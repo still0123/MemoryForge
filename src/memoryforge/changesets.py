@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import fcntl
 import hashlib
+import json
 import os
 import re
 import shutil
 import stat
 import uuid
 from collections.abc import Mapping, Sequence
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
@@ -167,6 +169,56 @@ class ChangeSetStore:
         finally:
             os.close(staging_fd)
         return [self.get(identifier) for identifier in identifiers]
+
+    def archive_applied(self, stored: StoredChangeSet, *, commit: str) -> Path:
+        """Move an applied proposal out of the pending staging namespace."""
+        self.workspace.validate_internal_directory(self.staging_dir)
+        staging_fd = self._open_staging()
+        try:
+            fcntl.flock(staging_fd, fcntl.LOCK_EX)
+            with suppress(FileExistsError):
+                os.mkdir("applied", 0o700, dir_fd=staging_fd)
+            applied_fd = os.open(
+                "applied",
+                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                dir_fd=staging_fd,
+            )
+            try:
+                os.rename(
+                    stored.changeset.changeset_id,
+                    stored.changeset.changeset_id,
+                    src_dir_fd=staging_fd,
+                    dst_dir_fd=applied_fd,
+                )
+                archived_fd = os.open(
+                    stored.changeset.changeset_id,
+                    os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                    dir_fd=applied_fd,
+                )
+                try:
+                    receipt = {
+                        "status": "APPLIED",
+                        "commit": commit,
+                        "applied_at": datetime.now(UTC).isoformat(),
+                        "changeset_id": stored.changeset.changeset_id,
+                    }
+                    receipt_payload = (
+                        json.dumps(receipt, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+                    ).encode()
+                    _write_new_file(archived_fd, "receipt.json", receipt_payload)
+                    if json.loads(_read_regular_file(archived_fd, "receipt.json")) != receipt:
+                        raise ChangeSetStoreError("Applied ChangeSet receipt is invalid")
+                finally:
+                    os.close(archived_fd)
+                os.fsync(applied_fd)
+                os.fsync(staging_fd)
+            finally:
+                os.close(applied_fd)
+        except OSError as exc:
+            raise ChangeSetStoreError("Applied ChangeSet could not be archived") from exc
+        finally:
+            os.close(staging_fd)
+        return self.staging_dir / "applied" / stored.changeset.changeset_id
 
     def _require_current_base(self, changeset: ChangeSet) -> None:
         current_commit = self.workspace.current_commit()

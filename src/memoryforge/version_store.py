@@ -138,6 +138,32 @@ class GitVersionStore:
         tracked = set(completed.stdout.splitlines())
         return all(path in tracked for path in paths)
 
+    def commit_paths(self, paths: tuple[str, ...], message: str) -> str:
+        """Commit only the stable Wiki paths produced by one approved ChangeSet."""
+        if not paths:
+            raise WorkspaceError("cannot create an empty knowledge commit")
+        self._run(["add", "--", *paths], check=True)
+        self._run(
+            ["commit", "--quiet", "--only", "-m", message, "--", *paths],
+            check=True,
+            extra_config=self._commit_identity(),
+        )
+        commit = self.head()
+        if commit is None:
+            raise WorkspaceError("knowledge commit completed without creating HEAD")
+        return commit
+
+    def require_clean_paths(self, paths: tuple[str, ...]) -> None:
+        completed = self._run(
+            ["status", "--porcelain", "--untracked-files=all", "--", *paths],
+            check=True,
+        )
+        if completed.stdout.strip():
+            raise WorkspaceError("refusing to apply over uncommitted changes in target Wiki paths")
+
+    def reset_paths(self, paths: tuple[str, ...]) -> None:
+        self._run(["reset", "--quiet", "HEAD", "--", *paths], check=True)
+
     def _commit_identity(self) -> tuple[str, ...]:
         name = self._config_value("user.name")
         email = self._config_value("user.email")

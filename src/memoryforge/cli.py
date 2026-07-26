@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import difflib
 import json
 import sqlite3
+from contextlib import suppress
 from pathlib import Path
 from typing import Annotated
 
@@ -9,6 +11,7 @@ import typer
 
 from memoryforge import __version__
 from memoryforge.changesets import ChangeSetStore
+from memoryforge.compiler import compilation_payload, compile_pending_sources
 from memoryforge.errors import FeatureUnavailableError, MemoryForgeError, WorkspaceError
 from memoryforge.importer import SourceValidationError, import_local_file
 from memoryforge.models import Sensitivity
@@ -130,8 +133,38 @@ def ingest(
     source: Annotated[list[str] | None, typer.Option("--source")] = None,
     workspace: WorkspaceOption = Path("."),
 ) -> None:
-    _ = pending, source
-    _require_future_feature(workspace, "ingest")
+    if not pending:
+        _exit_with_safe_error(ValueError("ingest currently requires --pending"))
+    try:
+        opened = Workspace.open(workspace)
+        compilation = compile_pending_sources(
+            opened,
+            source_ids=tuple(source or ()),
+        )
+        if compilation is None:
+            typer.echo(
+                json.dumps(
+                    {"status": "no_pending", "pending": []},
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            )
+            return
+        stored = ChangeSetStore(opened).create(
+            compilation.changeset,
+            compilation.candidate_files,
+        )
+    except (
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(json.dumps(compilation_payload(stored), ensure_ascii=False, indent=2))
 
 
 @app.command()
@@ -141,10 +174,19 @@ def review(
 ) -> None:
     try:
         opened = Workspace.open(workspace)
-        ChangeSetStore(opened).get(changeset_id)
-        raise FeatureUnavailableError("`review` is not enabled in the trusted-storage milestone")
-    except FeatureUnavailableError as exc:
-        _exit_with_safe_error(exc)
+        stored = ChangeSetStore(opened).get(changeset_id)
+        diffs: dict[str, str] = {}
+        for path, candidate in sorted(stored.candidate_files.items()):
+            stable_path = opened.root / path
+            stable = stable_path.read_text(encoding="utf-8") if stable_path.is_file() else ""
+            diffs[path] = "".join(
+                difflib.unified_diff(
+                    stable.splitlines(keepends=True),
+                    candidate.splitlines(keepends=True),
+                    fromfile=path,
+                    tofile=f"{path} (proposed)",
+                )
+            )
     except (
         MemoryForgeError,
         WorkspaceIntegrityError,
@@ -154,15 +196,85 @@ def review(
         sqlite3.Error,
     ) as exc:
         _exit_with_safe_error(exc)
+    typer.echo(
+        json.dumps(
+            {
+                "changeset_id": stored.changeset.changeset_id,
+                "status": stored.changeset.status.value,
+                "candidate_files": stored.candidate_files,
+                "unified_diff": diffs,
+                "claims": [claim.model_dump(mode="json") for claim in stored.changeset.claims],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
 
 
 @app.command()
 def apply(
     changeset_id: Annotated[str, typer.Argument()],
+    approve: Annotated[bool, typer.Option("--approve")] = False,
     workspace: WorkspaceOption = Path("."),
 ) -> None:
-    _ = changeset_id
-    _require_future_feature(workspace, "apply")
+    if not approve:
+        _exit_with_safe_error(ValueError("apply requires explicit --approve"))
+    try:
+        opened = Workspace.open(workspace)
+        store = ChangeSetStore(opened)
+        stored = store.get(changeset_id)
+        paths = tuple(sorted(stored.candidate_files))
+        opened.version_store.require_clean_paths(paths)
+        previous_files: dict[Path, str | None] = {}
+        try:
+            for path, content in stored.candidate_files.items():
+                destination = opened.root / path
+                previous_files[destination] = (
+                    destination.read_text(encoding="utf-8") if destination.is_file() else None
+                )
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_text(content, encoding="utf-8")
+            commit = opened.version_store.commit_paths(
+                paths,
+                f"knowledge: apply {changeset_id}",
+            )
+        except Exception:
+            for destination, previous in previous_files.items():
+                if previous is None:
+                    destination.unlink(missing_ok=True)
+                else:
+                    destination.write_text(previous, encoding="utf-8")
+            with suppress(MemoryForgeError):
+                opened.version_store.reset_paths(paths)
+            raise
+        archive_warning = None
+        try:
+            store.archive_applied(stored, commit=commit)
+        except MemoryForgeError as exc:
+            archive_warning = str(exc)
+    except (
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(
+        json.dumps(
+            {
+                "changeset_id": changeset_id,
+                "status": "APPLIED",
+                "commit": commit,
+                "files": list(paths),
+                "warning": archive_warning,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
 
 
 @app.command()

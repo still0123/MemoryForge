@@ -7,7 +7,8 @@ It compiles immutable source material into a versioned Wiki, stages every AI-gen
 
 ## Status
 
-The Phase 1 trusted-storage foundation is implemented:
+The Phase 1 trusted-storage foundation and the Phase 2 local core workflow are
+implemented:
 
 - initialize a private workspace with immutable `raw/` storage, SQLite FTS5,
   schema/config files, and a clean Git baseline commit;
@@ -20,11 +21,17 @@ The Phase 1 trusted-storage foundation is implemented:
   content hashes;
 - stage immutable ChangeSets with hashed candidate Wiki files without touching
   the stable `wiki/` tree;
+- deterministically compile the first meaningful source paragraph into a
+  VERIFIED Claim with an exact character-range citation;
+- review candidate Wiki files and unified diffs without modifying stable pages;
+- explicitly approve and apply a ChangeSet, commit only its Wiki paths, and
+  retain an applied receipt;
 - reject unsupported, oversized, symlinked, and out-of-root files;
 - reject common sensitive file names and high-confidence secret patterns.
 
-LLM compilation, vector retrieval, Feishu integration, Wiki write-back, and
-ChangeSet review/apply are intentionally not implemented in this phase.
+Network LLM compilation, vector retrieval, Feishu integration, cited question
+answering, reject, lint, history, rollback, and evaluation are not implemented.
+Phase 2 compilation is deliberately local and deterministic.
 
 ## Quickstart
 
@@ -41,7 +48,17 @@ memoryforge import ./demo/fixtures/public_project_note.md \
   --category design \
   --workspace ./demo-workspace
 memoryforge search 'cache design' --workspace ./demo-workspace
+memoryforge ingest --pending --workspace ./demo-workspace
+memoryforge review <changeset-id> --workspace ./demo-workspace
+memoryforge apply <changeset-id> --approve --workspace ./demo-workspace
 ```
+
+The Phase 2 demo compiles pending current SourceVersions into stable
+`wiki/sources/<source-id>.md` candidates. Generated pages include
+the Source ID, content hash, and a Markdown citation footnote containing the
+immutable `mf://blob/<sha256>` URI and exact character locator. Re-running
+`ingest --pending` is idempotent before apply and reports `no_pending` after the
+matching page is applied.
 
 One workspace corresponds to one source root. Always run MemoryForge from that
 source root; Source IDs are the full SHA-256 of the canonical relative source
@@ -89,13 +106,13 @@ that does not honor MemoryForge's staging lock are also outside this single-user
 threat model.
 
 ChangeSet candidates, metadata, and a metadata digest are published durably
-before the staging directory becomes visible. New records may only be
-`PROPOSED`; review/apply will use separate immutable transition events in a later
-phase. Every proposal load, reuse, and review verifies that its `base_commit`
-still matches the current Git `HEAD`; a future apply implementation must repeat
-that check immediately before writing or committing the stable Wiki. The digest
-detects accidental or one-sided metadata edits, but Phase 1 does not claim to
-resist an attacker who can rewrite both a record and its digest.
+before the staging directory becomes visible. New records start as `PROPOSED`.
+Review is read-only; apply requires `--approve`, refuses target Wiki paths with
+uncommitted changes, and archives a small receipt after the Git commit. Every
+proposal load, reuse, and review verifies that its `base_commit` still matches
+the current Git `HEAD`. The digest detects accidental or one-sided metadata
+edits, but MemoryForge does not claim to resist an attacker who can rewrite both
+a record and its digest.
 
 ## Core workflow
 
@@ -134,10 +151,13 @@ See [SPEC.md](./SPEC.md) for the complete product and engineering specification,
 memoryforge init <workspace>
 memoryforge import <path> --workspace <workspace> [--category <category>]
 memoryforge search <query> --workspace <workspace>
+memoryforge ingest --pending --workspace <workspace> [--source <source-id>]
+memoryforge review <changeset-id> --workspace <workspace>
+memoryforge apply <changeset-id> --approve --workspace <workspace>
 ```
 
-The lifecycle commands `ingest`, `review`, `apply`, `reject`, `ask`, `lint`,
-`history`, `rollback`, and `eval` are registered as stable CLI contracts and
-return an explicit “not enabled” error until their milestone is implemented.
+The lifecycle commands `reject`, `ask`, `lint`, `history`, `rollback`, and
+`eval` remain registered CLI contracts and return an explicit “not enabled”
+error until their milestone is implemented.
 
 The public demo fixture contains fictional data only.
