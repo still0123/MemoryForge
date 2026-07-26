@@ -490,7 +490,16 @@ def _changeset(workspace: Workspace) -> ChangeSet:
 def _git(root: Path, *arguments: str) -> str:
     environment = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
     completed = subprocess.run(
-        ["git", "-C", str(root), *arguments],
+        [
+            "git",
+            "-c",
+            "user.name=MemoryForge Tests",
+            "-c",
+            "user.email=memoryforge-tests@example.invalid",
+            "-C",
+            str(root),
+            *arguments,
+        ],
         check=True,
         capture_output=True,
         text=True,

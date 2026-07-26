@@ -115,7 +115,16 @@ def _git(root: Path, *arguments: str) -> str:
     import subprocess
 
     completed = subprocess.run(
-        ["git", "-C", str(root), *arguments],
+        [
+            "git",
+            "-c",
+            "user.name=MemoryForge Tests",
+            "-c",
+            "user.email=memoryforge-tests@example.invalid",
+            "-C",
+            str(root),
+            *arguments,
+        ],
         check=True,
         capture_output=True,
         text=True,
