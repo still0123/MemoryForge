@@ -1,12 +1,73 @@
 # MemoryForge
 
-MemoryForge is a Git-backed, auditable LLM Wiki agent for personal developer knowledge.
+MemoryForge aims to become a Git-backed, auditable LLM Wiki agent for personal
+developer knowledge.
 
 It compiles immutable source material into a versioned Wiki, stages every AI-generated change for review, and answers questions with source citations, temporal validity, and conflict awareness.
 
 ## Status
 
-The project is currently in the specification stage.
+The Phase 1a local ingestion foundation is implemented:
+
+- initialize a private workspace with immutable `raw/` storage and SQLite FTS5;
+- import local Markdown and UTF-8 text files;
+- track stable Sources and auditable SourceVersions while globally reusing
+  content-addressed Blob snapshots;
+- make repeated imports idempotent and retain old versions outside normal search;
+- search English and Chinese titles/body text with immutable snapshot URIs and
+  content hashes;
+- reject unsupported, oversized, symlinked, and out-of-root files;
+- reject common sensitive file names and high-confidence secret patterns.
+
+LLM compilation, vector retrieval, Feishu integration, Wiki write-back, and
+ChangeSets are intentionally not implemented in this phase.
+
+## Quickstart
+
+Requires Python 3.11+ on Linux or macOS. Windows is not supported in Phase 1a
+because secure local file operations depend on POSIX directory file descriptors.
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -e '.[dev]'
+
+memoryforge init ./demo-workspace
+memoryforge import ./demo/fixtures/public_project_note.md \
+  --category design \
+  --workspace ./demo-workspace
+memoryforge search 'cache design' --workspace ./demo-workspace
+```
+
+One workspace corresponds to one source root. Always run MemoryForge from that
+source root; Source IDs are the full SHA-256 of the canonical relative source
+path, so they remain stable when the repository moves. Importing the same
+relative path from a different root into the same workspace intentionally refers
+to the same Source.
+
+Imports are restricted to files under the current working directory. Symlinks
+are rejected, and only `.md`, `.markdown`, and `.txt` UTF-8 files up to 5 MiB
+are accepted. Run the command from the root of the source repository you intend
+to import. Search results cite immutable `mf://blob/<sha256>` evidence URIs and
+expose only workspace-relative snapshot paths rather than mutable original files
+or private absolute paths.
+
+`memoryforge init` creates a workspace `.gitignore` that protects `raw/` and
+`.memoryforge/` by default while leaving `wiki/` available for version control.
+Secret detection is deliberately conservative and is not a replacement for a
+dedicated secret-scanning tool.
+
+A Blob is written to a same-directory, private temporary file, fsynced, and then
+atomically published. A hard process termination can leave a recognizable
+unreferenced temporary file; the next import of the same hash removes it.
+Unreferenced complete Blobs can still remain if the process terminates after
+publication but before the database transaction commits; re-import verifies and
+reuses them.
+
+Phase 1a uses a local, trusted single-user threat model. It protects against
+accidental exposure, common symlink escapes, and evidence tampering. It does not
+claim to resist a malicious process running concurrently as the same account and
+replacing the SQLite directory.
 
 ## Core workflow
 
@@ -39,18 +100,12 @@ See [SPEC.md](./SPEC.md) for the complete product and engineering specification,
 - evaluation design;
 - a four-week MVP roadmap.
 
-## Planned MVP
-
-The initial release will provide:
+## Current CLI
 
 ```bash
-memoryforge init
-memoryforge import
-memoryforge ingest
-memoryforge review
-memoryforge ask
-memoryforge lint
-memoryforge rollback
+memoryforge init <workspace>
+memoryforge import <path> --workspace <workspace> [--category <category>]
+memoryforge search <query> --workspace <workspace>
 ```
 
-No implementation has been published yet.
+The public demo fixture contains fictional data only.
