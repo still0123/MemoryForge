@@ -20,6 +20,7 @@ from memoryforge.models import SourceVersionManifest
 
 _MANIFEST_NAME = re.compile(r"^(?P<source_id>[a-f0-9]{64})--(?P<record_sha256>[a-f0-9]{64})\.json$")
 _MANIFEST_TEMP_NAME = re.compile(r"^\.[a-f0-9]{64}--[a-f0-9]{64}\.json\.[a-f0-9]{32}\.tmp$")
+_LEGACY_MANIFEST_NAME = re.compile(r"^(?P<source_id>src_[a-f0-9]{16})\.json$")
 
 
 class SourceManifestStore:
@@ -38,6 +39,12 @@ class SourceManifestStore:
             for name in sorted(os.listdir(directory_fd)):
                 match = _MANIFEST_NAME.fullmatch(name)
                 if match is None:
+                    legacy_match = _LEGACY_MANIFEST_NAME.fullmatch(name)
+                    if legacy_match is not None:
+                        _validate_legacy_manifest(
+                            directory_fd, name, legacy_match.group("source_id")
+                        )
+                        continue
                     if _MANIFEST_TEMP_NAME.fullmatch(name):
                         _remove_owned_temp(directory_fd, name)
                         continue
@@ -184,7 +191,8 @@ class SourceManifestStore:
                         v.sensitivity,
                         v.tags_json,
                         v.legacy_category,
-                        b.snapshot_path
+                        b.snapshot_path,
+                        s.legacy_source_id
                     FROM sources AS s
                     JOIN source_versions AS v ON v.source_id = s.id
                     JOIN blobs AS b ON b.id = v.blob_id
@@ -220,7 +228,8 @@ def _read_regular_file(directory_fd: int, name: str) -> bytes:
 
 
 def _manifest_record(manifest: SourceVersionManifest) -> tuple[bytes, str]:
-    payload = (manifest.model_dump_json(indent=2) + "\n").encode()
+    excluded = {"legacy_source_id"} if manifest.legacy_source_id is None else None
+    payload = (manifest.model_dump_json(indent=2, exclude=excluded) + "\n").encode()
     record_sha256 = hashlib.sha256(payload).hexdigest()
     return payload, f"{manifest.source_id}--{record_sha256}.json"
 
@@ -245,7 +254,22 @@ def _row_matches_manifest(
         and tags == list(manifest.tags)
         and (str(row[8]) if row[8] is not None else None) == manifest.legacy_category
         and str(row[9]) == manifest.snapshot_path
+        and (str(row[10]) if row[10] is not None else None) == manifest.legacy_source_id
     )
+
+
+def _validate_legacy_manifest(
+    directory_fd: int,
+    name: str,
+    expected_source_id: str,
+) -> None:
+    try:
+        payload = _read_regular_file(directory_fd, name)
+        record = json.loads(payload)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise WorkspaceError(f"Legacy source manifest is invalid: {name}") from exc
+    if not isinstance(record, dict) or record.get("source_id") != expected_source_id:
+        raise WorkspaceError(f"Legacy source manifest identity check failed: {name}")
 
 
 def _remove_owned_temp(directory_fd: int, name: str) -> None:

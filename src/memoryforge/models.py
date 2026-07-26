@@ -115,6 +115,7 @@ class SourceVersionManifest(BaseModel):
 
     storage_version: int = Field(default=1, ge=1)
     source_id: str = Field(pattern=r"^[a-f0-9]{64}$")
+    legacy_source_id: str | None = Field(default=None, pattern=r"^src_[a-f0-9]{16}$")
     source_uri: str = Field(pattern=r"^mf://source/[a-f0-9]{64}$")
     source_path: str = Field(min_length=1)
     content_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")

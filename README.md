@@ -49,6 +49,11 @@ path, so they remain stable when the repository moves. Importing the same
 relative path from a different root into the same workspace intentionally refers
 to the same Source.
 
+The `origin/main` legacy schema is the one compatibility exception: its
+`src_<16hex>` identity is migrated to `sha256(legacy_source_id)`, while the
+original value is retained as `legacy_source_id` in the database and Manifest
+for auditing.
+
 Imports are restricted to files under the current working directory. Symlinks
 are rejected, and only `.md`, `.markdown`, and `.txt` UTF-8 files up to 5 MiB
 are accepted. Run the command from the root of the source repository you intend

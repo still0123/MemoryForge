@@ -11,7 +11,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Literal, cast
 
 from memoryforge.errors import WorkspaceError
@@ -51,6 +51,8 @@ _GITIGNORE_RULES = (
 _CJK_RUN = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]+")
 _SEARCH_RUN = re.compile(r"[A-Za-z0-9_]+|[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]+")
 _CHAR_LOCATOR = re.compile(r"^chars:(?P<start>\d+)-(?P<end>\d+)$")
+_CONTENT_SHA256 = re.compile(r"^[a-f0-9]{64}$")
+_ORIGIN_MAIN_SOURCE_ID = re.compile(r"^src_[a-f0-9]{16}$")
 _BLOB_ROOT = Path("raw/blobs")
 _SECURE_DIR_FD_SUPPORTED = all(
     function in os.supports_dir_fd for function in (os.open, os.mkdir, os.stat, os.unlink)
@@ -110,6 +112,14 @@ id_rsa
 .git/
 """
 
+_SOURCE_FTS_SCHEMA_STATEMENT = """
+CREATE VIRTUAL TABLE IF NOT EXISTS source_fts USING fts5(
+    title,
+    content,
+    search_terms,
+    tokenize='unicode61'
+)"""
+
 _SCHEMA_STATEMENTS = (
     """
 CREATE TABLE IF NOT EXISTS sources (
@@ -117,6 +127,7 @@ CREATE TABLE IF NOT EXISTS sources (
     source_id TEXT NOT NULL UNIQUE,
     source_uri TEXT NOT NULL UNIQUE,
     source_path TEXT NOT NULL,
+    legacy_source_id TEXT UNIQUE,
     source_kind TEXT NOT NULL CHECK (source_kind = 'local'),
     created_at TEXT NOT NULL
 )""",
@@ -150,13 +161,7 @@ WHERE is_current = 1""",
     """
 CREATE INDEX IF NOT EXISTS idx_source_versions_observed
 ON source_versions(source_id, observed_at DESC)""",
-    """
-CREATE VIRTUAL TABLE IF NOT EXISTS source_fts USING fts5(
-    title,
-    content,
-    search_terms,
-    tokenize='unicode61'
-)""",
+    _SOURCE_FTS_SCHEMA_STATEMENT,
 )
 
 
@@ -390,17 +395,35 @@ def _validate_workspace_identity_readonly(root: Path) -> None:
                 SELECT name
                 FROM sqlite_master
                 WHERE type IN ('table', 'view')
-                  AND name IN ('sources', 'blobs', 'source_versions', 'source_fts')
                 """
             ).fetchall()
     except sqlite3.Error as exc:
         raise WorkspaceError("MemoryForge workspace database is invalid") from exc
-    if {str(row[0]) for row in rows} != {
-        "sources",
-        "blobs",
-        "source_versions",
-        "source_fts",
-    }:
+    tables = {str(row[0]) for row in rows}
+    unified = {"sources", "blobs", "source_versions", "source_fts"} <= tables
+    origin_main = {"source_documents", "source_fts"} <= tables
+    if origin_main:
+        with sqlite3.connect(database_path.as_uri() + "?mode=ro", uri=True) as connection:
+            document_columns = {
+                str(row[1])
+                for row in connection.execute("PRAGMA table_info(source_documents)").fetchall()
+            }
+            fts_columns = {
+                str(row[1])
+                for row in connection.execute("PRAGMA table_info(source_fts)").fetchall()
+            }
+        origin_main = {
+            "source_id",
+            "uri",
+            "content_sha256",
+            "media_type",
+            "category",
+            "imported_at",
+            "observed_at",
+            "sensitivity",
+            "tags_json",
+        } <= document_columns and {"source_id", "title", "body"} <= fts_columns
+    if not unified and not origin_main:
         raise WorkspaceError("MemoryForge workspace database schema is invalid")
 
 
@@ -741,35 +764,262 @@ def _write_protective_gitignore(root: Path) -> None:
 
 def _migrate_database(database_path: Path) -> None:
     """Upgrade the Phase 1a schema transactionally without rewriting evidence."""
-    with _connect(database_path) as connection:
-        connection.execute("BEGIN IMMEDIATE")
-        columns = {
-            str(row["name"])
-            for row in connection.execute("PRAGMA table_info(source_versions)").fetchall()
-        }
-        if not columns:
-            _apply_schema(connection)
-            return
-        if "sensitivity" not in columns:
-            connection.execute(
-                "ALTER TABLE source_versions ADD COLUMN sensitivity TEXT NOT NULL DEFAULT 'public'"
-            )
-        if "tags_json" not in columns:
-            connection.execute(
-                "ALTER TABLE source_versions ADD COLUMN tags_json TEXT NOT NULL DEFAULT '[]'"
-            )
-        if "legacy_category" not in columns:
-            connection.execute("ALTER TABLE source_versions ADD COLUMN legacy_category TEXT")
-        placeholders = ", ".join("?" for _ in RAW_CATEGORIES)
+    root = database_path.parents[1]
+    created_blob_hashes: list[str] = []
+    try:
+        with _connect(database_path) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            tables = {
+                str(row["name"])
+                for row in connection.execute(
+                    "SELECT name FROM sqlite_master WHERE type IN ('table', 'view')"
+                ).fetchall()
+            }
+            if "source_documents" in tables:
+                _migrate_origin_main_schema(connection, root, created_blob_hashes)
+            else:
+                _migrate_unified_schema(connection)
+    except Exception:
+        for content_sha256 in created_blob_hashes:
+            _unlink_blob(root, content_sha256)
+        raise
+
+
+def _migrate_unified_schema(connection: sqlite3.Connection) -> None:
+    source_columns = {
+        str(row["name"]) for row in connection.execute("PRAGMA table_info(sources)").fetchall()
+    }
+    if source_columns and "legacy_source_id" not in source_columns:
+        connection.execute("ALTER TABLE sources ADD COLUMN legacy_source_id TEXT")
         connection.execute(
-            f"""
-            UPDATE source_versions
-            SET legacy_category = category, category = ?
-            WHERE category NOT IN ({placeholders})
-            """,
-            (SourceCategory.NOTES.value, *RAW_CATEGORIES),
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_sources_legacy_source_id
+            ON sources(legacy_source_id)
+            WHERE legacy_source_id IS NOT NULL
+            """
         )
+    columns = {
+        str(row["name"])
+        for row in connection.execute("PRAGMA table_info(source_versions)").fetchall()
+    }
+    if not columns:
         _apply_schema(connection)
+        return
+    if "sensitivity" not in columns:
+        connection.execute(
+            "ALTER TABLE source_versions ADD COLUMN sensitivity TEXT NOT NULL DEFAULT 'public'"
+        )
+    if "tags_json" not in columns:
+        connection.execute(
+            "ALTER TABLE source_versions ADD COLUMN tags_json TEXT NOT NULL DEFAULT '[]'"
+        )
+    if "legacy_category" not in columns:
+        connection.execute("ALTER TABLE source_versions ADD COLUMN legacy_category TEXT")
+    placeholders = ", ".join("?" for _ in RAW_CATEGORIES)
+    connection.execute(
+        f"""
+        UPDATE source_versions
+        SET legacy_category = category, category = ?
+        WHERE category NOT IN ({placeholders})
+        """,
+        (SourceCategory.NOTES.value, *RAW_CATEGORIES),
+    )
+    _apply_schema(connection)
+
+
+def _migrate_origin_main_schema(
+    connection: sqlite3.Connection,
+    root: Path,
+    created_blob_hashes: list[str],
+) -> None:
+    _apply_schema_without_source_fts(connection)
+    rows = connection.execute(
+        """
+        SELECT
+            d.source_id,
+            d.uri,
+            d.content_sha256,
+            d.media_type,
+            d.category,
+            d.imported_at,
+            d.observed_at,
+            d.sensitivity,
+            d.tags_json,
+            f.title
+        FROM source_documents AS d
+        LEFT JOIN source_fts AS f ON f.source_id = d.source_id
+        ORDER BY d.source_id
+        """
+    )
+    for row in rows:
+        legacy_source_id = str(row["source_id"])
+        content_sha256 = str(row["content_sha256"])
+        if _ORIGIN_MAIN_SOURCE_ID.fullmatch(legacy_source_id) is None:
+            raise WorkspaceIntegrityError("legacy source identity is invalid")
+        if _CONTENT_SHA256.fullmatch(content_sha256) is None:
+            raise WorkspaceIntegrityError("legacy source content hash is invalid")
+        content = _read_origin_main_raw(root, str(row["uri"]), content_sha256)
+        relative_blob, created = _write_blob(root, content_sha256, content)
+        if created:
+            created_blob_hashes.append(content_sha256)
+        try:
+            content.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise WorkspaceIntegrityError("legacy Raw source is not valid UTF-8") from exc
+        imported_at = _safe_legacy_timestamp(row["imported_at"], fallback=_now())
+        observed_at = _safe_legacy_timestamp(row["observed_at"], fallback=imported_at)
+        category_value = str(row["category"])
+        category = (
+            category_value if category_value in RAW_CATEGORIES else SourceCategory.NOTES.value
+        )
+        sensitivity_value = str(row["sensitivity"])
+        sensitivity = (
+            sensitivity_value
+            if sensitivity_value in {item.value for item in Sensitivity}
+            else Sensitivity.LOCAL_ONLY.value
+        )
+        tags_json = _safe_legacy_tags(row["tags_json"])
+        canonical_source_id = hashlib.sha256(legacy_source_id.encode("utf-8")).hexdigest()
+        title = str(row["title"]) if row["title"] else Path(str(row["uri"])).name
+        source_cursor = connection.execute(
+            """
+            INSERT INTO sources(
+                source_id, source_uri, source_path, legacy_source_id, source_kind, created_at
+            ) VALUES (?, ?, ?, ?, 'local', ?)
+            """,
+            (
+                canonical_source_id,
+                f"mf://source/{canonical_source_id}",
+                str(row["uri"]),
+                legacy_source_id,
+                imported_at,
+            ),
+        )
+        blob_cursor = connection.execute(
+            """
+            INSERT INTO blobs(content_sha256, snapshot_path, size_bytes, created_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                content_sha256,
+                relative_blob.as_posix(),
+                len(content),
+                imported_at,
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO source_versions(
+                source_id, blob_id, supersedes_version_id, media_type, category,
+                title, observed_at, sensitivity, tags_json, legacy_category, is_current
+            ) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, 1)
+            """,
+            (
+                _lastrowid(source_cursor),
+                _lastrowid(blob_cursor),
+                (
+                    str(row["media_type"])
+                    if str(row["media_type"]) in {"text/markdown", "text/plain"}
+                    else "text/plain"
+                ),
+                category,
+                title or Path(str(row["uri"])).name or "Untitled",
+                observed_at,
+                sensitivity,
+                tags_json,
+                category_value if category != category_value else None,
+            ),
+        )
+
+    connection.execute("DROP TABLE source_fts")
+    connection.execute(_SOURCE_FTS_SCHEMA_STATEMENT)
+    _rebuild_origin_main_fts(connection, root)
+    connection.execute("DROP TABLE source_documents")
+
+
+def _apply_schema_without_source_fts(connection: sqlite3.Connection) -> None:
+    for statement in _SCHEMA_STATEMENTS:
+        if statement != _SOURCE_FTS_SCHEMA_STATEMENT:
+            connection.execute(statement)
+
+
+def _rebuild_origin_main_fts(connection: sqlite3.Connection, root: Path) -> None:
+    rows = connection.execute(
+        """
+        SELECT v.id, v.title, b.content_sha256, b.snapshot_path
+        FROM source_versions AS v
+        JOIN blobs AS b ON b.id = v.blob_id
+        ORDER BY v.id
+        """
+    )
+    for row in rows:
+        content = _read_blob_bytes(
+            root,
+            str(row["content_sha256"]),
+            Path(str(row["snapshot_path"])),
+        ).decode("utf-8")
+        title = str(row["title"])
+        connection.execute(
+            """
+            INSERT INTO source_fts(rowid, title, content, search_terms)
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                int(row["id"]),
+                title,
+                content,
+                _search_terms(f"{title}\n{content}"),
+            ),
+        )
+
+
+def _read_origin_main_raw(root: Path, uri: str, content_sha256: str) -> bytes:
+    relative = PurePosixPath(uri)
+    if (
+        relative.is_absolute()
+        or len(relative.parts) < 2
+        or relative.parts[0] != "raw"
+        or any(part in {"", ".", ".."} for part in relative.parts)
+        or "\\" in uri
+    ):
+        raise WorkspaceIntegrityError("legacy Raw source path is invalid")
+    path = root.joinpath(*relative.parts)
+    _reject_symlink_components(path)
+    try:
+        descriptor = os.open(path, os.O_RDONLY | _no_follow_flag())
+        try:
+            if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+                raise WorkspaceIntegrityError("legacy Raw source must be a regular file")
+            with os.fdopen(descriptor, "rb", closefd=False) as source:
+                content = source.read()
+        finally:
+            os.close(descriptor)
+    except OSError as exc:
+        raise WorkspaceIntegrityError("legacy Raw source could not be read safely") from exc
+    if hashlib.sha256(content).hexdigest() != content_sha256:
+        raise WorkspaceIntegrityError("legacy Raw source digest does not match its index")
+    return content
+
+
+def _safe_legacy_timestamp(value: object, *, fallback: str) -> str:
+    if value is None:
+        return fallback
+    rendered = str(value)
+    try:
+        datetime.fromisoformat(rendered)
+    except ValueError:
+        return fallback
+    return rendered
+
+
+def _safe_legacy_tags(value: object) -> str:
+    try:
+        tags = json.loads(str(value))
+    except json.JSONDecodeError:
+        return "[]"
+    if not isinstance(tags, list) or not all(isinstance(tag, str) for tag in tags):
+        return "[]"
+    return json.dumps(tags)
 
 
 def _apply_schema(connection: sqlite3.Connection) -> None:
@@ -825,6 +1075,7 @@ def _backfill_source_manifests(root: Path) -> None:
             """
             SELECT
                 s.source_id,
+                s.legacy_source_id,
                 s.source_uri,
                 s.source_path,
                 v.media_type,
@@ -858,6 +1109,9 @@ def _backfill_source_manifests(root: Path) -> None:
             raise WorkspaceIntegrityError("SourceVersion tags metadata is invalid")
         manifest = SourceVersionManifest(
             source_id=str(row["source_id"]),
+            legacy_source_id=(
+                str(row["legacy_source_id"]) if row["legacy_source_id"] is not None else None
+            ),
             source_uri=str(row["source_uri"]),
             source_path=str(row["source_path"]),
             content_sha256=content_sha256,
