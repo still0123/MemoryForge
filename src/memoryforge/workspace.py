@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
 import sqlite3
@@ -8,26 +9,109 @@ import stat
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager, suppress
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
-from memoryforge.models import ImportResult, LocalDocument, SearchResult
+from memoryforge.errors import WorkspaceError
+from memoryforge.manifests import SourceManifestStore
+from memoryforge.models import (
+    ChangeSet,
+    ClaimStatus,
+    ImportResult,
+    LocalDocument,
+    SearchResult,
+    Sensitivity,
+    SourceCategory,
+    SourceVersionManifest,
+)
+from memoryforge.version_store import GitVersionStore
 
 DATABASE_RELATIVE_PATH = Path(".memoryforge/index.sqlite")
-_GITIGNORE_RULES = ("/raw/", "/.memoryforge/")
+RAW_CATEGORIES = ("design", "postmortem", "summary", "notes", "refs")
+WIKI_DIRECTORIES = (
+    "sources",
+    "entities",
+    "concepts",
+    "pitfalls",
+    "adrs",
+    "comparisons",
+    "overviews",
+)
+_GITIGNORE_RULES = (
+    "/raw/",
+    "/.memoryforge/index.sqlite*",
+    "/.memoryforge/manifests/",
+    "/.memoryforge/staging/",
+    "/.memoryforge/rejected/",
+    "/.memoryforge/traces/",
+    "/.memoryforge/vectors/",
+)
 _CJK_RUN = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]+")
 _SEARCH_RUN = re.compile(r"[A-Za-z0-9_]+|[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]+")
+_CHAR_LOCATOR = re.compile(r"^chars:(?P<start>\d+)-(?P<end>\d+)$")
 _BLOB_ROOT = Path("raw/blobs")
 _SECURE_DIR_FD_SUPPORTED = all(
     function in os.supports_dir_fd for function in (os.open, os.mkdir, os.stat, os.unlink)
 )
+_BASELINE_PATHS = (
+    ".gitignore",
+    ".memoryforgeignore",
+    "AGENTS.md",
+    "wiki/INDEX.md",
+    ".memoryforge/config.yaml",
+    ".memoryforge/schema.yaml",
+)
+_DEFAULT_CONFIG_YAML = """workspace_version: 1
+schema_version: 1
+provider:
+  enabled: false
+  allowed_environment_variables: []
+index:
+  fts: true
+  embeddings: false
+"""
+_DEFAULT_SCHEMA_YAML = """source_categories:
+  - design
+  - postmortem
+  - summary
+  - notes
+  - refs
+page_types:
+  - sources
+  - entities
+  - concepts
+  - pitfalls
+  - adrs
+  - comparisons
+  - overviews
+claim_rules:
+  verified_claim_requires_citation: true
+  allow_raw_mutation: false
+  unresolved_high_conflict_blocks_apply: true
+"""
+_DEFAULT_AGENTS_MD = """# MemoryForge Workspace
 
-_SCHEMA = """
-PRAGMA foreign_keys = ON;
-PRAGMA journal_mode = WAL;
-PRAGMA busy_timeout = 30000;
+This workspace contains personal developer knowledge only. Never add company,
+customer, credential, or production-secret material.
 
+`raw/` stores immutable imported evidence. Stable `wiki/` content may only be
+changed through a reviewed ChangeSet. Verified claims require citations.
+Sources marked `local_only` must not be sent to remote providers.
+"""
+_DEFAULT_MEMORYFORGEIGNORE = """.env
+.env.*
+*.pem
+*.key
+id_rsa
+.ssh/
+.aws/
+.git/
+"""
+
+_SCHEMA_STATEMENTS = (
+    """
 CREATE TABLE IF NOT EXISTS sources (
     id INTEGER PRIMARY KEY,
     source_id TEXT NOT NULL UNIQUE,
@@ -35,16 +119,16 @@ CREATE TABLE IF NOT EXISTS sources (
     source_path TEXT NOT NULL,
     source_kind TEXT NOT NULL CHECK (source_kind = 'local'),
     created_at TEXT NOT NULL
-);
-
+)""",
+    """
 CREATE TABLE IF NOT EXISTS blobs (
     id INTEGER PRIMARY KEY,
     content_sha256 TEXT NOT NULL UNIQUE,
     snapshot_path TEXT NOT NULL UNIQUE,
     size_bytes INTEGER NOT NULL CHECK (size_bytes >= 0),
     created_at TEXT NOT NULL
-);
-
+)""",
+    """
 CREATE TABLE IF NOT EXISTS source_versions (
     id INTEGER PRIMARY KEY,
     source_id INTEGER NOT NULL REFERENCES sources(id),
@@ -54,23 +138,26 @@ CREATE TABLE IF NOT EXISTS source_versions (
     category TEXT NOT NULL,
     title TEXT NOT NULL,
     observed_at TEXT NOT NULL,
+    sensitivity TEXT NOT NULL,
+    tags_json TEXT NOT NULL,
+    legacy_category TEXT,
     is_current INTEGER NOT NULL CHECK (is_current IN (0, 1))
-);
-
+)""",
+    """
 CREATE UNIQUE INDEX IF NOT EXISTS idx_source_versions_one_current
 ON source_versions(source_id)
-WHERE is_current = 1;
-
+WHERE is_current = 1""",
+    """
 CREATE INDEX IF NOT EXISTS idx_source_versions_observed
-ON source_versions(source_id, observed_at DESC);
-
+ON source_versions(source_id, observed_at DESC)""",
+    """
 CREATE VIRTUAL TABLE IF NOT EXISTS source_fts USING fts5(
     title,
     content,
     search_terms,
     tokenize='unicode61'
-);
-"""
+)""",
+)
 
 
 class WorkspaceSecurityError(ValueError):
@@ -81,23 +168,179 @@ class WorkspaceIntegrityError(RuntimeError):
     """Raised when immutable evidence no longer matches its recorded digest."""
 
 
+@dataclass(frozen=True)
+class Workspace:
+    """Validated paths and version-store access for one workspace."""
+
+    root: Path
+
+    @property
+    def raw_dir(self) -> Path:
+        return self.root / "raw"
+
+    @property
+    def wiki_dir(self) -> Path:
+        return self.root / "wiki"
+
+    @property
+    def internal_dir(self) -> Path:
+        return self.root / ".memoryforge"
+
+    @property
+    def config_path(self) -> Path:
+        return self.internal_dir / "config.yaml"
+
+    @property
+    def schema_path(self) -> Path:
+        return self.internal_dir / "schema.yaml"
+
+    @property
+    def manifest_dir(self) -> Path:
+        return self.internal_dir / "manifests" / "sources"
+
+    @property
+    def staging_dir(self) -> Path:
+        return self.internal_dir / "staging"
+
+    @property
+    def rejected_dir(self) -> Path:
+        return self.internal_dir / "rejected"
+
+    @property
+    def index_path(self) -> Path:
+        return self.root / DATABASE_RELATIVE_PATH
+
+    @property
+    def version_store(self) -> GitVersionStore:
+        return GitVersionStore(self.root)
+
+    def current_commit(self) -> str:
+        commit = self.version_store.head()
+        if commit is None:
+            raise WorkspaceError("workspace is missing its Git baseline commit")
+        return commit
+
+    def validate_changeset_evidence(self, changeset: ChangeSet) -> None:
+        """Bind staged source and citation identities to immutable local evidence."""
+        with _connect(self.index_path) as connection:
+            for source_id in changeset.source_ids:
+                exists = connection.execute(
+                    "SELECT 1 FROM sources WHERE source_id = ?",
+                    (source_id,),
+                ).fetchone()
+                if exists is None:
+                    raise WorkspaceIntegrityError(f"ChangeSet source does not exist: {source_id}")
+
+            for claim in changeset.claims:
+                if claim.status is not ClaimStatus.VERIFIED:
+                    continue
+                for citation in claim.citations:
+                    row = connection.execute(
+                        """
+                        SELECT b.snapshot_path
+                        FROM sources AS s
+                        JOIN source_versions AS v ON v.source_id = s.id
+                        JOIN blobs AS b ON b.id = v.blob_id
+                        WHERE s.source_id = ? AND b.content_sha256 = ?
+                        """,
+                        (citation.source_id, citation.content_sha256),
+                    ).fetchone()
+                    if row is None:
+                        raise WorkspaceIntegrityError(
+                            "Citation does not identify an imported SourceVersion"
+                        )
+                    snapshot_path = Path(str(row["snapshot_path"]))
+                    evidence = _read_blob_bytes(
+                        self.root,
+                        citation.content_sha256,
+                        snapshot_path,
+                    )
+                    try:
+                        text = evidence.decode("utf-8")
+                    except UnicodeDecodeError as exc:
+                        raise WorkspaceIntegrityError(
+                            "Citation evidence is not valid UTF-8"
+                        ) from exc
+                    match = _CHAR_LOCATOR.fullmatch(citation.locator)
+                    if match is None:
+                        raise WorkspaceIntegrityError("Citation locator is invalid")
+                    start = int(match.group("start"))
+                    end = int(match.group("end"))
+                    if end > len(text) or text[start:end] != citation.quote:
+                        raise WorkspaceIntegrityError(
+                            "Citation quote does not match its locator in immutable evidence"
+                        )
+
+    def validate_internal_directory(self, path: Path) -> None:
+        if not path.is_relative_to(self.internal_dir):
+            raise WorkspaceSecurityError("managed path must remain inside .memoryforge")
+        _validate_managed_directory(path)
+
+    @classmethod
+    def initialize(cls, root: Path) -> Workspace:
+        initialized = _initialize_workspace(root)
+        return cls(initialized)
+
+    @classmethod
+    def open(cls, root: Path) -> Workspace:
+        resolved = _validated_workspace_root(root)
+        _validate_workspace_identity_readonly(resolved)
+        version_store = GitVersionStore(resolved)
+        version_store.validate_metadata(allow_missing=True)
+        _upgrade_workspace_contract(resolved)
+        workspace_database(resolved)
+        _backfill_source_manifests(resolved)
+        workspace = cls(resolved)
+        if not workspace.config_path.is_file() or not workspace.schema_path.is_file():
+            raise WorkspaceError("workspace configuration is missing")
+        workspace.version_store.validate_metadata()
+        workspace.current_commit()
+        return workspace
+
+
 def init_workspace(workspace: Path) -> Path:
+    return Workspace.initialize(workspace).root
+
+
+def _initialize_workspace(workspace: Path) -> Path:
     root = _absolute_path(workspace)
     _reject_symlink_components(root)
     if root.exists() and not root.is_dir():
         raise WorkspaceSecurityError("workspace must be a directory")
+    _validate_initialization_targets(root)
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
     root.chmod(0o700)
 
-    for relative in (Path("raw"), Path("wiki"), Path(".memoryforge")):
+    managed_directories = [
+        Path("raw"),
+        Path("wiki"),
+        Path(".memoryforge"),
+        *(Path("wiki") / page_type for page_type in WIKI_DIRECTORIES),
+        Path(".memoryforge/manifests/sources"),
+        Path(".memoryforge/staging"),
+        Path(".memoryforge/rejected"),
+        Path(".memoryforge/traces"),
+        Path(".memoryforge/vectors"),
+    ]
+    for relative in managed_directories:
         _ensure_private_directory(root / relative)
     _write_protective_gitignore(root)
+    _write_new(root / ".memoryforgeignore", _DEFAULT_MEMORYFORGEIGNORE)
+    _write_new(root / "AGENTS.md", _DEFAULT_AGENTS_MD)
+    _write_new(root / "wiki/INDEX.md", "# Knowledge Index\n")
+    _write_new(root / ".memoryforge/config.yaml", _DEFAULT_CONFIG_YAML)
+    _write_new(root / ".memoryforge/schema.yaml", _DEFAULT_SCHEMA_YAML)
 
     database_path = root / DATABASE_RELATIVE_PATH
     _reject_symlink_components(database_path)
     with _connect(database_path) as connection:
-        connection.executescript(_SCHEMA)
+        connection.execute("BEGIN IMMEDIATE")
+        _apply_schema(connection)
     database_path.chmod(0o600)
+
+    version_store = GitVersionStore(root)
+    version_store.initialize()
+    version_store.ensure_baseline(_BASELINE_PATHS)
     return root
 
 
@@ -114,8 +357,51 @@ def workspace_database(workspace: Path) -> Path:
         )
     if not database_path.resolve().is_relative_to(root.resolve()):
         raise WorkspaceSecurityError("workspace database escapes the workspace")
+    _migrate_database(database_path)
     database_path.chmod(0o600)
     return database_path
+
+
+def _validate_workspace_identity_readonly(root: Path) -> None:
+    """Reject arbitrary directories before upgrade code can write into them."""
+    for relative in (Path("raw"), Path("wiki"), Path(".memoryforge")):
+        path = root / relative
+        _reject_symlink_components(path)
+        try:
+            metadata = os.lstat(path)
+        except FileNotFoundError:
+            raise WorkspaceError("MemoryForge workspace is not initialized") from None
+        if not stat.S_ISDIR(metadata.st_mode):
+            raise WorkspaceError("MemoryForge workspace is not initialized")
+
+    database_path = root / DATABASE_RELATIVE_PATH
+    _reject_symlink_components(database_path)
+    try:
+        database_metadata = os.lstat(database_path)
+    except FileNotFoundError:
+        raise WorkspaceError("MemoryForge workspace is not initialized") from None
+    if not stat.S_ISREG(database_metadata.st_mode):
+        raise WorkspaceError("MemoryForge workspace database is invalid")
+
+    try:
+        with sqlite3.connect(database_path.as_uri() + "?mode=ro", uri=True) as connection:
+            rows = connection.execute(
+                """
+                SELECT name
+                FROM sqlite_master
+                WHERE type IN ('table', 'view')
+                  AND name IN ('sources', 'blobs', 'source_versions', 'source_fts')
+                """
+            ).fetchall()
+    except sqlite3.Error as exc:
+        raise WorkspaceError("MemoryForge workspace database is invalid") from exc
+    if {str(row[0]) for row in rows} != {
+        "sources",
+        "blobs",
+        "source_versions",
+        "source_fts",
+    }:
+        raise WorkspaceError("MemoryForge workspace database schema is invalid")
 
 
 def store_source(
@@ -151,6 +437,8 @@ def store_source(
                         v.media_type,
                         v.category,
                         v.observed_at,
+                        v.sensitivity,
+                        v.tags_json,
                         b.content_sha256,
                         b.snapshot_path
                     FROM source_versions AS v
@@ -165,6 +453,8 @@ def store_source(
                     and current_row["category"] == document.category
                     and current_row["media_type"] == document.media_type
                     and current_row["title"] == document.title
+                    and current_row["sensitivity"] == document.sensitivity.value
+                    and current_row["tags_json"] == json.dumps(document.tags)
                 )
                 if metadata_unchanged:
                     snapshot_relative = str(current_row["snapshot_path"])
@@ -240,8 +530,8 @@ def store_source(
                 """
                 INSERT INTO source_versions(
                     source_id, blob_id, supersedes_version_id, media_type,
-                    category, title, observed_at, is_current
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+                    category, title, observed_at, sensitivity, tags_json, is_current
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
                 """,
                 (
                     database_source_id,
@@ -251,6 +541,8 @@ def store_source(
                     document.category,
                     document.title,
                     observed_at,
+                    document.sensitivity.value,
+                    json.dumps(document.tags),
                 ),
             )
             version_id = _lastrowid(version_cursor)
@@ -290,9 +582,10 @@ def search_sources(workspace: Path, query: str, *, limit: int = 10) -> list[Sear
     if limit < 1 or limit > 100:
         raise ValueError("search limit must be between 1 and 100")
 
-    root = _validated_workspace_root(workspace)
+    opened = Workspace.open(workspace)
+    root = opened.root
     match_query = _fts_query(query)
-    with _connect(workspace_database(root)) as connection:
+    with _connect(opened.index_path) as connection:
         rows = connection.execute(
             """
             SELECT
@@ -329,7 +622,7 @@ def search_sources(workspace: Path, query: str, *, limit: int = 10) -> list[Sear
                 source_path=str(row["source_path"]),
                 snapshot_uri=_blob_uri(content_sha256),
                 snapshot_path=snapshot_relative,
-                category=str(row["category"]),
+                category=SourceCategory(str(row["category"])),
                 snippet=_make_snippet(str(row["content"]), query),
                 content_sha256=content_sha256,
                 observed_at=datetime.fromisoformat(str(row["observed_at"])),
@@ -404,19 +697,186 @@ def _validate_managed_directory(path: Path) -> None:
     path.chmod(0o700)
 
 
+def _validate_initialization_targets(root: Path) -> None:
+    reserved = (
+        root / "raw",
+        root / "wiki",
+        root / ".memoryforge",
+        root / ".git",
+        root / ".gitignore",
+        root / ".memoryforgeignore",
+        root / "AGENTS.md",
+    )
+    for path in reserved:
+        _reject_symlink_components(path)
+    conflicts = [path.name for path in reserved if path.exists()]
+    if conflicts:
+        raise WorkspaceError(
+            "workspace paths already exist; refusing to merge: " + ", ".join(conflicts)
+        )
+
+
+def _write_new(path: Path, content: str) -> None:
+    _reject_symlink_components(path)
+    if path.exists():
+        raise WorkspaceError(f"refusing to overwrite existing workspace file: {path.name}")
+    path.write_text(content, encoding="utf-8")
+    path.chmod(0o600)
+
+
 def _write_protective_gitignore(root: Path) -> None:
     path = root / ".gitignore"
     _reject_symlink_components(path)
     existing = path.read_text(encoding="utf-8") if path.exists() else ""
-    lines = existing.splitlines()
+    lines = [line for line in existing.splitlines() if line.strip() != "/.memoryforge/"]
     missing = [rule for rule in _GITIGNORE_RULES if rule not in lines]
-    if not missing:
+    rendered = "\n".join([*lines, *missing])
+    if rendered:
+        rendered += "\n"
+    if rendered == existing:
         return
-    prefix = existing
-    if prefix and not prefix.endswith("\n"):
-        prefix += "\n"
-    path.write_text(prefix + "\n".join(missing) + "\n", encoding="utf-8")
+    path.write_text(rendered, encoding="utf-8")
     path.chmod(0o600)
+
+
+def _migrate_database(database_path: Path) -> None:
+    """Upgrade the Phase 1a schema transactionally without rewriting evidence."""
+    with _connect(database_path) as connection:
+        connection.execute("BEGIN IMMEDIATE")
+        columns = {
+            str(row["name"])
+            for row in connection.execute("PRAGMA table_info(source_versions)").fetchall()
+        }
+        if not columns:
+            _apply_schema(connection)
+            return
+        if "sensitivity" not in columns:
+            connection.execute(
+                "ALTER TABLE source_versions ADD COLUMN sensitivity TEXT NOT NULL DEFAULT 'public'"
+            )
+        if "tags_json" not in columns:
+            connection.execute(
+                "ALTER TABLE source_versions ADD COLUMN tags_json TEXT NOT NULL DEFAULT '[]'"
+            )
+        if "legacy_category" not in columns:
+            connection.execute("ALTER TABLE source_versions ADD COLUMN legacy_category TEXT")
+        placeholders = ", ".join("?" for _ in RAW_CATEGORIES)
+        connection.execute(
+            f"""
+            UPDATE source_versions
+            SET legacy_category = category, category = ?
+            WHERE category NOT IN ({placeholders})
+            """,
+            (SourceCategory.NOTES.value, *RAW_CATEGORIES),
+        )
+        _apply_schema(connection)
+
+
+def _apply_schema(connection: sqlite3.Connection) -> None:
+    for statement in _SCHEMA_STATEMENTS:
+        connection.execute(statement)
+
+
+def _upgrade_workspace_contract(root: Path) -> None:
+    """Add Phase 1 contract files/directories to a valid legacy Phase 1a workspace."""
+    version_store = GitVersionStore(root)
+    version_store.validate_metadata(allow_missing=True)
+    repository_existed = version_store.has_repository()
+    for relative in (
+        Path(".memoryforge/manifests/sources"),
+        Path(".memoryforge/staging"),
+        Path(".memoryforge/rejected"),
+        Path(".memoryforge/traces"),
+        Path(".memoryforge/vectors"),
+        *(Path("wiki") / page_type for page_type in WIKI_DIRECTORIES),
+    ):
+        _ensure_private_directory(root / relative)
+    _write_protective_gitignore(root)
+    defaults = {
+        Path(".memoryforgeignore"): _DEFAULT_MEMORYFORGEIGNORE,
+        Path("AGENTS.md"): _DEFAULT_AGENTS_MD,
+        Path("wiki/INDEX.md"): "# Knowledge Index\n",
+        Path(".memoryforge/config.yaml"): _DEFAULT_CONFIG_YAML,
+        Path(".memoryforge/schema.yaml"): _DEFAULT_SCHEMA_YAML,
+    }
+    for relative, content in defaults.items():
+        path = root / relative
+        _reject_symlink_components(path)
+        if not path.exists():
+            _write_new(path, content)
+        elif not path.is_file():
+            raise WorkspaceSecurityError(f"workspace contract path must be a file: {path}")
+    if not repository_existed:
+        version_store.initialize()
+        version_store.ensure_baseline(_BASELINE_PATHS)
+        return
+    if version_store.head() is None:
+        raise WorkspaceError(
+            "existing Git repository has no HEAD; commit the MemoryForge workspace "
+            "contract manually before opening it"
+        )
+
+
+def _backfill_source_manifests(root: Path) -> None:
+    """Create one verifiable, immutable Manifest for every historical SourceVersion."""
+    database_path = root / DATABASE_RELATIVE_PATH
+    with _connect(database_path) as connection:
+        rows = connection.execute(
+            """
+            SELECT
+                s.source_id,
+                s.source_uri,
+                s.source_path,
+                v.media_type,
+                v.category,
+                v.legacy_category,
+                v.title,
+                v.observed_at,
+                v.sensitivity,
+                v.tags_json,
+                b.content_sha256,
+                b.snapshot_path
+            FROM source_versions AS v
+            JOIN sources AS s ON s.id = v.source_id
+            JOIN blobs AS b ON b.id = v.blob_id
+            ORDER BY v.id
+            """
+        ).fetchall()
+
+    store = SourceManifestStore(root / ".memoryforge/manifests/sources")
+    for row in rows:
+        content_sha256 = str(row["content_sha256"])
+        snapshot_path = Path(str(row["snapshot_path"]))
+        media_type = str(row["media_type"])
+        if media_type not in {"text/markdown", "text/plain"}:
+            raise WorkspaceIntegrityError("SourceVersion media type is invalid")
+        try:
+            tags_value = json.loads(str(row["tags_json"]))
+        except json.JSONDecodeError as exc:
+            raise WorkspaceIntegrityError("SourceVersion tags metadata is invalid") from exc
+        if not isinstance(tags_value, list) or not all(isinstance(tag, str) for tag in tags_value):
+            raise WorkspaceIntegrityError("SourceVersion tags metadata is invalid")
+        manifest = SourceVersionManifest(
+            source_id=str(row["source_id"]),
+            source_uri=str(row["source_uri"]),
+            source_path=str(row["source_path"]),
+            content_sha256=content_sha256,
+            snapshot_uri=_blob_uri(content_sha256),
+            snapshot_path=snapshot_path.as_posix(),
+            media_type=cast(Literal["text/markdown", "text/plain"], media_type),
+            category=SourceCategory(str(row["category"])),
+            title=str(row["title"]),
+            observed_at=datetime.fromisoformat(str(row["observed_at"])),
+            sensitivity=Sensitivity(str(row["sensitivity"])),
+            tags=tuple(tags_value),
+            legacy_category=(
+                str(row["legacy_category"]) if row["legacy_category"] is not None else None
+            ),
+        )
+        if store.contains(manifest):
+            continue
+        _verify_blob_hash(root, content_sha256, snapshot_path)
+        store.write(manifest)
 
 
 def _write_blob(root: Path, content_sha256: str, content: bytes) -> tuple[Path, bool]:
@@ -489,10 +949,15 @@ def _cleanup_blob_temps(root: Path, content_sha256: str) -> None:
 
 
 def _verify_blob_hash(root: Path, content_sha256: str, relative: Path) -> None:
+    _read_blob_bytes(root, content_sha256, relative)
+
+
+def _read_blob_bytes(root: Path, content_sha256: str, relative: Path) -> bytes:
     expected_relative = _blob_relative_path(content_sha256)
     if relative != expected_relative:
         raise WorkspaceIntegrityError("blob integrity metadata is inconsistent")
 
+    content = bytearray()
     try:
         with _open_blob_chain(root, content_sha256, create=False) as chain:
             prefix_fd = chain[-1][2]
@@ -509,6 +974,7 @@ def _verify_blob_hash(root: Path, content_sha256: str, relative: Path) -> None:
                 with os.fdopen(descriptor, "rb", closefd=False) as snapshot:
                     for chunk in iter(lambda: snapshot.read(1024 * 1024), b""):
                         digest.update(chunk)
+                        content.extend(chunk)
                 os.fchmod(descriptor, 0o600)
             finally:
                 os.close(descriptor)
@@ -520,6 +986,7 @@ def _verify_blob_hash(root: Path, content_sha256: str, relative: Path) -> None:
 
     if digest.hexdigest() != content_sha256:
         raise WorkspaceIntegrityError("blob integrity check failed: digest mismatch")
+    return bytes(content)
 
 
 def _cleanup_orphan_blob(root: Path, database_path: Path, content_sha256: str) -> None:

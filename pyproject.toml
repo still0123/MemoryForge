@@ -24,7 +24,7 @@ dev = [
 ]
 
 [project.scripts]
-memoryforge = "memoryforge.cli:app"
+memoryforge = "memoryforge.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/memoryforge"]

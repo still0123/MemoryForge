@@ -23,7 +23,15 @@ def test_init_workspace_creates_minimal_directories_and_fts_schema(tmp_path: Pat
     assert (workspace / "wiki").is_dir()
     assert (workspace / ".memoryforge").is_dir()
     assert (workspace / ".memoryforge/index.sqlite").is_file()
-    assert (workspace / ".gitignore").read_text(encoding="utf-8") == "/raw/\n/.memoryforge/\n"
+    assert (workspace / ".gitignore").read_text(encoding="utf-8") == (
+        "/raw/\n"
+        "/.memoryforge/index.sqlite*\n"
+        "/.memoryforge/manifests/\n"
+        "/.memoryforge/staging/\n"
+        "/.memoryforge/rejected/\n"
+        "/.memoryforge/traces/\n"
+        "/.memoryforge/vectors/\n"
+    )
     assert stat.S_IMODE(workspace.stat().st_mode) == 0o700
     assert stat.S_IMODE((workspace / "raw").stat().st_mode) == 0o700
     assert stat.S_IMODE((workspace / "wiki").stat().st_mode) == 0o700

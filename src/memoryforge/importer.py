@@ -1,19 +1,26 @@
 from __future__ import annotations
 
+import fnmatch
 import hashlib
 import os
 import re
 import stat
 import unicodedata
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
-from memoryforge.models import ImportResult, LocalDocument
-from memoryforge.workspace import store_source, workspace_database
+from memoryforge.manifests import SourceManifestStore
+from memoryforge.models import (
+    ImportResult,
+    LocalDocument,
+    Sensitivity,
+    SourceCategory,
+    SourceVersionManifest,
+)
+from memoryforge.workspace import Workspace, store_source
 
 ALLOWED_SUFFIXES = {".md", ".markdown", ".txt"}
 MAX_SOURCE_BYTES = 5 * 1024 * 1024
 
-_CATEGORY_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
 _SENSITIVE_EXACT_NAMES = {
     ".env",
     ".git-credentials",
@@ -121,10 +128,16 @@ def import_local_file(
     *,
     category: str = "notes",
     source_root: Path | None = None,
+    tags: tuple[str, ...] = (),
+    sensitivity: Sensitivity = Sensitivity.PUBLIC,
 ) -> ImportResult:
-    workspace_database(workspace)
-    if not _CATEGORY_PATTERN.fullmatch(category):
-        raise SourceValidationError("category must use 1-32 lowercase letters, numbers, '_' or '-'")
+    current_workspace = Workspace.open(workspace)
+    workspace = current_workspace.root
+    try:
+        normalized_category = SourceCategory(category)
+    except ValueError as exc:
+        allowed = ", ".join(item.value for item in SourceCategory)
+        raise SourceValidationError(f"category must be one of: {allowed}") from exc
 
     allowed_root = (source_root if source_root is not None else Path.cwd()).expanduser().resolve()
     resolved = validate_source_path(source_path, source_root=allowed_root)
@@ -132,6 +145,10 @@ def import_local_file(
         allowed_root,
         resolved,
     )
+    if _is_ignored(allowed_root, relative_source_path):
+        raise SourceValidationError(
+            f"source is excluded by .memoryforgeignore: {relative_source_path}"
+        )
     source_bytes, content_sha256 = _read_source_secure(
         allowed_root,
         filesystem_relative_path,
@@ -150,23 +167,102 @@ def import_local_file(
 
     canonical_path = Path(relative_source_path)
     suffix = canonical_path.suffix.lower()
+    normalized_tags = tuple(sorted({tag.strip() for tag in tags if tag.strip()}))
     document = LocalDocument.model_validate(
         {
             "source_uri": source_uri,
             "source_path": relative_source_path,
             "media_type": ("text/markdown" if suffix in {".md", ".markdown"} else "text/plain"),
-            "category": category,
+            "category": normalized_category,
             "suffix": suffix,
             "title": _extract_title(content, canonical_path.stem),
             "content": content,
+            "sensitivity": sensitivity,
+            "tags": normalized_tags,
         }
     )
-    return store_source(
+    result = store_source(
         workspace,
         source_id=source_id,
         content_sha256=content_sha256,
         document=document,
     )
+    SourceManifestStore(current_workspace.manifest_dir).write(
+        SourceVersionManifest(
+            source_id=result.source_id,
+            source_uri=result.source_uri,
+            source_path=document.source_path,
+            content_sha256=result.content_sha256,
+            snapshot_uri=result.snapshot_uri,
+            snapshot_path=result.snapshot_path,
+            media_type=document.media_type,
+            category=result.category,
+            title=result.title,
+            observed_at=result.observed_at,
+            sensitivity=document.sensitivity,
+            tags=document.tags,
+        )
+    )
+    return result
+
+
+def _is_ignored(source_root: Path, relative_path: str) -> bool:
+    """Apply the documented, intentionally small .memoryforgeignore subset."""
+    try:
+        root_fd = os.open(
+            source_root,
+            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+        )
+    except OSError as exc:
+        raise SourceValidationError("source root could not be opened safely") from exc
+    try:
+        try:
+            ignore_fd = os.open(
+                ".memoryforgeignore",
+                os.O_RDONLY | os.O_NOFOLLOW,
+                dir_fd=root_fd,
+            )
+        except FileNotFoundError:
+            return False
+        except OSError as exc:
+            raise SourceValidationError(".memoryforgeignore could not be opened safely") from exc
+        try:
+            file_stat = os.fstat(ignore_fd)
+            if not stat.S_ISREG(file_stat.st_mode):
+                raise SourceValidationError(".memoryforgeignore must be a regular file")
+            with os.fdopen(ignore_fd, "r", encoding="utf-8", closefd=False) as ignore_file:
+                rules = ignore_file.read().splitlines()
+        except (OSError, UnicodeDecodeError) as exc:
+            raise SourceValidationError(".memoryforgeignore must be valid UTF-8") from exc
+        finally:
+            os.close(ignore_fd)
+    finally:
+        os.close(root_fd)
+
+    path = PurePosixPath(relative_path)
+    for raw_rule in rules:
+        rule = raw_rule.strip()
+        if not rule or rule.startswith("#"):
+            continue
+        if rule.startswith("!"):
+            raise SourceValidationError(
+                ".memoryforgeignore negation rules are not supported in Phase 1"
+            )
+        anchored = rule.startswith("/")
+        rule = rule.lstrip("/")
+        directory_rule = rule.endswith("/")
+        rule = rule.rstrip("/")
+        if not rule or any(part == ".." for part in PurePosixPath(rule).parts):
+            raise SourceValidationError(".memoryforgeignore contains an unsafe rule")
+        candidates = [relative_path] if anchored or "/" in rule else list(path.parts)
+        if directory_rule:
+            directories = [
+                PurePosixPath(*path.parts[:index]).as_posix() for index in range(1, len(path.parts))
+            ]
+            candidates = directories if anchored or "/" in rule else list(path.parts[:-1])
+        if any(fnmatch.fnmatchcase(candidate, rule) for candidate in candidates):
+            return True
+    return False
 
 
 def _extract_title(content: str, fallback: str) -> str:

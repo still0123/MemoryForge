@@ -7,20 +7,24 @@ It compiles immutable source material into a versioned Wiki, stages every AI-gen
 
 ## Status
 
-The Phase 1a local ingestion foundation is implemented:
+The Phase 1 trusted-storage foundation is implemented:
 
-- initialize a private workspace with immutable `raw/` storage and SQLite FTS5;
+- initialize a private workspace with immutable `raw/` storage, SQLite FTS5,
+  schema/config files, and a clean Git baseline commit;
 - import local Markdown and UTF-8 text files;
 - track stable Sources and auditable SourceVersions while globally reusing
   content-addressed Blob snapshots;
+- write one append-only, Pydantic-validated Manifest per SourceVersion;
 - make repeated imports idempotent and retain old versions outside normal search;
 - search English and Chinese titles/body text with immutable snapshot URIs and
   content hashes;
+- stage immutable ChangeSets with hashed candidate Wiki files without touching
+  the stable `wiki/` tree;
 - reject unsupported, oversized, symlinked, and out-of-root files;
 - reject common sensitive file names and high-confidence secret patterns.
 
 LLM compilation, vector retrieval, Feishu integration, Wiki write-back, and
-ChangeSets are intentionally not implemented in this phase.
+ChangeSet review/apply are intentionally not implemented in this phase.
 
 ## Quickstart
 
@@ -52,8 +56,16 @@ to import. Search results cite immutable `mf://blob/<sha256>` evidence URIs and
 expose only workspace-relative snapshot paths rather than mutable original files
 or private absolute paths.
 
-`memoryforge init` creates a workspace `.gitignore` that protects `raw/` and
-`.memoryforge/` by default while leaving `wiki/` available for version control.
+An optional `.memoryforgeignore` in the source root excludes files before they
+are read. Phase 1 supports blank lines, `#` comments, root-anchored `/patterns`,
+directory patterns ending in `/`, and shell-style `*`, `?`, and `[]` wildcards.
+Patterns without `/` match any path component. Negation (`!`) and parent
+traversal (`..`) are rejected instead of being interpreted ambiguously. The
+ignore file itself must be a regular UTF-8 file and may not be a symbolic link.
+
+`memoryforge init` creates a workspace `.gitignore` that protects Raw blobs,
+SQLite, manifests, staging, traces, and vectors while leaving the stable Wiki
+and workspace contract available for version control.
 Secret detection is deliberately conservative and is not a replacement for a
 dedicated secret-scanning tool.
 
@@ -67,7 +79,18 @@ reuses them.
 Phase 1a uses a local, trusted single-user threat model. It protects against
 accidental exposure, common symlink escapes, and evidence tampering. It does not
 claim to resist a malicious process running concurrently as the same account and
-replacing the SQLite directory.
+replacing the SQLite directory. Concurrent Git writes by an external process
+that does not honor MemoryForge's staging lock are also outside this single-user
+threat model.
+
+ChangeSet candidates, metadata, and a metadata digest are published durably
+before the staging directory becomes visible. New records may only be
+`PROPOSED`; review/apply will use separate immutable transition events in a later
+phase. Every proposal load, reuse, and review verifies that its `base_commit`
+still matches the current Git `HEAD`; a future apply implementation must repeat
+that check immediately before writing or committing the stable Wiki. The digest
+detects accidental or one-sided metadata edits, but Phase 1 does not claim to
+resist an attacker who can rewrite both a record and its digest.
 
 ## Core workflow
 
@@ -107,5 +130,9 @@ memoryforge init <workspace>
 memoryforge import <path> --workspace <workspace> [--category <category>]
 memoryforge search <query> --workspace <workspace>
 ```
+
+The lifecycle commands `ingest`, `review`, `apply`, `reject`, `ask`, `lint`,
+`history`, `rollback`, and `eval` are registered as stable CLI contracts and
+return an explicit “not enabled” error until their milestone is implemented.
 
 The public demo fixture contains fictional data only.
