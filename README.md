@@ -7,8 +7,8 @@ It compiles immutable source material into a versioned Wiki, stages every AI-gen
 
 ## Status
 
-The Phase 1 trusted-storage foundation and the Phase 2 local core workflow are
-implemented:
+The Phase 1 trusted-storage foundation, Phase 2 local core workflow, and Phase 3
+local cited answering are implemented:
 
 - initialize a private workspace with immutable `raw/` storage, SQLite FTS5,
   schema/config files, and a clean Git baseline commit;
@@ -26,12 +26,14 @@ implemented:
 - review candidate Wiki files and unified diffs without modifying stable pages;
 - explicitly approve and apply a ChangeSet, commit only its Wiki paths, and
   retain an applied receipt;
+- ask questions over applied Wiki facts with deterministic extractive answers
+  and citations back to immutable Blob character ranges;
 - reject unsupported, oversized, symlinked, and out-of-root files;
 - reject common sensitive file names and high-confidence secret patterns.
 
-Network LLM compilation, vector retrieval, Feishu integration, cited question
-answering, reject, lint, history, rollback, and evaluation are not implemented.
-Phase 2 compilation is deliberately local and deterministic.
+Network LLM compilation, vector retrieval, Feishu integration, reject, lint,
+history, rollback, and evaluation are not implemented. Compilation and cited
+answering are deliberately local and deterministic.
 
 ## Quickstart
 
@@ -51,14 +53,24 @@ memoryforge search 'cache design' --workspace ./demo-workspace
 memoryforge ingest --pending --workspace ./demo-workspace
 memoryforge review <changeset-id> --workspace ./demo-workspace
 memoryforge apply <changeset-id> --approve --workspace ./demo-workspace
+memoryforge ask 'What does this project say about cache design?' \
+  --workspace ./demo-workspace
 ```
 
-The Phase 2 demo compiles pending current SourceVersions into stable
+The demo compiles pending current SourceVersions into stable
 `wiki/sources/<source-id>.md` candidates. Generated pages include
 the Source ID, content hash, and a Markdown citation footnote containing the
 immutable `mf://blob/<sha256>` URI and exact character locator. Re-running
 `ingest --pending` is idempotent before apply and reports `no_pending` after the
 matching page is applied.
+
+`memoryforge ask` searches only facts in the applied `wiki/` tree. It returns
+the best matching fact verbatim with its `mf://blob/<sha256>` URI, exact
+character locator, and source ID. If the applied Wiki has insufficient evidence,
+it returns `unknown` and `不知道`. This is deterministic extractive answering:
+there is no LLM, vector database, Feishu integration, or multi-step Agent in the
+current implementation. The public `--as-of` option is reserved for a later
+history milestone and currently returns an explicit unsupported error.
 
 One workspace corresponds to one source root. Always run MemoryForge from that
 source root; Source IDs are the full SHA-256 of the canonical relative source
@@ -154,10 +166,11 @@ memoryforge search <query> --workspace <workspace>
 memoryforge ingest --pending --workspace <workspace> [--source <source-id>]
 memoryforge review <changeset-id> --workspace <workspace>
 memoryforge apply <changeset-id> --approve --workspace <workspace>
+memoryforge ask <question> --workspace <workspace> [--as-of <timestamp>]
 ```
 
-The lifecycle commands `reject`, `ask`, `lint`, `history`, `rollback`, and
-`eval` remain registered CLI contracts and return an explicit “not enabled”
-error until their milestone is implemented.
+The lifecycle commands `reject`, `lint`, `history`, `rollback`, and `eval`
+remain registered CLI contracts and return an explicit “not enabled” error
+until their milestone is implemented.
 
 The public demo fixture contains fictional data only.

@@ -103,14 +103,14 @@ def test_cli_unifies_secure_import_search_and_future_contracts(
         ],
     )
     searched = runner.invoke(app, ["search", "Searchable", "--workspace", str(workspace)])
-    unavailable = runner.invoke(app, ["ask", "current?", "--workspace", str(workspace)])
+    unanswered = runner.invoke(app, ["ask", "current?", "--workspace", str(workspace)])
 
     assert imported.exit_code == 0
     assert json.loads(imported.stdout)["status"] == "created"
     assert searched.exit_code == 0
     assert json.loads(searched.stdout)[0]["source_path"] == "note.md"
-    assert unavailable.exit_code == 2
-    assert "not enabled" in unavailable.output
+    assert unanswered.exit_code == 0
+    assert json.loads(unanswered.stdout)["status"] == "unknown"
     manifests = SourceManifestStore(Workspace.open(workspace).manifest_dir).list_all()
     assert manifests[0].sensitivity is Sensitivity.LOCAL_ONLY
     assert manifests[0].tags == ("evidence",)

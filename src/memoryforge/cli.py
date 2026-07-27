@@ -15,6 +15,7 @@ from memoryforge.compiler import compilation_payload, compile_pending_sources
 from memoryforge.errors import FeatureUnavailableError, MemoryForgeError, WorkspaceError
 from memoryforge.importer import SourceValidationError, import_local_file
 from memoryforge.models import Sensitivity
+from memoryforge.query import answer_question
 from memoryforge.workspace import (
     Workspace,
     WorkspaceIntegrityError,
@@ -292,8 +293,21 @@ def ask(
     as_of: Annotated[str | None, typer.Option("--as-of")] = None,
     workspace: WorkspaceOption = Path("."),
 ) -> None:
-    _ = question, as_of
-    _require_future_feature(workspace, "ask")
+    try:
+        if as_of is not None:
+            raise FeatureUnavailableError("--as-of is not supported yet")
+        opened = Workspace.open(workspace)
+        result = answer_question(opened.root, question)
+    except (
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 @app.command()
