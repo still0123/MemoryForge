@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import fcntl
+import os
 import sqlite3
 import stat
 from contextlib import closing
@@ -7,8 +9,10 @@ from pathlib import Path
 
 import pytest
 
+import memoryforge.workspace as workspace_module
 from memoryforge.importer import import_local_file
 from memoryforge.workspace import (
+    Workspace,
     WorkspaceIntegrityError,
     WorkspaceSecurityError,
     init_workspace,
@@ -28,6 +32,7 @@ def test_init_workspace_creates_minimal_directories_and_fts_schema(tmp_path: Pat
         "/.memoryforge/index.sqlite*\n"
         "/.memoryforge/manifests/\n"
         "/.memoryforge/staging/\n"
+        "/.memoryforge/workspace.lock\n"
         "/.memoryforge/rejected/\n"
         "/.memoryforge/traces/\n"
         "/.memoryforge/vectors/\n"
@@ -37,6 +42,39 @@ def test_init_workspace_creates_minimal_directories_and_fts_schema(tmp_path: Pat
     assert stat.S_IMODE((workspace / "wiki").stat().st_mode) == 0o700
     assert stat.S_IMODE((workspace / ".memoryforge").stat().st_mode) == 0o700
     assert stat.S_IMODE((workspace / ".memoryforge/index.sqlite").stat().st_mode) == 0o600
+
+
+def test_search_opens_workspace_without_running_upgrade_writes(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    source_root = tmp_path / "repository"
+    source_root.mkdir()
+    source = source_root / "notes.md"
+    source.write_text("# Cache\n\nCache entries expire after sixty seconds.", encoding="utf-8")
+    workspace = init_workspace(tmp_path / "knowledge")
+    import_local_file(workspace, source, source_root=source_root)
+
+    def reject_write(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("read-only search must not upgrade the workspace")
+
+    monkeypatch.setattr(workspace_module, "_upgrade_workspace_contract", reject_write)
+    monkeypatch.setattr(workspace_module, "_migrate_database", reject_write)
+    monkeypatch.setattr(workspace_module, "_backfill_source_manifests", reject_write)
+
+    assert search_sources(workspace, "cache")
+
+
+def test_workspace_exclusive_lock_blocks_a_second_writer(tmp_path: Path) -> None:
+    workspace = Workspace.initialize(tmp_path / "knowledge")
+
+    with workspace.exclusive_lock():
+        descriptor = os.open(workspace.internal_dir / "workspace.lock", os.O_RDWR)
+        try:
+            with pytest.raises(BlockingIOError):
+                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        finally:
+            os.close(descriptor)
 
 
 def test_init_workspace_rejects_workspace_symlink(tmp_path: Path) -> None:

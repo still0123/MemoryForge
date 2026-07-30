@@ -203,7 +203,10 @@ def import_local_file(
             "source content appears to contain a high-confidence secret pattern"
         )
 
-    source_id = hashlib.sha256(relative_source_path.encode("utf-8")).hexdigest()
+    root_id = hashlib.sha256(allowed_root.as_posix().encode("utf-8")).hexdigest()
+    source_id = hashlib.sha256(
+        f"local:{root_id}:{relative_source_path}".encode()
+    ).hexdigest()
     source_uri = f"mf://source/{source_id}"
 
     canonical_path = Path(relative_source_path)

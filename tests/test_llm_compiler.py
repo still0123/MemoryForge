@@ -87,6 +87,7 @@ def test_llm_compiler_merges_two_pending_sources_and_keeps_review_gate(
     }
     page = compilation.candidate_files[merged_path]
     assert "source_versions:" in page
+    assert "## Model summary (unverified)" in page
     assert "Cache and storage are local subsystems." in page
     assert first_import["source_id"] in page
     assert second_import["source_id"] in page

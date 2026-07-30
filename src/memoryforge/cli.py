@@ -526,7 +526,7 @@ def review(
     workspace: WorkspaceOption = Path("."),
 ) -> None:
     try:
-        opened = Workspace.open(workspace)
+        opened = Workspace.open_readonly(workspace)
         stored = ChangeSetStore(opened).get(changeset_id)
         diffs: dict[str, str] = {}
         for path, candidate in sorted(stored.candidate_files.items()):
@@ -573,50 +573,51 @@ def apply(
         _exit_with_safe_error(ValueError("apply requires explicit --approve"))
     try:
         opened = Workspace.open(workspace)
-        store = ChangeSetStore(opened)
-        stored = store.get(changeset_id)
-        paths = tuple(sorted(stored.candidate_files))
-        opened.version_store.require_clean_paths(paths)
-        opened.require_current_source_versions(stored.changeset.source_versions)
-        page_sources = candidate_page_sources(stored.candidate_files)
-        validate_changeset_page_sources(page_sources, stored.changeset.source_ids)
-        previous_source_versions = opened.record_applied_source_versions(
-            stored.changeset.source_versions
-        )
-        try:
-            previous_page_sources = opened.replace_applied_page_sources(page_sources)
-        except Exception:
-            opened.restore_applied_source_versions(previous_source_versions)
-            raise
-        previous_files: dict[Path, str | None] = {}
-        try:
-            for path, content in stored.candidate_files.items():
-                destination = opened.root / path
-                previous_files[destination] = (
-                    destination.read_text(encoding="utf-8") if destination.is_file() else None
-                )
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                destination.write_text(content, encoding="utf-8")
-            commit = opened.version_store.commit_paths(
-                paths,
-                f"knowledge: apply {changeset_id}",
+        with opened.exclusive_lock():
+            store = ChangeSetStore(opened)
+            stored = store.get(changeset_id)
+            paths = tuple(sorted(stored.candidate_files))
+            opened.version_store.require_clean_paths(paths)
+            opened.require_current_source_versions(stored.changeset.source_versions)
+            page_sources = candidate_page_sources(stored.candidate_files)
+            validate_changeset_page_sources(page_sources, stored.changeset.source_ids)
+            previous_source_versions = opened.record_applied_source_versions(
+                stored.changeset.source_versions
             )
-        except Exception:
-            for destination, previous in previous_files.items():
-                if previous is None:
-                    destination.unlink(missing_ok=True)
-                else:
-                    destination.write_text(previous, encoding="utf-8")
-            opened.restore_applied_source_versions(previous_source_versions)
-            opened.restore_applied_page_sources(previous_page_sources)
-            with suppress(MemoryForgeError):
-                opened.version_store.reset_paths(paths)
-            raise
-        archive_warning = None
-        try:
-            store.archive_applied(stored, commit=commit)
-        except MemoryForgeError as exc:
-            archive_warning = str(exc)
+            try:
+                previous_page_sources = opened.replace_applied_page_sources(page_sources)
+            except Exception:
+                opened.restore_applied_source_versions(previous_source_versions)
+                raise
+            previous_files: dict[Path, str | None] = {}
+            try:
+                for path, content in stored.candidate_files.items():
+                    destination = opened.root / path
+                    previous_files[destination] = (
+                        destination.read_text(encoding="utf-8") if destination.is_file() else None
+                    )
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    destination.write_text(content, encoding="utf-8")
+                commit = opened.version_store.commit_paths(
+                    paths,
+                    f"knowledge: apply {changeset_id}",
+                )
+            except Exception:
+                for destination, previous in previous_files.items():
+                    if previous is None:
+                        destination.unlink(missing_ok=True)
+                    else:
+                        destination.write_text(previous, encoding="utf-8")
+                opened.restore_applied_source_versions(previous_source_versions)
+                opened.restore_applied_page_sources(previous_page_sources)
+                with suppress(MemoryForgeError):
+                    opened.version_store.reset_paths(paths)
+                raise
+            archive_warning = None
+            try:
+                store.archive_applied(stored, commit=commit)
+            except MemoryForgeError as exc:
+                archive_warning = str(exc)
     except (
         MemoryForgeError,
         WorkspaceIntegrityError,
@@ -676,7 +677,7 @@ def ask(
     try:
         if as_of is not None:
             raise FeatureUnavailableError("--as-of is not supported yet")
-        opened = Workspace.open(workspace)
+        opened = Workspace.open_readonly(workspace)
         provider = OpenAICompatibleProvider(ProviderConfig.from_environment()) if llm else None
         if provider is not None:
             typer.echo("正在基于命中的公开 Wiki 证据生成回答…", err=True)
@@ -747,7 +748,7 @@ def eval(
     workspace: WorkspaceOption = Path("."),
 ) -> None:
     try:
-        opened = Workspace.open(workspace)
+        opened = Workspace.open_readonly(workspace)
         result = run_evaluation(opened.root, eval_config)
     except (
         MemoryForgeError,

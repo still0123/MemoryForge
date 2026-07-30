@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
 import os
@@ -39,6 +40,7 @@ _GITIGNORE_RULES = (
     "/.memoryforge/index.sqlite*",
     "/.memoryforge/manifests/",
     "/.memoryforge/staging/",
+    "/.memoryforge/workspace.lock",
     "/.memoryforge/rejected/",
     "/.memoryforge/traces/",
     "/.memoryforge/vectors/",
@@ -508,6 +510,25 @@ class Workspace:
             raise WorkspaceSecurityError("managed path must remain inside .memoryforge")
         _validate_managed_directory(path)
 
+    @contextmanager
+    def exclusive_lock(self) -> Iterator[None]:
+        self.validate_internal_directory(self.internal_dir)
+        try:
+            descriptor = os.open(
+                self.internal_dir / "workspace.lock",
+                os.O_RDWR | os.O_CREAT | _no_follow_flag(),
+                0o600,
+            )
+        except OSError as exc:
+            raise WorkspaceSecurityError("workspace lock is unsafe") from exc
+        try:
+            if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+                raise WorkspaceSecurityError("workspace lock must be a regular file")
+            fcntl.flock(descriptor, fcntl.LOCK_EX)
+            yield
+        finally:
+            os.close(descriptor)
+
     @classmethod
     def initialize(cls, root: Path) -> Workspace:
         initialized = _initialize_workspace(root)
@@ -522,6 +543,17 @@ class Workspace:
         _upgrade_workspace_contract(resolved)
         workspace_database(resolved)
         _backfill_source_manifests(resolved)
+        workspace = cls(resolved)
+        if not workspace.config_path.is_file() or not workspace.schema_path.is_file():
+            raise WorkspaceError("workspace configuration is missing")
+        workspace.version_store.validate_metadata()
+        workspace.current_commit()
+        return workspace
+
+    @classmethod
+    def open_readonly(cls, root: Path) -> Workspace:
+        resolved = _validated_workspace_root(root)
+        _validate_workspace_identity_readonly(resolved)
         workspace = cls(resolved)
         if not workspace.config_path.is_file() or not workspace.schema_path.is_file():
             raise WorkspaceError("workspace configuration is missing")
@@ -623,7 +655,7 @@ def register_git_checkout(
 def list_git_checkouts(workspace: Path) -> tuple[GitRepositoryRecord, ...]:
     """List the existing local Git checkouts registered with this workspace."""
     opened = Workspace.open(workspace)
-    with _connect(opened.index_path) as connection:
+    with _connect_readonly(opened.index_path) as connection:
         rows = connection.execute(
             "SELECT * FROM git_repositories ORDER BY registered_at, repository_id"
         ).fetchall()
@@ -1229,10 +1261,10 @@ def search_sources(workspace: Path, query: str, *, limit: int = 10) -> list[Sear
     if limit < 1 or limit > 100:
         raise ValueError("search limit must be between 1 and 100")
 
-    opened = Workspace.open(workspace)
+    opened = Workspace.open_readonly(workspace)
     root = opened.root
     match_query = _fts_query(query)
-    with _connect(opened.index_path) as connection:
+    with _connect_readonly(opened.index_path) as connection:
         rows = connection.execute(
             """
             SELECT
@@ -1260,7 +1292,12 @@ def search_sources(workspace: Path, query: str, *, limit: int = 10) -> list[Sear
     for row in rows:
         content_sha256 = str(row["content_sha256"])
         snapshot_relative = str(row["snapshot_path"])
-        _verify_blob_hash(root, content_sha256, Path(snapshot_relative))
+        _verify_blob_hash(
+            root,
+            content_sha256,
+            Path(snapshot_relative),
+            repair_permissions=False,
+        )
         results.append(
             SearchResult(
                 source_id=str(row["source_id"]),
@@ -1285,8 +1322,8 @@ def find_applied_page_paths(workspace: Path, query: str, *, limit: int = 10) -> 
     if limit < 1 or limit > 100:
         raise ValueError("search limit must be between 1 and 100")
 
-    opened = Workspace.open(workspace)
-    with _connect(opened.index_path) as connection:
+    opened = Workspace.open_readonly(workspace)
+    with _connect_readonly(opened.index_path) as connection:
         rows = connection.execute(
             """
             SELECT ps.page_path
@@ -1324,8 +1361,8 @@ def read_source_excerpt(
     if locator_match is None:
         raise WorkspaceIntegrityError("Citation locator is invalid")
 
-    opened = Workspace.open(workspace)
-    with _connect(opened.index_path) as connection:
+    opened = Workspace.open_readonly(workspace)
+    with _connect_readonly(opened.index_path) as connection:
         row = connection.execute(
             """
             SELECT b.content_sha256, b.snapshot_path
@@ -1343,6 +1380,7 @@ def read_source_excerpt(
         opened.root,
         str(row["content_sha256"]),
         Path(str(row["snapshot_path"])),
+        repair_permissions=False,
     )
     try:
         text = evidence.decode("utf-8")
@@ -1362,8 +1400,8 @@ def is_public_source_version(
     source_version: int,
 ) -> bool:
     """Return whether one immutable source revision may be sent to an LLM."""
-    opened = Workspace.open(workspace)
-    with _connect(opened.index_path) as connection:
+    opened = Workspace.open_readonly(workspace)
+    with _connect_readonly(opened.index_path) as connection:
         row = connection.execute(
             """
             SELECT 1
@@ -1388,6 +1426,23 @@ def _connect(database_path: Path) -> Iterator[sqlite3.Connection]:
     except Exception:
         connection.rollback()
         raise
+    finally:
+        connection.close()
+
+
+@contextmanager
+def _connect_readonly(database_path: Path) -> Iterator[sqlite3.Connection]:
+    connection = sqlite3.connect(
+        database_path.as_uri() + "?mode=ro",
+        uri=True,
+        timeout=30,
+    )
+    connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA foreign_keys = ON")
+    connection.execute("PRAGMA query_only = ON")
+    connection.execute("PRAGMA busy_timeout = 30000")
+    try:
+        yield connection
     finally:
         connection.close()
 
@@ -2050,11 +2105,28 @@ def _cleanup_blob_temps(root: Path, content_sha256: str) -> None:
         return
 
 
-def _verify_blob_hash(root: Path, content_sha256: str, relative: Path) -> None:
-    _read_blob_bytes(root, content_sha256, relative)
+def _verify_blob_hash(
+    root: Path,
+    content_sha256: str,
+    relative: Path,
+    *,
+    repair_permissions: bool = True,
+) -> None:
+    _read_blob_bytes(
+        root,
+        content_sha256,
+        relative,
+        repair_permissions=repair_permissions,
+    )
 
 
-def _read_blob_bytes(root: Path, content_sha256: str, relative: Path) -> bytes:
+def _read_blob_bytes(
+    root: Path,
+    content_sha256: str,
+    relative: Path,
+    *,
+    repair_permissions: bool = True,
+) -> bytes:
     expected_relative = _blob_relative_path(content_sha256)
     if relative != expected_relative:
         raise WorkspaceIntegrityError("blob integrity metadata is inconsistent")
@@ -2077,7 +2149,8 @@ def _read_blob_bytes(root: Path, content_sha256: str, relative: Path) -> bytes:
                     for chunk in iter(lambda: snapshot.read(1024 * 1024), b""):
                         digest.update(chunk)
                         content.extend(chunk)
-                os.fchmod(descriptor, 0o600)
+                if repair_permissions:
+                    os.fchmod(descriptor, 0o600)
             finally:
                 os.close(descriptor)
             _assert_blob_chain(root, chain)

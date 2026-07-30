@@ -27,7 +27,8 @@ _INDEX_ENTRY = re.compile(
     re.MULTILINE,
 )
 _FRONTMATTER = re.compile(r"\A---\n(?P<fields>.*?)\n---\n", re.DOTALL)
-_WORDS = re.compile(r"[a-z0-9]+|[\u4e00-\u9fff]", re.IGNORECASE)
+_WORDS = re.compile(r"[a-z0-9]+|[\u4e00-\u9fff]+", re.IGNORECASE)
+_CJK = re.compile(r"^[\u4e00-\u9fff]+$")
 _REPOSITORY_OVERVIEW_LINK = re.compile(r"^pages/repository-[a-f0-9]{12}\.md$")
 _STOP_WORDS = {
     "a",
@@ -59,6 +60,10 @@ class CitationPayload(TypedDict):
     quote: str
 
 
+class EvidencePayload(CitationPayload):
+    text: str
+
+
 class AskPayload(TypedDict):
     status: Literal["answered", "unknown"]
     answer: str
@@ -69,7 +74,7 @@ class AskPayload(TypedDict):
     locator: str | None
     quote: str | None
     trace: NotRequired[list[TraceStep]]
-    evidence: NotRequired[str]
+    evidence: NotRequired[list[EvidencePayload]]
 
 
 class TraceStep(TypedDict):
@@ -139,18 +144,29 @@ def answer_question(
         "quote": citation["quote"],
     }
     if verify:
-        result["evidence"] = read_source_excerpt(
-            workspace_root,
-            source_id=citation["source_id"],
-            source_version=citation["source_version"],
-            locator=citation["locator"],
-        )
-        trace.append(
-            {
-                "level": "L3",
-                "artifact": f"source {citation['source_id']} revision {citation['source_version']}",
-            }
-        )
+        evidence: list[EvidencePayload] = []
+        for selected_citation in citations:
+            evidence.append(
+                {
+                    **selected_citation,
+                    "text": read_source_excerpt(
+                        workspace_root,
+                        source_id=selected_citation["source_id"],
+                        source_version=selected_citation["source_version"],
+                        locator=selected_citation["locator"],
+                    ),
+                }
+            )
+            trace.append(
+                {
+                    "level": "L3",
+                    "artifact": (
+                        f"source {selected_citation['source_id']} "
+                        f"revision {selected_citation['source_version']}"
+                    ),
+                }
+            )
+        result["evidence"] = evidence
     if debug:
         result["trace"] = trace
     return result
@@ -241,7 +257,8 @@ def _candidate_pages(
     wiki_root = workspace_root / "wiki"
     index = wiki_root / "INDEX.md"
     scored: list[tuple[tuple[int, int], Path]] = []
-    if (safe_index := _safe_wiki_index(workspace_root, index)) is not None:
+    safe_index = _safe_wiki_index(workspace_root, index)
+    if safe_index is not None:
         trace.append({"level": "L0", "artifact": "wiki/INDEX.md"})
         for entry in _INDEX_ENTRY.finditer(safe_index.read_text(encoding="utf-8")):
             if _REPOSITORY_OVERVIEW_LINK.fullmatch(entry.group("path")):
@@ -253,30 +270,31 @@ def _candidate_pages(
             overlap = question_terms & _terms(f"{title} {entry.group('summary')}")
             if overlap:
                 scored.append(((len(overlap), sum(len(term) for term in overlap)), page))
-    if scored:
-        return [
-            page
-            for _, page in sorted(
-                scored,
-                key=lambda candidate: (
-                    -candidate[0][0],
-                    -candidate[0][1],
-                    str(candidate[1].relative_to(workspace_root)),
-                ),
-            )[:max_pages]
-        ]
-    fts_paths = find_applied_page_paths(
-        workspace_root,
-        " ".join(sorted(question_terms)),
-        limit=max_pages,
-    )
+    fts_paths: tuple[str, ...] = ()
+    index_path = workspace_root / ".memoryforge" / "index.sqlite"
+    if safe_index is None or (index_path.is_file() and not index_path.is_symlink()):
+        fts_paths = find_applied_page_paths(
+            workspace_root,
+            " ".join(sorted(question_terms)),
+            limit=max_pages,
+        )
     if fts_paths:
         trace.append({"level": "L0", "artifact": "SQLite FTS5 applied-source index"})
-    return [
-        page
-        for path in fts_paths
-        if (page := _safe_wiki_page(workspace_root, workspace_root / path)) is not None
-    ]
+    candidates: list[Path] = []
+    for path in fts_paths:
+        if (page := _safe_wiki_page(workspace_root, workspace_root / path)) is not None:
+            candidates.append(page)
+    for _, page in sorted(
+        scored,
+        key=lambda candidate: (
+            -candidate[0][0],
+            -candidate[0][1],
+            str(candidate[1].relative_to(workspace_root)),
+        ),
+    ):
+        if page not in candidates:
+            candidates.append(page)
+    return candidates[:max_pages]
 
 
 def _validate_max_pages(max_pages: int) -> None:
@@ -386,8 +404,12 @@ def _unescape_link_text(value: str) -> str:
 
 
 def _terms(text: str) -> set[str]:
-    return {
-        token
-        for token in (match.group().lower() for match in _WORDS.finditer(text))
-        if token not in _STOP_WORDS
-    }
+    terms: set[str] = set()
+    for match in _WORDS.finditer(text):
+        token = match.group().lower()
+        if _CJK.fullmatch(token):
+            terms.update(character for character in token if character not in _STOP_WORDS)
+            terms.update(token[index : index + 2] for index in range(len(token) - 1))
+        elif token not in _STOP_WORDS:
+            terms.add(token)
+    return terms

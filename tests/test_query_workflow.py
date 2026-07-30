@@ -256,6 +256,87 @@ def test_ask_uses_applied_source_fts_when_index_has_no_candidate(
     }
 
 
+def test_ask_prefers_fts_candidate_over_a_weak_index_match(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    runner, workspace, _ = _workspace_with_imported_source(
+        tmp_path,
+        monkeypatch,
+        "# Cache policy\n\nCache entries expire after sixty seconds.\n",
+    )
+    _apply_pending_source(runner, workspace)
+    weak_page = workspace / "wiki/pages/weak.md"
+    weak_page.write_text("# Weak match\n\nRelease notes are archived monthly.\n", encoding="utf-8")
+    (workspace / "wiki/INDEX.md").write_text(
+        "# Knowledge Index\n\n- [Cache overview](pages/weak.md) — cache notes\n",
+        encoding="utf-8",
+    )
+
+    payload = query_module.answer_question(
+        workspace,
+        "When do cache entries expire?",
+        max_pages=1,
+    )
+
+    assert payload["status"] == "answered"
+    assert payload["answer"] == "Cache entries expire after sixty seconds."
+
+
+def test_verify_expands_every_selected_citation(tmp_path: Path, monkeypatch) -> None:
+    workspace = tmp_path / "workspace"
+    pages = workspace / "wiki/pages"
+    pages.mkdir(parents=True)
+    first_id = "a" * 64
+    second_id = "b" * 64
+    (workspace / "wiki/INDEX.md").write_text(
+        "# Knowledge Index\n\n- [Cache](pages/cache.md) — cache seconds\n",
+        encoding="utf-8",
+    )
+    (pages / "cache.md").write_text(
+        "\n".join(
+            [
+                "# Cache",
+                "",
+                "## Verified facts",
+                "",
+                "- Cache entries expire after sixty seconds. [^first]",
+                "- Cache refresh starts after thirty seconds. [^second]",
+                "",
+                "## Sources",
+                "",
+                f"[^first]: source `{first_id}` · revision `1` · `chars:0-42`",
+                f"[^second]: source `{second_id}` · revision `2` · `chars:0-45`",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    class StubProvider:
+        def answer_with_evidence(self, _messages: object) -> tuple[str, tuple[int, ...]]:
+            return "Cache expiration and refresh are both time-bound.", (0, 1)
+
+    monkeypatch.setattr(query_module, "is_public_source_version", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(
+        query_module,
+        "read_source_excerpt",
+        lambda _workspace, *, source_id, **_kwargs: f"raw:{source_id}",
+    )
+
+    payload = query_module.answer_question(
+        workspace,
+        "cache seconds",
+        verify=True,
+        provider=StubProvider(),
+    )
+
+    assert [item["text"] for item in payload["evidence"]] == [
+        f"raw:{first_id}",
+        f"raw:{second_id}",
+    ]
+
+
 def test_ask_expands_no_more_than_the_page_budget(tmp_path: Path, monkeypatch) -> None:
     workspace = tmp_path / "workspace"
     pages = workspace / "wiki/pages"
