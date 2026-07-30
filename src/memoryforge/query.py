@@ -1,22 +1,34 @@
-"""Deterministic question answering over applied Wiki pages."""
+"""Deterministic progressive queries over applied Wiki pages."""
 
 from __future__ import annotations
 
+import json
 import re
-from pathlib import Path
-from typing import Literal, TypedDict
+from pathlib import Path, PurePosixPath
+from typing import Literal, NotRequired, TypedDict
 
-from memoryforge.workspace import _read_blob_bytes
+from memoryforge.provider import OpenAICompatibleProvider
+from memoryforge.workspace import (
+    find_applied_page_paths,
+    is_public_source_version,
+    read_source_excerpt,
+)
 
 _FACT = re.compile(r"^- (?P<quote>.+?) \[\^(?P<footnote>[^\]]+)\]$", re.MULTILINE)
 _FOOTNOTE = re.compile(
-    r"^\[\^(?P<footnote>[^\]]+)\]: "
-    r"`(?P<snapshot_uri>mf://blob/[a-f0-9]{64})` · "
-    r"`(?P<locator>chars:\d+-\d+)` · "
-    r"source `(?P<source_id>[a-f0-9]{64})`$",
+    r"^\[\^(?P<footnote>[^\]]+)\]: source "
+    r"`(?P<source_id>[a-f0-9]{64})` · "
+    r"revision `(?P<source_version>\d+)` · "
+    r"`(?P<locator>chars:\d+-\d+)`$",
     re.MULTILINE,
 )
+_INDEX_ENTRY = re.compile(
+    r"^- \[(?P<title>(?:\\.|[^\]])+)\]\((?P<path>[^)]+)\) — (?P<summary>.+)$",
+    re.MULTILINE,
+)
+_FRONTMATTER = re.compile(r"\A---\n(?P<fields>.*?)\n---\n", re.DOTALL)
 _WORDS = re.compile(r"[a-z0-9]+|[\u4e00-\u9fff]", re.IGNORECASE)
+_REPOSITORY_OVERVIEW_LINK = re.compile(r"^pages/repository-[a-f0-9]{12}\.md$")
 _STOP_WORDS = {
     "a",
     "an",
@@ -42,7 +54,7 @@ _STOP_WORDS = {
 
 class CitationPayload(TypedDict):
     source_id: str
-    snapshot_uri: str
+    source_version: int
     locator: str
     quote: str
 
@@ -51,50 +63,284 @@ class AskPayload(TypedDict):
     status: Literal["answered", "unknown"]
     answer: str
     citations: list[CitationPayload]
+    wiki_pages: list[str]
     source_id: str | None
-    snapshot_uri: str | None
+    source_version: int | None
     locator: str | None
     quote: str | None
+    trace: NotRequired[list[TraceStep]]
+    evidence: NotRequired[str]
 
 
-def answer_question(workspace_root: Path, question: str) -> AskPayload:
-    """Return the most relevant verified fact from applied Wiki Markdown."""
+class TraceStep(TypedDict):
+    level: Literal["L0", "L1", "L2", "L3"]
+    artifact: str
+
+
+def answer_question(
+    workspace_root: Path,
+    question: str,
+    *,
+    debug: bool = False,
+    verify: bool = False,
+    max_pages: int = 3,
+    provider: OpenAICompatibleProvider | None = None,
+) -> AskPayload:
+    """Answer from a bounded set of Wiki pages, expanding raw evidence only on request."""
+    _validate_max_pages(max_pages)
     question_terms = _terms(question)
-    best: tuple[tuple[int, int], CitationPayload] | None = None
+    trace: list[TraceStep] = []
+    if not question_terms:
+        return _unknown_payload(debug, trace)
 
-    wiki_root = workspace_root / "wiki"
-    for page in sorted(wiki_root.glob("**/*.md")):
-        for citation in _page_citations(
-            workspace_root,
-            page.read_text(encoding="utf-8"),
-        ):
+    matches: list[tuple[tuple[int, int], str, CitationPayload]] = []
+
+    for page in _candidate_pages(
+        workspace_root,
+        question_terms,
+        max_pages=max_pages,
+        trace=trace,
+    ):
+        content = page.read_text(encoding="utf-8")
+        trace.append({"level": "L1", "artifact": str(page.relative_to(workspace_root))})
+        for citation in _page_citations(content):
             overlap = question_terms & _terms(citation["quote"])
             score = (len(overlap), sum(len(term) for term in overlap))
             sufficient_match = len(overlap) >= 2 or (len(question_terms) == 1 and len(overlap) == 1)
-            if sufficient_match and (best is None or score > best[0]):
-                best = (score, citation)
+            if sufficient_match:
+                matches.append((score, str(page.relative_to(workspace_root)), citation))
 
-    if best is None:
-        return {
-            "status": "unknown",
-            "answer": "不知道",
-            "citations": [],
-            "source_id": None,
-            "snapshot_uri": None,
-            "locator": None,
-            "quote": None,
-        }
+    if not matches:
+        return _unknown_payload(debug, trace)
 
-    citation = best[1]
-    return {
+    if provider is None:
+        _, page_path, citation = max(matches, key=lambda match: match[0])
+        answer = citation["quote"]
+        selected = [(page_path, citation)]
+    else:
+        generated = _model_answer(workspace_root, question, matches, provider)
+        if generated is None:
+            return _unknown_payload(debug, trace)
+        answer, selected = generated
+
+    citations = [citation for _, citation in selected]
+    pages = list(dict.fromkeys(page_path for page_path, _ in selected))
+    for page_path in pages:
+        trace.append({"level": "L2", "artifact": page_path})
+    citation = citations[0]
+    result: AskPayload = {
         "status": "answered",
-        "answer": citation["quote"],
-        "citations": [citation],
-        **citation,
+        "answer": answer,
+        "citations": citations,
+        "wiki_pages": pages,
+        "source_id": citation["source_id"],
+        "source_version": citation["source_version"],
+        "locator": citation["locator"],
+        "quote": citation["quote"],
     }
+    if verify:
+        result["evidence"] = read_source_excerpt(
+            workspace_root,
+            source_id=citation["source_id"],
+            source_version=citation["source_version"],
+            locator=citation["locator"],
+        )
+        trace.append(
+            {
+                "level": "L3",
+                "artifact": f"source {citation['source_id']} revision {citation['source_version']}",
+            }
+        )
+    if debug:
+        result["trace"] = trace
+    return result
 
 
-def _page_citations(workspace_root: Path, content: str) -> list[CitationPayload]:
+def _model_answer(
+    workspace_root: Path,
+    question: str,
+    matches: list[tuple[tuple[int, int], str, CitationPayload]],
+    provider: OpenAICompatibleProvider,
+) -> tuple[str, list[tuple[str, CitationPayload]]] | None:
+    public_matches = [
+        (page_path, citation)
+        for _, page_path, citation in matches
+        if is_public_source_version(
+            workspace_root,
+            source_id=citation["source_id"],
+            source_version=citation["source_version"],
+        )
+    ][:12]
+    if not public_matches:
+        raise ValueError("LLM answers require public source evidence")
+
+    answer, indexes = provider.answer_with_evidence(_answer_messages(question, public_matches))
+    selected: list[tuple[str, CitationPayload]] = []
+    seen: set[tuple[str, int, str]] = set()
+    for index in indexes:
+        if isinstance(index, bool) or not 0 <= index < len(public_matches):
+            continue
+        page_path, citation = public_matches[index]
+        key = (citation["source_id"], citation["source_version"], citation["locator"])
+        if key not in seen:
+            seen.add(key)
+            selected.append((page_path, citation))
+    if not answer.strip() or answer.strip() == "不知道" or not selected:
+        return None
+    return answer.strip(), selected
+
+
+def _answer_messages(
+    question: str,
+    matches: list[tuple[str, CitationPayload]],
+) -> list[dict[str, str]]:
+    facts = [
+        {"index": index, "quote": citation["quote"]}
+        for index, (_, citation) in enumerate(matches)
+    ]
+    return [
+        {
+            "role": "system",
+            "content": (
+                "Answer only from the candidate facts. Return JSON with answer and "
+                "citation_indexes. citation_indexes must contain the zero-based indexes of "
+                "facts that support the answer. If the facts do not answer the question, "
+                'return {"answer":"不知道","citation_indexes":[]}. Reply in the question language.'
+            ),
+        },
+        {
+            "role": "user",
+            "content": json.dumps({"question": question, "facts": facts}, ensure_ascii=False),
+        },
+    ]
+
+
+def _unknown_payload(debug: bool, trace: list[TraceStep]) -> AskPayload:
+    result: AskPayload = {
+        "status": "unknown",
+        "answer": "不知道",
+        "citations": [],
+        "wiki_pages": [],
+        "source_id": None,
+        "source_version": None,
+        "locator": None,
+        "quote": None,
+    }
+    if debug:
+        result["trace"] = trace
+    return result
+
+
+def _candidate_pages(
+    workspace_root: Path,
+    question_terms: set[str],
+    *,
+    max_pages: int,
+    trace: list[TraceStep],
+) -> list[Path]:
+    wiki_root = workspace_root / "wiki"
+    index = wiki_root / "INDEX.md"
+    scored: list[tuple[tuple[int, int], Path]] = []
+    if (safe_index := _safe_wiki_index(workspace_root, index)) is not None:
+        trace.append({"level": "L0", "artifact": "wiki/INDEX.md"})
+        for entry in _INDEX_ENTRY.finditer(safe_index.read_text(encoding="utf-8")):
+            if _REPOSITORY_OVERVIEW_LINK.fullmatch(entry.group("path")):
+                continue
+            page = _safe_wiki_page(workspace_root, wiki_root / entry.group("path"))
+            if page is None:
+                continue
+            title = _unescape_link_text(entry.group("title"))
+            overlap = question_terms & _terms(f"{title} {entry.group('summary')}")
+            if overlap:
+                scored.append(((len(overlap), sum(len(term) for term in overlap)), page))
+    if scored:
+        return [
+            page
+            for _, page in sorted(
+                scored,
+                key=lambda candidate: (
+                    -candidate[0][0],
+                    -candidate[0][1],
+                    str(candidate[1].relative_to(workspace_root)),
+                ),
+            )[:max_pages]
+        ]
+    fts_paths = find_applied_page_paths(
+        workspace_root,
+        " ".join(sorted(question_terms)),
+        limit=max_pages,
+    )
+    if fts_paths:
+        trace.append({"level": "L0", "artifact": "SQLite FTS5 applied-source index"})
+    return [
+        page
+        for path in fts_paths
+        if (page := _safe_wiki_page(workspace_root, workspace_root / path)) is not None
+    ]
+
+
+def _validate_max_pages(max_pages: int) -> None:
+    if isinstance(max_pages, bool) or not isinstance(max_pages, int) or not 1 <= max_pages <= 10:
+        raise ValueError("max_pages must be an integer between 1 and 10")
+
+
+def _safe_wiki_index(workspace_root: Path, index: Path) -> Path | None:
+    """Accept only the real ``workspace/wiki/INDEX.md`` file."""
+    wiki_root = workspace_root / "wiki"
+    expected = wiki_root / "INDEX.md"
+    if (
+        index != expected
+        or not wiki_root.is_dir()
+        or wiki_root.is_symlink()
+        or index.is_symlink()
+        or not index.is_file()
+    ):
+        return None
+    try:
+        if index.resolve(strict=True) != wiki_root.resolve(strict=True) / "INDEX.md":
+            return None
+    except OSError:
+        return None
+    return index
+
+
+def _safe_wiki_page(workspace_root: Path, page: Path) -> Path | None:
+    """Accept only real stable Wiki pages below ``wiki/pages``."""
+    pages_root = workspace_root / "wiki" / "pages"
+    try:
+        stable_path = page.relative_to(workspace_root).as_posix()
+        page_relative = page.relative_to(pages_root)
+    except ValueError:
+        return None
+    parts = PurePosixPath(stable_path).parts
+    if (
+        "\\" in stable_path
+        or len(parts) < 3
+        or parts[:2] != ("wiki", "pages")
+        or not stable_path.endswith(".md")
+        or any(part in {"", ".", ".."} for part in parts)
+        or str(PurePosixPath(stable_path)) != stable_path
+        or not pages_root.is_dir()
+        or pages_root.is_symlink()
+        or not page.is_file()
+    ):
+        return None
+
+    current = pages_root
+    for part in page_relative.parts:
+        current /= part
+        if current.is_symlink():
+            return None
+    try:
+        page.resolve(strict=True).relative_to(pages_root.resolve(strict=True))
+    except (OSError, ValueError):
+        return None
+    return page
+
+
+def _page_citations(content: str) -> list[CitationPayload]:
+    if not _page_matches_frontmatter(content):
+        return []
     section_match = re.search(
         r"^## Verified facts\s*$\n(?P<section>.*?)(?=^## |\Z)",
         content,
@@ -114,28 +360,29 @@ def _page_citations(workspace_root: Path, content: str) -> list[CitationPayload]
         citations.append(
             {
                 "source_id": footnote["source_id"],
-                "snapshot_uri": footnote["snapshot_uri"],
+                "source_version": int(footnote["source_version"]),
                 "locator": footnote["locator"],
-                "quote": _blob_quote(
-                    workspace_root,
-                    footnote["snapshot_uri"],
-                    footnote["locator"],
-                ),
+                "quote": fact.group("quote"),
             }
         )
     return citations
 
 
-def _blob_quote(workspace_root: Path, snapshot_uri: str, locator: str) -> str:
-    content_sha256 = snapshot_uri.removeprefix("mf://blob/")
-    snapshot_path = Path("raw/blobs") / content_sha256[:2] / f"{content_sha256}.blob"
-    content = _read_blob_bytes(
-        workspace_root,
-        content_sha256,
-        snapshot_path,
-    ).decode("utf-8")
-    start_text, end_text = locator.removeprefix("chars:").split("-")
-    return content[int(start_text) : int(end_text)]
+def _page_matches_frontmatter(content: str) -> bool:
+    match = _FRONTMATTER.match(content)
+    if match is None:
+        return True
+    fields = {
+        key.strip(): value.strip()
+        for line in match.group("fields").splitlines()
+        for key, separator, value in (line.partition(":"),)
+        if separator
+    }
+    return fields.get("type") in {"entity", "concept", "synthesis"}
+
+
+def _unescape_link_text(value: str) -> str:
+    return re.sub(r"\\(.)", r"\1", value)
 
 
 def _terms(text: str) -> set[str]:

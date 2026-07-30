@@ -90,7 +90,12 @@ class SourceValidationError(ValueError):
     """Raised when a local source violates the import safety boundary."""
 
 
-def validate_source_path(path: Path, *, source_root: Path) -> Path:
+def validate_source_path(
+    path: Path,
+    *,
+    source_root: Path,
+    allowed_suffixes: set[str] | frozenset[str] = frozenset(ALLOWED_SUFFIXES),
+) -> Path:
     candidate = path.expanduser()
     if candidate.is_symlink():
         raise SourceValidationError("symbolic links are not accepted as import sources")
@@ -113,13 +118,49 @@ def validate_source_path(path: Path, *, source_root: Path) -> Path:
     ):
         raise SourceValidationError(f"sensitive file name is not allowed: {resolved.name}")
 
-    if resolved.suffix.lower() not in ALLOWED_SUFFIXES:
-        raise SourceValidationError("only .md, .markdown, and .txt files are supported")
+    if resolved.suffix.lower() not in allowed_suffixes:
+        if allowed_suffixes == ALLOWED_SUFFIXES:
+            raise SourceValidationError("only .md, .markdown, and .txt files are supported")
+        allowed = ", ".join(sorted(allowed_suffixes))
+        raise SourceValidationError(f"only {allowed} files are supported")
     if resolved.stat().st_size > MAX_SOURCE_BYTES:
         raise SourceValidationError(
             f"source exceeds the {MAX_SOURCE_BYTES // (1024 * 1024)} MiB size limit"
         )
     return resolved
+
+
+def read_local_text_file(
+    source_path: Path,
+    *,
+    source_root: Path,
+    allowed_suffixes: set[str] | frozenset[str] = frozenset(ALLOWED_SUFFIXES),
+) -> str:
+    """Read one validated UTF-8 text file through the existing safe local-file boundary."""
+    allowed_root = source_root.expanduser().resolve()
+    resolved = validate_source_path(
+        source_path,
+        source_root=allowed_root,
+        allowed_suffixes=allowed_suffixes,
+    )
+    filesystem_relative_path, relative_source_path = _canonical_relative_source_path(
+        allowed_root,
+        resolved,
+    )
+    if _is_ignored(allowed_root, relative_source_path):
+        raise SourceValidationError(
+            f"source is excluded by .memoryforgeignore: {relative_source_path}"
+        )
+    source_bytes, _ = _read_source_secure(allowed_root, filesystem_relative_path)
+    try:
+        content = source_bytes.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise SourceValidationError("source must be valid UTF-8 text") from exc
+    if _contains_high_confidence_secret(content):
+        raise SourceValidationError(
+            "source content appears to contain a high-confidence secret pattern"
+        )
+    return content
 
 
 def import_local_file(
@@ -181,26 +222,70 @@ def import_local_file(
             "tags": normalized_tags,
         }
     )
-    result = store_source(
-        workspace,
+    return _store_local_document(
+        current_workspace,
+        document=document,
         source_id=source_id,
         content_sha256=content_sha256,
-        document=document,
     )
-    SourceManifestStore(current_workspace.manifest_dir).write(
+
+
+def import_local_document(
+    workspace: Path,
+    document: LocalDocument,
+    *,
+    source_id: str,
+) -> ImportResult:
+    """Persist an already-read local document without touching its source path again."""
+    current_workspace = Workspace.open(workspace)
+    content_sha256 = hashlib.sha256(document.content.encode("utf-8")).hexdigest()
+    validate_local_document(document)
+    return _store_local_document(
+        current_workspace,
+        document=document,
+        source_id=source_id,
+        content_sha256=content_sha256,
+    )
+
+
+def validate_local_document(document: LocalDocument) -> None:
+    """Check an already-read document before a caller begins a batch import."""
+    if _contains_high_confidence_secret(document.content):
+        raise SourceValidationError(
+            "source content appears to contain a high-confidence secret pattern"
+        )
+
+
+def _store_local_document(
+    workspace: Workspace,
+    *,
+    document: LocalDocument,
+    source_id: str,
+    content_sha256: str,
+) -> ImportResult:
+    stored_document = document.model_copy(
+        update={"source_uri": f"mf://source/{source_id}"}
+    )
+    result = store_source(
+        workspace.root,
+        source_id=source_id,
+        content_sha256=content_sha256,
+        document=stored_document,
+    )
+    SourceManifestStore(workspace.manifest_dir).write(
         SourceVersionManifest(
             source_id=result.source_id,
             source_uri=result.source_uri,
-            source_path=document.source_path,
+            source_path=stored_document.source_path,
             content_sha256=result.content_sha256,
             snapshot_uri=result.snapshot_uri,
             snapshot_path=result.snapshot_path,
-            media_type=document.media_type,
+            media_type=stored_document.media_type,
             category=result.category,
             title=result.title,
             observed_at=result.observed_at,
-            sensitivity=document.sensitivity,
-            tags=document.tags,
+            sensitivity=stored_document.sensitivity,
+            tags=stored_document.tags,
         )
     )
     return result

@@ -7,18 +7,21 @@ import re
 import sqlite3
 import stat
 import uuid
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator, Mapping
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import Literal, cast
 
-from memoryforge.errors import WorkspaceError
+from memoryforge.errors import ChangeSetStoreError, WorkspaceError
 from memoryforge.manifests import SourceManifestStore
 from memoryforge.models import (
     ChangeSet,
     ClaimStatus,
+    GitDocumentSyncResult,
+    GitRepositoryRecord,
+    GitRepositorySyncResult,
     ImportResult,
     LocalDocument,
     SearchResult,
@@ -30,15 +33,7 @@ from memoryforge.version_store import GitVersionStore
 
 DATABASE_RELATIVE_PATH = Path(".memoryforge/index.sqlite")
 RAW_CATEGORIES = ("design", "postmortem", "summary", "notes", "refs")
-WIKI_DIRECTORIES = (
-    "sources",
-    "entities",
-    "concepts",
-    "pitfalls",
-    "adrs",
-    "comparisons",
-    "overviews",
-)
+WIKI_DIRECTORIES = ("pages",)
 _GITIGNORE_RULES = (
     "/raw/",
     "/.memoryforge/index.sqlite*",
@@ -53,6 +48,7 @@ _SEARCH_RUN = re.compile(r"[A-Za-z0-9_]+|[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaf
 _CHAR_LOCATOR = re.compile(r"^chars:(?P<start>\d+)-(?P<end>\d+)$")
 _CONTENT_SHA256 = re.compile(r"^[a-f0-9]{64}$")
 _ORIGIN_MAIN_SOURCE_ID = re.compile(r"^src_[a-f0-9]{16}$")
+_FEISHU_SOURCE_PATH = re.compile(r"^feishu/(?P<document_id>[A-Za-z0-9_-]{8,})\.md$")
 _BLOB_ROOT = Path("raw/blobs")
 _SECURE_DIR_FD_SUPPORTED = all(
     function in os.supports_dir_fd for function in (os.open, os.mkdir, os.stat, os.unlink)
@@ -81,13 +77,9 @@ _DEFAULT_SCHEMA_YAML = """source_categories:
   - notes
   - refs
 page_types:
-  - sources
-  - entities
-  - concepts
-  - pitfalls
-  - adrs
-  - comparisons
-  - overviews
+  - entity
+  - concept
+  - synthesis
 claim_rules:
   verified_claim_requires_citation: true
   allow_raw_mutation: false
@@ -161,6 +153,52 @@ WHERE is_current = 1""",
     """
 CREATE INDEX IF NOT EXISTS idx_source_versions_observed
 ON source_versions(source_id, observed_at DESC)""",
+    """
+CREATE TABLE IF NOT EXISTS applied_source_versions (
+    source_id TEXT PRIMARY KEY REFERENCES sources(source_id),
+    source_version_id INTEGER NOT NULL REFERENCES source_versions(id)
+)""",
+    """
+CREATE TABLE IF NOT EXISTS page_sources (
+    page_path TEXT NOT NULL,
+    source_id TEXT NOT NULL REFERENCES sources(source_id),
+    PRIMARY KEY(page_path, source_id)
+)""",
+    """
+CREATE INDEX IF NOT EXISTS idx_page_sources_source_id
+ON page_sources(source_id, page_path)""",
+    """
+CREATE TABLE IF NOT EXISTS git_repositories (
+    repository_id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    checkout_path TEXT NOT NULL UNIQUE,
+    remote_name TEXT,
+    remote_url TEXT,
+    sensitivity TEXT NOT NULL DEFAULT 'local_only',
+    registered_at TEXT NOT NULL,
+    last_synced_commit TEXT
+)""",
+    """
+CREATE TABLE IF NOT EXISTS feishu_documents (
+    document_id TEXT PRIMARY KEY,
+    category TEXT NOT NULL,
+    tags_json TEXT NOT NULL,
+    registered_at TEXT NOT NULL
+)""",
+    """
+CREATE TABLE IF NOT EXISTS git_source_revisions (
+    source_version_id INTEGER PRIMARY KEY REFERENCES source_versions(id),
+    repository_id TEXT NOT NULL REFERENCES git_repositories(repository_id),
+    relative_path TEXT NOT NULL,
+    commit_sha TEXT NOT NULL,
+    UNIQUE(repository_id, relative_path, commit_sha)
+)""",
+    """
+CREATE TABLE IF NOT EXISTS git_code_modules (
+    repository_id TEXT NOT NULL REFERENCES git_repositories(repository_id),
+    relative_path TEXT NOT NULL,
+    PRIMARY KEY(repository_id, relative_path)
+)""",
     _SOURCE_FTS_SCHEMA_STATEMENT,
 )
 
@@ -171,6 +209,13 @@ class WorkspaceSecurityError(ValueError):
 
 class WorkspaceIntegrityError(RuntimeError):
     """Raised when immutable evidence no longer matches its recorded digest."""
+
+
+@dataclass(frozen=True)
+class RegisteredFeishuDocument:
+    document_id: str
+    category: SourceCategory
+    tags: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -224,6 +269,188 @@ class Workspace:
         if commit is None:
             raise WorkspaceError("workspace is missing its Git baseline commit")
         return commit
+
+    def require_current_source_versions(self, source_versions: Mapping[str, int]) -> None:
+        """Reject an apply when one of its staged source revisions was superseded."""
+        if not source_versions:
+            return
+        placeholders = ", ".join("?" for _ in source_versions)
+        with _connect(self.index_path) as connection:
+            rows = connection.execute(
+                f"""
+                SELECT s.source_id, v.id
+                FROM sources AS s
+                JOIN source_versions AS v ON v.source_id = s.id
+                WHERE s.source_id IN ({placeholders}) AND v.is_current = 1
+                """,
+                tuple(source_versions),
+            ).fetchall()
+        current = {str(row[0]): int(row[1]) for row in rows}
+        stale = sorted(
+            source_id
+            for source_id, version_id in source_versions.items()
+            if current.get(source_id) != version_id
+        )
+        if stale:
+            raise ChangeSetStoreError(
+                "ChangeSet source versions are no longer current: " + ", ".join(stale)
+            )
+
+    def record_applied_source_versions(
+        self,
+        source_versions: Mapping[str, int],
+    ) -> dict[str, int | None]:
+        """Record versions for an apply attempt and return their previous mappings."""
+        if not source_versions:
+            return {}
+        with _connect(self.index_path) as connection:
+            previous_rows = connection.execute(
+                """
+                SELECT source_id, source_version_id
+                FROM applied_source_versions
+                WHERE source_id IN ({})
+                """.format(", ".join("?" for _ in source_versions)),
+                tuple(source_versions),
+            ).fetchall()
+            previous: dict[str, int | None] = {
+                source_id: None for source_id in source_versions
+            }
+            previous.update({str(row[0]): int(row[1]) for row in previous_rows})
+            connection.executemany(
+                """
+                INSERT INTO applied_source_versions(source_id, source_version_id)
+                VALUES (?, ?)
+                ON CONFLICT(source_id) DO UPDATE SET source_version_id = excluded.source_version_id
+                """,
+                source_versions.items(),
+            )
+        return previous
+
+    def restore_applied_source_versions(self, previous: Mapping[str, int | None]) -> None:
+        """Restore version mappings after an apply attempt fails before its Git commit."""
+        if not previous:
+            return
+        with _connect(self.index_path) as connection:
+            for source_id, source_version_id in previous.items():
+                if source_version_id is None:
+                    connection.execute(
+                        "DELETE FROM applied_source_versions WHERE source_id = ?",
+                        (source_id,),
+                    )
+                    continue
+                connection.execute(
+                    """
+                    INSERT INTO applied_source_versions(source_id, source_version_id)
+                    VALUES (?, ?)
+                    ON CONFLICT(source_id) DO UPDATE SET
+                        source_version_id = excluded.source_version_id
+                    """,
+                    (source_id, source_version_id),
+                )
+
+    def replace_applied_page_sources(
+        self,
+        page_sources: Mapping[str, tuple[str, ...]],
+    ) -> dict[str, tuple[str, ...]]:
+        """Replace source ownership for stable Wiki pages in one transaction."""
+        normalized = _normalize_page_sources(page_sources)
+        if not normalized:
+            return {}
+        placeholders = ", ".join("?" for _ in normalized)
+        with _connect(self.index_path) as connection:
+            rows = connection.execute(
+                f"""
+                SELECT page_path, source_id
+                FROM page_sources
+                WHERE page_path IN ({placeholders})
+                ORDER BY page_path, source_id
+                """,
+                tuple(normalized),
+            ).fetchall()
+            previous: dict[str, list[str]] = {path: [] for path in normalized}
+            for row in rows:
+                previous[str(row["page_path"])].append(str(row["source_id"]))
+            connection.executemany(
+                "DELETE FROM page_sources WHERE page_path = ?",
+                ((path,) for path in normalized),
+            )
+            connection.executemany(
+                "INSERT INTO page_sources(page_path, source_id) VALUES (?, ?)",
+                (
+                    (page_path, source_id)
+                    for page_path, source_ids in normalized.items()
+                    for source_id in source_ids
+                ),
+            )
+        return {path: tuple(source_ids) for path, source_ids in previous.items()}
+
+    def restore_applied_page_sources(
+        self,
+        previous: Mapping[str, tuple[str, ...]],
+    ) -> None:
+        """Restore source ownership when apply fails before its Git commit."""
+        restored = _normalize_page_sources(
+            {page_path: source_ids for page_path, source_ids in previous.items() if source_ids}
+        )
+        paths = tuple(sorted(previous))
+        if not paths:
+            return
+        if any(not _is_stable_wiki_page_path(path) for path in paths):
+            raise ValueError("page source mappings must stay below wiki/pages/")
+        placeholders = ", ".join("?" for _ in paths)
+        with _connect(self.index_path) as connection:
+            connection.execute(
+                f"DELETE FROM page_sources WHERE page_path IN ({placeholders})",
+                paths,
+            )
+            connection.executemany(
+                "INSERT INTO page_sources(page_path, source_id) VALUES (?, ?)",
+                (
+                    (page_path, source_id)
+                    for page_path, source_ids in restored.items()
+                    for source_id in source_ids
+                ),
+            )
+
+    def page_paths_for_source(self, source_id: str) -> tuple[str, ...]:
+        """Return deterministic stable Wiki paths currently supported by one source."""
+        if _CONTENT_SHA256.fullmatch(source_id) is None:
+            raise ValueError("source_id must be a SHA-256 hex digest")
+        with _connect(self.index_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT page_path
+                FROM page_sources
+                WHERE source_id = ?
+                ORDER BY page_path
+                """,
+                (source_id,),
+            ).fetchall()
+        return tuple(
+            sorted(
+                {
+                    path
+                    for row in rows
+                    if _is_stable_wiki_page_path(path := str(row["page_path"]))
+                }
+            )
+        )
+
+    def source_ids_for_page(self, page_path: str) -> tuple[str, ...]:
+        """Return the current source ownership recorded for one stable Wiki page."""
+        if not _is_stable_wiki_page_path(page_path):
+            raise ValueError("page_path must be a Markdown file below wiki/pages/")
+        with _connect(self.index_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT source_id
+                FROM page_sources
+                WHERE page_path = ?
+                ORDER BY source_id
+                """,
+                (page_path,),
+            ).fetchall()
+        return tuple(str(row["source_id"]) for row in rows)
 
     def validate_changeset_evidence(self, changeset: ChangeSet) -> None:
         """Bind staged source and citation identities to immutable local evidence."""
@@ -305,6 +532,403 @@ class Workspace:
 
 def init_workspace(workspace: Path) -> Path:
     return Workspace.initialize(workspace).root
+
+
+def register_git_checkout(
+    workspace: Path,
+    checkout: Path,
+    *,
+    sensitivity: Sensitivity = Sensitivity.LOCAL_ONLY,
+) -> GitRepositoryRecord:
+    """Register one existing local Git checkout without contacting its remote."""
+    from memoryforge.git_adapter import snapshot_git_repository
+
+    opened = Workspace.open(workspace)
+    snapshot = snapshot_git_repository(checkout)
+    checkout_path = str(snapshot.repository_root)
+    repository_id = hashlib.sha256(
+        snapshot.repository_identity.encode("utf-8")
+    ).hexdigest()
+
+    with _connect(opened.index_path) as connection:
+        existing_checkout = connection.execute(
+            "SELECT * FROM git_repositories WHERE checkout_path = ?",
+            (checkout_path,),
+        ).fetchone()
+        existing_identity = connection.execute(
+            "SELECT * FROM git_repositories WHERE repository_id = ?",
+            (repository_id,),
+        ).fetchone()
+        if existing_checkout is None and existing_identity is None:
+            connection.execute(
+                """
+                INSERT INTO git_repositories(
+                    repository_id, name, checkout_path, remote_name, remote_url, sensitivity,
+                    registered_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    repository_id,
+                    snapshot.repository_root.name,
+                    checkout_path,
+                    snapshot.remote_name,
+                    snapshot.remote_url,
+                    sensitivity.value,
+                    _now(),
+                ),
+            )
+        elif existing_identity is not None:
+            connection.execute(
+                """
+                UPDATE git_repositories
+                SET name = ?, checkout_path = ?, remote_name = ?, remote_url = ?, sensitivity = ?
+                WHERE repository_id = ?
+                """,
+                (
+                    snapshot.repository_root.name,
+                    checkout_path,
+                    snapshot.remote_name,
+                    snapshot.remote_url,
+                    sensitivity.value,
+                    repository_id,
+                ),
+            )
+        elif existing_checkout is not None:
+            if existing_checkout["last_synced_commit"] is not None:
+                raise WorkspaceError("registered Git checkout identity changed after sync")
+            connection.execute(
+                """
+                UPDATE git_repositories
+                SET repository_id = ?, name = ?, remote_name = ?, remote_url = ?, sensitivity = ?
+                WHERE checkout_path = ?
+                """,
+                (
+                    repository_id,
+                    snapshot.repository_root.name,
+                    snapshot.remote_name,
+                    snapshot.remote_url,
+                    sensitivity.value,
+                    checkout_path,
+                ),
+            )
+        row = connection.execute(
+            "SELECT * FROM git_repositories WHERE repository_id = ?",
+            (repository_id,),
+        ).fetchone()
+    if row is None:
+        raise WorkspaceIntegrityError("registered Git checkout could not be read")
+    return _git_repository_record(row)
+
+
+def list_git_checkouts(workspace: Path) -> tuple[GitRepositoryRecord, ...]:
+    """List the existing local Git checkouts registered with this workspace."""
+    opened = Workspace.open(workspace)
+    with _connect(opened.index_path) as connection:
+        rows = connection.execute(
+            "SELECT * FROM git_repositories ORDER BY registered_at, repository_id"
+        ).fetchall()
+    return tuple(_git_repository_record(row) for row in rows)
+
+
+def register_git_code_module(
+    workspace: Path,
+    repository_id: str,
+    relative_path: str,
+) -> str:
+    """Select one committed Go/Python file or directory for future Git syncs."""
+    from memoryforge.git_adapter import scan_git_snapshot_code, snapshot_git_repository
+
+    opened = Workspace.open(workspace)
+    repository = _get_git_repository(opened, repository_id)
+    snapshot = snapshot_git_repository(Path(repository.checkout_path))
+    selected = relative_path.strip().replace("\\", "/").rstrip("/")
+    if not scan_git_snapshot_code(snapshot, (selected,), sensitivity=repository.sensitivity):
+        raise ValueError("code path contains no committed .go or .py files")
+    with _connect(opened.index_path) as connection:
+        connection.execute(
+            """
+            INSERT OR IGNORE INTO git_code_modules(repository_id, relative_path)
+            VALUES (?, ?)
+            """,
+            (repository_id, selected),
+        )
+    return selected
+
+
+def list_git_code_modules(workspace: Workspace, repository_id: str) -> tuple[str, ...]:
+    with _connect(workspace.index_path) as connection:
+        rows = connection.execute(
+            """
+            SELECT relative_path FROM git_code_modules
+            WHERE repository_id = ?
+            ORDER BY relative_path
+            """,
+            (repository_id,),
+        ).fetchall()
+    return tuple(str(row["relative_path"]) for row in rows)
+
+
+def register_feishu_document(
+    workspace: Path,
+    document_id: str,
+    *,
+    category: SourceCategory,
+    tags: tuple[str, ...],
+) -> None:
+    """Remember one successfully imported Feishu document for manual refreshes."""
+    opened = Workspace.open(workspace)
+    with _connect(opened.index_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO feishu_documents(document_id, category, tags_json, registered_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(document_id) DO UPDATE SET
+                category = excluded.category,
+                tags_json = excluded.tags_json
+            """,
+            (document_id, category.value, json.dumps(tags), _now()),
+        )
+
+
+def list_feishu_documents(workspace: Path) -> tuple[RegisteredFeishuDocument, ...]:
+    """List Feishu documents previously imported through this workspace."""
+    opened = Workspace.open(workspace)
+    with _connect(opened.index_path) as connection:
+        _backfill_feishu_documents(connection)
+        rows = connection.execute(
+            "SELECT document_id, category, tags_json FROM feishu_documents ORDER BY document_id"
+        ).fetchall()
+    documents: list[RegisteredFeishuDocument] = []
+    for row in rows:
+        tags = _registered_feishu_tags(row["tags_json"])
+        documents.append(
+            RegisteredFeishuDocument(
+                document_id=str(row["document_id"]),
+                category=SourceCategory(str(row["category"])),
+                tags=tuple(tags),
+            )
+        )
+    return tuple(documents)
+
+
+def _backfill_feishu_documents(connection: sqlite3.Connection) -> None:
+    """Register documents imported before manual refreshes existed."""
+    rows = connection.execute(
+        """
+        SELECT s.source_path, v.category, v.tags_json
+        FROM sources AS s
+        JOIN source_versions AS v ON v.source_id = s.id
+        WHERE v.is_current = 1
+          AND s.source_path LIKE 'feishu/%.md'
+          AND instr(substr(s.source_path, 8), '/') = 0
+        """
+    ).fetchall()
+    for row in rows:
+        match = _FEISHU_SOURCE_PATH.fullmatch(str(row["source_path"]))
+        if match is None:
+            continue
+        tags = tuple(tag for tag in _registered_feishu_tags(row["tags_json"]) if tag != "feishu")
+        connection.execute(
+            """
+            INSERT OR IGNORE INTO feishu_documents(document_id, category, tags_json, registered_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (match["document_id"], str(row["category"]), json.dumps(tags), _now()),
+        )
+
+
+def _registered_feishu_tags(value: object) -> tuple[str, ...]:
+    try:
+        tags = json.loads(str(value))
+    except json.JSONDecodeError as exc:
+        raise WorkspaceIntegrityError("registered Feishu document tags are invalid") from exc
+    if not isinstance(tags, list) or not all(isinstance(tag, str) for tag in tags):
+        raise WorkspaceIntegrityError("registered Feishu document tags are invalid")
+    return tuple(tags)
+
+
+def sync_git_checkout(workspace: Path, repository_id: str) -> GitRepositorySyncResult:
+    """Import committed documentation from one registered local checkout."""
+    from memoryforge.git_adapter import (
+        scan_git_snapshot_code,
+        scan_git_snapshot_documentation,
+        snapshot_git_repository,
+    )
+    from memoryforge.importer import import_local_document, validate_local_document
+
+    opened = Workspace.open(workspace)
+    repository = _get_git_repository(opened, repository_id)
+    snapshot = snapshot_git_repository(Path(repository.checkout_path))
+    if str(snapshot.repository_root) != repository.checkout_path:
+        raise WorkspaceError("registered Git checkout path no longer matches its repository root")
+    current_repository_id = hashlib.sha256(
+        snapshot.repository_identity.encode("utf-8")
+    ).hexdigest()
+    if current_repository_id != repository.repository_id:
+        raise WorkspaceError("registered Git checkout identity changed; add it as a new checkout")
+
+    scanned_documents = list(
+        scan_git_snapshot_documentation(
+            snapshot,
+            sensitivity=repository.sensitivity,
+        )
+    )
+    scanned_documents.extend(
+        scan_git_snapshot_code(
+            snapshot,
+            list_git_code_modules(opened, repository.repository_id),
+            sensitivity=repository.sensitivity,
+        )
+    )
+    scanned_documents = sorted(
+        {document.source_path: document for document in scanned_documents}.values(),
+        key=lambda document: document.source_path,
+    )
+    for document in scanned_documents:
+        validate_local_document(document)
+
+    documents: list[GitDocumentSyncResult] = []
+    counts = {"created": 0, "updated": 0, "unchanged": 0}
+    for document in scanned_documents:
+        source_id = hashlib.sha256(
+            f"{repository.repository_id}\0{document.source_path}".encode()
+        ).hexdigest()
+        imported = import_local_document(opened.root, document, source_id=source_id)
+        _record_git_source_revision(
+            opened,
+            source_id=imported.source_id,
+            repository_id=repository.repository_id,
+            relative_path=document.source_path,
+            commit_sha=snapshot.revision,
+        )
+        counts[imported.status] += 1
+        documents.append(
+            GitDocumentSyncResult(
+                source_id=imported.source_id,
+                relative_path=document.source_path,
+                revision=snapshot.revision,
+                status=imported.status,
+            )
+        )
+
+    _reconcile_git_snapshot_sources(
+        opened,
+        repository_id=repository.repository_id,
+        current_paths={document.source_path for document in scanned_documents},
+    )
+    with _connect(opened.index_path) as connection:
+        connection.execute(
+            """
+            UPDATE git_repositories
+            SET last_synced_commit = ?
+            WHERE repository_id = ?
+            """,
+            (snapshot.revision, repository.repository_id),
+        )
+    return GitRepositorySyncResult(
+        repository_id=repository.repository_id,
+        head_commit=snapshot.revision,
+        created=counts["created"],
+        updated=counts["updated"],
+        unchanged=counts["unchanged"],
+        documents=tuple(documents),
+    )
+
+
+def _reconcile_git_snapshot_sources(
+    workspace: Workspace,
+    *,
+    repository_id: str,
+    current_paths: set[str],
+) -> None:
+    """Mark current Git sources absent from a completed snapshot as no longer current."""
+    with _connect(workspace.index_path) as connection:
+        rows = connection.execute(
+            """
+            SELECT versions.id, revisions.relative_path
+            FROM source_versions AS versions
+            JOIN git_source_revisions AS revisions
+              ON revisions.source_version_id = versions.id
+            WHERE revisions.repository_id = ? AND versions.is_current = 1
+            """,
+            (repository_id,),
+        ).fetchall()
+        stale_version_ids = [
+            int(row["id"])
+            for row in rows
+            if str(row["relative_path"]) not in current_paths
+        ]
+        connection.executemany(
+            "UPDATE source_versions SET is_current = 0 WHERE id = ?",
+            ((version_id,) for version_id in stale_version_ids),
+        )
+
+
+def _get_git_repository(workspace: Workspace, repository_id: str) -> GitRepositoryRecord:
+    with _connect(workspace.index_path) as connection:
+        row = connection.execute(
+            "SELECT * FROM git_repositories WHERE repository_id = ?",
+            (repository_id,),
+        ).fetchone()
+    if row is None:
+        raise ValueError(f"unknown Git repository: {repository_id}")
+    return _git_repository_record(row)
+
+
+def _record_git_source_revision(
+    workspace: Workspace,
+    *,
+    source_id: str,
+    repository_id: str,
+    relative_path: str,
+    commit_sha: str,
+) -> None:
+    with _connect(workspace.index_path) as connection:
+        version_row = connection.execute(
+            """
+            SELECT v.id
+            FROM source_versions AS v
+            JOIN sources AS s ON s.id = v.source_id
+            WHERE s.source_id = ? AND v.is_current = 1
+            """,
+            (source_id,),
+        ).fetchone()
+        if version_row is None:
+            raise WorkspaceIntegrityError("imported Git source version could not be found")
+        current_version_id = int(version_row["id"])
+        connection.execute(
+            """
+            DELETE FROM git_source_revisions
+            WHERE source_version_id = ?
+               OR (repository_id = ? AND relative_path = ? AND commit_sha = ?)
+            """,
+            (current_version_id, repository_id, relative_path, commit_sha),
+        )
+        connection.execute(
+            """
+            INSERT INTO git_source_revisions(
+                source_version_id, repository_id, relative_path, commit_sha
+            ) VALUES (?, ?, ?, ?)
+            """,
+            (current_version_id, repository_id, relative_path, commit_sha),
+        )
+
+
+def _git_repository_record(row: sqlite3.Row) -> GitRepositoryRecord:
+    return GitRepositoryRecord(
+        repository_id=str(row["repository_id"]),
+        name=str(row["name"]),
+        checkout_path=str(row["checkout_path"]),
+        remote_name=str(row["remote_name"]) if row["remote_name"] is not None else None,
+        remote_url=str(row["remote_url"]) if row["remote_url"] is not None else None,
+        sensitivity=Sensitivity(str(row["sensitivity"])),
+        registered_at=datetime.fromisoformat(str(row["registered_at"])),
+        last_synced_commit=(
+            str(row["last_synced_commit"])
+            if row["last_synced_commit"] is not None
+            else None
+        ),
+    )
 
 
 def _initialize_workspace(workspace: Path) -> Path:
@@ -654,6 +1278,104 @@ def search_sources(workspace: Path, query: str, *, limit: int = 10) -> list[Sear
     return results
 
 
+def find_applied_page_paths(workspace: Path, query: str, *, limit: int = 10) -> tuple[str, ...]:
+    """Use FTS5 to find Wiki pages backed by applied source revisions only."""
+    if not query.strip():
+        raise ValueError("search query must not be empty")
+    if limit < 1 or limit > 100:
+        raise ValueError("search limit must be between 1 and 100")
+
+    opened = Workspace.open(workspace)
+    with _connect(opened.index_path) as connection:
+        rows = connection.execute(
+            """
+            SELECT ps.page_path
+            FROM source_fts
+            JOIN source_versions AS v ON v.id = source_fts.rowid
+            JOIN sources AS s ON s.id = v.source_id
+            JOIN applied_source_versions AS applied
+              ON applied.source_id = s.source_id
+             AND applied.source_version_id = v.id
+            JOIN page_sources AS ps ON ps.source_id = s.source_id
+            WHERE source_fts MATCH ?
+            ORDER BY bm25(source_fts), ps.page_path
+            """,
+            (_fts_query(query),),
+        ).fetchall()
+    paths: list[str] = []
+    for row in rows:
+        path = str(row["page_path"])
+        if path not in paths:
+            paths.append(path)
+        if len(paths) == limit:
+            break
+    return tuple(paths)
+
+
+def read_source_excerpt(
+    workspace: Path,
+    *,
+    source_id: str,
+    source_version: int,
+    locator: str,
+) -> str:
+    """Read one cited range from immutable evidence on explicit user request."""
+    locator_match = _CHAR_LOCATOR.fullmatch(locator)
+    if locator_match is None:
+        raise WorkspaceIntegrityError("Citation locator is invalid")
+
+    opened = Workspace.open(workspace)
+    with _connect(opened.index_path) as connection:
+        row = connection.execute(
+            """
+            SELECT b.content_sha256, b.snapshot_path
+            FROM sources AS s
+            JOIN source_versions AS v ON v.source_id = s.id
+            JOIN blobs AS b ON b.id = v.blob_id
+            WHERE s.source_id = ? AND v.id = ?
+            """,
+            (source_id, source_version),
+        ).fetchone()
+    if row is None:
+        raise WorkspaceIntegrityError("Citation does not identify an imported SourceVersion")
+
+    evidence = _read_blob_bytes(
+        opened.root,
+        str(row["content_sha256"]),
+        Path(str(row["snapshot_path"])),
+    )
+    try:
+        text = evidence.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise WorkspaceIntegrityError("Citation evidence is not valid UTF-8") from exc
+    start = int(locator_match.group("start"))
+    end = int(locator_match.group("end"))
+    if end > len(text):
+        raise WorkspaceIntegrityError("Citation locator is outside immutable evidence")
+    return text[start:end]
+
+
+def is_public_source_version(
+    workspace: Path,
+    *,
+    source_id: str,
+    source_version: int,
+) -> bool:
+    """Return whether one immutable source revision may be sent to an LLM."""
+    opened = Workspace.open(workspace)
+    with _connect(opened.index_path) as connection:
+        row = connection.execute(
+            """
+            SELECT 1
+            FROM sources AS s
+            JOIN source_versions AS v ON v.source_id = s.id
+            WHERE s.source_id = ? AND v.id = ? AND v.sensitivity = ?
+            """,
+            (source_id, source_version, Sensitivity.PUBLIC.value),
+        ).fetchone()
+    return row is not None
+
+
 @contextmanager
 def _connect(database_path: Path) -> Iterator[sqlite3.Connection]:
     connection = sqlite3.connect(database_path, timeout=30)
@@ -668,6 +1390,124 @@ def _connect(database_path: Path) -> Iterator[sqlite3.Connection]:
         raise
     finally:
         connection.close()
+
+
+def candidate_page_sources(candidate_files: Mapping[str, str]) -> dict[str, tuple[str, ...]]:
+    """Read locally generated `sources` frontmatter for candidate stable pages."""
+    page_sources: dict[str, tuple[str, ...]] = {}
+    for path, content in candidate_files.items():
+        if _is_stable_wiki_page_path(path):
+            if is_generated_repository_overview(content):
+                continue
+            source_ids = _page_source_ids_from_frontmatter(content)
+            if not source_ids:
+                raise WorkspaceIntegrityError("candidate Wiki page has invalid sources metadata")
+            page_sources[path] = source_ids
+    return page_sources
+
+
+def is_generated_repository_overview(content: str) -> bool:
+    """Recognize local navigation pages that deliberately have no source ownership."""
+    if not content.startswith("---\n"):
+        return False
+    closing = content.find("\n---\n", len("---\n"))
+    if closing < 0:
+        return False
+    fields = {
+        key.strip(): value.strip()
+        for line in content[len("---\n") : closing].splitlines()
+        for key, separator, value in (line.partition(":"),)
+        if separator
+    }
+    return (
+        fields.get("generated") == "repository_overview"
+        and fields.get("type") == "entity"
+        and bool(fields.get("title"))
+        and bool(fields.get("summary"))
+        and _CONTENT_SHA256.fullmatch(fields.get("repository_id", "")) is not None
+        and "sources" not in fields
+    )
+
+
+def validate_changeset_page_sources(
+    page_sources: Mapping[str, tuple[str, ...]],
+    source_ids: Iterable[str],
+) -> None:
+    """Require candidate pages to give every ChangeSet source one page owner."""
+    if not page_sources:
+        return
+    expected_source_ids = set(source_ids)
+    source_owners: dict[str, str] = {}
+    for page_path, page_source_ids in page_sources.items():
+        for source_id in page_source_ids:
+            previous_page_path = source_owners.get(source_id)
+            if previous_page_path is not None:
+                raise WorkspaceIntegrityError(
+                    "candidate Wiki page source belongs to multiple pages: " + source_id
+                )
+            source_owners[source_id] = page_path
+    if set(source_owners) != expected_source_ids:
+        raise WorkspaceIntegrityError(
+            "candidate Wiki page sources must exactly match ChangeSet source IDs"
+        )
+
+
+def _normalize_page_sources(
+    page_sources: Mapping[str, tuple[str, ...]],
+) -> dict[str, tuple[str, ...]]:
+    normalized: dict[str, tuple[str, ...]] = {}
+    for page_path, source_ids in page_sources.items():
+        if not _is_stable_wiki_page_path(page_path):
+            raise ValueError("page source mappings must stay below wiki/pages/")
+        if not source_ids:
+            raise ValueError(f"page source mappings must include sources: {page_path}")
+        if len(source_ids) != len(set(source_ids)):
+            raise ValueError(f"page source mappings must not duplicate sources: {page_path}")
+        if any(_CONTENT_SHA256.fullmatch(source_id) is None for source_id in source_ids):
+            raise ValueError(f"page source mappings contain an invalid source ID: {page_path}")
+        normalized[page_path] = tuple(sorted(source_ids))
+    return normalized
+
+
+def _is_stable_wiki_page_path(path: str) -> bool:
+    parts = PurePosixPath(path).parts
+    return (
+        "\\" not in path
+        and len(parts) >= 3
+        and parts[:2] == ("wiki", "pages")
+        and path.endswith(".md")
+        and all(part not in {"", ".", ".."} for part in parts)
+        and str(PurePosixPath(path)) == path
+    )
+
+
+def _page_source_ids_from_frontmatter(content: str) -> tuple[str, ...]:
+    if not content.startswith("---\n"):
+        return ()
+    closing = content.find("\n---\n", len("---\n"))
+    if closing < 0:
+        return ()
+    for line in content[len("---\n") : closing].splitlines():
+        key, separator, value = line.partition(":")
+        if key.strip() != "sources" or not separator:
+            continue
+        try:
+            decoded = json.loads(value.strip())
+        except json.JSONDecodeError as exc:
+            raise WorkspaceIntegrityError(
+                "candidate Wiki page has invalid sources metadata"
+            ) from exc
+        if not isinstance(decoded, list) or not all(
+            isinstance(source_id, str) for source_id in decoded
+        ):
+            raise WorkspaceIntegrityError("candidate Wiki page has invalid sources metadata")
+        source_ids = tuple(decoded)
+        if not source_ids or len(source_ids) != len(set(source_ids)):
+            raise WorkspaceIntegrityError("candidate Wiki page has invalid sources metadata")
+        if any(_CONTENT_SHA256.fullmatch(source_id) is None for source_id in source_ids):
+            raise WorkspaceIntegrityError("candidate Wiki page has invalid sources metadata")
+        return source_ids
+    return ()
 
 
 def _absolute_path(path: Path) -> Path:
@@ -786,6 +1626,14 @@ def _migrate_database(database_path: Path) -> None:
 
 
 def _migrate_unified_schema(connection: sqlite3.Connection) -> None:
+    repository_columns = {
+        str(row["name"])
+        for row in connection.execute("PRAGMA table_info(git_repositories)").fetchall()
+    }
+    if repository_columns and "sensitivity" not in repository_columns:
+        connection.execute(
+            "ALTER TABLE git_repositories ADD COLUMN sensitivity TEXT NOT NULL DEFAULT 'local_only'"
+        )
     source_columns = {
         str(row["name"]) for row in connection.execute("PRAGMA table_info(sources)").fetchall()
     }

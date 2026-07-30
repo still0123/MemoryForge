@@ -1,0 +1,23 @@
+{
+  "name": "AgentSkill-Eval public documentation",
+  "cases": [
+    {
+      "id": "statistics-truth-source",
+      "question": "如何避免把模拟实验结果当成真实结论？",
+      "expected_source_path": "docs/statistics-and-reports.md",
+      "required_terms": ["Manifest", "RunMeasurement"]
+    },
+    {
+      "id": "trace-boundary",
+      "question": "Trace Intelligence 不保存什么？",
+      "expected_source_path": "docs/trace-intelligence.md",
+      "required_terms": ["隐藏思维过程", "unavailable"]
+    },
+    {
+      "id": "real-agent-boundary",
+      "question": "SkillUpRunnerAdapter 会引入新的 Provider 编排框架吗？",
+      "expected_source_path": "docs/real-agent-evidence.md",
+      "required_terms": ["Provider", "模拟结果"]
+    }
+  ]
+}

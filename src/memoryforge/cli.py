@@ -11,16 +11,33 @@ import typer
 
 from memoryforge import __version__
 from memoryforge.changesets import ChangeSetStore
-from memoryforge.compiler import compilation_payload, compile_pending_sources
+from memoryforge.compiler import (
+    compilation_payload,
+    compile_pending_sources,
+    compile_repository_topics,
+)
 from memoryforge.errors import FeatureUnavailableError, MemoryForgeError, WorkspaceError
+from memoryforge.evaluation import run_evaluation
+from memoryforge.feishu_adapter import FeishuDocumentError, import_feishu_document
+from memoryforge.git_adapter import GitRepositoryError
 from memoryforge.importer import SourceValidationError, import_local_file
+from memoryforge.linting import lint_workspace
 from memoryforge.models import Sensitivity
+from memoryforge.provider import OpenAICompatibleProvider, ProviderConfig
 from memoryforge.query import answer_question
+from memoryforge.refresh import refresh_workspace
+from memoryforge.web_adapter import WebPageError, import_html_file, import_web_page
 from memoryforge.workspace import (
     Workspace,
     WorkspaceIntegrityError,
     WorkspaceSecurityError,
+    candidate_page_sources,
+    list_git_checkouts,
+    register_git_checkout,
+    register_git_code_module,
     search_sources,
+    sync_git_checkout,
+    validate_changeset_page_sources,
 )
 
 app = typer.Typer(
@@ -98,6 +115,333 @@ def import_command(
     typer.echo(json.dumps(result.model_dump(mode="json"), ensure_ascii=False, indent=2))
 
 
+@app.command("git-add")
+def git_add(
+    checkout: Annotated[Path, typer.Argument(help="Existing local Git checkout.")],
+    public: Annotated[
+        bool,
+        typer.Option(
+            "--public",
+            help="Allow this checkout's synced documents to be sent to an LLM.",
+        ),
+    ] = False,
+    workspace: WorkspaceOption = Path("."),
+) -> None:
+    """Register an existing local checkout without cloning or fetching."""
+    try:
+        result = register_git_checkout(
+            workspace,
+            checkout,
+            sensitivity=Sensitivity.PUBLIC if public else Sensitivity.LOCAL_ONLY,
+        )
+    except (
+        GitRepositoryError,
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(json.dumps(result.model_dump(mode="json"), ensure_ascii=False, indent=2))
+
+
+@app.command("git-list")
+def git_list(workspace: WorkspaceOption = Path(".")) -> None:
+    """List registered local Git checkouts."""
+    try:
+        results = list_git_checkouts(workspace)
+    except (
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(
+        json.dumps(
+            [result.model_dump(mode="json") for result in results],
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
+@app.command("git-sync")
+def git_sync(
+    repository_id: Annotated[str, typer.Argument(help="Registered Git repository ID.")],
+    workspace: WorkspaceOption = Path("."),
+) -> None:
+    """Import committed documentation from one registered local checkout."""
+    try:
+        result = sync_git_checkout(workspace, repository_id)
+    except (
+        GitRepositoryError,
+        MemoryForgeError,
+        SourceValidationError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(json.dumps(result.model_dump(mode="json"), ensure_ascii=False, indent=2))
+
+
+@app.command("code-add")
+def code_add(
+    repository_id: Annotated[str, typer.Argument(help="Registered Git repository ID.")],
+    path: Annotated[str, typer.Argument(help="Committed Go/Python file or directory.")],
+    workspace: WorkspaceOption = Path("."),
+) -> None:
+    """Select one code module; the next sync imports its Go/Python files."""
+    try:
+        selected = register_git_code_module(workspace, repository_id, path)
+    except (
+        GitRepositoryError,
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(
+        json.dumps(
+            {"repository_id": repository_id, "path": selected},
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
+@app.command("web-import")
+def web_import(
+    url: Annotated[str, typer.Argument(help="One public HTTP(S) article URL.")],
+    workspace: WorkspaceOption = Path("."),
+    category: Annotated[
+        str,
+        typer.Option("--category", "-c", help="SourceVersion category."),
+    ] = "refs",
+    tag: Annotated[
+        list[str] | None,
+        typer.Option("--tag", "-t", help="Repeatable tag stored in the immutable manifest."),
+    ] = None,
+    local_only: Annotated[
+        bool,
+        typer.Option(help="Keep this page out of future remote model requests."),
+    ] = False,
+) -> None:
+    """Import one readable public web page; no crawling or login is used."""
+    try:
+        result = import_web_page(
+            workspace,
+            url,
+            category=category,
+            tags=tuple(tag or ()),
+            sensitivity=Sensitivity.LOCAL_ONLY if local_only else Sensitivity.PUBLIC,
+        )
+    except (
+        WebPageError,
+        MemoryForgeError,
+        SourceValidationError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(json.dumps(result.model_dump(mode="json"), ensure_ascii=False, indent=2))
+
+
+@app.command("html-import")
+def html_import(
+    path: Annotated[Path, typer.Argument(help="Browser-saved .html or .htm file.")],
+    url: Annotated[str, typer.Option("--url", help="Original public article URL.")],
+    workspace: WorkspaceOption = Path("."),
+    category: Annotated[
+        str,
+        typer.Option("--category", "-c", help="SourceVersion category."),
+    ] = "refs",
+    tag: Annotated[
+        list[str] | None,
+        typer.Option("--tag", "-t", help="Repeatable tag stored in the immutable manifest."),
+    ] = None,
+    local_only: Annotated[
+        bool,
+        typer.Option(help="Keep this page out of future remote model requests."),
+    ] = False,
+) -> None:
+    """Convert one saved HTML page locally; no browser profile is read."""
+    try:
+        result = import_html_file(
+            workspace,
+            path,
+            url=url,
+            category=category,
+            tags=tuple(tag or ()),
+            sensitivity=Sensitivity.LOCAL_ONLY if local_only else Sensitivity.PUBLIC,
+        )
+    except (
+        WebPageError,
+        MemoryForgeError,
+        SourceValidationError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(json.dumps(result.model_dump(mode="json"), ensure_ascii=False, indent=2))
+
+
+@app.command()
+def refresh(workspace: WorkspaceOption = Path(".")) -> None:
+    """Manually refresh all registered local Git and Feishu sources once."""
+    try:
+        opened = Workspace.open(workspace)
+        result = refresh_workspace(opened.root)
+    except (
+        FeishuDocumentError,
+        GitRepositoryError,
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(
+        json.dumps(
+            {
+                "status": "changed" if result.changed else "unchanged",
+                "git": [
+                    {
+                        "repository_id": item.repository_id,
+                        "head_commit": item.head_commit,
+                        "created": item.created,
+                        "updated": item.updated,
+                        "unchanged": item.unchanged,
+                    }
+                    for item in result.git
+                ],
+                "feishu": [
+                    {
+                        "document_id": item.document_id,
+                        "created": item.created,
+                        "updated": item.updated,
+                        "unchanged": item.unchanged,
+                    }
+                    for item in result.feishu
+                ],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
+@app.command("topics")
+def topics(
+    repository_id: Annotated[str, typer.Argument(help="Public Git repository ID.")],
+    workspace: WorkspaceOption = Path("."),
+) -> None:
+    """Use the configured model to organize one public repository's Wiki pages."""
+    try:
+        opened = Workspace.open(workspace)
+        typer.echo("正在请求模型整理主题（通常需要几十秒）…", err=True)
+        compilation = compile_repository_topics(
+            opened,
+            repository_id,
+            OpenAICompatibleProvider(ProviderConfig.from_environment()),
+        )
+        stored = ChangeSetStore(opened).create(
+            compilation.changeset,
+            compilation.candidate_files,
+        )
+    except (
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(json.dumps(compilation_payload(stored), ensure_ascii=False, indent=2))
+
+
+@app.command("feishu-import")
+def feishu_import(
+    document: Annotated[
+        str,
+        typer.Argument(help="Readable Feishu/Lark Docx or Wiki URL, or token."),
+    ],
+    workspace: WorkspaceOption = Path("."),
+    category: Annotated[
+        str,
+        typer.Option("--category", "-c", help="SourceVersion category."),
+    ] = "notes",
+    tag: Annotated[
+        list[str] | None,
+        typer.Option("--tag", "-t", help="Repeatable source tag."),
+    ] = None,
+) -> None:
+    """Import one current Feishu document through the user-authorized lark-cli."""
+    try:
+        results = import_feishu_document(
+            workspace,
+            document,
+            category=category,
+            tags=tuple(tag or ()),
+        )
+    except (
+        FeishuDocumentError,
+        MemoryForgeError,
+        SourceValidationError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    status = next(
+        (
+            value
+            for value in ("created", "updated")
+            if any(result.status == value for result in results)
+        ),
+        "unchanged",
+    )
+    typer.echo(
+        json.dumps(
+            {
+                "status": status,
+                "sources": [result.model_dump(mode="json") for result in results],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
 @app.command()
 def search(
     query: Annotated[str, typer.Argument(help="Full-text search query.")],
@@ -132,15 +476,23 @@ def search(
 def ingest(
     pending: Annotated[bool, typer.Option("--pending")] = True,
     source: Annotated[list[str] | None, typer.Option("--source")] = None,
+    llm: Annotated[
+        bool,
+        typer.Option("--llm", help="Use the configured OpenAI-compatible PageChange provider."),
+    ] = False,
     workspace: WorkspaceOption = Path("."),
 ) -> None:
     if not pending:
         _exit_with_safe_error(ValueError("ingest currently requires --pending"))
     try:
         opened = Workspace.open(workspace)
+        provider = (
+            OpenAICompatibleProvider(ProviderConfig.from_environment()) if llm else None
+        )
         compilation = compile_pending_sources(
             opened,
             source_ids=tuple(source or ()),
+            provider=provider,
         )
         if compilation is None:
             typer.echo(
@@ -204,7 +556,6 @@ def review(
                 "status": stored.changeset.status.value,
                 "candidate_files": stored.candidate_files,
                 "unified_diff": diffs,
-                "claims": [claim.model_dump(mode="json") for claim in stored.changeset.claims],
             },
             ensure_ascii=False,
             indent=2,
@@ -226,6 +577,17 @@ def apply(
         stored = store.get(changeset_id)
         paths = tuple(sorted(stored.candidate_files))
         opened.version_store.require_clean_paths(paths)
+        opened.require_current_source_versions(stored.changeset.source_versions)
+        page_sources = candidate_page_sources(stored.candidate_files)
+        validate_changeset_page_sources(page_sources, stored.changeset.source_ids)
+        previous_source_versions = opened.record_applied_source_versions(
+            stored.changeset.source_versions
+        )
+        try:
+            previous_page_sources = opened.replace_applied_page_sources(page_sources)
+        except Exception:
+            opened.restore_applied_source_versions(previous_source_versions)
+            raise
         previous_files: dict[Path, str | None] = {}
         try:
             for path, content in stored.candidate_files.items():
@@ -245,6 +607,8 @@ def apply(
                     destination.unlink(missing_ok=True)
                 else:
                     destination.write_text(previous, encoding="utf-8")
+            opened.restore_applied_source_versions(previous_source_versions)
+            opened.restore_applied_page_sources(previous_page_sources)
             with suppress(MemoryForgeError):
                 opened.version_store.reset_paths(paths)
             raise
@@ -291,17 +655,44 @@ def reject(
 def ask(
     question: Annotated[str, typer.Argument()],
     as_of: Annotated[str | None, typer.Option("--as-of")] = None,
+    llm: Annotated[
+        bool,
+        typer.Option("--llm", help="Summarize matched public evidence with the configured model."),
+    ] = False,
+    debug: Annotated[
+        bool,
+        typer.Option("--debug", help="Show the short Index, Wiki, and evidence read path."),
+    ] = False,
+    verify: Annotated[
+        bool,
+        typer.Option("--verify", help="Expand the selected cited source excerpt after answering."),
+    ] = False,
+    max_pages: Annotated[
+        int,
+        typer.Option("--max-pages", min=1, max=10, help="Maximum Wiki pages to expand."),
+    ] = 3,
     workspace: WorkspaceOption = Path("."),
 ) -> None:
     try:
         if as_of is not None:
             raise FeatureUnavailableError("--as-of is not supported yet")
         opened = Workspace.open(workspace)
-        result = answer_question(opened.root, question)
+        provider = OpenAICompatibleProvider(ProviderConfig.from_environment()) if llm else None
+        if provider is not None:
+            typer.echo("正在基于命中的公开 Wiki 证据生成回答…", err=True)
+        result = answer_question(
+            opened.root,
+            question,
+            debug=debug,
+            verify=verify,
+            max_pages=max_pages,
+            provider=provider,
+        )
     except (
         MemoryForgeError,
         WorkspaceIntegrityError,
         WorkspaceSecurityError,
+        ValueError,
         FileNotFoundError,
         OSError,
         sqlite3.Error,
@@ -315,8 +706,21 @@ def lint(
     fix_proposal: Annotated[bool, typer.Option("--fix-proposal")] = False,
     workspace: WorkspaceOption = Path("."),
 ) -> None:
-    _ = fix_proposal
-    _require_future_feature(workspace, "lint")
+    try:
+        if fix_proposal:
+            raise FeatureUnavailableError("--fix-proposal is not supported; lint is read-only")
+        result = lint_workspace(workspace)
+    except (
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 @app.command()
@@ -342,8 +746,20 @@ def eval(
     eval_config: Annotated[Path, typer.Argument()],
     workspace: WorkspaceOption = Path("."),
 ) -> None:
-    _ = eval_config
-    _require_future_feature(workspace, "eval")
+    try:
+        opened = Workspace.open(workspace)
+        result = run_evaluation(opened.root, eval_config)
+    except (
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 def _require_future_feature(workspace: Path, command: str) -> None:

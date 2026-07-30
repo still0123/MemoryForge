@@ -72,7 +72,7 @@ class LocalDocument(BaseModel):
     source_path: str = Field(min_length=1)
     media_type: Literal["text/markdown", "text/plain"]
     category: SourceCategory
-    suffix: Literal[".md", ".markdown", ".txt"]
+    suffix: Literal[".md", ".markdown", ".txt", ".go", ".py"]
     title: str = Field(min_length=1)
     content: str
     sensitivity: Sensitivity = Sensitivity.PUBLIC
@@ -91,6 +91,63 @@ class ImportResult(BaseModel):
     snapshot_uri: str
     snapshot_path: str
     observed_at: datetime
+
+
+class GitRepositoryRecord(BaseModel):
+    """A registered local Git checkout."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    repository_id: str = Field(pattern=r"^[a-f0-9]{64}$")
+    name: str = Field(min_length=1)
+    checkout_path: str = Field(min_length=1)
+    remote_name: str | None = None
+    remote_url: str | None = None
+    sensitivity: Sensitivity = Sensitivity.LOCAL_ONLY
+    registered_at: datetime
+    last_synced_commit: str | None = Field(default=None, pattern=r"^[a-f0-9]{40,64}$")
+
+
+class GitDocumentSyncResult(BaseModel):
+    """One documentation file imported from a committed Git snapshot."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source_id: SourceId
+    relative_path: str = Field(min_length=1)
+    revision: str = Field(pattern=r"^[a-f0-9]{40,64}$")
+    status: Literal["created", "updated", "unchanged"]
+
+
+class GitRepositorySyncResult(BaseModel):
+    """Summary of one local checkout sync."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    repository_id: str = Field(pattern=r"^[a-f0-9]{64}$")
+    head_commit: str = Field(pattern=r"^[a-f0-9]{40,64}$")
+    created: int = Field(ge=0)
+    updated: int = Field(ge=0)
+    unchanged: int = Field(ge=0)
+    documents: tuple[GitDocumentSyncResult, ...] = ()
+
+
+class TopicGroup(BaseModel):
+    """One model-proposed navigation topic for already compiled source pages."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    title: str = Field(min_length=1)
+    summary: str = Field(min_length=1)
+    source_ids: tuple[SourceId, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_topic_group(self) -> TopicGroup:
+        if len(self.source_ids) != len(set(self.source_ids)):
+            raise ValueError("TopicGroup source_ids must not contain duplicates")
+        validate_llm_title(self.title)
+        validate_llm_summary(self.summary)
+        return self
 
 
 class SearchResult(BaseModel):
@@ -134,6 +191,89 @@ class SourceVersionManifest(BaseModel):
         if self.snapshot_uri != f"mf://blob/{self.content_sha256}":
             raise ValueError("snapshot_uri must identify the manifest content_sha256")
         return self
+
+
+class PageCitation(BaseModel):
+    """A source locator attached to an LLM-proposed Wiki page."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source_id: SourceId
+    locator: str = Field(pattern=r"^chars:\d+-\d+$")
+
+    @model_validator(mode="after")
+    def validate_locator(self) -> PageCitation:
+        match = _CHAR_LOCATOR.fullmatch(self.locator)
+        if match is None or int(match.group("end")) <= int(match.group("start")):
+            raise ValueError("locator must contain a non-empty character range")
+        return self
+
+
+class PageChange(BaseModel):
+    """A reviewable page proposal returned by an LLM compiler."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    path: str = Field(min_length=1)
+    title: str = Field(min_length=1)
+    page_type: Literal["entity", "concept", "synthesis"]
+    summary: str = Field(min_length=1)
+    body: str = Field(min_length=1)
+    source_ids: tuple[SourceId, ...] = Field(min_length=1)
+    citations: tuple[PageCitation, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_page_change(self) -> PageChange:
+        filename = self.path.removeprefix("wiki/pages/")
+        if (
+            "\\" in self.path
+            or not self.path.startswith("wiki/pages/")
+            or "/" in filename
+            or not filename.endswith(".md")
+            or filename in {".md", "..md"}
+            or "\x00" in filename
+        ):
+            raise ValueError("PageChange paths must be Markdown files below wiki/pages/")
+        if len(self.source_ids) != len(set(self.source_ids)):
+            raise ValueError("PageChange source_ids must not contain duplicates")
+        declared_sources = set(self.source_ids)
+        cited_sources = {citation.source_id for citation in self.citations}
+        if cited_sources != declared_sources:
+            raise ValueError(
+                "PageChange citations must cover exactly all declared source_ids"
+            )
+        validate_llm_title(self.title)
+        validate_llm_summary(self.summary)
+        validate_llm_body(self.body)
+        return self
+
+
+def validate_llm_title(title: str) -> None:
+    """Keep model titles from injecting Markdown structure into local page templates."""
+    if not title.strip() or len(title.splitlines()) != 1:
+        raise ValueError("PageChange title must be one non-empty line")
+    if re.search(r"(?:^|\s)(?:#{1,6}\s|---(?:\s|$)|```|\[\^)", title):
+        raise ValueError("PageChange title must not contain Markdown structure")
+
+
+def validate_llm_summary(summary: str) -> None:
+    """Keep INDEX rows to one locally-rendered line."""
+    if not summary.strip() or len(summary.splitlines()) != 1:
+        raise ValueError("PageChange summary must be one non-empty line")
+
+
+def validate_llm_body(body: str) -> None:
+    """Keep reserved, locally-rendered evidence sections out of model output."""
+    if body.lstrip().startswith("---"):
+        raise ValueError("PageChange body must not contain frontmatter")
+    if re.search(
+        r"^ {0,3}#{1,6}[ \t]+(?:Verified[ \t]+facts|Sources)(?:[ \t]+#+)?[ \t]*$",
+        body,
+        re.MULTILINE | re.IGNORECASE,
+    ):
+        raise ValueError("PageChange body must not contain reserved Wiki sections")
+    if "[^" in body:
+        raise ValueError("PageChange body must not contain footnote markers")
 
 
 class Citation(BaseModel):
@@ -220,6 +360,7 @@ class ChangeSet(BaseModel):
     changeset_id: str = Field(pattern=r"^chg_[a-zA-Z0-9_-]+$")
     base_commit: str = Field(pattern=r"^[a-f0-9]{40,64}$")
     source_ids: tuple[SourceId, ...] = ()
+    source_versions: dict[SourceId, int] = Field(default_factory=dict)
     status: ChangeSetStatus
     operations: tuple[ChangeOperation, ...] = ()
     claims: tuple[Claim, ...] = ()
@@ -230,6 +371,10 @@ class ChangeSet(BaseModel):
     def validate_evidence_references(self) -> ChangeSet:
         if len(self.source_ids) != len(set(self.source_ids)):
             raise ValueError("ChangeSet source_ids must not contain duplicates")
+        if self.source_versions and set(self.source_versions) != set(self.source_ids):
+            raise ValueError("ChangeSet source_versions must match source_ids")
+        if any(version_id < 1 for version_id in self.source_versions.values()):
+            raise ValueError("ChangeSet source_versions must contain positive version IDs")
         operation_paths = [operation.path for operation in self.operations]
         if len(operation_paths) != len(set(operation_paths)):
             raise ValueError("ChangeSet operations must not conflict on the same Wiki path")

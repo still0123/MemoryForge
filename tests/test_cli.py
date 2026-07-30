@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -80,3 +81,79 @@ def test_cli_help_describes_source_version_category() -> None:
 
     assert result.exit_code == 0
     assert "SourceVersion category" in result.stdout
+
+
+def test_cli_registers_lists_and_syncs_existing_git_checkout(tmp_path: Path) -> None:
+    checkout = tmp_path / "repository"
+    checkout.mkdir()
+    _git(checkout, "init")
+    _git(checkout, "config", "user.email", "test@example.com")
+    _git(checkout, "config", "user.name", "Test User")
+    (checkout / "README.md").write_text("# Service\n\nCLI fixture", encoding="utf-8")
+    _git(checkout, "add", ".")
+    _git(checkout, "commit", "-m", "Add documentation")
+    workspace = tmp_path / "workspace"
+    runner = CliRunner()
+
+    assert runner.invoke(app, ["init", str(workspace)]).exit_code == 0
+    add_result = runner.invoke(
+        app,
+        ["git-add", str(checkout), "--workspace", str(workspace)],
+    )
+    repository = json.loads(add_result.stdout)
+    list_result = runner.invoke(app, ["git-list", "--workspace", str(workspace)])
+    sync_result = runner.invoke(
+        app,
+        ["git-sync", repository["repository_id"], "--workspace", str(workspace)],
+    )
+    unknown_result = runner.invoke(
+        app,
+        ["git-sync", "0" * 64, "--workspace", str(workspace)],
+    )
+
+    assert add_result.exit_code == 0
+    assert repository["sensitivity"] == "local_only"
+    assert list_result.exit_code == 0
+    assert [item["repository_id"] for item in json.loads(list_result.stdout)] == [
+        repository["repository_id"]
+    ]
+    assert sync_result.exit_code == 0
+    assert json.loads(sync_result.stdout)["created"] == 1
+    assert unknown_result.exit_code == 1
+    assert "unknown Git repository" in unknown_result.stderr
+    assert "Traceback" not in unknown_result.stderr
+
+
+def test_cli_refreshes_all_registered_git_checkouts(tmp_path: Path) -> None:
+    checkout = tmp_path / "repository"
+    checkout.mkdir()
+    _git(checkout, "init")
+    _git(checkout, "config", "user.email", "test@example.com")
+    _git(checkout, "config", "user.name", "Test User")
+    (checkout / "README.md").write_text("# Service\n\nRefresh fixture", encoding="utf-8")
+    _git(checkout, "add", ".")
+    _git(checkout, "commit", "-m", "Add documentation")
+    workspace = tmp_path / "workspace"
+    runner = CliRunner()
+
+    assert runner.invoke(app, ["init", str(workspace)]).exit_code == 0
+    registered = runner.invoke(
+        app,
+        ["git-add", str(checkout), "--workspace", str(workspace)],
+    )
+    assert registered.exit_code == 0, registered.output
+
+    refreshed = runner.invoke(app, ["refresh", "--workspace", str(workspace)])
+    unchanged = runner.invoke(app, ["refresh", "--workspace", str(workspace)])
+
+    assert refreshed.exit_code == 0, refreshed.output
+    assert json.loads(refreshed.stdout)["status"] == "changed"
+    assert json.loads(refreshed.stdout)["git"][0]["created"] == 1
+    assert "documents" not in json.loads(refreshed.stdout)["git"][0]
+    assert json.loads(refreshed.stdout)["feishu"] == []
+    assert unchanged.exit_code == 0, unchanged.output
+    assert json.loads(unchanged.stdout)["status"] == "unchanged"
+
+
+def _git(checkout: Path, *arguments: str) -> None:
+    subprocess.run(["git", *arguments], cwd=checkout, check=True, capture_output=True, text=True)
