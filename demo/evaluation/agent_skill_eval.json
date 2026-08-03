@@ -3,7 +3,7 @@
   "cases": [
     {
       "id": "statistics-truth-source",
-      "question": "如何避免把模拟实验结果当成真实结论？",
+      "question": "统计器如何避免把模拟实验结果当成真实结论？",
       "expected_source_path": "docs/statistics-and-reports.md",
       "required_terms": ["Manifest", "RunMeasurement"]
     },
@@ -15,9 +15,39 @@
     },
     {
       "id": "real-agent-boundary",
-      "question": "SkillUpRunnerAdapter 会引入新的 Provider 编排框架吗？",
+      "question": "Real Agent 模块会不会引入新的 Provider 编排框架？",
       "expected_source_path": "docs/real-agent-evidence.md",
       "required_terms": ["Provider", "模拟结果"]
+    },
+    {
+      "id": "local-engine-boundary",
+      "question": "本地配对实验引擎依赖哪些服务？",
+      "expected_source_path": "docs/local-experiment-engine.md",
+      "required_terms": ["Redis", "Celery"]
+    },
+    {
+      "id": "evidence-skill-activation",
+      "question": "为什么配置声明了 Skill 不足以证明 Skill 生效？",
+      "expected_source_path": "docs/evidence-and-replay.md",
+      "required_terms": ["Skill", "Secret"]
+    },
+    {
+      "id": "promotion-core-handoff",
+      "question": "Stage 4b 把 Evolution handoff 接入哪个 Promotion Core、复用了哪个评估器？",
+      "expected_source_path": "docs/promotion-workflow-integration.md",
+      "required_terms": ["Promotion Core", "IndependentFinalEvaluator"]
+    },
+    {
+      "id": "memory-rag-boundary",
+      "question": "Memory/RAG MVP 刻意不用哪些能力？",
+      "expected_source_path": "docs/memory-rag-evaluation.md",
+      "required_terms": ["LLM Judge", "Embedding"]
+    },
+    {
+      "id": "observed-failure-boundary",
+      "question": "Observed Failure Evidence Bridge 会重新运行 Agent 吗？",
+      "expected_source_path": "docs/observed-failure-evidence-bridge.md",
+      "required_terms": ["FailureEvidenceBundle", "不重新运行"]
     }
   ]
 }

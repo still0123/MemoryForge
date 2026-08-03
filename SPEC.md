@@ -5,9 +5,9 @@
 | 字段 | 内容 |
 |---|---|
 | 文档状态 | Draft v0.4 |
-| 当前基线 | `09d19a9`，分支 `agent/phase-1a-local-foundation` |
+| 当前基线 | `0feb379`，分支 `agent/phase-1a-local-foundation` |
 | 产品形态 | 单用户、本地优先、CLI |
-| 当前阶段 | Phase 5：真实仓库验证与项目总览导航 |
+| 当前阶段 | Phase 5：公开证据包与五分钟复现已完成 |
 
 ## 1. 项目定义
 
@@ -80,7 +80,7 @@ MemoryForge 面向拥有多个代码仓库、设计文档和个人笔记的开�
 
 ```text
 LocalFileAdapter ─┐
-GitRepoAdapter ───┼─> SourceDocument ─> WikiCompiler ─> PageChange
+GitRepoAdapter ───┼─> LocalDocument ─> WikiCompiler ─> PageChange
 Future Adapters ──┘                                  │
                                                     v
                                              review / apply
@@ -93,7 +93,7 @@ Future Adapters ──┘                                  │
 
 系统只保留三个核心业务结构：
 
-1. `SourceDocument`：统一表示输入；
+1. `LocalDocument`：统一表示输入；
 2. `PageChange`：表示模型提出的页面更新；
 3. `ChangeSet`：组织一次可审核更新。
 
@@ -106,7 +106,7 @@ Future Adapters ──┘                                  │
 所有来源转换成同一种结构：
 
 ```python
-class SourceDocument(BaseModel):
+class LocalDocument(BaseModel):
     id: str
     kind: Literal["local_file", "git"]
     title: str
@@ -179,20 +179,17 @@ Frontmatter、来源映射、可展开引用和 Index 链接。每个 Git 仓库
 - 网页批量采集、登录态页面和动态渲染页面；
 - 经过人工选择的聊天结论。
 
-这些来源仍然转换为 `SourceDocument`，核心编译器不感知飞书或网页 API。
+这些来源仍然转换为 `LocalDocument`，核心编译器不感知飞书或网页 API。
 
 ## 5. Wiki 结构
 
 ```text
 workspace/
-├── purpose.md
-├── sources/
+├── raw/
 ├── wiki/
 │   ├── INDEX.md
-│   ├── pages/
-│   └── log.md
-├── staging/
-└── memoryforge.db
+│   └── pages/
+└── .memoryforge/
 ```
 
 | 页面类型 | 回答的问题 | 示例 |
@@ -218,11 +215,11 @@ source_version: 12
 updated: 2026-07-29
 ```
 
-正文末尾保存简单引用：
+正文末尾保存简单引用，定位使用字符区间：
 
 ```text
-[note-cache-design:L12-L24]
-[repo-order-service@abc123:docs/cache.md:L8-L20]
+[note-cache-design:chars:12-240]
+[repo-order-service@abc123:docs/cache.md:chars:8-200]
 ```
 
 MVP 不单独维护一份与页面正文重复的 Claim Ledger。
@@ -231,7 +228,7 @@ MVP 不单独维护一份与页面正文重复的 Claim Ledger。
 
 一次编译读取：
 
-- 新增或变化的 `SourceDocument`；编译器以 `source_version` 判断页面是否
+- 新增或变化的 `LocalDocument`；编译器以 `source_version` 判断页面是否
   已经同步；
 - `INDEX.md` 中的页面摘要；
 - 页面类型和写作规则。
@@ -271,7 +268,7 @@ class PageChange(BaseModel):
 - 必填字段存在且页面可解析；
 - Citation 的 `source_id` 存在；
 - 明确的本地行号没有越界；
-- 模型不能修改 `sources/`。
+- 模型不能修改 `raw/`。
 
 语义正确性通过页面 Diff、引用和公开评测保证，不增加第二个 LLM Judge 作为强制门禁。
 
@@ -304,7 +301,7 @@ LLM prompt 当前只包含待编译来源，不上传已有 `INDEX.md`；Index �
 ## 7. 渐进式查询
 
 ```text
-L0 purpose.md + INDEX.md  -> 确定范围和候选页面
+L0 INDEX.md               -> 确定范围和候选页面
 L1 页面摘要/Frontmatter  -> 筛选相关页面
 L2 Wiki 正文             -> 回答大多数问题
 L3 原始来源              -> 核实细节或提供出处
@@ -345,10 +342,11 @@ L3 原始来源              -> 核实细节或提供出处
 
 ```bash
 memoryforge init <workspace>
-memoryforge source add-local <path>
-memoryforge source add-git <repo-path>
-memoryforge source list
-memoryforge ingest [--source <source-id>]
+memoryforge import <path> [--category <category>]
+memoryforge git-add <local-checkout> [--public]
+memoryforge git-list
+memoryforge git-sync <repository-id>
+memoryforge ingest --pending [--llm]
 memoryforge review <changeset-id>
 memoryforge apply <changeset-id> --approve
 memoryforge search "<query>"
@@ -419,7 +417,7 @@ Raw FTS 基线跑通；只有它证明需要更强语义检索时，才加入 Ch
 - Index 未命中时从已应用 Source FTS5 回退到页面；
 - 最多读取指定数量的 Wiki 页面，原文只在 `--verify` 时展开。
 
-### Phase 5：评测与包装
+### Phase 5：评测与包装（已完成）
 
 - 构造公开的小型多来源数据集；
 - 对比 Raw FTS 基线与 MemoryForge；

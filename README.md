@@ -283,4 +283,30 @@ memoryforge eval demo/evaluation/agent_skill_eval.json --workspace ./my-wiki
 
 题集中的 `expected_source_path` 和 `required_terms` 是人工写下的验收标准，因此结果可复现、也便于发现检索退化。不要把内部资料题集或评测输出提交到公开仓库。
 
+## 从公开仓库复跑（五分钟）
+
+想亲手验证上面的说法，可以对一个**已经克隆到本地**的公开仓库跑一遍完整链路，无需模型 API Key，也不联网：
+
+1. 准备 `AgentSkill-Eval` 的本地 checkout，例如 `~/code/AgentSkill-Eval`；脚本只读它的 `HEAD`，不 clone/fetch/checkout。
+2. 运行复现脚本（`--workspace` 必须是一个不存在或为空的目录）：
+
+   ```bash
+   .venv/bin/python demo/run_public_demo.py \
+     --source-repo ~/code/AgentSkill-Eval \
+     --workspace /private/tmp/memoryforge-public-demo \
+     --output /private/tmp/agent_skill_eval_public.json
+   ```
+
+3. 仓库里已提交了一份真实运行结果：[demo/results/agent_skill_eval_public.json](./demo/results/agent_skill_eval_public.json)；你的输出应当与它一致（源仓 commit 相同的前提下）。
+
+脚本依次编排 `init → git-add --public → git-sync → ingest --pending → review → apply --approve → lint → ask --debug --verify → eval`，并从每一步真实 JSON 中解析 `repository-id`、`changeset-id`。证据 JSON 中各指标的含义：
+
+- `answer_accuracy`：回答包含预期关键事实的题目比例；
+- `citation_accuracy`：引用能回到预期原始资料的题目比例；
+- `average_wiki_pages_read`：每题平均展开的 Wiki 页数（页面预算）；
+- `average_raw_sources_read`：日常查询读取原文的次数，正常应为 `0`；
+- `average_citation_audit_characters`：查询结束后为核对引用而单独读取的原文字符数。
+
+这组评测只证明现有 Wiki 流程在这组公开问题上的行为和成本边界，并不声称 “MemoryForge 比 Raw FTS 更准确”。复现请只用公开仓库，不要把公司内部仓库或飞书文档用于公开复跑。
+
 实现细节、数据模型和阶段计划在 [SPEC.md](./SPEC.md)。公开演示时请只使用虚构或公开资料，不要提交公司内部代码和文档。

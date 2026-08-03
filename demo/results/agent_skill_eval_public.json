@@ -1,0 +1,224 @@
+{
+  "schema_version": 1,
+  "memoryforge_commit": "0feb379e0018362a4cd832b2c0e77d5b5ca83ff4",
+  "source_repository": {
+    "remote_url": "https://github.com/ranmaoxia0123/AgentSkill-Eval.git",
+    "commit": "93f5dc05229da250b041850ad8deeeec886ef304"
+  },
+  "workflow": {
+    "source_count": 56,
+    "wiki_file_count": 57,
+    "lint": {
+      "status": "clean",
+      "checked_pages": 57,
+      "issues": []
+    }
+  },
+  "sample_query": {
+    "question": "本地配对实验引擎依赖哪些服务？",
+    "answer": "本地实验引擎把冻结的 `ExperimentManifest`、Variant、Case 和运行时配置展开成可审计的 PairBlock/Run，并按 PairBlock 内预先随机化的顺序调用 Runner Adapter。它是单机 P0 的控制面，不依赖数据库服务、Redis、Celery 或 Web API。",
+    "citations": [
+      {
+        "source_id": "c795a256eb094f3c07f2f7e7a5eac92c36f9df5a1186d11e2eca0d0cd3abc2aa",
+        "source_version": 29,
+        "locator": "chars:25-183",
+        "quote": "本地实验引擎把冻结的 `ExperimentManifest`、Variant、Case 和运行时配置展开成可审计的 PairBlock/Run，并按 PairBlock 内预先随机化的顺序调用 Runner Adapter。它是单机 P0 的控制面，不依赖数据库服务、Redis、Celery 或 Web API。"
+      }
+    ],
+    "trace": [
+      {
+        "level": "L0",
+        "artifact": "wiki/INDEX.md"
+      },
+      {
+        "level": "L1",
+        "artifact": "wiki/pages/c795a256eb094f3c07f2f7e7a5eac92c36f9df5a1186d11e2eca0d0cd3abc2aa.md"
+      },
+      {
+        "level": "L1",
+        "artifact": "wiki/pages/f8d5d6c610b0bed0bf2a1808bff45f01846f4450e4b0672fe4535ab4e51ac38d.md"
+      },
+      {
+        "level": "L1",
+        "artifact": "wiki/pages/ad1f1f6377f66150bff8584da873559ae822efb10a4e9709ee8a402ada67882f.md"
+      },
+      {
+        "level": "L2",
+        "artifact": "wiki/pages/c795a256eb094f3c07f2f7e7a5eac92c36f9df5a1186d11e2eca0d0cd3abc2aa.md"
+      },
+      {
+        "level": "L3",
+        "artifact": "source c795a256eb094f3c07f2f7e7a5eac92c36f9df5a1186d11e2eca0d0cd3abc2aa revision 29"
+      }
+    ]
+  },
+  "evaluation": {
+    "suite": "AgentSkill-Eval public documentation",
+    "case_count": 8,
+    "memoryforge": {
+      "answer_accuracy": 100.0,
+      "citation_accuracy": 100.0,
+      "average_wiki_pages_read": 3.0,
+      "average_raw_sources_read": 0.0,
+      "average_citation_audit_characters": 144.88
+    },
+    "raw_fts_baseline": {
+      "expected_source_recall_at_3": 0.0,
+      "average_exposed_characters": 0.0
+    },
+    "cases": [
+      {
+        "id": "statistics-truth-source",
+        "question": "统计器如何避免把模拟实验结果当成真实结论？",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "citation_audit_characters": 189,
+          "wiki_pages": [
+            "wiki/pages/a19b4bd7fa32bf164a474323bd6186a66d9ef639a1f10905423bbe8d82b33291.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": false,
+          "result_count": 0,
+          "exposed_characters": 0
+        }
+      },
+      {
+        "id": "trace-boundary",
+        "question": "Trace Intelligence 不保存什么？",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "citation_audit_characters": 127,
+          "wiki_pages": [
+            "wiki/pages/039d51e4ebbf8c02f44ac424f1cda5160358b7db6d76259e869da4bc62333ff2.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": false,
+          "result_count": 0,
+          "exposed_characters": 0
+        }
+      },
+      {
+        "id": "real-agent-boundary",
+        "question": "Real Agent 模块会不会引入新的 Provider 编排框架？",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "citation_audit_characters": 110,
+          "wiki_pages": [
+            "wiki/pages/ad1f1f6377f66150bff8584da873559ae822efb10a4e9709ee8a402ada67882f.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": false,
+          "result_count": 0,
+          "exposed_characters": 0
+        }
+      },
+      {
+        "id": "local-engine-boundary",
+        "question": "本地配对实验引擎依赖哪些服务？",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "citation_audit_characters": 158,
+          "wiki_pages": [
+            "wiki/pages/c795a256eb094f3c07f2f7e7a5eac92c36f9df5a1186d11e2eca0d0cd3abc2aa.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": false,
+          "result_count": 0,
+          "exposed_characters": 0
+        }
+      },
+      {
+        "id": "evidence-skill-activation",
+        "question": "为什么配置声明了 Skill 不足以证明 Skill 生效？",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "citation_audit_characters": 120,
+          "wiki_pages": [
+            "wiki/pages/a0c98300c8c29d3393560a9ad7c6455541cddfa354546d6ceb5731b187ff5cfa.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": false,
+          "result_count": 0,
+          "exposed_characters": 0
+        }
+      },
+      {
+        "id": "promotion-core-handoff",
+        "question": "Stage 4b 把 Evolution handoff 接入哪个 Promotion Core、复用了哪个评估器？",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "citation_audit_characters": 131,
+          "wiki_pages": [
+            "wiki/pages/7f8151ac637e6dcf6ecbf0ef71c23891290bc9336b55f56be084309dd9ac24d2.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": false,
+          "result_count": 0,
+          "exposed_characters": 0
+        }
+      },
+      {
+        "id": "memory-rag-boundary",
+        "question": "Memory/RAG MVP 刻意不用哪些能力？",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "citation_audit_characters": 182,
+          "wiki_pages": [
+            "wiki/pages/1eac09791d1e5997becfe6cefb4bbd634ecf699fdfdf6e48b930455d51575997.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": false,
+          "result_count": 0,
+          "exposed_characters": 0
+        }
+      },
+      {
+        "id": "observed-failure-boundary",
+        "question": "Observed Failure Evidence Bridge 会重新运行 Agent 吗？",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "citation_audit_characters": 142,
+          "wiki_pages": [
+            "wiki/pages/b41d0d9a203daa2b4a0085b97439fc424b59d65e2907b2248a03c5944edbfbfd.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": false,
+          "result_count": 0,
+          "exposed_characters": 0
+        }
+      }
+    ]
+  }
+}
