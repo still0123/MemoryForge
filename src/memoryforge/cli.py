@@ -544,9 +544,18 @@ def search(
         int,
         typer.Option("--limit", "-n", min=1, max=100, help="Maximum result count."),
     ] = 10,
+    repository_id: Annotated[
+        str | None,
+        typer.Option("--repository", help="Limit results to one registered Git repository."),
+    ] = None,
 ) -> None:
     try:
-        results = search_sources(workspace, query, limit=limit)
+        results = search_sources(
+            workspace,
+            query,
+            limit=limit,
+            repository_id=repository_id,
+        )
     except (
         MemoryForgeError,
         WorkspaceIntegrityError,
@@ -814,6 +823,10 @@ def ask(
         int,
         typer.Option("--max-pages", min=1, max=10, help="Maximum Wiki pages to expand."),
     ] = 3,
+    repository_id: Annotated[
+        str | None,
+        typer.Option("--repository", help="Limit answers to one registered Git repository."),
+    ] = None,
     workspace: WorkspaceOption = Path("."),
 ) -> None:
     try:
@@ -831,6 +844,7 @@ def ask(
             max_pages=max_pages,
             provider=provider,
             allow_local=allow_local_llm,
+            repository_id=repository_id,
         )
     except (
         MemoryForgeError,
@@ -854,7 +868,7 @@ def agent(
     ] = 4,
     max_pages: Annotated[
         int,
-        typer.Option("--max-pages", min=1, max=10, help="Maximum Wiki pages for search."),
+        typer.Option("--max-pages", min=1, max=3, help="Maximum Wiki pages for search."),
     ] = 3,
     allow_local_llm: Annotated[
         bool,
@@ -870,6 +884,10 @@ def agent(
             help="Create a reviewable Wiki ChangeSet from the answered evidence.",
         ),
     ] = False,
+    repository_id: Annotated[
+        str | None,
+        typer.Option("--repository", help="Limit the Agent to one registered Git repository."),
+    ] = None,
     workspace: WorkspaceOption = Path("."),
 ) -> None:
     try:
@@ -883,6 +901,7 @@ def agent(
             max_pages=max_pages,
             allow_local=allow_local_llm,
             propose_update=propose_update,
+            repository_id=repository_id,
         )
     except (
         MemoryForgeError,

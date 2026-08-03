@@ -83,6 +83,14 @@ def test_cli_help_describes_source_version_category() -> None:
     assert "SourceVersion category" in result.stdout
 
 
+def test_query_commands_expose_repository_scope() -> None:
+    runner = CliRunner()
+
+    assert "--repository" in runner.invoke(app, ["search", "--help"]).stdout
+    assert "--repository" in runner.invoke(app, ["ask", "--help"]).stdout
+    assert "--repository" in runner.invoke(app, ["agent", "--help"]).stdout
+
+
 def test_cli_registers_lists_and_syncs_existing_git_checkout(tmp_path: Path) -> None:
     checkout = tmp_path / "repository"
     checkout.mkdir()

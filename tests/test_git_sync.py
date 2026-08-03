@@ -26,9 +26,11 @@ from memoryforge.models import (
     Sensitivity,
     TopicGroup,
 )
+from memoryforge.query import answer_question
 from memoryforge.workspace import (
     Workspace,
     WorkspaceError,
+    find_applied_page_paths,
     init_workspace,
     list_git_checkouts,
     list_git_code_modules,
@@ -534,6 +536,68 @@ def test_deleted_source_rebuilds_shared_page_from_remaining_source(tmp_path: Pat
     retry_source_id = source_by_path["docs/retry.md"].source_id
     assert Workspace.open(workspace).page_paths_for_source(retry_source_id) == (shared_path,)
     assert lint_workspace(workspace)["status"] == "clean"
+
+
+def test_repository_scope_keeps_same_keyword_queries_in_one_git_checkout(
+    tmp_path: Path,
+) -> None:
+    first_root = tmp_path / "first"
+    first_root.mkdir()
+    first_checkout = _create_repository(first_root)
+    _write(
+        first_checkout / "README.md",
+        "# Shared module\n\nRepository one owns the blue scheduler.\n",
+    )
+    _commit_all(first_checkout, "Add first scheduler")
+    second_root = tmp_path / "second"
+    second_root.mkdir()
+    second_checkout = _create_repository(second_root)
+    _write(
+        second_checkout / "README.md",
+        "# Shared module\n\nRepository two owns the red scheduler.\n",
+    )
+    _commit_all(second_checkout, "Add second scheduler")
+    workspace = init_workspace(tmp_path / "workspace")
+    first_repository = register_git_checkout(workspace, first_checkout)
+    second_repository = register_git_checkout(workspace, second_checkout)
+    sync_git_checkout(workspace, first_repository.repository_id)
+    sync_git_checkout(workspace, second_repository.repository_id)
+    runner = CliRunner()
+    staged = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
+    assert staged.exit_code == 0, staged.output
+    assert runner.invoke(
+        app,
+        [
+            "apply",
+            json.loads(staged.stdout)["changeset_id"],
+            "--approve",
+            "--workspace",
+            str(workspace),
+        ],
+    ).exit_code == 0
+
+    scoped_sources = search_sources(
+        workspace,
+        "scheduler",
+        repository_id=first_repository.repository_id,
+    )
+    scoped_pages = find_applied_page_paths(
+        workspace,
+        "scheduler",
+        repository_id=first_repository.repository_id,
+    )
+    scoped_answer = answer_question(
+        workspace,
+        "Which repository owns the scheduler?",
+        repository_id=first_repository.repository_id,
+    )
+
+    assert len(scoped_sources) == 1
+    assert scoped_sources[0].source_path == "README.md"
+    assert len(scoped_pages) == 1
+    assert scoped_answer["status"] == "answered"
+    assert "blue scheduler" in scoped_answer["answer"]
+    assert "red scheduler" not in scoped_answer["answer"]
 
 
 def test_git_sync_preflights_all_documents_before_importing_any(tmp_path: Path) -> None:

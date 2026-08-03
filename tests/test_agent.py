@@ -339,6 +339,40 @@ def test_agent_bounds_tool_result_context(tmp_path: Path, monkeypatch) -> None:
     assert "truncated" in result["events"][0]["result"]
 
 
+def test_agent_passes_repository_scope_to_wiki_search(tmp_path: Path, monkeypatch) -> None:
+    workspace = _applied_public_workspace(tmp_path, monkeypatch)
+    captured: dict[str, object] = {}
+
+    def fake_answer_question(*_args: object, **kwargs: object) -> dict[str, object]:
+        captured.update(kwargs)
+        return {
+            "status": "unknown",
+            "answer": "不知道",
+            "citations": [],
+            "wiki_pages": [],
+            "source_id": None,
+            "source_version": None,
+            "locator": None,
+            "quote": None,
+        }
+
+    monkeypatch.setattr(agent_module, "answer_question", fake_answer_question)
+    result = run_agent(
+        workspace,
+        "What is the scheduler?",
+        provider=StubAgentProvider(
+            [
+                AgentStep(action="search_wiki", query="scheduler"),
+                AgentStep(action="final", answer="不知道"),
+            ]
+        ),
+        repository_id="a" * 64,
+    )
+
+    assert result["status"] == "unknown"
+    assert captured["repository_id"] == "a" * 64
+
+
 def test_agent_can_use_local_evidence_when_explicitly_trusted(tmp_path: Path, monkeypatch) -> None:
     workspace = _applied_public_workspace(tmp_path, monkeypatch, local_only=True)
 

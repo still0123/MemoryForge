@@ -1299,7 +1299,13 @@ def store_source(
     )
 
 
-def search_sources(workspace: Path, query: str, *, limit: int = 10) -> list[SearchResult]:
+def search_sources(
+    workspace: Path,
+    query: str,
+    *,
+    limit: int = 10,
+    repository_id: str | None = None,
+) -> list[SearchResult]:
     if not query.strip():
         raise ValueError("search query must not be empty")
     if limit < 1 or limit > 100:
@@ -1309,8 +1315,22 @@ def search_sources(workspace: Path, query: str, *, limit: int = 10) -> list[Sear
     root = opened.root
     match_query = _fts_query(query)
     with _connect_readonly(opened.index_path) as connection:
-        rows = connection.execute(
+        parameters: list[object] = [match_query]
+        repository_filter = ""
+        if repository_id is not None:
+            _validate_repository_scope(connection, repository_id)
+            repository_filter = """
+              AND EXISTS (
+                SELECT 1
+                FROM git_source_revisions AS scoped_revisions
+                WHERE scoped_revisions.source_version_id = v.id
+                  AND scoped_revisions.repository_id = ?
+              )
             """
+            parameters.append(repository_id)
+        parameters.append(limit)
+        rows = connection.execute(
+            f"""
             SELECT
                 s.source_id,
                 s.source_uri,
@@ -1326,10 +1346,11 @@ def search_sources(workspace: Path, query: str, *, limit: int = 10) -> list[Sear
             JOIN blobs AS b ON b.id = v.blob_id
             JOIN sources AS s ON s.id = v.source_id
             WHERE source_fts MATCH ? AND v.is_current = 1
+            {repository_filter}
             ORDER BY bm25(source_fts), v.observed_at DESC
             LIMIT ?
             """,
-            (match_query, limit),
+            tuple(parameters),
         ).fetchall()
 
     results: list[SearchResult] = []
@@ -1359,7 +1380,13 @@ def search_sources(workspace: Path, query: str, *, limit: int = 10) -> list[Sear
     return results
 
 
-def find_applied_page_paths(workspace: Path, query: str, *, limit: int = 10) -> tuple[str, ...]:
+def find_applied_page_paths(
+    workspace: Path,
+    query: str,
+    *,
+    limit: int = 10,
+    repository_id: str | None = None,
+) -> tuple[str, ...]:
     """Use FTS5 to find Wiki pages backed by applied source revisions only."""
     if not query.strip():
         raise ValueError("search query must not be empty")
@@ -1368,20 +1395,30 @@ def find_applied_page_paths(workspace: Path, query: str, *, limit: int = 10) -> 
 
     opened = Workspace.open_readonly(workspace)
     with _connect_readonly(opened.index_path) as connection:
-        rows = connection.execute(
+        parameters: list[object] = [_fts_query(query)]
+        repository_filter = ""
+        if repository_id is not None:
+            _validate_repository_scope(connection, repository_id)
+            repository_filter = """
+              AND revisions.repository_id = ?
             """
+            parameters.append(repository_id)
+        rows = connection.execute(
+            f"""
             SELECT ps.page_path
             FROM source_fts
             JOIN source_versions AS v ON v.id = source_fts.rowid
             JOIN sources AS s ON s.id = v.source_id
             JOIN applied_source_versions AS applied
-              ON applied.source_id = s.source_id
+             ON applied.source_id = s.source_id
              AND applied.source_version_id = v.id
             JOIN page_sources AS ps ON ps.source_id = s.source_id
+            LEFT JOIN git_source_revisions AS revisions ON revisions.source_version_id = v.id
             WHERE source_fts MATCH ?
+            {repository_filter}
             ORDER BY bm25(source_fts), ps.page_path
             """,
-            (_fts_query(query),),
+            tuple(parameters),
         ).fetchall()
     paths: list[str] = []
     for row in rows:
@@ -1391,6 +1428,28 @@ def find_applied_page_paths(workspace: Path, query: str, *, limit: int = 10) -> 
         if len(paths) == limit:
             break
     return tuple(paths)
+
+
+def repository_page_paths(workspace: Path, repository_id: str) -> tuple[str, ...]:
+    """Return applied Wiki pages backed by one registered Git repository."""
+    opened = Workspace.open_readonly(workspace)
+    with _connect_readonly(opened.index_path) as connection:
+        _validate_repository_scope(connection, repository_id)
+        rows = connection.execute(
+            """
+            SELECT DISTINCT page_sources.page_path
+            FROM page_sources
+            JOIN sources ON sources.source_id = page_sources.source_id
+            JOIN applied_source_versions AS applied
+              ON applied.source_id = sources.source_id
+            JOIN git_source_revisions AS revisions
+              ON revisions.source_version_id = applied.source_version_id
+            WHERE revisions.repository_id = ?
+            ORDER BY page_sources.page_path
+            """,
+            (repository_id,),
+        ).fetchall()
+    return tuple(str(row[0]) for row in rows)
 
 
 def read_source_excerpt(
@@ -1472,6 +1531,17 @@ def _connect(database_path: Path) -> Iterator[sqlite3.Connection]:
         raise
     finally:
         connection.close()
+
+
+def _validate_repository_scope(connection: sqlite3.Connection, repository_id: str) -> None:
+    if _CONTENT_SHA256.fullmatch(repository_id) is None:
+        raise ValueError("repository_id must be a SHA-256 hex digest")
+    row = connection.execute(
+        "SELECT 1 FROM git_repositories WHERE repository_id = ?",
+        (repository_id,),
+    ).fetchone()
+    if row is None:
+        raise ValueError("unknown Git repository: " + repository_id)
 
 
 @contextmanager

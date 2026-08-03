@@ -57,6 +57,7 @@ def run_agent(
     max_pages: int = 3,
     allow_local: bool = False,
     propose_update: bool = False,
+    repository_id: str | None = None,
 ) -> AgentPayload:
     """Run a bounded model/tool loop over public Wiki evidence by default."""
     _validate_limits(max_steps, max_pages)
@@ -174,6 +175,7 @@ def run_agent(
                     decision.query,
                     max_pages,
                     allow_local=allow_local,
+                    repository_id=repository_id,
                 )
                 evidence = []
                 evidence_characters = 0
@@ -251,6 +253,7 @@ def _search_wiki(
     max_pages: int,
     *,
     allow_local: bool,
+    repository_id: str | None,
 ) -> AskPayload:
     found = answer_question(
         workspace_root,
@@ -258,6 +261,7 @@ def _search_wiki(
         debug=False,
         max_pages=max_pages,
         max_citations=_MAX_AGENT_CITATIONS,
+        repository_id=repository_id,
     )
     visible_citations = [
         citation

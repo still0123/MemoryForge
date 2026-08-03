@@ -498,7 +498,7 @@ TOOLS = {
 - 支持最多 6 个 Citation，并执行 3 页、2,000 字符 evidence、8,000 字符 tool result 上限；
 - Agent Payload 记录 `wiki_pages_read`、`evidence_characters` 和 `tool_result_characters`。
 
-## 11. Phase 6（P2）：知识变多时先做范围路由，不急着上向量库
+## 11. Phase 6（P2）：知识变多时先做范围路由，不急着上向量库（已完成）
 
 ### 用户接口
 
@@ -524,6 +524,14 @@ memoryforge agent '<question>' --repository <repository-id> --workspace <workspa
 - 全局查询行为不变；
 - 页面预算仍然有效；
 - 扩展题集增加多仓同名模块测试。
+
+### 实现结果
+
+- `search_sources` 和 `find_applied_page_paths` 支持按 Git `repository_id` 过滤；
+- `answer_question` 会同时过滤 INDEX 候选和 FTS 候选，避免同名页面跨仓混入；
+- `agent`、`ask`、`search` CLI 均支持 `--repository`；
+- 不指定范围时保留原有全局行为，LocalFile 来源仍可参与全局查询；
+- 增加了两个仓库含同名关键词时的隔离测试。
 
 ### 主要文件
 
@@ -633,7 +641,7 @@ git diff --check
 - [ ] 所有稳定 Wiki 修改仍经过 `review → apply --approve`；
 - [x] Git 来源删除后可以生成可审核的页面清理方案；
 - [x] MiniClaude 的工具调用、终止状态和上下文预算可测试；
-- [ ] 多仓查询可以按 repository 范围过滤；
+- [x] 多仓查询可以按 repository 范围过滤；
 - [ ] 公开题集不少于 30 题，包含多来源、拒答和改写问题；
 - [ ] Citation grounding 为 100%，关键指标和失败案例如实提交；
 - [ ] 没有评测证据时不引入向量库、qmd、MCP 或知识图谱；

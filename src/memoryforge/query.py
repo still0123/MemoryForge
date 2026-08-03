@@ -12,6 +12,7 @@ from memoryforge.workspace import (
     find_applied_page_paths,
     is_public_source_version,
     read_source_excerpt,
+    repository_page_paths,
 )
 
 _FACT = re.compile(r"^- (?P<quote>.+?) \[\^(?P<footnote>[^\]]+)\]$", re.MULTILINE)
@@ -92,6 +93,7 @@ def answer_question(
     max_citations: int = 1,
     provider: OpenAICompatibleProvider | None = None,
     allow_local: bool = False,
+    repository_id: str | None = None,
 ) -> AskPayload:
     """Answer from a bounded set of Wiki pages, expanding raw evidence only on request."""
     _validate_max_pages(max_pages)
@@ -108,6 +110,7 @@ def answer_question(
         question_terms,
         max_pages=max_pages,
         trace=trace,
+        repository_id=repository_id,
     ):
         content = page.read_text(encoding="utf-8")
         trace.append({"level": "L1", "artifact": str(page.relative_to(workspace_root))})
@@ -266,10 +269,16 @@ def _candidate_pages(
     *,
     max_pages: int,
     trace: list[TraceStep],
+    repository_id: str | None,
 ) -> list[Path]:
     wiki_root = workspace_root / "wiki"
     index = wiki_root / "INDEX.md"
     scored: list[tuple[tuple[int, int], Path]] = []
+    allowed_paths = (
+        set(repository_page_paths(workspace_root, repository_id))
+        if repository_id is not None
+        else None
+    )
     safe_index = _safe_wiki_index(workspace_root, index)
     if safe_index is not None:
         trace.append({"level": "L0", "artifact": "wiki/INDEX.md"})
@@ -279,6 +288,9 @@ def _candidate_pages(
             page = _safe_wiki_page(workspace_root, wiki_root / entry.group("path"))
             if page is None:
                 continue
+            relative_path = str(page.relative_to(workspace_root))
+            if allowed_paths is not None and relative_path not in allowed_paths:
+                continue
             title = _unescape_link_text(entry.group("title"))
             overlap = question_terms & _terms(f"{title} {entry.group('summary')}")
             if overlap:
@@ -286,11 +298,19 @@ def _candidate_pages(
     fts_paths: tuple[str, ...] = ()
     index_path = workspace_root / ".memoryforge" / "index.sqlite"
     if safe_index is None or (index_path.is_file() and not index_path.is_symlink()):
-        fts_paths = find_applied_page_paths(
-            workspace_root,
-            " ".join(sorted(question_terms)),
-            limit=max_pages,
-        )
+        if repository_id is None:
+            fts_paths = find_applied_page_paths(
+                workspace_root,
+                " ".join(sorted(question_terms)),
+                limit=max_pages,
+            )
+        else:
+            fts_paths = find_applied_page_paths(
+                workspace_root,
+                " ".join(sorted(question_terms)),
+                limit=max_pages,
+                repository_id=repository_id,
+            )
     if fts_paths:
         trace.append({"level": "L0", "artifact": "SQLite FTS5 applied-source index"})
     candidates: list[Path] = []
