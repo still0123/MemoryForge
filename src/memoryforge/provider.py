@@ -7,7 +7,7 @@ import os
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -77,6 +77,18 @@ class _AnswerResponse(BaseModel):
     citation_indexes: tuple[int, ...]
 
 
+class AgentStep(BaseModel):
+    """One JSON decision in the small Wiki-backed Agent loop."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    action: Literal["search_wiki", "read_evidence", "final"]
+    query: str | None = None
+    citation_index: int | None = None
+    answer: str | None = None
+    citation_indexes: tuple[int, ...] = ()
+
+
 def _urlopen_transport(request: Request) -> bytes:
     with urlopen(request, timeout=30) as response:
         body = response.read()
@@ -123,6 +135,14 @@ class OpenAICompatibleProvider:
         except ValidationError as exc:
             raise ValueError("provider response does not match evidence answer contract") from exc
         return response.answer, response.citation_indexes
+
+    def agent_step(self, messages: Sequence[Mapping[str, str]]) -> AgentStep:
+        """Choose one small Wiki tool action or finish the answer."""
+        decoded = self._request_json(messages, disable_thinking=True, max_tokens=1024)
+        try:
+            return AgentStep.model_validate(decoded)
+        except ValidationError as exc:
+            raise ValueError("provider response does not match Agent step contract") from exc
 
     def _request_json(
         self,

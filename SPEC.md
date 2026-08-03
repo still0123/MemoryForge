@@ -5,9 +5,9 @@
 | 字段 | 内容 |
 |---|---|
 | 文档状态 | Draft v0.4 |
-| 当前基线 | `0feb379`，分支 `agent/phase-1a-local-foundation` |
+| 当前基线 | `f8ebaa6`，分支 `agent/phase-1a-local-foundation` |
 | 产品形态 | 单用户、本地优先、CLI |
-| 当前阶段 | Phase 5：公开证据包与五分钟复现已完成 |
+| 当前阶段 | Phase 6：Wiki-backed MiniClaude Agent 层 |
 
 ## 1. 项目定义
 
@@ -58,6 +58,7 @@ MemoryForge 面向拥有多个代码仓库、设计文档和个人笔记的开�
 - Index → 摘要 → 正文 → 原文的渐进式查询；
 - FTS5 检索；
 - 一个 OpenAI-compatible 模型适配器；
+- 一个只使用 Wiki 公开证据的最小 Agent Loop；
 - 一组可复现的公开资料评测。
 - 手动刷新已登记 Git 仓库和飞书文档的 `refresh` 命令。
 - 选择性导入 Git 仓库中已提交的 Go/Python 代码模块，并生成带代码位置引用的模块页。
@@ -68,7 +69,7 @@ MemoryForge 面向拥有多个代码仓库、设计文档和个人笔记的开�
 
 - 飞书、Notion、Obsidian 完整接入，以及网页批量采集；
 - PDF/OCR、音视频和多模态；
-- 通用编码 Agent、多 Agent 和复杂工具循环；
+- 完整通用编码 Agent、多 Agent 和复杂工具循环；当前 Agent 只支持 Wiki 检索和原文核验；
 - Web/桌面 UI；
 - Neo4j、向量数据库调优和完整知识图谱；
 - RBAC、多租户、后台任务和审批流；
@@ -425,6 +426,16 @@ Raw FTS 基线跑通；只有它证明需要更强语义检索时，才加入 Ch
 - 完成 README、架构图和五分钟 Demo。
 
 评测用于证明渐进式 Wiki 的价值，不追求大规模 Benchmark 和复杂消融实验。
+
+### Phase 6：Wiki-backed MiniClaude Agent（进行中）
+
+- 复用现有 OpenAI-compatible Provider；
+- 通过有限轮 JSON 决策实现 Agent Loop；
+- 只提供 `search_wiki`、`read_evidence` 和 `final` 三个动作；
+- 只把 `public` 来源证据发送给模型；
+- 不执行 Shell、不修改文件、不引入 MCP、Subagent 或新依赖。
+
+验收：模型能完成“搜索 Wiki → 核验原文 → 带引用回答”的闭环；超过步数或缺少引用时不生成无依据的最终答案。
 
 ## 12. 项目完成标准
 

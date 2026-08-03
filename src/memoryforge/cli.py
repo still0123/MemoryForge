@@ -10,6 +10,7 @@ from typing import Annotated
 import typer
 
 from memoryforge import __version__
+from memoryforge.agent import run_agent
 from memoryforge.changesets import ChangeSetStore
 from memoryforge.compiler import (
     compilation_payload,
@@ -688,6 +689,42 @@ def ask(
             verify=verify,
             max_pages=max_pages,
             provider=provider,
+        )
+    except (
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+@app.command()
+def agent(
+    question: Annotated[str, typer.Argument(help="Question for the Wiki-backed MiniClaude.")],
+    max_steps: Annotated[
+        int,
+        typer.Option("--max-steps", min=1, max=8, help="Maximum model/tool turns."),
+    ] = 4,
+    max_pages: Annotated[
+        int,
+        typer.Option("--max-pages", min=1, max=10, help="Maximum Wiki pages for search."),
+    ] = 3,
+    workspace: WorkspaceOption = Path("."),
+) -> None:
+    try:
+        opened = Workspace.open_readonly(workspace)
+        typer.echo("正在运行 Wiki-backed MiniClaude Agent…", err=True)
+        result = run_agent(
+            opened.root,
+            question,
+            provider=OpenAICompatibleProvider(ProviderConfig.from_environment()),
+            max_steps=max_steps,
+            max_pages=max_pages,
         )
     except (
         MemoryForgeError,

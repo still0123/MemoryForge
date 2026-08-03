@@ -109,7 +109,13 @@ memoryforge ask '缓存多久过期？' --verify --workspace ./my-wiki
 
 # 让模型只根据命中的公开证据归纳答案，并保留来源引用
 memoryforge ask '缓存多久过期？' --llm --workspace ./my-wiki
+
+# 运行最小 Wiki-backed MiniClaude Agent
+memoryforge agent '缓存多久过期？' --workspace ./my-wiki
 ```
+
+`agent` 是一个很小的 Agent Loop：模型在 `search_wiki`、`read_evidence` 和 `final` 三个动作之间选择，
+最多运行有限轮次。它只能看到公开来源的 Wiki 证据，不能执行 Shell、修改文件或把 `local_only` 资料发给模型。
 
 ## 日常怎么把资料放进来？
 
@@ -192,6 +198,24 @@ memoryforge html-import ./article.html \
 
 ## 这个项目的关键设计
 
+### 0. 一个很小的 Agent 外壳
+
+MemoryForge 不是完整的 Claude Code。当前只提供一个围绕 Wiki 内核的最小 Agent 层：
+
+```text
+问题
+  ↓
+MiniClaude Agent Loop
+  ├─ search_wiki
+  ├─ read_evidence
+  └─ final
+  ↓
+带引用的答案
+```
+
+Agent Loop 借鉴了 [learn-claude-code](https://github.com/shareAI-lab/learn-claude-code) 的核心思路，
+但工具范围收窄到知识检索，不执行代码、不改文件、不做 Subagent 和 MCP 编排。
+
 ### 1. 先写成 Wiki，再做检索
 
 普通 RAG 往往把文档切块后丢进向量库。MemoryForge 先生成可以直接打开阅读的 Wiki 页面：一个页面讲清一个项目、机制或决策。即使不用模型，Wiki 本身也应该有价值。
@@ -240,7 +264,7 @@ memoryforge ask '缓存多久过期？' --llm --workspace ./my-wiki
 
 为了把核心问题做深，当前刻意不做：
 
-- 完整的 Claude Code / 通用编码 Agent；
+- 完整的 Claude Code / 通用编码 Agent；当前只做 Wiki 检索 Agent 外壳；
 - 飞书机器人、定时同步和权限管理；
 - 向量数据库、知识图谱、多 Agent 编排；
 - Web 管理后台和多用户协作；
@@ -267,6 +291,7 @@ memoryforge ingest --pending [--llm] --workspace <workspace>
 memoryforge review <changeset-id> --workspace <workspace>
 memoryforge apply <changeset-id> --approve --workspace <workspace>
 memoryforge ask <question> [--llm] [--debug] [--verify] [--max-pages 1..10] --workspace <workspace>
+memoryforge agent <question> [--max-steps 1..8] [--max-pages 1..10] --workspace <workspace>
 memoryforge lint --workspace <workspace>
 memoryforge eval <public-suite.json> --workspace <workspace>
 ```
