@@ -26,3 +26,14 @@
 - `evaluation`：题集 `eval` 的完整汇总。
 
 不写时间戳、绝对路径、API Key、环境变量或 workspace 内部 Git commit，因此两个不同临时 workspace 连续运行结果一致。
+
+## 这份基线证明什么
+
+它证明公开 Git 文档可以沿真实路径完成 `导入 → 编译 → 审核 → 写入 → 检索 → 回源 → 评测`，并记录
+实际页面预算和引用核验成本。当前提交的结果固定使用 `AgentSkill-Eval@93f5dc0`，8 道公开题的答案和
+引用均通过验收。
+
+它不比较不同模型，也不证明所有知识库都比 Raw FTS 更准确；`raw_fts_baseline` 只记录当前数据集上的
+检索边界。当前 `demo/results/agent_skill_eval_public.json` 是题集迁移前的 8 题基线；迁移后的 30 题结果需要
+使用上面的命令重新生成。Agent 的证据终止约束、增量主题扩展、`local_only` 模型授权和飞书回复桥接由仓库测试覆盖，
+因为这些功能不应把公司内部资料写进公开 Demo。

@@ -4,10 +4,10 @@
 
 | 字段 | 内容 |
 |---|---|
-| 文档状态 | Draft v0.4 |
-| 当前基线 | `f8ebaa6`，分支 `agent/phase-1a-local-foundation` |
+| 文档状态 | Draft v0.7 |
+| 当前基线 | 分支 `agent/phase-1a-local-foundation` |
 | 产品形态 | 单用户、本地优先、CLI |
-| 当前阶段 | Phase 6：Wiki-backed MiniClaude Agent 层 |
+| 当前阶段 | Phase 4 已完成，下一步是 Phase 5：MiniClaude Agent 打磨 |
 
 ## 1. 项目定义
 
@@ -92,13 +92,15 @@ Future Adapters ──┘                                  │
                                              Progressive Query
 ```
 
-系统只保留三个核心业务结构：
+系统的稳定业务结构仍保持精简：
 
 1. `LocalDocument`：统一表示输入；
 2. `PageChange`：表示模型提出的页面更新；
 3. `ChangeSet`：组织一次可审核更新。
 
-不再引入 CompilationPlan、PageProjection、Claim Mutation、独立审计事件等多层中间对象。
+LLM 编译额外保留一个很小的 `CompilationPlan`，只用于说明“准备创建/更新哪些页面”，
+并作为 `ChangeOperation.details` 随审核记录保存；它不是新的持久化知识模型。除此之外，
+不引入 `PageProjection`、Claim Mutation、独立审计事件等多层中间对象。
 
 ## 4. 知识来源
 
@@ -161,8 +163,8 @@ git-add <checkout> -> git-list -> git-sync <repository-id>
 所有导入文档默认 `local_only`。对可公开仓库，可通过
 `git-add <checkout> --public` 显式授予模型访问权限；重新 `git-sync` 后，该仓库新版本
 才会成为 `public`。Phase 3B 已实现来源到页面的唯一归属和多来源页面
-的增量路由；Phase 4 已实现有上限的渐进式查询。只读 Wiki Lint 已检查页面
-Frontmatter、来源映射、可展开引用和 Index 链接。每个 Git 仓库还会生成一个只做导航、
+的增量路由；Phase 4 已实现有上限的渐进式查询和来源删除后的 Wiki 生命周期维护。只读 Wiki Lint 已检查页面
+Frontmatter、来源映射、可展开引用、Index 链接、孤儿页和需要清理的失效来源。每个 Git 仓库还会生成一个只做导航、
 不参与问答的项目总览页。飞书第一版只提供
 `feishu-import <docx-or-wiki-url-or-token>`：通过已登录的 `lark-cli` 读取一篇 Markdown
 文档并按 `local_only` 来源进入现有编译链。长文档按一级标题拆成一个总览来源和多个章节来源，
@@ -237,7 +239,7 @@ MVP 不单独维护一份与页面正文重复的 Claim Ledger。
 未变化来源不会读取 Raw Blob；只有待编译的变化来源才会读取其正文。
 `INDEX.md` 以已有索引条目和本次候选页面增量合并，不扫描整个 `wiki/pages/`。
 
-模型返回：
+模型最终生成：
 
 ```python
 class Citation(BaseModel):
@@ -254,6 +256,10 @@ class PageChange(BaseModel):
     body: str
     citations: list[Citation]
 ```
+
+启用 LLM 编译时，Provider 先返回一个受校验的 `CompilationPlan`，再根据该计划生成
+`PageChange`。计划只允许引用当前 pending 来源和 `wiki/pages/*.md` 页面；本地代码校验
+来源归属、路径和 Citation，模型不能绕过 staging。
 
 页面路由规则：
 
@@ -293,11 +299,15 @@ ingest -> staging -> review -> applied / rejected
 LLM 编译通过 `memoryforge ingest --pending --llm` 显式开启。CLI 从
 `MEMORYFORGE_API_BASE`、`MEMORYFORGE_API_KEY`、`MEMORYFORGE_MODEL` 读取
 OpenAI-compatible Provider 配置；默认 ingest 不读取这些环境变量，也不发网络请求。
-模型只提议 `PageChange`：它可以把多个 pending 来源合并到一个
+模型先提议一个简短的 `CompilationPlan`，再生成 `PageChange`：它可以把多个 pending 来源合并到一个
 `wiki/pages/*.md` 页面，但不能写 Frontmatter、`INDEX.md` 或 raw。来源校验、引用、
 Frontmatter、INDEX 和 ChangeSet 由本地代码生成，仍必须经过 review/apply。
-LLM prompt 当前只包含待编译来源，不上传已有 `INDEX.md`；Index 可能包含已应用
-`local_only` 页面的摘要。
+根目录 `AGENTS.md` 和 `.memoryforge/schema.yaml` 会作为有上限的 Workspace contract
+进入编译 prompt；它们只能补充写作约束，不能替代本地校验。
+LLM prompt 包含待编译来源的正文；对于已存在且相近的公开页面，只提供路径、标题、摘要和来源
+ID 的小卡片。模型可以把新来源追加到其中一个候选页，但不能移动已有来源；本地代码仍验证唯一归属。
+默认不上传 `local_only` 来源或其卡片。只有用户显式传 `--allow-local-llm`，才允许当前配置的可信
+模型处理本地资料。
 
 ## 7. 渐进式查询
 
@@ -316,8 +326,8 @@ L3 原始来源              -> 核实细节或提供出处
 4. 不要求每个问题都回读原文；
 5. 找不到支持信息时说明知识库暂无答案。
 
-默认输出答案、使用的 Wiki 页面和必要来源。查询先读 `INDEX.md`；当 Index 没有
-候选页时，复用已应用 Source 到页面的 SQLite FTS5 映射回退。候选页按分数和路径
+默认输出答案、使用的 Wiki 页面和必要来源。查询先读 `INDEX.md`，并用已应用 Source 到页面的
+SQLite FTS5 映射补充候选页。候选页按分数和路径
 稳定排序，默认最多展开 3 页，可用 `--max-pages 1..10` 调整；原始来源仍只在
 `--verify` 时读取。调试模式可以展示读取路径，但不记录冗长的 Token 级 Trace。
 
@@ -347,13 +357,15 @@ memoryforge import <path> [--category <category>]
 memoryforge git-add <local-checkout> [--public]
 memoryforge git-list
 memoryforge git-sync <repository-id>
-memoryforge ingest --pending [--llm]
+memoryforge ingest --pending [--llm] [--allow-local-llm]
 memoryforge review <changeset-id>
 memoryforge apply <changeset-id> --approve
 memoryforge search "<query>"
-memoryforge ask "<question>" [--max-pages <1-10>] [--verify]
+memoryforge ask "<question>" [--llm] [--allow-local-llm] [--max-pages <1-10>] [--verify]
+memoryforge agent "<question>" [--allow-local-llm]
 memoryforge lint
 memoryforge feishu-import <docx-or-wiki-url-or-token>
+memoryforge feishu-reply "<question>"
 memoryforge web-import <public-http-url>
 memoryforge html-import <saved-page.html> --url <public-http-url>
 ```
@@ -371,11 +383,26 @@ memoryforge html-import <saved-page.html> --url <public-http-url>
 - `wiki/pages/` 稳定页面路径、统一 Frontmatter 和增量 `INDEX.md`；
 - staging、review、apply 和 Git commit；
 - Git 多仓库 Adapter 和已应用来源到 Wiki 页的编译路由；
+- 基于标题和摘要候选卡片的增量主题扩展、页面相关链接和关系页；
+- Lint 对相关页失链、来源删除和来源更新未重编译的提示；
+- Git 来源删除后的 `cleanup_required` 检查，以及单来源归档、共享页面重建的审核式 ChangeSet；
+- `ARCHIVE_PAGE` 在 `apply --approve` 时删除稳定页面并清理来源映射，`reject` 不改变稳定 Wiki；
 - 一个 OpenAI-compatible LLM Provider，以及多来源页面更新；
+- LLM 编译的两步“CompilationPlan → PageChange”流程；计划会随 ChangeSet operation details
+  进入 review，但不成为新的知识层；
+- Workspace 根目录 `AGENTS.md` 和 `.memoryforge/schema.yaml` 会进入 WikiCompiler 与 MiniClaude
+  的 prompt，且有固定字符上限；
 - Index → SQLite FTS5 回退 → 有上限 Wiki 正文 → 按需原文核实的渐进式问答，
   以及来源版本和定位信息；
 - `refresh` 一次性同步已登记的本地 Git checkout 和飞书文档；它不 fetch 远端、
   不做后台任务，变更仍须经过 `ingest → review → apply`。
+- MiniClaude Agent 已要求每个最终引用先经过 `read_evidence`；默认只发送公开资料，
+  可信内部模型可用 `--allow-local-llm` 明确放行本地资料。
+- MiniClaude Agent 支持 `--propose-update`：只能基于本次已读取的原始证据生成一个
+  `PROPOSED` ChangeSet，不直接修改稳定 Wiki，仍须经过 `review → apply --approve`。
+- 提供纯函数式 Feishu 文本事件到 Wiki 回复 payload 的桥接层，以及复用 `lark-cli` 的
+  本地 `feishu-serve` 常驻命令；它只监听私聊文本事件、调用既有 Wiki 问答并回复原消息，
+  不引入 HTTP 服务或在项目内保存 App Secret。
 
 已实现一个离线 `eval <suite.json>`：题集为每道题声明预期来源路径和关键事实；
 它检查 Wiki 回答正确率、引用正确率、每题展开的 Wiki 页数和查询期间的原文读取数；
@@ -394,12 +421,13 @@ Raw FTS 基线跑通；只有它证明需要更强语义检索时，才加入 Ch
 
 验收：三份相关文档形成多类页面，页面可被发现，回答可显示来源，重复导入不产生更新。
 
-### Phase 2：最小 LLM 编译器
+### Phase 2：最小 LLM 编译器（已完成）
 
 - 接入一个 OpenAI-compatible Provider；
-- 模型直接输出 `PageChange`；
+- 模型先输出简短的 `CompilationPlan`，再生成 `PageChange`；
 - 支持多来源更新同一页面；
 - Review 显示清晰的 Markdown Diff。
+- `AGENTS.md` 和 `.memoryforge/schema.yaml` 进入编译与 Agent prompt；
 
 验收：模型不能绕过 staging，页面没有明显重复，引用能定位已有 Source，无效输出直接失败。
 
@@ -427,15 +455,28 @@ Raw FTS 基线跑通；只有它证明需要更强语义检索时，才加入 Ch
 
 评测用于证明渐进式 Wiki 的价值，不追求大规模 Benchmark 和复杂消融实验。
 
-### Phase 6：Wiki-backed MiniClaude Agent（进行中）
+### Phase 6：Wiki-backed MiniClaude Agent（已完成最小闭环）
 
 - 复用现有 OpenAI-compatible Provider；
 - 通过有限轮 JSON 决策实现 Agent Loop；
 - 只提供 `search_wiki`、`read_evidence` 和 `final` 三个动作；
-- 只把 `public` 来源证据发送给模型；
+- 默认只把 `public` 来源证据发送给模型，可信内部模型可显式放行 `local_only`；
 - 不执行 Shell、不修改文件、不引入 MCP、Subagent 或新依赖。
+- 支持从一次已完成的证据问答提议更新一个已有 Wiki 页面；提议进入现有 staging，
+  不绕过审核流程。
 
 验收：模型能完成“搜索 Wiki → 核验原文 → 带引用回答”的闭环；超过步数或缺少引用时不生成无依据的最终答案。
+
+### Phase 7：薄飞书机器人接入（已完成）
+
+- 解析飞书 URL 验证和文本消息事件；
+- 用既有渐进式 Wiki 查询生成标准文本回复 payload；
+- `feishu-serve` 通过 `lark-cli event consume im.message.receive_v1 --as bot` 常驻监听，
+  再用 `lark-cli im +messages-reply --as bot` 回复同一条消息；
+- 不在项目内保存 App Secret、起 HTTP 服务或代替飞书权限管理。
+
+验收：在飞书私聊机器人发送一条文本问题，机器人从已应用的本地 Wiki 返回答案和 Wiki 页面引用；
+机器人自身消息和非文本消息不会触发回复。
 
 ## 12. 项目完成标准
 

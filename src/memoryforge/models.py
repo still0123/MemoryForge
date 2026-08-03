@@ -248,6 +248,40 @@ class PageChange(BaseModel):
         return self
 
 
+class PlannedPage(BaseModel):
+    """One small, reviewable page target proposed before page generation."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    path: str = Field(min_length=1)
+    action: Literal["create", "update"]
+    source_ids: tuple[SourceId, ...] = Field(min_length=1)
+    reason: str = Field(min_length=1)
+    related_pages: tuple[str, ...] = ()
+
+    @model_validator(mode="after")
+    def validate_plan_path(self) -> PlannedPage:
+        if (
+            not self.path.startswith("wiki/pages/")
+            or not self.path.endswith(".md")
+            or "\\" in self.path
+            or any(part in {"", ".", ".."} for part in self.path.split("/"))
+        ):
+            raise ValueError("planned page paths must be Markdown files below wiki/pages/")
+        if len(self.source_ids) != len(set(self.source_ids)):
+            raise ValueError("planned page source_ids must not contain duplicates")
+        return self
+
+
+class CompilationPlan(BaseModel):
+    """Structured routing notes kept with a proposed compiler ChangeSet."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    pages: tuple[PlannedPage, ...] = Field(min_length=1)
+    conflicts: tuple[str, ...] = ()
+
+
 def validate_llm_title(title: str) -> None:
     """Keep model titles from injecting Markdown structure into local page templates."""
     if not title.strip() or len(title.splitlines()) != 1:

@@ -24,8 +24,10 @@ def test_run_public_demo_builds_reproducible_evidence_from_a_tiny_git_repo(
                 "cases": [
                     {
                         "id": "cache-expiry",
+                        "category": "single_hop",
                         "question": "When do cache entries expire?",
-                        "expected_source_path": "docs/cache.md",
+                        "expected_status": "answered",
+                        "expected_source_paths": ["docs/cache.md"],
                         "required_terms": ["sixty", "seconds"],
                     }
                 ],

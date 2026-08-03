@@ -11,10 +11,21 @@ from typer.testing import CliRunner
 
 from memoryforge.changesets import ChangeSetStore
 from memoryforge.cli import app
-from memoryforge.compiler import compile_repository_topics
+from memoryforge.compiler import (
+    _load_current_sources,
+    _render_deterministic_group_page,
+    compile_repository_topics,
+)
 from memoryforge.importer import SourceValidationError
 from memoryforge.linting import lint_workspace
-from memoryforge.models import Sensitivity, TopicGroup
+from memoryforge.models import (
+    ChangeOperation,
+    ChangeOperationType,
+    ChangeSet,
+    ChangeSetStatus,
+    Sensitivity,
+    TopicGroup,
+)
 from memoryforge.workspace import (
     Workspace,
     WorkspaceError,
@@ -402,6 +413,127 @@ def test_git_sync_deactivates_deleted_document_source(tmp_path: Path) -> None:
     assert deleted_sync.documents == ()
     assert _current_version_count(workspace, source_id) == 0
     assert search_sources(workspace, "Retired documentation") == []
+
+
+def test_deleted_git_document_generates_reviewable_archive_and_apply_removes_page(
+    tmp_path: Path,
+) -> None:
+    checkout = _create_repository(tmp_path)
+    _write(checkout / "README.md", "# Service\n\nRetired documentation evidence")
+    _commit_all(checkout, "Add documentation")
+    workspace = init_workspace(tmp_path / "workspace")
+    repository = register_git_checkout(workspace, checkout)
+    first_sync = sync_git_checkout(workspace, repository.repository_id)
+    source_id = first_sync.documents[0].source_id
+    runner = CliRunner()
+
+    staged = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
+    assert staged.exit_code == 0, staged.output
+    initial_id = json.loads(staged.stdout)["changeset_id"]
+    assert runner.invoke(
+        app,
+        ["apply", initial_id, "--approve", "--workspace", str(workspace)],
+    ).exit_code == 0
+    page_path = workspace / "wiki/pages" / f"{source_id}.md"
+    assert page_path.is_file()
+
+    (checkout / "README.md").unlink()
+    _commit_all(checkout, "Remove documentation")
+    sync_git_checkout(workspace, repository.repository_id)
+
+    linted = lint_workspace(workspace)
+    assert [issue["code"] for issue in linted["issues"]] == ["cleanup_required"]
+    cleanup = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
+    assert cleanup.exit_code == 0, cleanup.output
+    cleanup_id = json.loads(cleanup.stdout)["changeset_id"]
+    stored = ChangeSetStore(Workspace.open(workspace)).get(cleanup_id)
+    assert any(
+        operation.type is ChangeOperationType.ARCHIVE_PAGE
+        and operation.path == f"wiki/pages/{source_id}.md"
+        for operation in stored.changeset.operations
+    )
+    assert f"wiki/pages/{source_id}.md" not in stored.candidate_files
+    assert f"pages/{source_id}.md" not in stored.candidate_files["wiki/INDEX.md"]
+
+    applied = runner.invoke(
+        app,
+        ["apply", cleanup_id, "--approve", "--workspace", str(workspace)],
+    )
+    assert applied.exit_code == 0, applied.output
+    assert not page_path.exists()
+    assert _source_version_count(workspace, source_id) == 1
+    assert _current_version_count(workspace, source_id) == 0
+    assert lint_workspace(workspace)["status"] == "clean"
+
+
+def test_deleted_source_rebuilds_shared_page_from_remaining_source(tmp_path: Path) -> None:
+    checkout = _create_repository(tmp_path)
+    _write(checkout / "README.md", "# Service\n\nThe service accepts orders.\n")
+    _write(checkout / "docs" / "retry.md", "# Retry policy\n\nRetries stop after three attempts.\n")
+    _commit_all(checkout, "Add documentation")
+    workspace = init_workspace(tmp_path / "workspace")
+    repository = register_git_checkout(workspace, checkout)
+    sync_git_checkout(workspace, repository.repository_id)
+    sources = _load_current_sources(Workspace.open(workspace), set())
+    source_by_path = {source.relative_path: source for source in sources}
+    shared_path = "wiki/pages/shared.md"
+    shared_content = _render_deterministic_group_page(Workspace.open(workspace), list(sources))
+    index_content = (
+        "# Knowledge Index\n\nUse this page to find the relevant Wiki page before reading it.\n\n"
+        "## Concepts\n\n- [README / retry policy](pages/shared.md) — shared documentation\n"
+    )
+    changeset = ChangeSetStore(Workspace.open(workspace)).create(
+        ChangeSet(
+            changeset_id="chg_shared_page",
+            base_commit=Workspace.open(workspace).current_commit(),
+            source_ids=tuple(source.source_id for source in sources),
+            source_versions={
+                source.source_id: source.source_version for source in sources
+            },
+            status=ChangeSetStatus.PROPOSED,
+            operations=(
+                ChangeOperation(
+                    type=ChangeOperationType.CREATE_PAGE,
+                    path=shared_path,
+                ),
+                ChangeOperation(
+                    type=ChangeOperationType.CREATE_PAGE,
+                    path="wiki/INDEX.md",
+                ),
+            ),
+        ),
+        {shared_path: shared_content, "wiki/INDEX.md": index_content},
+    )
+    runner = CliRunner()
+    assert runner.invoke(
+        app,
+        ["apply", changeset.changeset.changeset_id, "--approve", "--workspace", str(workspace)],
+    ).exit_code == 0
+
+    (checkout / "README.md").unlink()
+    _commit_all(checkout, "Remove service overview")
+    sync_git_checkout(workspace, repository.repository_id)
+
+    cleanup = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
+    assert cleanup.exit_code == 0, cleanup.output
+    cleanup_id = json.loads(cleanup.stdout)["changeset_id"]
+    stored = ChangeSetStore(Workspace.open(workspace)).get(cleanup_id)
+    assert any(
+        operation.type is ChangeOperationType.UPDATE_PAGE and operation.path == shared_path
+        for operation in stored.changeset.operations
+    )
+    assert "Service" not in stored.candidate_files[shared_path]
+    assert "Retries stop after three attempts." in stored.candidate_files[shared_path]
+
+    applied = runner.invoke(
+        app,
+        ["apply", cleanup_id, "--approve", "--workspace", str(workspace)],
+    )
+    assert applied.exit_code == 0, applied.output
+    assert (workspace / shared_path).is_file()
+    retry_source_id = source_by_path["docs/retry.md"].source_id
+    assert Workspace.open(workspace).page_paths_for_source(retry_source_id) == (shared_path,)
+    assert lint_workspace(workspace)["status"] == "clean"
 
 
 def test_git_sync_preflights_all_documents_before_importing_any(tmp_path: Path) -> None:

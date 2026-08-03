@@ -13,7 +13,7 @@ from urllib.request import Request, urlopen
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from memoryforge.models import PageChange, TopicGroup
+from memoryforge.models import CompilationPlan, PageChange, TopicGroup
 
 Transport = Callable[[Request], bytes]
 _PROVIDER_ENV_NAMES = (
@@ -64,6 +64,12 @@ class _ProviderResponse(BaseModel):
     changes: tuple[PageChange, ...]
 
 
+class _PlanResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    plan: CompilationPlan
+
+
 class _TopicResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -75,6 +81,12 @@ class _AnswerResponse(BaseModel):
 
     answer: str
     citation_indexes: tuple[int, ...]
+
+
+class _UpdateResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    change: PageChange | None
 
 
 class AgentStep(BaseModel):
@@ -116,6 +128,13 @@ class OpenAICompatibleProvider:
         except ValidationError as exc:
             raise ValueError("provider response does not match PageChange contract") from exc
 
+    def plan_pages(self, messages: Sequence[Mapping[str, str]]) -> CompilationPlan:
+        decoded = self._request_json(messages, disable_thinking=True, max_tokens=2048)
+        try:
+            return _PlanResponse.model_validate(decoded).plan
+        except ValidationError as exc:
+            raise ValueError("provider response does not match CompilationPlan contract") from exc
+
     def organize_topics(self, messages: Sequence[Mapping[str, str]]) -> tuple[TopicGroup, ...]:
         """Return small navigation groups for public, already-compiled source pages."""
         decoded = self._request_json(messages, disable_thinking=True, max_tokens=4096)
@@ -143,6 +162,14 @@ class OpenAICompatibleProvider:
             return AgentStep.model_validate(decoded)
         except ValidationError as exc:
             raise ValueError("provider response does not match Agent step contract") from exc
+
+    def propose_update(self, messages: Sequence[Mapping[str, str]]) -> PageChange | None:
+        """Propose one reviewable page update from already-read evidence."""
+        decoded = self._request_json(messages, disable_thinking=True, max_tokens=2048)
+        try:
+            return _UpdateResponse.model_validate(decoded).change
+        except ValidationError as exc:
+            raise ValueError("provider response does not match Wiki update contract") from exc
 
     def _request_json(
         self,

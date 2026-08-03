@@ -115,6 +115,50 @@ def test_ask_llm_rejects_local_only_evidence_before_calling_provider(
         query_module.answer_question(workspace, "When do cache entries expire?", provider=provider)
 
 
+def test_ask_llm_allows_local_only_evidence_when_explicitly_trusted(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    runner, workspace, imported = _workspace_with_imported_source(
+        tmp_path,
+        monkeypatch,
+        "# Cache policy\n\nCache entries expire after sixty seconds.\n",
+        local_only=True,
+    )
+    _apply_pending_source(runner, workspace)
+    captured: list[dict[str, object]] = []
+
+    def transport(request) -> bytes:
+        captured.append(json.loads(request.data or b""))
+        return json.dumps(
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {"answer": "缓存六十秒后过期。", "citation_indexes": [0]}
+                            )
+                        }
+                    }
+                ]
+            }
+        ).encode("utf-8")
+
+    result = query_module.answer_question(
+        workspace,
+        "When do cache entries expire?",
+        provider=OpenAICompatibleProvider(
+            ProviderConfig("https://example.test", "test-key", "test-model"),
+            transport=transport,
+        ),
+        allow_local=True,
+    )
+
+    assert result["status"] == "answered"
+    assert result["citations"][0]["source_id"] == imported["source_id"]
+    assert captured
+
+
 def test_ask_cli_uses_llm_only_when_explicitly_requested(tmp_path: Path, monkeypatch) -> None:
     runner, workspace, _ = _workspace_with_imported_source(
         tmp_path,
@@ -462,6 +506,39 @@ def test_ask_ignores_symlinked_index_outside_wiki_and_falls_back_safely(
 def test_ask_rejects_invalid_page_budget(tmp_path: Path, max_pages: int) -> None:
     with pytest.raises(ValueError, match="max_pages must be an integer between 1 and 10"):
         query_module.answer_question(tmp_path, "cache", max_pages=max_pages)
+
+
+@pytest.mark.parametrize("max_citations", [0, 11, True])
+def test_ask_rejects_invalid_citation_budget(tmp_path: Path, max_citations: int) -> None:
+    with pytest.raises(ValueError, match="max_citations must be an integer between 1 and 10"):
+        query_module.answer_question(tmp_path, "cache", max_citations=max_citations)
+
+
+def test_ask_can_return_multiple_citations_when_requested(tmp_path: Path, monkeypatch) -> None:
+    runner, workspace, _ = _workspace_with_imported_source(
+        tmp_path,
+        monkeypatch,
+        "# Cache policy\n\nCache expires after sixty seconds.\n",
+    )
+    second = tmp_path / "repository" / "deploy.md"
+    second.write_text("# Deploy\n\nDeployment runs every Friday.\n", encoding="utf-8")
+    imported_second = runner.invoke(
+        app,
+        ["import", str(second), "--workspace", str(workspace)],
+    )
+    assert imported_second.exit_code == 0, imported_second.output
+    _apply_pending_source(runner, workspace)
+
+    result = query_module.answer_question(
+        workspace,
+        "Cache expires sixty seconds and deployment Friday",
+        max_citations=2,
+    )
+
+    assert result["status"] == "answered"
+    assert len(result["citations"]) == 2
+    assert "sixty seconds" in result["answer"]
+    assert "Friday" in result["answer"]
 
 
 def test_ask_uses_multiline_fact_rendered_in_the_wiki_page(

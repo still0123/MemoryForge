@@ -11,7 +11,7 @@ from typer.testing import CliRunner
 from memoryforge.changesets import ChangeSetStore
 from memoryforge.cli import app
 from memoryforge.compiler import compile_pending_sources
-from memoryforge.models import PageChange
+from memoryforge.models import CompilationPlan, PageChange, PlannedPage
 from memoryforge.workspace import Workspace
 
 
@@ -23,6 +23,17 @@ class FakeProvider:
     def compile_pages(self, messages: tuple[dict[str, str], ...]) -> tuple[PageChange, ...]:
         self.messages = messages
         return self.changes
+
+
+class PlanningFakeProvider(FakeProvider):
+    def __init__(self, changes: tuple[PageChange, ...], plan: CompilationPlan) -> None:
+        super().__init__(changes)
+        self.plan = plan
+        self.plan_messages: tuple[dict[str, str], ...] | None = None
+
+    def plan_pages(self, messages: tuple[dict[str, str], ...]) -> CompilationPlan:
+        self.plan_messages = messages
+        return self.plan
 
 
 def test_llm_compiler_merges_two_pending_sources_and_keeps_review_gate(
@@ -102,6 +113,48 @@ def test_llm_compiler_merges_two_pending_sources_and_keeps_review_gate(
     )
     assert stored.changeset.status.value == "PROPOSED"
     assert not (workspace_path / merged_path).exists()
+
+
+def test_llm_compiler_uses_workspace_contract_and_stages_plan_details(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository, workspace_path, source_id = _workspace_with_one_source(tmp_path, monkeypatch)
+    (workspace_path / "AGENTS.md").write_text("Use the team glossary.\n", encoding="utf-8")
+    (workspace_path / ".memoryforge/schema.yaml").write_text(
+        "page_types:\n  - concept\n", encoding="utf-8"
+    )
+    source_text = (repository / "note.md").read_text(encoding="utf-8")
+    change = PageChange(
+        path="wiki/pages/note.md",
+        title="Note",
+        page_type="concept",
+        summary="A note.",
+        body="The note is retained.",
+        source_ids=(source_id,),
+        citations=({"source_id": source_id, "locator": f"chars:0-{len(source_text)}"},),
+    )
+    plan = CompilationPlan(
+        pages=(
+            PlannedPage(
+                path="wiki/pages/note.md",
+                action="create",
+                source_ids=(source_id,),
+                reason="Create the first concept page.",
+            ),
+        )
+    )
+    provider = PlanningFakeProvider((change,), plan)
+
+    compilation = compile_pending_sources(Workspace.open(workspace_path), provider=provider)
+
+    assert compilation is not None
+    assert provider.plan_messages is not None
+    assert "Use the team glossary." in json.dumps(provider.plan_messages, ensure_ascii=False)
+    assert provider.messages is not None
+    assert "page_types:" in json.dumps(provider.messages, ensure_ascii=False)
+    details = compilation.changeset.operations[0].details
+    assert details["compilation_plan"]["reason"] == "Create the first concept page."
 
 
 def test_llm_compiler_rejects_invalid_output_before_staging(
@@ -969,6 +1022,77 @@ def test_deterministic_compiler_routes_mixed_pending_sources_to_existing_and_new
     assert opened.page_paths_for_source(second_id) == (merged_path,)
     assert opened.page_paths_for_source(third_id) == (f"wiki/pages/{third_id}.md",)
     assert not (workspace_path / f"wiki/pages/{first_id}.md").exists()
+
+
+def test_llm_compiler_can_extend_a_related_existing_page(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    first = repository / "cache-design.md"
+    second = repository / "cache-operations.md"
+    first_text = "# Cache Design\n\nCache entries expire after sixty seconds.\n"
+    second_text = "# Cache Operations\n\nCache invalidation removes stale entries.\n"
+    first.write_text(first_text, encoding="utf-8")
+    monkeypatch.chdir(repository)
+    runner = CliRunner()
+    workspace_path = repository / "workspace"
+    assert runner.invoke(app, ["init", str(workspace_path)]).exit_code == 0
+    first_id = json.loads(
+        runner.invoke(app, ["import", str(first), "--workspace", str(workspace_path)]).stdout
+    )["source_id"]
+
+    initial_change = PageChange(
+        path="wiki/pages/cache.md",
+        title="Cache",
+        page_type="concept",
+        summary="Cache entries expire after sixty seconds.",
+        body="Cache design notes.",
+        source_ids=(first_id,),
+        citations=({"source_id": first_id, "locator": f"chars:0-{len(first_text)}"},),
+    )
+    initial = compile_pending_sources(
+        Workspace.open(workspace_path), provider=FakeProvider((initial_change,))
+    )
+    assert initial is not None
+    stored = ChangeSetStore(Workspace.open(workspace_path)).create(
+        initial.changeset, initial.candidate_files
+    )
+    assert runner.invoke(
+        app,
+        ["apply", stored.changeset.changeset_id, "--approve", "--workspace", str(workspace_path)],
+    ).exit_code == 0
+
+    second.write_text(second_text, encoding="utf-8")
+    second_id = json.loads(
+        runner.invoke(app, ["import", str(second), "--workspace", str(workspace_path)]).stdout
+    )["source_id"]
+    expanded_change = PageChange(
+        path="wiki/pages/model-name.md",
+        title="Cache",
+        page_type="concept",
+        summary="Cache covers expiry and invalidation.",
+        body="Cache design now also documents invalidation.",
+        source_ids=(first_id, second_id),
+        citations=(
+            {"source_id": first_id, "locator": f"chars:0-{len(first_text)}"},
+            {"source_id": second_id, "locator": f"chars:0-{len(second_text)}"},
+        ),
+    )
+    provider = FakeProvider((expanded_change,))
+    compilation = compile_pending_sources(Workspace.open(workspace_path), provider=provider)
+
+    assert compilation is not None
+    original_path = f"wiki/pages/{first_id}.md"
+    assert set(compilation.candidate_files) == {original_path, "wiki/INDEX.md"}
+    assert compilation.changeset.source_ids == (first_id, second_id)
+    assert f'sources: ["{first_id}", "{second_id}"]' in compilation.candidate_files[original_path]
+    assert provider.messages is not None
+    prompt = provider.messages[1]["content"]
+    assert "EXISTING PAGE CARDS:" in prompt
+    assert f"PATH: {original_path}" in prompt
+    assert first_text not in prompt
 
 
 def test_llm_compiler_rejects_duplicate_source_ownership_before_staging(

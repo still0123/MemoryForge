@@ -89,10 +89,13 @@ def answer_question(
     debug: bool = False,
     verify: bool = False,
     max_pages: int = 3,
+    max_citations: int = 1,
     provider: OpenAICompatibleProvider | None = None,
+    allow_local: bool = False,
 ) -> AskPayload:
     """Answer from a bounded set of Wiki pages, expanding raw evidence only on request."""
     _validate_max_pages(max_pages)
+    _validate_max_citations(max_citations)
     question_terms = _terms(question)
     trace: list[TraceStep] = []
     if not question_terms:
@@ -119,11 +122,16 @@ def answer_question(
         return _unknown_payload(debug, trace)
 
     if provider is None:
-        _, page_path, citation = max(matches, key=lambda match: match[0])
-        answer = citation["quote"]
-        selected = [(page_path, citation)]
+        selected = _top_matches(matches, max_citations)
+        answer = " ".join(citation["quote"] for _, citation in selected)
     else:
-        generated = _model_answer(workspace_root, question, matches, provider)
+        generated = _model_answer(
+            workspace_root,
+            question,
+            matches,
+            provider,
+            allow_local=allow_local,
+        )
         if generated is None:
             return _unknown_payload(debug, trace)
         answer, selected = generated
@@ -177,26 +185,29 @@ def _model_answer(
     question: str,
     matches: list[tuple[tuple[int, int], str, CitationPayload]],
     provider: OpenAICompatibleProvider,
+    *,
+    allow_local: bool,
 ) -> tuple[str, list[tuple[str, CitationPayload]]] | None:
-    public_matches = [
+    usable_matches = [
         (page_path, citation)
         for _, page_path, citation in matches
-        if is_public_source_version(
+        if allow_local
+        or is_public_source_version(
             workspace_root,
             source_id=citation["source_id"],
             source_version=citation["source_version"],
         )
     ][:12]
-    if not public_matches:
+    if not usable_matches:
         raise ValueError("LLM answers require public source evidence")
 
-    answer, indexes = provider.answer_with_evidence(_answer_messages(question, public_matches))
+    answer, indexes = provider.answer_with_evidence(_answer_messages(question, usable_matches))
     selected: list[tuple[str, CitationPayload]] = []
     seen: set[tuple[str, int, str]] = set()
     for index in indexes:
-        if isinstance(index, bool) or not 0 <= index < len(public_matches):
+        if isinstance(index, bool) or not 0 <= index < len(usable_matches):
             continue
-        page_path, citation = public_matches[index]
+        page_path, citation = usable_matches[index]
         key = (citation["source_id"], citation["source_version"], citation["locator"])
         if key not in seen:
             seen.add(key)
@@ -222,6 +233,8 @@ def _answer_messages(
                 "citation_indexes. citation_indexes must contain the zero-based indexes of "
                 "facts that support the answer. If the facts do not answer the question, "
                 'return {"answer":"不知道","citation_indexes":[]}. Reply in the question language.'
+                " You may restate an explicit contrast in direct language, but do not add details "
+                "beyond the facts."
             ),
         },
         {
@@ -300,6 +313,32 @@ def _candidate_pages(
 def _validate_max_pages(max_pages: int) -> None:
     if isinstance(max_pages, bool) or not isinstance(max_pages, int) or not 1 <= max_pages <= 10:
         raise ValueError("max_pages must be an integer between 1 and 10")
+
+
+def _validate_max_citations(max_citations: int) -> None:
+    if (
+        isinstance(max_citations, bool)
+        or not isinstance(max_citations, int)
+        or not 1 <= max_citations <= 10
+    ):
+        raise ValueError("max_citations must be an integer between 1 and 10")
+
+
+def _top_matches(
+    matches: list[tuple[tuple[int, int], str, CitationPayload]],
+    max_citations: int,
+) -> list[tuple[str, CitationPayload]]:
+    selected: list[tuple[str, CitationPayload]] = []
+    seen: set[tuple[str, int, str]] = set()
+    for _, page_path, citation in sorted(matches, key=lambda match: match[0], reverse=True):
+        key = (citation["source_id"], citation["source_version"], citation["locator"])
+        if key in seen:
+            continue
+        seen.add(key)
+        selected.append((page_path, citation))
+        if len(selected) == max_citations:
+            break
+    return selected
 
 
 def _safe_wiki_index(workspace_root: Path, index: Path) -> Path | None:

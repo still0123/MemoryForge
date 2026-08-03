@@ -20,10 +20,12 @@ from memoryforge.compiler import (
 from memoryforge.errors import FeatureUnavailableError, MemoryForgeError, WorkspaceError
 from memoryforge.evaluation import run_evaluation
 from memoryforge.feishu_adapter import FeishuDocumentError, import_feishu_document
+from memoryforge.feishu_bot import FeishuBotError, reply_to_feishu_text
+from memoryforge.feishu_service import FeishuServiceError, serve_feishu_bot
 from memoryforge.git_adapter import GitRepositoryError
 from memoryforge.importer import SourceValidationError, import_local_file
 from memoryforge.linting import lint_workspace
-from memoryforge.models import Sensitivity
+from memoryforge.models import ChangeOperationType, Sensitivity
 from memoryforge.provider import OpenAICompatibleProvider, ProviderConfig
 from memoryforge.query import answer_question
 from memoryforge.refresh import refresh_workspace
@@ -443,6 +445,97 @@ def feishu_import(
     )
 
 
+@app.command("feishu-reply")
+def feishu_reply(
+    question: Annotated[str, typer.Argument(help="Text received by a Feishu bot.")],
+    max_pages: Annotated[
+        int,
+        typer.Option("--max-pages", min=1, max=10, help="Maximum Wiki pages to search."),
+    ] = 3,
+    llm: Annotated[
+        bool,
+        typer.Option("--llm", help="Summarize matched Wiki evidence with the configured model."),
+    ] = False,
+    allow_local_llm: Annotated[
+        bool,
+        typer.Option(
+            "--allow-local-llm",
+            help="Allow the configured model to receive local_only evidence for this reply.",
+        ),
+    ] = False,
+    workspace: WorkspaceOption = Path("."),
+) -> None:
+    """Print the reply payload that a Feishu bot can send back to one text message."""
+    try:
+        opened = Workspace.open_readonly(workspace)
+        provider = OpenAICompatibleProvider(ProviderConfig.from_environment()) if llm else None
+        reply = reply_to_feishu_text(
+            opened.root,
+            question,
+            max_pages=max_pages,
+            provider=provider,
+            allow_local=allow_local_llm,
+        )
+    except (
+        FeishuBotError,
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(json.dumps(reply, ensure_ascii=False, indent=2))
+
+
+@app.command("feishu-serve")
+def feishu_serve(
+    max_pages: Annotated[
+        int,
+        typer.Option("--max-pages", min=1, max=10, help="Maximum Wiki pages to search."),
+    ] = 3,
+    llm: Annotated[
+        bool,
+        typer.Option("--llm", help="Summarize matched Wiki evidence with the configured model."),
+    ] = False,
+    allow_local_llm: Annotated[
+        bool,
+        typer.Option(
+            "--allow-local-llm",
+            help="Allow the configured model to receive local_only evidence for replies.",
+        ),
+    ] = False,
+    workspace: WorkspaceOption = Path("."),
+) -> None:
+    """Listen for direct Feishu bot messages and reply from the local Wiki."""
+    try:
+        opened = Workspace.open_readonly(workspace)
+        typer.echo("Listening for Feishu bot messages. Press Ctrl+C to stop.")
+        provider = OpenAICompatibleProvider(ProviderConfig.from_environment()) if llm else None
+        serve_feishu_bot(
+            opened.root,
+            max_pages=max_pages,
+            provider=provider,
+            allow_local=allow_local_llm,
+        )
+    except KeyboardInterrupt:
+        typer.echo("Feishu listener stopped.")
+    except (
+        FeishuBotError,
+        FeishuServiceError,
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+
+
 @app.command()
 def search(
     query: Annotated[str, typer.Argument(help="Full-text search query.")],
@@ -481,6 +574,13 @@ def ingest(
         bool,
         typer.Option("--llm", help="Use the configured OpenAI-compatible PageChange provider."),
     ] = False,
+    allow_local_llm: Annotated[
+        bool,
+        typer.Option(
+            "--allow-local-llm",
+            help="Allow the configured model to receive local_only sources for this run.",
+        ),
+    ] = False,
     workspace: WorkspaceOption = Path("."),
 ) -> None:
     if not pending:
@@ -494,6 +594,7 @@ def ingest(
             opened,
             source_ids=tuple(source or ()),
             provider=provider,
+            allow_local=allow_local_llm,
         )
         if compilation is None:
             typer.echo(
@@ -577,7 +678,19 @@ def apply(
         with opened.exclusive_lock():
             store = ChangeSetStore(opened)
             stored = store.get(changeset_id)
-            paths = tuple(sorted(stored.candidate_files))
+            archive_paths = tuple(
+                sorted(
+                    operation.path
+                    for operation in stored.changeset.operations
+                    if operation.type is ChangeOperationType.ARCHIVE_PAGE
+                )
+            )
+            if any(not path.startswith("wiki/pages/") for path in archive_paths):
+                raise ValueError("ARCHIVE_PAGE operations must target wiki/pages/")
+            existing_archive_paths = tuple(
+                path for path in archive_paths if (opened.root / path).is_file()
+            )
+            paths = tuple(sorted(set(stored.candidate_files) | set(existing_archive_paths)))
             opened.version_store.require_clean_paths(paths)
             opened.require_current_source_versions(stored.changeset.source_versions)
             page_sources = candidate_page_sources(stored.candidate_files)
@@ -585,13 +698,20 @@ def apply(
             previous_source_versions = opened.record_applied_source_versions(
                 stored.changeset.source_versions
             )
+            previous_page_sources: dict[str, tuple[str, ...]] = {}
             try:
                 previous_page_sources = opened.replace_applied_page_sources(page_sources)
+                previous_page_sources.update(opened.remove_applied_page_sources(archive_paths))
             except Exception:
                 opened.restore_applied_source_versions(previous_source_versions)
+                opened.restore_applied_page_sources(previous_page_sources)
                 raise
             previous_files: dict[Path, str | None] = {}
             try:
+                for path in existing_archive_paths:
+                    destination = opened.root / path
+                    previous_files[destination] = destination.read_text(encoding="utf-8")
+                    destination.unlink()
                 for path, content in stored.candidate_files.items():
                     destination = opened.root / path
                     previous_files[destination] = (
@@ -649,8 +769,22 @@ def reject(
     changeset_id: Annotated[str, typer.Argument()],
     workspace: WorkspaceOption = Path("."),
 ) -> None:
-    _ = changeset_id
-    _require_future_feature(workspace, "reject")
+    try:
+        opened = Workspace.open(workspace)
+        with opened.exclusive_lock():
+            stored = ChangeSetStore(opened).get(changeset_id)
+            ChangeSetStore(opened).archive_rejected(stored)
+    except (
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(json.dumps({"changeset_id": changeset_id, "status": "REJECTED"}))
 
 
 @app.command()
@@ -660,6 +794,13 @@ def ask(
     llm: Annotated[
         bool,
         typer.Option("--llm", help="Summarize matched public evidence with the configured model."),
+    ] = False,
+    allow_local_llm: Annotated[
+        bool,
+        typer.Option(
+            "--allow-local-llm",
+            help="Allow the configured model to receive local_only evidence for this question.",
+        ),
     ] = False,
     debug: Annotated[
         bool,
@@ -689,6 +830,7 @@ def ask(
             verify=verify,
             max_pages=max_pages,
             provider=provider,
+            allow_local=allow_local_llm,
         )
     except (
         MemoryForgeError,
@@ -714,6 +856,20 @@ def agent(
         int,
         typer.Option("--max-pages", min=1, max=10, help="Maximum Wiki pages for search."),
     ] = 3,
+    allow_local_llm: Annotated[
+        bool,
+        typer.Option(
+            "--allow-local-llm",
+            help="Allow the configured model to read local_only evidence in this agent run.",
+        ),
+    ] = False,
+    propose_update: Annotated[
+        bool,
+        typer.Option(
+            "--propose-update",
+            help="Create a reviewable Wiki ChangeSet from the answered evidence.",
+        ),
+    ] = False,
     workspace: WorkspaceOption = Path("."),
 ) -> None:
     try:
@@ -725,6 +881,8 @@ def agent(
             provider=OpenAICompatibleProvider(ProviderConfig.from_environment()),
             max_steps=max_steps,
             max_pages=max_pages,
+            allow_local=allow_local_llm,
+            propose_update=propose_update,
         )
     except (
         MemoryForgeError,

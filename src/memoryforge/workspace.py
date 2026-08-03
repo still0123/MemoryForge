@@ -105,6 +105,7 @@ id_rsa
 .aws/
 .git/
 """
+_PROMPT_CONTEXT_LIMIT = 8000
 
 _SOURCE_FTS_SCHEMA_STATEMENT = """
 CREATE VIRTUAL TABLE IF NOT EXISTS source_fts USING fts5(
@@ -272,6 +273,19 @@ class Workspace:
             raise WorkspaceError("workspace is missing its Git baseline commit")
         return commit
 
+    def prompt_context(self, *, max_chars: int = _PROMPT_CONTEXT_LIMIT) -> str:
+        """Read the bounded Workspace contract used in model prompts."""
+        if isinstance(max_chars, bool) or not isinstance(max_chars, int) or max_chars < 0:
+            raise ValueError("max_chars must be a non-negative integer")
+        sections: list[str] = []
+        for label, path in (
+            ("AGENTS.md", self.root / "AGENTS.md"),
+            (".memoryforge/schema.yaml", self.schema_path),
+        ):
+            if path.is_file() and not path.is_symlink():
+                sections.append(f"[{label}]\n{path.read_text(encoding='utf-8')}")
+        return "\n\n".join(sections)[:max_chars]
+
     def require_current_source_versions(self, source_versions: Mapping[str, int]) -> None:
         """Reject an apply when one of its staged source revisions was superseded."""
         if not source_versions:
@@ -383,6 +397,36 @@ class Workspace:
                     for page_path, source_ids in normalized.items()
                     for source_id in source_ids
                 ),
+            )
+        return {path: tuple(source_ids) for path, source_ids in previous.items()}
+
+    def remove_applied_page_sources(
+        self,
+        page_paths: Iterable[str],
+    ) -> dict[str, tuple[str, ...]]:
+        """Remove source ownership for pages approved for archival."""
+        paths = tuple(sorted(set(page_paths)))
+        if not paths:
+            return {}
+        if any(not _is_stable_wiki_page_path(path) for path in paths):
+            raise ValueError("page source mappings must stay below wiki/pages/")
+        placeholders = ", ".join("?" for _ in paths)
+        with _connect(self.index_path) as connection:
+            rows = connection.execute(
+                f"""
+                SELECT page_path, source_id
+                FROM page_sources
+                WHERE page_path IN ({placeholders})
+                ORDER BY page_path, source_id
+                """,
+                paths,
+            ).fetchall()
+            previous: dict[str, list[str]] = {path: [] for path in paths}
+            for row in rows:
+                previous[str(row["page_path"])].append(str(row["source_id"]))
+            connection.execute(
+                f"DELETE FROM page_sources WHERE page_path IN ({placeholders})",
+                paths,
             )
         return {path: tuple(source_ids) for path, source_ids in previous.items()}
 

@@ -26,8 +26,10 @@ def test_eval_compares_wiki_answers_with_raw_fts(tmp_path: Path, monkeypatch) ->
                 "cases": [
                     {
                         "id": "cache-expiry",
+                        "category": "single_hop",
                         "question": "Cache entries expire",
-                        "expected_source_path": "note.md",
+                        "expected_status": "answered",
+                        "expected_source_paths": ["note.md"],
                         "required_terms": ["sixty", "seconds"],
                     }
                 ],
@@ -54,10 +56,13 @@ def test_eval_compares_wiki_answers_with_raw_fts(tmp_path: Path, monkeypatch) ->
     payload = json.loads(result.stdout)
     assert payload["memoryforge"] == {
         "answer_accuracy": 100.0,
-        "citation_accuracy": 100.0,
+        "source_recall_at_3": 100.0,
+        "citation_grounding_accuracy": 100.0,
+        "multi_source_coverage": 0.0,
+        "abstention_accuracy": 0.0,
         "average_wiki_pages_read": 1.0,
         "average_raw_sources_read": 0.0,
-        "average_citation_audit_characters": 41.0,
+        "average_evidence_characters": 41.0,
     }
     assert payload["raw_fts_baseline"]["expected_source_recall_at_3"] == 100.0
 
@@ -82,14 +87,18 @@ def test_eval_citation_accuracy_drops_when_a_case_routes_to_the_wrong_source(
                 "cases": [
                     {
                         "id": "cache-expiry",
+                        "category": "single_hop",
                         "question": "When do cache entries expire?",
-                        "expected_source_path": "cache.md",
+                        "expected_status": "answered",
+                        "expected_source_paths": ["cache.md"],
                         "required_terms": ["sixty", "seconds"],
                     },
                     {
                         "id": "deploy-day-wrong-source",
+                        "category": "single_hop",
                         "question": "When does deployment run every week?",
-                        "expected_source_path": "cache.md",
+                        "expected_status": "answered",
+                        "expected_source_paths": ["cache.md"],
                         "required_terms": ["Friday"],
                     },
                 ],
@@ -103,7 +112,8 @@ def test_eval_citation_accuracy_drops_when_a_case_routes_to_the_wrong_source(
     assert result.exit_code == 0, result.output
     payload = json.loads(result.stdout)
     assert payload["memoryforge"]["answer_accuracy"] == 100.0
-    assert payload["memoryforge"]["citation_accuracy"] == 50.0
+    assert payload["memoryforge"]["citation_grounding_accuracy"] == 100.0
+    assert payload["memoryforge"]["source_recall_at_3"] == 50.0
 
 
 def test_eval_uses_daily_debug_query_and_separates_raw_audit_reads(
@@ -123,8 +133,10 @@ def test_eval_uses_daily_debug_query_and_separates_raw_audit_reads(
                 "cases": [
                     {
                         "id": "cache-expiry",
+                        "category": "single_hop",
                         "question": "When do cache entries expire?",
-                        "expected_source_path": "cache.md",
+                        "expected_status": "answered",
+                        "expected_source_paths": ["cache.md"],
                         "required_terms": ["sixty", "seconds"],
                     }
                 ],
@@ -147,7 +159,82 @@ def test_eval_uses_daily_debug_query_and_separates_raw_audit_reads(
     payload = json.loads(result.stdout)
     assert debug_flags == [True]
     assert payload["memoryforge"]["average_raw_sources_read"] == 0.0
-    assert payload["memoryforge"]["average_citation_audit_characters"] > 0.0
+    assert payload["memoryforge"]["average_evidence_characters"] > 0.0
+
+
+def test_eval_cites_all_expected_sources_for_multi_source_case(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    runner, workspace = _build_applied_workspace(
+        tmp_path,
+        monkeypatch,
+        {
+            "cache.md": "# Cache\n\nCache expires after sixty seconds.\n",
+            "deploy.md": "# Deploy\n\nDeployment runs every Friday.\n",
+        },
+    )
+    config = tmp_path / "suite.json"
+    config.write_text(
+        json.dumps(
+            {
+                "name": "multi-source",
+                "cases": [
+                    {
+                        "id": "cache-and-deploy",
+                        "category": "multi_source",
+                        "question": "Cache expires sixty seconds and deployment Friday",
+                        "expected_status": "answered",
+                        "expected_source_paths": ["cache.md", "deploy.md"],
+                        "required_terms": ["sixty", "Friday"],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["eval", str(config), "--workspace", str(workspace)])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload["memoryforge"]["multi_source_coverage"] == 100.0
+    assert payload["cases"][0]["memoryforge"]["cited_source_paths"] == [
+        "cache.md",
+        "deploy.md",
+    ]
+
+
+def test_eval_accepts_and_scores_unanswerable_case(tmp_path: Path, monkeypatch) -> None:
+    runner, workspace = _build_applied_workspace(
+        tmp_path,
+        monkeypatch,
+        {"cache.md": "# Cache\n\nCache expires after sixty seconds.\n"},
+    )
+    config = tmp_path / "suite.json"
+    config.write_text(
+        json.dumps(
+            {
+                "name": "abstention",
+                "cases": [
+                    {
+                        "id": "unknown-database-sharding",
+                        "category": "unanswerable",
+                        "question": "How should database shards rebalance?",
+                        "expected_status": "unknown",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["eval", str(config), "--workspace", str(workspace)])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload["memoryforge"]["abstention_accuracy"] == 100.0
+    assert payload["cases"][0]["memoryforge"]["citation_grounded"] is True
 
 
 def _build_applied_workspace(

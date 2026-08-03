@@ -94,6 +94,7 @@ def test_lint_reports_missing_index_page_and_source_mapping_mismatch(
         "index_missing_page",
         "missing_index_entry",
         "missing_source_citation",
+        "orphan_page",
         "source_mapping_mismatch",
     }
 
@@ -125,6 +126,53 @@ def test_lint_reports_page_without_citation(tmp_path: Path, monkeypatch) -> None
         "missing_citation",
         "missing_source_citation",
     ]
+
+
+def test_lint_reports_source_that_needs_recompile(tmp_path: Path, monkeypatch) -> None:
+    runner, workspace, imported = _workspace_with_applied_source(tmp_path, monkeypatch)
+    source = workspace.parent / "note.md"
+    source.write_text(
+        "# Cache policy\n\nCache entries expire after thirty seconds.\n",
+        encoding="utf-8",
+    )
+    assert runner.invoke(app, ["import", str(source), "--workspace", str(workspace)]).exit_code == 0
+
+    payload = lint_workspace(workspace)
+
+    assert payload["status"] == "issues"
+    assert [issue["code"] for issue in payload["issues"]] == ["source_needs_recompile"]
+    assert imported["source_id"] in payload["issues"][0]["message"]
+
+
+def test_lint_reports_missing_related_page(tmp_path: Path, monkeypatch) -> None:
+    _, workspace, _ = _workspace_with_applied_source(tmp_path, monkeypatch)
+    page = next((workspace / "wiki/pages").glob("*.md"))
+    page.write_text(
+        page.read_text(encoding="utf-8")
+        + "\n## Related pages\n\n- [Missing](missing.md)\n",
+        encoding="utf-8",
+    )
+
+    payload = lint_workspace(workspace)
+
+    assert payload["status"] == "issues"
+    assert [issue["code"] for issue in payload["issues"]] == ["related_page_missing"]
+
+
+def test_lint_reports_orphan_page_when_not_indexed_or_linked(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _, workspace, _ = _workspace_with_applied_source(tmp_path, monkeypatch)
+    (workspace / "wiki/INDEX.md").write_text("# Knowledge Index\n", encoding="utf-8")
+
+    payload = lint_workspace(workspace)
+
+    assert payload["status"] == "issues"
+    assert {issue["code"] for issue in payload["issues"]} == {
+        "missing_index_entry",
+        "orphan_page",
+    }
 
 
 def test_lint_rejects_reversed_citation_range(tmp_path: Path, monkeypatch) -> None:

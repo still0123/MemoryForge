@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 from typing import Literal, TypedDict
 
+from memoryforge.changesets import ChangeSetStore
+from memoryforge.compiler import propose_agent_update
 from memoryforge.provider import OpenAICompatibleProvider
 from memoryforge.query import (
     AskPayload,
@@ -13,7 +15,11 @@ from memoryforge.query import (
     EvidencePayload,
     answer_question,
 )
-from memoryforge.workspace import is_public_source_version, read_source_excerpt
+from memoryforge.workspace import (
+    Workspace,
+    is_public_source_version,
+    read_source_excerpt,
+)
 
 
 class AgentEvent(TypedDict):
@@ -29,6 +35,7 @@ class AgentPayload(TypedDict):
     evidence: list[EvidencePayload]
     wiki_pages: list[str]
     events: list[AgentEvent]
+    changeset_id: str | None
 
 
 def run_agent(
@@ -38,10 +45,15 @@ def run_agent(
     provider: OpenAICompatibleProvider,
     max_steps: int = 4,
     max_pages: int = 3,
+    allow_local: bool = False,
+    propose_update: bool = False,
 ) -> AgentPayload:
-    """Run a bounded model/tool loop over public Wiki evidence."""
+    """Run a bounded model/tool loop over public Wiki evidence by default."""
     _validate_limits(max_steps, max_pages)
-    messages = _agent_messages(question)
+    messages = _agent_messages(
+        question,
+        Workspace.open_readonly(workspace_root).prompt_context(),
+    )
     latest: AskPayload | None = None
     evidence: list[EvidencePayload] = []
     events: list[AgentEvent] = []
@@ -52,7 +64,41 @@ def run_agent(
         if decision.action == "final":
             citations = _selected_citations(latest, decision.citation_indexes)
             answer = (decision.answer or "").strip()
-            if answer and answer != "不知道" and citations:
+            if answer == "不知道":
+                events.append(
+                    {
+                        "step": step_number,
+                        "action": "final",
+                        "result": _event_result({"status": "unknown"}),
+                    }
+                )
+                return {
+                    "status": "unknown",
+                    "answer": "不知道",
+                    "citations": [],
+                    "evidence": evidence,
+                    "wiki_pages": latest["wiki_pages"] if latest else [],
+                    "events": events,
+                    "changeset_id": None,
+                }
+            if answer and citations and _citations_are_read(citations, evidence):
+                changeset_id = None
+                if propose_update:
+                    compilation = propose_agent_update(
+                        Workspace.open_readonly(workspace_root),
+                        question=question,
+                        answer=answer,
+                        evidence=evidence,
+                        wiki_pages=latest["wiki_pages"] if latest else [],
+                        provider=provider,
+                        allow_local=allow_local,
+                    )
+                    if compilation is not None:
+                        stored = ChangeSetStore(Workspace.open(workspace_root)).create(
+                            compilation.changeset,
+                            compilation.candidate_files,
+                        )
+                        changeset_id = stored.changeset.changeset_id
                 events.append(
                     {
                         "step": step_number,
@@ -67,10 +113,18 @@ def run_agent(
                     "evidence": evidence,
                     "wiki_pages": latest["wiki_pages"] if latest else [],
                     "events": events,
+                    "changeset_id": changeset_id,
                 }
-            tool_result = {"error": "final answer needs at least one Wiki citation"}
+            tool_result = {
+                "error": "final answer needs at least one citation returned by read_evidence"
+            }
         elif decision.action == "search_wiki":
-            latest = _search_public_wiki(workspace_root, decision.query or question, max_pages)
+            latest = _search_wiki(
+                workspace_root,
+                decision.query or question,
+                max_pages,
+                allow_local=allow_local,
+            )
             evidence = []
             tool_result = _json_tool_result(latest)
         else:
@@ -102,10 +156,14 @@ def run_agent(
         "evidence": evidence,
         "wiki_pages": latest["wiki_pages"] if latest else [],
         "events": events,
+        "changeset_id": None,
     }
 
 
-def _agent_messages(question: str) -> list[dict[str, str]]:
+def _agent_messages(question: str, prompt_context: str = "") -> list[dict[str, str]]:
+    workspace_rules = (
+        "\nWorkspace contract:\n" + prompt_context if prompt_context else ""
+    )
     return [
         {
             "role": "system",
@@ -114,35 +172,44 @@ def _agent_messages(question: str) -> list[dict[str, str]]:
                 "Use one action per turn and return JSON only. Actions are: "
                 "search_wiki with query; read_evidence with citation_index; "
                 "final with answer and citation_indexes. Start with search_wiki. "
-                "Only use facts returned by tools. A final answer must cite at least one "
-                "citation index from the latest search. If evidence is insufficient, "
+                "Only use facts returned by tools. Read every citation you plan to use before "
+                "final. A final answer must cite at least one citation index returned by "
+                "read_evidence. If evidence is insufficient, "
                 'return {"action":"final","answer":"不知道","citation_indexes":[]}. '
                 "Do not invent tools or file paths."
+                + workspace_rules
             ),
         },
         {"role": "user", "content": question},
     ]
 
 
-def _search_public_wiki(workspace_root: Path, query: str, max_pages: int) -> AskPayload:
+def _search_wiki(
+    workspace_root: Path,
+    query: str,
+    max_pages: int,
+    *,
+    allow_local: bool,
+) -> AskPayload:
     found = answer_question(workspace_root, query, debug=True, max_pages=max_pages)
-    public_citations = [
+    visible_citations = [
         citation
         for citation in found["citations"]
-        if is_public_source_version(
+        if allow_local
+        or is_public_source_version(
             workspace_root,
             source_id=citation["source_id"],
             source_version=citation["source_version"],
         )
     ]
-    if not public_citations:
+    if not visible_citations:
         return _unknown_search(found)
-    first = public_citations[0]
+    first = visible_citations[0]
     return {
         **found,
         "status": "answered",
         "answer": first["quote"],
-        "citations": public_citations,
+        "citations": visible_citations,
         "source_id": first["source_id"],
         "source_version": first["source_version"],
         "locator": first["locator"],
@@ -199,6 +266,20 @@ def _selected_citations(
         if citation not in citations:
             citations.append(citation)
     return citations
+
+
+def _citations_are_read(
+    citations: list[CitationPayload],
+    evidence: list[EvidencePayload],
+) -> bool:
+    read = {
+        (item["source_id"], item["source_version"], item["locator"])
+        for item in evidence
+    }
+    return bool(citations) and all(
+        (citation["source_id"], citation["source_version"], citation["locator"]) in read
+        for citation in citations
+    )
 
 
 def _json_tool_result(result: AskPayload) -> dict[str, object]:

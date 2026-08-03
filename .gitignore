@@ -11,5 +11,14 @@ dist/
 
 # Local MemoryForge workspaces and credentials
 .env
+.env.*
 .memoryforge/
 demo-workspace/
+memoryforge-demo/
+wiki/
+.botmux/
+logs/
+*.key
+*.pem
+*.p12
+*.pfx

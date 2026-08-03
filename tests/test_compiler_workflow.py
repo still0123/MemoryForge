@@ -118,6 +118,31 @@ def test_apply_requires_approval_then_writes_wiki_and_commits(
     assert receipt["changeset_id"] == changeset_id
 
 
+def test_reject_archives_proposal_without_changing_stable_wiki(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    runner, workspace_path, imported = _initialized_workspace(tmp_path, monkeypatch)
+    changeset_id = _stage_changeset(workspace_path, imported)
+    stable_wiki = workspace_path / CANDIDATE_PATH
+    base_commit = _git_head(workspace_path)
+
+    rejected = runner.invoke(
+        app,
+        ["reject", changeset_id, "--workspace", str(workspace_path)],
+    )
+
+    assert rejected.exit_code == 0, rejected.output
+    assert json.loads(rejected.stdout) == {
+        "changeset_id": changeset_id,
+        "status": "REJECTED",
+    }
+    assert not stable_wiki.exists()
+    assert _git_head(workspace_path) == base_commit
+    assert not (workspace_path / ".memoryforge/staging" / changeset_id).exists()
+    assert (workspace_path / ".memoryforge/staging/rejected" / changeset_id).is_dir()
+
+
 def test_ingest_is_idempotent_until_apply_then_has_no_pending_sources(
     tmp_path: Path,
     monkeypatch,

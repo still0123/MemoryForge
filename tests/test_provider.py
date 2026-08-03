@@ -7,7 +7,7 @@ from urllib.request import Request
 import pytest
 from pydantic import ValidationError
 
-from memoryforge.models import PageChange, TopicGroup
+from memoryforge.models import CompilationPlan, PageChange, TopicGroup
 from memoryforge.provider import OpenAICompatibleProvider, ProviderConfig
 
 SOURCE_ID = "a" * 64
@@ -30,9 +30,11 @@ def _page_change() -> dict[str, object]:
     ["MEMORYFORGE_API_BASE", "MEMORYFORGE_API_KEY", "MEMORYFORGE_MODEL"],
 )
 def test_provider_config_requires_each_environment_value(
+    tmp_path,
     monkeypatch: pytest.MonkeyPatch,
     missing: str,
 ) -> None:
+    monkeypatch.chdir(tmp_path)
     for name in ("MEMORYFORGE_API_BASE", "MEMORYFORGE_API_KEY", "MEMORYFORGE_MODEL"):
         monkeypatch.setenv(name, "configured")
     monkeypatch.delenv(missing)
@@ -111,6 +113,38 @@ def test_provider_parses_valid_page_changes() -> None:
     assert changes == (PageChange.model_validate(_page_change()),)
 
 
+def test_provider_parses_compilation_plan() -> None:
+    plan = {
+        "pages": [
+            {
+                "path": "wiki/pages/cache-design.md",
+                "action": "create",
+                "source_ids": [SOURCE_ID],
+                "reason": "Create the cache concept page.",
+                "related_pages": [],
+            }
+        ],
+        "conflicts": [],
+    }
+    captured: list[Request] = []
+
+    def transport(request: Request) -> bytes:
+        captured.append(request)
+        return _chat_response({"plan": plan})
+
+    provider = OpenAICompatibleProvider(
+        ProviderConfig("https://example.test", "test-key", "test-model"),
+        transport=transport,
+    )
+
+    result = provider.plan_pages([{"role": "user", "content": "plan this"}])
+
+    assert result == CompilationPlan.model_validate(plan)
+    payload = json.loads(captured[0].data or b"")
+    assert payload["thinking"] == {"type": "disabled"}
+    assert payload["max_tokens"] == 2048
+
+
 def test_provider_parses_topic_groups() -> None:
     topic = {
         "title": "Cache behavior",
@@ -156,6 +190,26 @@ def test_provider_parses_evidence_answer() -> None:
     payload = json.loads(captured[0].data or b"")
     assert payload["thinking"] == {"type": "disabled"}
     assert payload["max_tokens"] == 1024
+
+
+def test_provider_parses_optional_wiki_update() -> None:
+    captured: list[Request] = []
+
+    def transport(request: Request) -> bytes:
+        captured.append(request)
+        return _chat_response({"change": _page_change()})
+
+    provider = OpenAICompatibleProvider(
+        ProviderConfig("https://example.test", "test-key", "test-model"),
+        transport=transport,
+    )
+
+    result = provider.propose_update([{"role": "user", "content": "propose this"}])
+
+    assert result == PageChange.model_validate(_page_change())
+    payload = json.loads(captured[0].data or b"")
+    assert payload["thinking"] == {"type": "disabled"}
+    assert payload["max_tokens"] == 2048
 
 
 def test_provider_rejects_invalid_model_json() -> None:

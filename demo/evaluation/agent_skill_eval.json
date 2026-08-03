@@ -3,50 +3,247 @@
   "cases": [
     {
       "id": "statistics-truth-source",
+      "category": "single_hop",
       "question": "统计器如何避免把模拟实验结果当成真实结论？",
-      "expected_source_path": "docs/statistics-and-reports.md",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/statistics-and-reports.md"],
       "required_terms": ["Manifest", "RunMeasurement"]
     },
     {
       "id": "trace-boundary",
+      "category": "single_hop",
       "question": "Trace Intelligence 不保存什么？",
-      "expected_source_path": "docs/trace-intelligence.md",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/trace-intelligence.md"],
       "required_terms": ["隐藏思维过程", "unavailable"]
     },
     {
       "id": "real-agent-boundary",
+      "category": "single_hop",
       "question": "Real Agent 模块会不会引入新的 Provider 编排框架？",
-      "expected_source_path": "docs/real-agent-evidence.md",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/real-agent-evidence.md"],
       "required_terms": ["Provider", "模拟结果"]
     },
     {
       "id": "local-engine-boundary",
+      "category": "single_hop",
       "question": "本地配对实验引擎依赖哪些服务？",
-      "expected_source_path": "docs/local-experiment-engine.md",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/local-experiment-engine.md"],
       "required_terms": ["Redis", "Celery"]
     },
     {
       "id": "evidence-skill-activation",
+      "category": "single_hop",
       "question": "为什么配置声明了 Skill 不足以证明 Skill 生效？",
-      "expected_source_path": "docs/evidence-and-replay.md",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/evidence-and-replay.md"],
       "required_terms": ["Skill", "Secret"]
     },
     {
       "id": "promotion-core-handoff",
+      "category": "single_hop",
       "question": "Stage 4b 把 Evolution handoff 接入哪个 Promotion Core、复用了哪个评估器？",
-      "expected_source_path": "docs/promotion-workflow-integration.md",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/promotion-workflow-integration.md"],
       "required_terms": ["Promotion Core", "IndependentFinalEvaluator"]
     },
     {
       "id": "memory-rag-boundary",
+      "category": "single_hop",
       "question": "Memory/RAG MVP 刻意不用哪些能力？",
-      "expected_source_path": "docs/memory-rag-evaluation.md",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/memory-rag-evaluation.md"],
       "required_terms": ["LLM Judge", "Embedding"]
     },
     {
       "id": "observed-failure-boundary",
+      "category": "single_hop",
       "question": "Observed Failure Evidence Bridge 会重新运行 Agent 吗？",
-      "expected_source_path": "docs/observed-failure-evidence-bridge.md",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/observed-failure-evidence-bridge.md"],
+      "required_terms": ["FailureEvidenceBundle", "不重新运行"]
+    },
+    {
+      "id": "statistics-completeness-gate",
+      "category": "single_hop",
+      "question": "报告要求 Manifest 和 RunMeasurement 满足什么条件？",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/statistics-and-reports.md"],
+      "required_terms": ["Manifest", "RunMeasurement"]
+    },
+    {
+      "id": "trace-unavailable-value",
+      "category": "single_hop",
+      "question": "Trace Intelligence 对 unavailable 和隐藏思维过程如何处理？",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/trace-intelligence.md"],
+      "required_terms": ["隐藏思维过程", "unavailable"]
+    },
+    {
+      "id": "real-agent-simulation",
+      "category": "single_hop",
+      "question": "Real Agent 证据为什么不能把模拟结果当成 Provider 结论？",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/real-agent-evidence.md"],
+      "required_terms": ["Provider", "模拟结果"]
+    },
+    {
+      "id": "local-engine-workers",
+      "category": "single_hop",
+      "question": "本地实验引擎的 Redis 和 Celery 分别属于什么依赖？",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/local-experiment-engine.md"],
+      "required_terms": ["Redis", "Celery"]
+    },
+    {
+      "id": "evidence-secret-proof",
+      "category": "single_hop",
+      "question": "Evidence replay 为什么同时关注 Skill 和 Secret？",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/evidence-and-replay.md"],
+      "required_terms": ["Skill", "Secret"]
+    },
+    {
+      "id": "promotion-evaluator",
+      "category": "single_hop",
+      "question": "Promotion Core 使用了哪个 IndependentFinalEvaluator？",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/promotion-workflow-integration.md"],
+      "required_terms": ["Promotion Core", "IndependentFinalEvaluator"]
+    },
+    {
+      "id": "memory-rag-no-judge",
+      "category": "single_hop",
+      "question": "Memory/RAG 的 MVP 为什么不使用 Embedding 和 LLM Judge？",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/memory-rag-evaluation.md"],
+      "required_terms": ["LLM Judge", "Embedding"]
+    },
+    {
+      "id": "statistics-agent-boundary",
+      "category": "multi_source",
+      "question": "Manifest RunMeasurement 与 Provider 模拟结果分别如何保证实验结论可信？",
+      "expected_status": "answered",
+      "expected_source_paths": [
+        "docs/statistics-and-reports.md",
+        "docs/real-agent-evidence.md"
+      ],
+      "required_terms": ["Manifest", "RunMeasurement", "Provider", "模拟结果"]
+    },
+    {
+      "id": "trace-memory-boundary",
+      "category": "multi_source",
+      "question": "Trace Intelligence 的隐藏思维过程边界与 Memory/RAG 的 LLM Judge、Embedding 边界是什么？",
+      "expected_status": "answered",
+      "expected_source_paths": [
+        "docs/trace-intelligence.md",
+        "docs/memory-rag-evaluation.md"
+      ],
+      "required_terms": ["隐藏思维过程", "LLM Judge", "Embedding"]
+    },
+    {
+      "id": "evidence-promotion-boundary",
+      "category": "multi_source",
+      "question": "Skill Secret 的证据要求与 Promotion Core、IndependentFinalEvaluator 有什么关系？",
+      "expected_status": "answered",
+      "expected_source_paths": [
+        "docs/evidence-and-replay.md",
+        "docs/promotion-workflow-integration.md"
+      ],
+      "required_terms": ["Skill", "Secret", "Promotion Core", "IndependentFinalEvaluator"]
+    },
+    {
+      "id": "engine-failure-boundary",
+      "category": "multi_source",
+      "question": "Redis Celery 与 FailureEvidenceBundle 不重新运行分别解决什么问题？",
+      "expected_status": "answered",
+      "expected_source_paths": [
+        "docs/local-experiment-engine.md",
+        "docs/observed-failure-evidence-bridge.md"
+      ],
+      "required_terms": ["Redis", "Celery", "FailureEvidenceBundle", "不重新运行"]
+    },
+    {
+      "id": "statistics-rag-boundary",
+      "category": "multi_source",
+      "question": "统计器的 Manifest RunMeasurement 与 Memory/RAG 的 Embedding、LLM Judge 分别是什么？",
+      "expected_status": "answered",
+      "expected_source_paths": [
+        "docs/statistics-and-reports.md",
+        "docs/memory-rag-evaluation.md"
+      ],
+      "required_terms": ["Manifest", "RunMeasurement", "Embedding", "LLM Judge"]
+    },
+    {
+      "id": "unknown-kubernetes-capacity",
+      "category": "unanswerable",
+      "question": "这个项目的 Kubernetes 集群有几个节点？",
+      "expected_status": "unknown"
+    },
+    {
+      "id": "unknown-author-birthday",
+      "category": "unanswerable",
+      "question": "作者的生日是什么？",
+      "expected_status": "unknown"
+    },
+    {
+      "id": "unknown-gpu-model",
+      "category": "unanswerable",
+      "question": "系统使用什么 GPU 型号训练模型？",
+      "expected_status": "unknown"
+    },
+    {
+      "id": "unknown-sharding-key",
+      "category": "unanswerable",
+      "question": "数据库分片键应该如何选择？",
+      "expected_status": "unknown"
+    },
+    {
+      "id": "unknown-frontend-framework",
+      "category": "unanswerable",
+      "question": "前端页面使用 React 还是 Vue？",
+      "expected_status": "unknown"
+    },
+    {
+      "id": "paraphrase-statistics",
+      "category": "paraphrase",
+      "question": "怎样核验实验统计不是模拟出来的？",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/statistics-and-reports.md"],
+      "required_terms": ["Manifest", "RunMeasurement"]
+    },
+    {
+      "id": "paraphrase-trace",
+      "category": "paraphrase",
+      "question": "Trace Intelligence 会不会把模型的隐藏思维过程保存下来？",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/trace-intelligence.md"],
+      "required_terms": ["隐藏思维过程", "unavailable"]
+    },
+    {
+      "id": "paraphrase-real-agent",
+      "category": "paraphrase",
+      "question": "真实 Agent 评测是否另外搭建 Provider 编排系统？",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/real-agent-evidence.md"],
+      "required_terms": ["Provider", "模拟结果"]
+    },
+    {
+      "id": "paraphrase-evidence",
+      "category": "paraphrase",
+      "question": "只写了 Skill 配置，为什么还不能说明它真的运行过？",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/evidence-and-replay.md"],
+      "required_terms": ["Skill", "Secret"]
+    },
+    {
+      "id": "paraphrase-failure",
+      "category": "paraphrase",
+      "question": "Observed Failure Evidence Bridge 会再次执行 Agent 来补证据吗？",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/observed-failure-evidence-bridge.md"],
       "required_terms": ["FailureEvidenceBundle", "不重新运行"]
     }
   ]

@@ -23,6 +23,7 @@ _FOOTNOTE = re.compile(
     r"revision `(?P<source_version>\d+)` · `(?P<locator>chars:\d+-\d+)`$",
     re.MULTILINE,
 )
+_RELATED_PAGE_LINK = re.compile(r"^- \[[^\]]+\]\((?P<path>[^)]+\.md)\)$", re.MULTILINE)
 _PAGE_TYPES = {"entity", "concept", "synthesis"}
 
 
@@ -90,8 +91,20 @@ def lint_workspace(workspace_root: Path) -> LintPayload:
                 str(path.relative_to(workspace_root)),
                 "page must be a real Markdown file inside wiki/pages",
             )
-        )
+    )
     page_paths = {str(path.relative_to(workspace_root)) for path in pages}
+    linked_paths: set[str] = set()
+    for path in pages:
+        relative_path = str(path.relative_to(workspace_root))
+        try:
+            content = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        linked_paths.update(
+            target
+            for target in _related_page_paths(relative_path, content)
+            if target in page_paths
+        )
 
     try:
         for path in pages:
@@ -136,6 +149,8 @@ def lint_workspace(workspace_root: Path) -> LintPayload:
                             "frontmatter sources do not match the applied source-to-page mapping",
                         )
                     )
+                else:
+                    _lint_source_freshness(index, relative_path, source_ids, issues)
                 _lint_citations(
                     workspace_root,
                     index,
@@ -144,6 +159,7 @@ def lint_workspace(workspace_root: Path) -> LintPayload:
                     set(source_ids),
                     issues,
                 )
+            _lint_related_page_links(relative_path, content, page_paths, issues)
             if relative_path not in indexed_paths:
                 issues.append(
                     _issue(
@@ -152,6 +168,14 @@ def lint_workspace(workspace_root: Path) -> LintPayload:
                         "page is absent from wiki/INDEX.md",
                     )
                 )
+                if relative_path not in linked_paths:
+                    issues.append(
+                        _issue(
+                            "orphan_page",
+                            relative_path,
+                            "page is neither indexed nor linked by another page",
+                        )
+                    )
     except sqlite3.Error:
         issues.append(
             _issue(
@@ -308,6 +332,80 @@ def _lint_citations(
                 f"page has no citation for declared source: {source_id}",
             )
         )
+
+
+def _lint_source_freshness(
+    index: sqlite3.Connection,
+    page_path: str,
+    source_ids: tuple[str, ...],
+    issues: list[LintIssue],
+) -> None:
+    """Report pages whose declared sources are deleted or newer than their Wiki copy."""
+    for source_id in source_ids:
+        row = index.execute(
+            """
+            SELECT current_version.id AS current_version, applied.source_version_id
+            FROM sources AS s
+            LEFT JOIN source_versions AS current_version
+              ON current_version.source_id = s.id AND current_version.is_current = 1
+            LEFT JOIN applied_source_versions AS applied ON applied.source_id = s.source_id
+            WHERE s.source_id = ?
+            """,
+            (source_id,),
+        ).fetchone()
+        if row is None or row["current_version"] is None:
+            issues.append(
+                _issue(
+                    "cleanup_required",
+                    page_path,
+                    f"declared source no longer has a current version: {source_id}",
+                )
+            )
+        elif row["current_version"] != row["source_version_id"]:
+            issues.append(
+                _issue(
+                    "source_needs_recompile",
+                    page_path,
+                    f"declared source has a newer version: {source_id}",
+                )
+            )
+
+
+def _lint_related_page_links(
+    page_path: str,
+    content: str,
+    page_paths: set[str],
+    issues: list[LintIssue],
+) -> None:
+    for match in _RELATED_PAGE_LINK.finditer(content):
+        target = match.group("path")
+        if "/" in target or target.startswith("."):
+            issues.append(
+                _issue(
+                    "invalid_related_link",
+                    page_path,
+                    f"related page link must stay in wiki/pages: {target}",
+                )
+            )
+        elif f"wiki/pages/{target}" not in page_paths:
+            issues.append(
+                _issue(
+                    "related_page_missing",
+                    page_path,
+                    f"related page does not exist: wiki/pages/{target}",
+                )
+            )
+
+
+def _related_page_paths(page_path: str, content: str) -> tuple[str, ...]:
+    """Return valid same-directory Wiki page targets for orphan detection."""
+    _ = page_path
+    return tuple(
+        f"wiki/pages/{target}"
+        for match in _RELATED_PAGE_LINK.finditer(content)
+        for target in (match.group("path"),)
+        if "/" not in target and not target.startswith(".")
+    )
 
 
 def _open_readonly_index(workspace_root: Path) -> sqlite3.Connection:

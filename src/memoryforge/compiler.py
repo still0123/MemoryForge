@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 import sqlite3
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal, cast
 
@@ -15,7 +16,9 @@ from memoryforge.models import (
     ChangeOperationType,
     ChangeSet,
     ChangeSetStatus,
+    CompilationPlan,
     PageChange,
+    PlannedPage,
     Sensitivity,
     TopicGroup,
     validate_llm_body,
@@ -23,7 +26,12 @@ from memoryforge.models import (
     validate_llm_title,
 )
 from memoryforge.provider import OpenAICompatibleProvider
-from memoryforge.workspace import Workspace, list_git_checkouts
+from memoryforge.query import EvidencePayload
+from memoryforge.workspace import (
+    Workspace,
+    candidate_page_sources,
+    list_git_checkouts,
+)
 
 PageType = Literal["entity", "concept", "synthesis"]
 _PAGE_TYPES: tuple[PageType, ...] = ("entity", "concept", "synthesis")
@@ -62,6 +70,9 @@ _INDEX_ENTRY = re.compile(
     r"- \[(?P<title>(?:\\.|[^\]])+)\]"
     r"\((?P<path>[^)]+)\) — (?P<summary>.+)"
 )
+_WORDS = re.compile(r"[a-z0-9]+|[\u4e00-\u9fff]+", re.IGNORECASE)
+_CJK = re.compile(r"^[\u4e00-\u9fff]+$")
+_RELATED_PAGE_LINK = re.compile(r"^- \[[^\]]+\]\((?P<path>[^)]+\.md)\)$", re.MULTILINE)
 
 
 @dataclass(frozen=True)
@@ -101,16 +112,46 @@ class RoutedPage:
     source_ids: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class StalePage:
+    path: str
+    stale_source_ids: tuple[str, ...]
+    current_source_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class PageCard:
+    """A small existing-Wiki card that a compiler can extend, not rewrite blindly."""
+
+    path: str
+    title: str
+    summary: str
+    source_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class AgentUpdateCandidate:
+    path: str
+    summary: PageSummary
+    source_ids: tuple[str, ...]
+    content: str
+    sources: tuple[CurrentSource, ...]
+
+
 def compile_pending_sources(
     workspace: Workspace,
     *,
     source_ids: tuple[str, ...] = (),
     provider: OpenAICompatibleProvider | None = None,
+    allow_local: bool = False,
 ) -> Compilation | None:
     """Compile pending local sources into a reviewable Wiki ChangeSet."""
     selected = set(source_ids)
     _require_known_sources(workspace, selected)
     pending = _load_pending_sources(workspace, selected)
+    stale_pages = _stale_pages(workspace, selected)
+    if stale_pages:
+        return _compile_stale_pages(workspace, stale_pages)
     if not pending:
         return _compile_missing_repository_overviews(workspace) if not selected else None
 
@@ -120,12 +161,21 @@ def compile_pending_sources(
         for routed_page in routed_pages
         for source_id in routed_page.source_ids
     }
-    compilation_sources = _load_current_sources(
-        workspace,
-        {source.source_id for source in pending} | routed_source_ids,
-    )
+    compilation_source_ids = {source.source_id for source in pending} | routed_source_ids
+    candidate_pages: tuple[PageCard, ...] = ()
+    if provider is not None:
+        candidate_pages = _candidate_pages_for_pending_sources(
+            workspace,
+            pending,
+            routed_pages,
+            allow_local=allow_local,
+        )
+        compilation_source_ids.update(
+            source_id for page in candidate_pages for source_id in page.source_ids
+        )
+    compilation_sources = _load_current_sources(workspace, compilation_source_ids)
     loaded_source_ids = {source.source_id for source in compilation_sources}
-    expected_source_ids = {source.source_id for source in pending} | routed_source_ids
+    expected_source_ids = compilation_source_ids
     if loaded_source_ids != expected_source_ids:
         raise ValueError("recorded Wiki page ownership has no current source version")
 
@@ -135,16 +185,18 @@ def compile_pending_sources(
             for source in compilation_sources
             if source.sensitivity is Sensitivity.LOCAL_ONLY
         ]
-        if local_only:
+        if local_only and not allow_local:
             raise ValueError(
                 "LLM compilation cannot include local_only sources: "
                 + ", ".join(local_only)
             )
         return _compile_with_provider(
             workspace,
+            pending,
             compilation_sources,
             provider,
             routed_pages=routed_pages,
+            candidate_pages=candidate_pages,
         )
 
     return _compile_deterministically(workspace, compilation_sources, routed_pages)
@@ -358,51 +410,304 @@ def _compile_missing_repository_overviews(workspace: Workspace) -> Compilation |
     )
 
 
+def _stale_pages(workspace: Workspace, selected: set[str]) -> tuple[StalePage, ...]:
+    """Find applied pages that still own a source without a current version."""
+    connection = sqlite3.connect(workspace.index_path)
+    connection.row_factory = sqlite3.Row
+    try:
+        rows = connection.execute(
+            """
+            SELECT ps.page_path, ps.source_id, current_version.id AS current_version
+            FROM page_sources AS ps
+            JOIN sources AS source ON source.source_id = ps.source_id
+            LEFT JOIN source_versions AS current_version
+              ON current_version.source_id = source.id AND current_version.is_current = 1
+            ORDER BY ps.page_path, ps.source_id
+            """
+        ).fetchall()
+    finally:
+        connection.close()
+
+    grouped: dict[str, tuple[list[str], list[str]]] = {}
+    for row in rows:
+        page_path = str(row["page_path"])
+        stale_ids, current_ids = grouped.setdefault(page_path, ([], []))
+        if row["current_version"] is None:
+            stale_ids.append(str(row["source_id"]))
+        else:
+            current_ids.append(str(row["source_id"]))
+
+    pages: list[StalePage] = []
+    for path in sorted(grouped):
+        stale_ids, current_ids = grouped[path]
+        if stale_ids and (not selected or set(stale_ids) & selected):
+            pages.append(
+                StalePage(
+                    path=path,
+                    stale_source_ids=tuple(stale_ids),
+                    current_source_ids=tuple(current_ids),
+                )
+            )
+    return tuple(pages)
+
+
+def _compile_stale_pages(
+    workspace: Workspace,
+    stale_pages: tuple[StalePage, ...],
+) -> Compilation:
+    """Propose archive/rebuild operations for pages with deleted sources."""
+    current_sources = _load_current_sources(workspace, set())
+    sources_by_id = {source.source_id: source for source in current_sources}
+    candidate_files: dict[str, str] = {}
+    operations: list[ChangeOperation] = []
+    removed_paths: set[str] = set()
+    active_source_ids: list[str] = []
+    page_groups: list[tuple[str, list[CurrentSource]]] = []
+
+    for stale_page in stale_pages:
+        if not stale_page.current_source_ids:
+            operations.append(
+                ChangeOperation(
+                    type=ChangeOperationType.ARCHIVE_PAGE,
+                    path=stale_page.path,
+                )
+            )
+            removed_paths.add(stale_page.path)
+            continue
+
+        page_sources = [sources_by_id[source_id] for source_id in stale_page.current_source_ids]
+        page_groups.append((stale_page.path, page_sources))
+        active_source_ids.extend(source.source_id for source in page_sources)
+        if len(page_sources) == 1:
+            source = page_sources[0]
+            content = _read_source_text(workspace, source)
+            if "code" in source.tags:
+                candidate_files[stale_page.path] = _render_code_page(source, content)
+            else:
+                quote, start = _first_meaningful_paragraph(content)
+                candidate_files[stale_page.path] = _render_page(
+                    source,
+                    quote,
+                    f"chars:{start}-{start + len(quote)}",
+                )
+        else:
+            candidate_files[stale_page.path] = _render_deterministic_group_page(
+                workspace,
+                page_sources,
+            )
+        operations.append(
+            ChangeOperation(
+                type=ChangeOperationType.UPDATE_PAGE,
+                path=stale_page.path,
+            )
+        )
+
+    repository_ids = _repository_ids_for_sources(
+        workspace,
+        {source_id for page in stale_pages for source_id in page.stale_source_ids},
+    )
+    candidate_paths = {
+        source.source_id: page_path
+        for page_path, page_sources in page_groups
+        for source in page_sources
+    }
+    for repository_id in sorted(repository_ids):
+        repository_sources = [
+            source for source in current_sources if source.repository_id == repository_id
+        ]
+        links = _repository_links(workspace, repository_sources, candidate_paths)
+        overview_path = _repository_overview_path(repository_id)
+        if links:
+            candidate_files[overview_path] = _render_repository_overview(
+                repository_id,
+                links,
+                _existing_repository_topics(workspace, repository_id, links),
+            )
+            operations.append(
+                ChangeOperation(
+                    type=(
+                        ChangeOperationType.UPDATE_PAGE
+                        if (workspace.root / overview_path).is_file()
+                        else ChangeOperationType.CREATE_PAGE
+                    ),
+                    path=overview_path,
+                )
+            )
+        elif (workspace.root / overview_path).is_file():
+            removed_paths.add(overview_path)
+            operations.append(
+                ChangeOperation(
+                    type=ChangeOperationType.ARCHIVE_PAGE,
+                    path=overview_path,
+                )
+            )
+
+    index_path = "wiki/INDEX.md"
+    candidate_files[index_path] = _render_index(
+        workspace,
+        candidate_files,
+        removed_paths=removed_paths,
+    )
+    operations.append(
+        ChangeOperation(
+            type=(
+                ChangeOperationType.UPDATE_PAGE
+                if (workspace.root / index_path).is_file()
+                else ChangeOperationType.CREATE_PAGE
+            ),
+            path=index_path,
+        )
+    )
+    _add_relations_page(
+        workspace,
+        candidate_files,
+        operations,
+        removed_paths=removed_paths,
+    )
+
+    active_source_ids = list(dict.fromkeys(active_source_ids))
+    base_commit = workspace.current_commit()
+    identity = "\n".join(
+        [
+            base_commit,
+            "stale-pages",
+            *(
+                f"{page.path}:{','.join(page.stale_source_ids)}"
+                f"->{','.join(page.current_source_ids)}"
+                for page in stale_pages
+            ),
+        ]
+    )
+    return Compilation(
+        changeset=ChangeSet(
+            changeset_id="chg_" + hashlib.sha256(identity.encode()).hexdigest()[:20],
+            base_commit=base_commit,
+            source_ids=tuple(active_source_ids),
+            source_versions={
+                source_id: sources_by_id[source_id].source_version
+                for source_id in active_source_ids
+            },
+            status=ChangeSetStatus.PROPOSED,
+            operations=tuple(operations),
+        ),
+        candidate_files=candidate_files,
+    )
+
+
+def _repository_ids_for_sources(workspace: Workspace, source_ids: set[str]) -> tuple[str, ...]:
+    if not source_ids:
+        return ()
+    placeholders = ", ".join("?" for _ in source_ids)
+    connection = sqlite3.connect(workspace.index_path)
+    try:
+        rows = connection.execute(
+            f"""
+            SELECT DISTINCT revisions.repository_id
+            FROM git_source_revisions AS revisions
+            JOIN source_versions AS versions ON versions.id = revisions.source_version_id
+            JOIN sources AS sources ON sources.id = versions.source_id
+            WHERE sources.source_id IN ({placeholders})
+            """,
+            tuple(source_ids),
+        ).fetchall()
+    finally:
+        connection.close()
+    return tuple(sorted(str(row[0]) for row in rows))
+
+
 def _compile_with_provider(
     workspace: Workspace,
     pending: list[CurrentSource],
+    available_sources: list[CurrentSource],
     provider: OpenAICompatibleProvider,
     *,
     routed_pages: tuple[RoutedPage, ...] = (),
+    candidate_pages: tuple[PageCard, ...] = (),
 ) -> Compilation:
-    source_texts = {source.source_id: _read_source_text(workspace, source) for source in pending}
-    messages = _llm_messages(pending, source_texts)
+    source_texts = {
+        source.source_id: _read_source_text(workspace, source) for source in available_sources
+    }
+    prompt_context = workspace.prompt_context()
+    plan_provider = getattr(provider, "plan_pages", None)
+    plan: CompilationPlan | None = None
+    if plan_provider is not None:
+        plan = plan_provider(
+            _planning_messages(
+                pending,
+                source_texts,
+                candidate_pages,
+                routed_source_ids={
+                    source_id for page in routed_pages for source_id in page.source_ids
+                },
+                prompt_context=prompt_context,
+            )
+        )
+        _validate_compilation_plan(
+            plan,
+            pending_ids={source.source_id for source in pending},
+            available_source_ids={source.source_id for source in available_sources},
+        )
+    messages = _llm_messages(
+        pending,
+        source_texts,
+        candidate_pages,
+        routed_source_ids={
+            source_id for page in routed_pages for source_id in page.source_ids
+        },
+        plan=plan,
+        prompt_context=prompt_context,
+    )
     changes = provider.compile_pages(messages)
-    pending_by_id = {source.source_id: source for source in pending}
+    sources_by_id = {source.source_id: source for source in available_sources}
     _validate_llm_changes(
         workspace,
         changes,
-        pending_by_id,
-        source_texts,
+        pending_ids={source.source_id for source in pending},
+        available_source_ids=set(sources_by_id),
+        source_texts=source_texts,
         routed_pages=routed_pages,
+        candidate_pages=candidate_pages,
     )
 
     operations: list[ChangeOperation] = []
     candidate_files: dict[str, str] = {}
     used_source_ids: list[str] = []
     for change in changes:
-        page_sources = [pending_by_id[source_id] for source_id in change.source_ids]
-        page_path = _target_page_path(change, routed_pages)
+        page_sources = [sources_by_id[source_id] for source_id in change.source_ids]
+        page_path = _target_page_path(
+            change,
+            routed_pages,
+            candidate_pages,
+            pending_ids={source.source_id for source in pending},
+        )
         if page_path in candidate_files:
             raise ValueError(f"provider returned duplicate page ownership: {page_path}")
         candidate_files[page_path] = _render_llm_page(
             change,
             page_sources,
             source_texts,
+            related_pages=tuple(page for page in candidate_pages if page.path != page_path),
         )
         operation_type = (
             ChangeOperationType.UPDATE_PAGE
             if (workspace.root / page_path).is_file()
             else ChangeOperationType.CREATE_PAGE
         )
-        operations.append(ChangeOperation(type=operation_type, path=page_path))
+        details = {}
+        if plan is not None:
+            details["compilation_plan"] = _plan_for_path(
+                plan,
+                page_path,
+                source_ids=change.source_ids,
+            ).model_dump(mode="json")
+        operations.append(ChangeOperation(type=operation_type, path=page_path, details=details))
         used_source_ids.extend(change.source_ids)
 
     if not candidate_files:
         raise ValueError("provider returned no PageChange proposals")
 
     used_source_ids = list(dict.fromkeys(used_source_ids))
-    used_sources = [pending_by_id[source_id] for source_id in used_source_ids]
+    used_sources = [sources_by_id[source_id] for source_id in used_source_ids]
     index_path = "wiki/INDEX.md"
     index_target = workspace.root / index_path
     operations.append(
@@ -416,17 +721,21 @@ def _compile_with_provider(
         )
     )
     candidate_files[index_path] = _render_index(workspace, candidate_files)
+    _add_relations_page(workspace, candidate_files, operations)
 
     base_commit = workspace.current_commit()
+    pending_ids = {source.source_id for source in pending}
+    page_identities = [
+        f"{_target_page_path(change, routed_pages, candidate_pages, pending_ids=pending_ids)}:"
+        f"{change.title}"
+        for change in changes
+    ]
     identity = "\n".join(
         [
             base_commit,
             "llm",
             *(f"{source.source_id}:{source.source_version}" for source in used_sources),
-            *(
-                f"{_target_page_path(change, routed_pages)}:{change.title}"
-                for change in changes
-            ),
+            *page_identities,
         ]
     )
     changeset_id = "chg_" + hashlib.sha256(identity.encode()).hexdigest()[:20]
@@ -446,6 +755,11 @@ def _compile_with_provider(
 def _llm_messages(
     pending: list[CurrentSource],
     source_texts: dict[str, str],
+    candidate_pages: tuple[PageCard, ...],
+    *,
+    routed_source_ids: set[str],
+    plan: CompilationPlan | None = None,
+    prompt_context: str = "",
 ) -> tuple[dict[str, str], ...]:
     source_blocks = []
     for source in pending:
@@ -455,37 +769,141 @@ def _llm_messages(
             f"CATEGORY: {source.category}\n"
             f"CONTENT:\n{source_texts[source.source_id]}"
         )
+    pending_ids = {source.source_id for source in pending}
+    routed_context = "\n\n---\n\n".join(
+        f"SOURCE_ID: {source_id}\nCONTENT:\n{source_text}"
+        for source_id, source_text in source_texts.items()
+        if source_id in routed_source_ids and source_id not in pending_ids
+    )
+    cards = "\n\n".join(
+        "\n".join(
+            [
+                f"PATH: {page.path}",
+                f"TITLE: {page.title}",
+                f"SUMMARY: {page.summary}",
+                f"SOURCES: {','.join(page.source_ids)}",
+            ]
+        )
+        for page in candidate_pages
+    )
+    workspace_context = (
+        "\n\nWORKSPACE CONTRACT:\n" + prompt_context if prompt_context else ""
+    )
+    plan_context = (
+        "\n\nCOMPILATION PLAN:\n"
+        + json.dumps(plan.model_dump(mode="json"), ensure_ascii=False)
+        if plan is not None
+        else ""
+    )
     return (
         {
             "role": "system",
             "content": (
                 "You propose concise Markdown Wiki page changes. Return JSON with "
-                "{\"changes\":[...]} matching the PageChange contract. Use only the "
-                "provided pending source IDs. Paths must be wiki/pages/<filename>.md. "
+                "{\"changes\":[...]} matching the PageChange contract. Every pending source "
+                "must appear in exactly one change. You may extend one existing page card by "
+                "including all of its listed source IDs plus relevant pending sources; do not "
+                "move sources between existing pages. Paths must be wiki/pages/<filename>.md. "
                 "Do not return frontmatter in body; the local compiler adds it. "
                 "Every citation locator must be a character range in its source. "
                 "Return no INDEX or raw file changes."
+                + workspace_context
             ),
         },
         {
             "role": "user",
-            "content": (
-                "PENDING SOURCES:\n"
-                + "\n\n---\n\n".join(source_blocks)
-            ),
+            "content": "PENDING SOURCES:\n"
+            + "\n\n---\n\n".join(source_blocks)
+            + (
+                "\n\nEXISTING SOURCE CONTEXT (only use it when preserving an existing "
+                "source group):\n"
+                + routed_context
+                if routed_context
+                else ""
+            )
+            + ("\n\nEXISTING PAGE CARDS:\n" + cards if cards else "")
+            + plan_context,
         },
     )
+
+
+def _planning_messages(
+    pending: list[CurrentSource],
+    source_texts: dict[str, str],
+    candidate_pages: tuple[PageCard, ...],
+    *,
+    routed_source_ids: set[str],
+    prompt_context: str,
+) -> tuple[dict[str, str], ...]:
+    base = _llm_messages(
+        pending,
+        source_texts,
+        candidate_pages,
+        routed_source_ids=routed_source_ids,
+        prompt_context=prompt_context,
+    )
+    return (
+        {
+            "role": "system",
+            "content": (
+                "Return JSON with a plan object matching the CompilationPlan contract. "
+                "List every pending source exactly once, choose create or update, and explain "
+                "the routing in one short reason. Do not write Markdown or hidden reasoning."
+                + ("\n\nWORKSPACE CONTRACT:\n" + prompt_context if prompt_context else "")
+            ),
+        },
+        base[1],
+    )
+
+
+def _validate_compilation_plan(
+    plan: CompilationPlan,
+    *,
+    pending_ids: set[str],
+    available_source_ids: set[str],
+) -> None:
+    planned_ids = [source_id for page in plan.pages for source_id in page.source_ids]
+    if set(planned_ids) != pending_ids:
+        missing = sorted(pending_ids - set(planned_ids))
+        extra = sorted(set(planned_ids) - pending_ids)
+        message = "CompilationPlan source coverage mismatch"
+        if missing:
+            message += "; missing: " + ", ".join(missing)
+        if extra:
+            message += "; unsupported: " + ", ".join(extra)
+        raise ValueError(message)
+    if len(planned_ids) != len(set(planned_ids)):
+        raise ValueError("CompilationPlan must assign each pending source exactly once")
+    if not set(planned_ids) <= available_source_ids:
+        raise ValueError("CompilationPlan references an unavailable source")
+
+
+def _plan_for_path(
+    plan: CompilationPlan,
+    path: str,
+    *,
+    source_ids: tuple[str, ...],
+) -> PlannedPage:
+    for page in plan.pages:
+        if page.path == path:
+            return page
+    source_set = set(source_ids)
+    for page in plan.pages:
+        if set(page.source_ids) == source_set:
+            return page
+    raise ValueError(f"CompilationPlan has no entry for generated page: {path}")
 
 
 def _validate_llm_changes(
     workspace: Workspace,
     changes: tuple[PageChange, ...],
-    pending: dict[str, CurrentSource],
-    source_texts: dict[str, str],
     *,
+    pending_ids: set[str],
+    available_source_ids: set[str],
+    source_texts: dict[str, str],
     routed_pages: tuple[RoutedPage, ...] = (),
+    candidate_pages: tuple[PageCard, ...] = (),
 ) -> None:
-    pending_ids = set(pending)
     covered_source_ids: set[str] = set()
     for change in changes:
         if change.path == "wiki/INDEX.md" or not change.path.startswith("wiki/pages/"):
@@ -504,26 +922,50 @@ def _validate_llm_changes(
             raise ValueError(
                 f"provider returned reserved page body content: {change.path}"
             ) from exc
-        if not set(change.source_ids) <= pending_ids:
-            raise ValueError(f"provider referenced a non-pending source: {change.path}")
+        change_source_ids = set(change.source_ids)
+        if not change_source_ids <= available_source_ids:
+            raise ValueError(f"provider referenced an unavailable source: {change.path}")
         duplicate_source_ids = covered_source_ids & set(change.source_ids)
         if duplicate_source_ids:
             listed = ", ".join(sorted(duplicate_source_ids))
             raise ValueError(f"provider assigned a source to multiple Wiki pages: {listed}")
         covered_source_ids.update(change.source_ids)
-        if not {citation.source_id for citation in change.citations} <= pending_ids:
+        if not {citation.source_id for citation in change.citations} <= available_source_ids:
             raise ValueError(
-                f"provider returned a citation for a non-pending source: {change.path}"
+                f"provider returned a citation for an unavailable source: {change.path}"
             )
         for citation in change.citations:
             source_text = source_texts[citation.source_id]
             start, end = _locator_range(citation.locator)
             if end > len(source_text):
                 raise ValueError(f"provider returned an out-of-range citation: {citation.locator}")
+        matching_routed_pages = [
+            page for page in routed_pages if change_source_ids & set(page.source_ids)
+        ]
+        if matching_routed_pages:
+            if len(matching_routed_pages) != 1 or change_source_ids != set(
+                matching_routed_pages[0].source_ids
+            ):
+                raise ValueError("provider cannot change an existing Wiki page ownership group")
+            expected_existing_sources = matching_routed_pages[0].source_ids
+        else:
+            existing_source_ids = change_source_ids - pending_ids
+            matching_cards = [
+                page for page in candidate_pages if set(page.source_ids) == existing_source_ids
+            ]
+            if existing_source_ids and len(matching_cards) != 1:
+                raise ValueError("provider can only extend a supplied existing Wiki page")
+            expected_existing_sources = matching_cards[0].source_ids if matching_cards else ()
         _validate_page_ownership(
             workspace,
             change,
-            _target_page_path(change, routed_pages),
+            _target_page_path(
+                change,
+                routed_pages,
+                candidate_pages,
+                pending_ids=pending_ids,
+            ),
+            expected_existing_sources=expected_existing_sources,
         )
     for routed_page in routed_pages:
         if not any(
@@ -533,7 +975,7 @@ def _validate_llm_changes(
                 "provider must update each routed Wiki page with exactly its existing "
                 f"sources: {routed_page.path}"
             )
-    if covered_source_ids != pending_ids:
+    if covered_source_ids & pending_ids != pending_ids:
         omitted = ", ".join(sorted(pending_ids - covered_source_ids))
         raise ValueError(f"provider omitted pending sources: {omitted}")
 
@@ -542,6 +984,8 @@ def _validate_page_ownership(
     workspace: Workspace,
     change: PageChange,
     canonical_path: str | None = None,
+    *,
+    expected_existing_sources: tuple[str, ...] = (),
 ) -> None:
     """Reject an LLM update when the existing page belongs to other sources."""
     path = canonical_path or change.path
@@ -562,7 +1006,7 @@ def _validate_page_ownership(
         isinstance(source_id, str) for source_id in decoded
     ):
         raise ValueError(f"existing Wiki page has invalid sources ownership: {path}")
-    if set(decoded) != set(change.source_ids):
+    if set(decoded) != set(expected_existing_sources):
         raise ValueError(
             f"provider cannot update Wiki page owned by different sources: {path}"
         )
@@ -579,6 +1023,8 @@ def _render_llm_page(
     change: PageChange,
     sources: list[CurrentSource],
     source_texts: dict[str, str],
+    *,
+    related_pages: tuple[PageCard, ...] = (),
 ) -> str:
     source_ids = tuple(source.source_id for source in sources)
     tags = tuple(dict.fromkeys(source.category for source in sources))
@@ -599,9 +1045,18 @@ def _render_llm_page(
         "",
         change.body.rstrip(),
         "",
+    ]
+    if related_pages:
+        lines.extend(["## Related pages", ""])
+        for page in related_pages:
+            lines.append(f"- [{_escape_link_text(page.title)}]({page.path.rsplit('/', 1)[-1]})")
+        lines.append("")
+    lines.extend(
+        [
         "## Verified facts",
         "",
-    ]
+        ]
+    )
     for index, citation in enumerate(change.citations):
         footnote = f"source-{index + 1}-{citation.source_id[:8]}"
         quote = _citation_excerpt(citation.locator, citation.source_id, source_texts)
@@ -644,6 +1099,201 @@ def compilation_payload(stored: StoredChangeSet) -> dict[str, object]:
         "status": stored.changeset.status.value,
         "files": files,
     }
+
+
+def propose_agent_update(
+    workspace: Workspace,
+    *,
+    question: str,
+    answer: str,
+    evidence: Sequence[EvidencePayload],
+    wiki_pages: Sequence[str],
+    provider: OpenAICompatibleProvider,
+    allow_local: bool = False,
+) -> Compilation | None:
+    """Turn one evidence-backed Agent answer into a reviewable page proposal."""
+    if not answer.strip() or answer.strip() == "不知道" or not evidence or not wiki_pages:
+        return None
+
+    evidence_versions = {item["source_id"]: item["source_version"] for item in evidence}
+    candidates: list[AgentUpdateCandidate] = []
+    for path in dict.fromkeys(wiki_pages):
+        if not path.startswith("wiki/pages/"):
+            continue
+        page = workspace.root / path
+        if not page.is_file() or page.is_symlink():
+            continue
+        content = page.read_text(encoding="utf-8")
+        summary = _parse_page_summary(path, content)
+        page_sources = candidate_page_sources({path: content}).get(path)
+        if summary is None or not page_sources:
+            continue
+        if not set(page_sources) <= set(evidence_versions):
+            continue
+        loaded = _load_current_sources(workspace, set(page_sources))
+        sources_by_id = {source.source_id: source for source in loaded}
+        if set(sources_by_id) != set(page_sources):
+            continue
+        sources = tuple(sources_by_id[source_id] for source_id in page_sources)
+        if any(source.source_version != evidence_versions[source.source_id] for source in sources):
+            continue
+        if (
+            any(source.sensitivity is Sensitivity.LOCAL_ONLY for source in sources)
+            and not allow_local
+        ):
+            continue
+        candidates.append(
+            AgentUpdateCandidate(
+                path=path,
+                summary=summary,
+                source_ids=page_sources,
+                content=content,
+                sources=sources,
+            )
+        )
+
+    if not candidates:
+        return None
+    candidate = min(
+        candidates,
+        key=lambda item: (
+            {"synthesis": 0, "concept": 1, "entity": 2}[item.summary.page_type],
+            item.path,
+        ),
+    )
+    source_texts = {
+        source.source_id: _read_source_text(workspace, source) for source in candidate.sources
+    }
+    change = provider.propose_update(
+        _agent_update_messages(
+            question,
+            answer,
+            evidence,
+            candidate,
+            prompt_context=workspace.prompt_context(),
+        )
+    )
+    if change is None:
+        return None
+    _validate_agent_update(change, candidate, evidence, source_texts)
+
+    candidate_files = {
+        candidate.path: _render_llm_page(
+            change,
+            list(candidate.sources),
+            source_texts,
+        )
+    }
+    if candidate_files[candidate.path] == candidate.content:
+        return None
+    operations = [
+        ChangeOperation(
+            type=ChangeOperationType.UPDATE_PAGE,
+            path=candidate.path,
+            details={"origin": "agent", "question": question},
+        )
+    ]
+    index_path = "wiki/INDEX.md"
+    candidate_files[index_path] = _render_index(workspace, candidate_files)
+    operations.append(ChangeOperation(type=ChangeOperationType.UPDATE_PAGE, path=index_path))
+    _add_relations_page(workspace, candidate_files, operations)
+
+    base_commit = workspace.current_commit()
+    identity = "\n".join(
+        [
+            base_commit,
+            "agent-update",
+            question,
+            candidate.path,
+            *(f"{source.source_id}:{source.source_version}" for source in candidate.sources),
+            change.body,
+        ]
+    )
+    changeset_id = "chg_" + hashlib.sha256(identity.encode()).hexdigest()[:20]
+    return Compilation(
+        changeset=ChangeSet(
+            changeset_id=changeset_id,
+            base_commit=base_commit,
+            source_ids=candidate.source_ids,
+            source_versions={
+                source.source_id: source.source_version for source in candidate.sources
+            },
+            status=ChangeSetStatus.PROPOSED,
+            operations=tuple(operations),
+        ),
+        candidate_files=candidate_files,
+    )
+
+
+def _agent_update_messages(
+    question: str,
+    answer: str,
+    evidence: Sequence[EvidencePayload],
+    candidate: AgentUpdateCandidate,
+    *,
+    prompt_context: str,
+) -> tuple[dict[str, str], ...]:
+    evidence_payload = [
+        {
+            "source_id": item["source_id"],
+            "locator": item["locator"],
+            "text": item["text"][:2000],
+        }
+        for item in evidence
+    ]
+    return (
+        {
+            "role": "system",
+            "content": (
+                "You propose one concise Wiki page update from an answered question. Return "
+                'JSON as {"change": null} or {"change": PageChange}. Update exactly the '
+                f"candidate path {candidate.path}. Keep page type {candidate.summary.page_type}. "
+                "Use only the supplied evidence, and cite every source ID in the change. "
+                "Do not return frontmatter, Verified facts, Sources, or footnote markers in body. "
+                "If the answer is not worth retaining, return null."
+                + ("\n\nWORKSPACE CONTRACT:\n" + prompt_context if prompt_context else "")
+            ),
+        },
+        {
+            "role": "user",
+            "content": json.dumps(
+                {
+                    "question": question,
+                    "answer": answer,
+                    "evidence": evidence_payload,
+                    "candidate_page": {
+                        "path": candidate.path,
+                        "title": candidate.summary.title,
+                        "type": candidate.summary.page_type,
+                        "summary": candidate.summary.summary,
+                        "content": candidate.content[:8000],
+                    },
+                },
+                ensure_ascii=False,
+            ),
+        },
+    )
+
+
+def _validate_agent_update(
+    change: PageChange,
+    candidate: AgentUpdateCandidate,
+    evidence: Sequence[EvidencePayload],
+    source_texts: dict[str, str],
+) -> None:
+    if change.path != candidate.path:
+        raise ValueError("agent update must keep the selected Wiki page path")
+    if change.page_type != candidate.summary.page_type:
+        raise ValueError("agent update must keep the selected Wiki page type")
+    if set(change.source_ids) != set(candidate.source_ids):
+        raise ValueError("agent update must keep the selected Wiki page sources")
+    evidence_keys = {(item["source_id"], item["locator"]) for item in evidence}
+    for citation in change.citations:
+        if (citation.source_id, citation.locator) not in evidence_keys:
+            raise ValueError("agent update citation must come from read evidence")
+        start, end = _locator_range(citation.locator)
+        if end > len(source_texts[citation.source_id]):
+            raise ValueError("agent update citation is outside the current source")
 
 
 def _require_known_sources(workspace: Workspace, source_ids: set[str]) -> None:
@@ -777,6 +1427,143 @@ def _routed_pages_for_pending_sources(
     return tuple(routed_pages[path] for path in sorted(routed_pages))
 
 
+def _add_relations_page(
+    workspace: Workspace,
+    candidate_files: dict[str, str],
+    operations: list[ChangeOperation],
+    *,
+    removed_paths: set[str] | None = None,
+) -> None:
+    """Maintain one small backlink map for the related-page links we generate."""
+    removed = removed_paths or set()
+    pages_root = workspace.wiki_dir / "pages"
+    page_contents = {
+        str(path.relative_to(workspace.root)): path.read_text(encoding="utf-8")
+        for path in pages_root.glob("*.md")
+        if path.is_file() and not path.is_symlink()
+        and str(path.relative_to(workspace.root)) not in removed
+    }
+    page_contents.update(
+        {
+            path: content
+            for path, content in candidate_files.items()
+            if path.startswith("wiki/pages/")
+            and path not in removed
+        }
+    )
+    titles = {
+        path: summary.title
+        for path, content in page_contents.items()
+        if (summary := _parse_page_summary(path, content)) is not None
+    }
+    pairs: set[tuple[str, str]] = set()
+    for path, content in page_contents.items():
+        for target in _related_page_paths(path, content):
+            if target in titles:
+                pairs.add((path, target) if path < target else (target, path))
+
+    relations_path = "wiki/RELATIONS.md"
+    existing = workspace.root / relations_path
+    if not pairs and not existing.is_file():
+        return
+    lines = [
+        "# Wiki relations",
+        "",
+        "Related-page links generated during compilation.",
+    ]
+    for left, right in sorted(pairs):
+        lines.extend(
+            [
+                "",
+                f"- [{_escape_link_text(titles[left])}]({left.removeprefix('wiki/')}) ↔ "
+                f"[{_escape_link_text(titles[right])}]({right.removeprefix('wiki/')})",
+            ]
+        )
+    candidate_files[relations_path] = "\n".join(lines) + "\n"
+    operations.append(
+        ChangeOperation(
+            type=(
+                ChangeOperationType.UPDATE_PAGE
+                if existing.is_file()
+                else ChangeOperationType.CREATE_PAGE
+            ),
+            path=relations_path,
+        )
+    )
+
+
+def _related_page_paths(page_path: str, content: str) -> tuple[str, ...]:
+    """Read same-directory Markdown links from a generated Wiki page."""
+    targets: list[str] = []
+    for match in _RELATED_PAGE_LINK.finditer(content):
+        target = match.group("path")
+        if "/" in target or target.startswith("."):
+            continue
+        resolved = f"wiki/pages/{target}"
+        if resolved != page_path and resolved not in targets:
+            targets.append(resolved)
+    return tuple(targets)
+
+
+def _candidate_pages_for_pending_sources(
+    workspace: Workspace,
+    pending: list[CurrentSource],
+    routed_pages: tuple[RoutedPage, ...],
+    *,
+    allow_local: bool,
+) -> tuple[PageCard, ...]:
+    """Find a few existing pages a new source may extend.
+
+    ponytail: title/summary token overlap is deliberately simple; add embeddings only if
+    the public evaluation shows this local router misses real topic updates.
+    """
+    pending_terms = _terms(
+        " ".join(
+            " ".join((source.title, source.category, *source.tags)) for source in pending
+        )
+    )
+    if not pending_terms:
+        return ()
+    routed_paths = {page.path for page in routed_pages}
+    sources_by_id = {source.source_id: source for source in _load_current_sources(workspace, set())}
+    scored: list[tuple[tuple[int, int], PageCard]] = []
+    for path in sorted(workspace.wiki_dir.joinpath("pages").glob("*.md")):
+        relative_path = str(path.relative_to(workspace.root))
+        if relative_path in routed_paths or path.is_symlink():
+            continue
+        source_ids = workspace.source_ids_for_page(relative_path)
+        page_sources = [sources_by_id.get(source_id) for source_id in source_ids]
+        if not source_ids or any(source is None for source in page_sources):
+            continue
+        if not allow_local and any(
+            source.sensitivity is Sensitivity.LOCAL_ONLY for source in page_sources if source
+        ):
+            continue
+        summary = _parse_page_summary(relative_path, path.read_text(encoding="utf-8"))
+        if summary is None:
+            continue
+        overlap = pending_terms & _terms(f"{summary.title} {summary.summary}")
+        if overlap:
+            scored.append(
+                (
+                    (len(overlap), sum(len(term) for term in overlap)),
+                    PageCard(
+                        path=relative_path,
+                        title=summary.title,
+                        summary=summary.summary,
+                        source_ids=source_ids,
+                    ),
+                )
+            )
+    return tuple(
+        card
+        for _, card in sorted(
+            scored,
+            key=lambda item: (-item[0][0], -item[0][1], item[1].path),
+        )[:6]
+    )
+
+
 def _tags_from_json(value: str) -> tuple[str, ...]:
     try:
         decoded = json.loads(value)
@@ -785,6 +1572,18 @@ def _tags_from_json(value: str) -> tuple[str, ...]:
     if not isinstance(decoded, list):
         return ()
     return tuple(tag for tag in decoded if isinstance(tag, str))
+
+
+def _terms(text: str) -> set[str]:
+    terms: set[str] = set()
+    for match in _WORDS.finditer(text):
+        token = match.group().lower()
+        if _CJK.fullmatch(token):
+            terms.add(token)
+            terms.update(token[index : index + 2] for index in range(len(token) - 1))
+        else:
+            terms.add(token)
+    return terms
 
 
 def _read_source_text(workspace: Workspace, source: CurrentSource) -> str:
@@ -836,10 +1635,17 @@ def _canonical_page_path(source_ids: tuple[str, ...]) -> str:
 def _target_page_path(
     change: PageChange,
     routed_pages: tuple[RoutedPage, ...],
+    candidate_pages: tuple[PageCard, ...] = (),
+    *,
+    pending_ids: set[str] | None = None,
 ) -> str:
     for routed_page in routed_pages:
         if set(change.source_ids) == set(routed_page.source_ids):
             return routed_page.path
+    existing_source_ids = set(change.source_ids) - (pending_ids or set())
+    for page in candidate_pages:
+        if set(page.source_ids) == existing_source_ids:
+            return page.path
     return _canonical_page_path(change.source_ids)
 
 
@@ -1167,8 +1973,14 @@ def _validate_topic_groups(topics: tuple[TopicGroup, ...], source_ids: set[str])
         raise ValueError("provider omitted sources from topic groups")
 
 
-def _render_index(workspace: Workspace, candidate_files: dict[str, str]) -> str:
+def _render_index(
+    workspace: Workspace,
+    candidate_files: dict[str, str],
+    *,
+    removed_paths: set[str] | None = None,
+) -> str:
     index = workspace.wiki_dir / "INDEX.md"
+    removed = removed_paths or set()
     existing = _index_summaries(index.read_text(encoding="utf-8") if index.is_file() else "")
     changed = [
         summary
@@ -1178,7 +1990,12 @@ def _render_index(workspace: Workspace, candidate_files: dict[str, str]) -> str:
     ]
     changed_paths = {page.path for page in changed}
     pages = sorted(
-        [page for page in existing if page.path not in changed_paths] + changed,
+        [
+            page
+            for page in existing
+            if page.path not in changed_paths and page.path not in removed
+        ]
+        + changed,
         key=lambda page: (page.page_type, page.title.lower(), page.path),
     )
     sections = {

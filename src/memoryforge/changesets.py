@@ -220,6 +220,36 @@ class ChangeSetStore:
             os.close(staging_fd)
         return self.staging_dir / "applied" / stored.changeset.changeset_id
 
+    def archive_rejected(self, stored: StoredChangeSet) -> Path:
+        """Move a rejected proposal out of the pending staging namespace."""
+        self.workspace.validate_internal_directory(self.staging_dir)
+        staging_fd = self._open_staging()
+        try:
+            fcntl.flock(staging_fd, fcntl.LOCK_EX)
+            with suppress(FileExistsError):
+                os.mkdir("rejected", 0o700, dir_fd=staging_fd)
+            rejected_fd = os.open(
+                "rejected",
+                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                dir_fd=staging_fd,
+            )
+            try:
+                os.rename(
+                    stored.changeset.changeset_id,
+                    stored.changeset.changeset_id,
+                    src_dir_fd=staging_fd,
+                    dst_dir_fd=rejected_fd,
+                )
+                os.fsync(rejected_fd)
+                os.fsync(staging_fd)
+            finally:
+                os.close(rejected_fd)
+        except OSError as exc:
+            raise ChangeSetStoreError("Rejected ChangeSet could not be archived") from exc
+        finally:
+            os.close(staging_fd)
+        return self.staging_dir / "rejected" / stored.changeset.changeset_id
+
     def _require_current_base(self, changeset: ChangeSet) -> None:
         current_commit = self.workspace.current_commit()
         if changeset.base_commit != current_commit:

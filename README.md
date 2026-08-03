@@ -186,7 +186,7 @@ memoryforge agent '<question>' --workspace <workspace>
 memoryforge feishu-serve --workspace <workspace>
 ```
 
-更多命令请运行 `memoryforge --help`。实现细节、数据模型与阶段计划见 [SPEC.md](SPEC.md)。
+更多命令请运行 `memoryforge --help`。实现细节与数据模型见 [SPEC.md](SPEC.md)，下一阶段的完整实施计划见 [NEXT_PHASE_SPEC.md](NEXT_PHASE_SPEC.md)。
 
 ## 当前边界
 
