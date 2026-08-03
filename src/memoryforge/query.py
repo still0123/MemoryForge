@@ -117,7 +117,15 @@ def answer_question(
         for citation in _page_citations(content):
             overlap = question_terms & _terms(citation["quote"])
             score = (len(overlap), sum(len(term) for term in overlap))
-            sufficient_match = len(overlap) >= 2 or (len(question_terms) == 1 and len(overlap) == 1)
+            has_cjk_terms = any(_CJK.fullmatch(term) for term in question_terms)
+            required_overlap = (
+                1
+                if len(question_terms) == 1
+                else min(3, len(question_terms))
+                if has_cjk_terms
+                else 2
+            )
+            sufficient_match = len(overlap) >= required_overlap
             if sufficient_match:
                 matches.append((score, str(page.relative_to(workspace_root)), citation))
 
@@ -467,8 +475,12 @@ def _terms(text: str) -> set[str]:
     for match in _WORDS.finditer(text):
         token = match.group().lower()
         if _CJK.fullmatch(token):
-            terms.update(character for character in token if character not in _STOP_WORDS)
-            terms.update(token[index : index + 2] for index in range(len(token) - 1))
+            if token in _STOP_WORDS:
+                continue
+            if len(token) == 1:
+                terms.add(token)
+            else:
+                terms.update(token[index : index + 2] for index in range(len(token) - 1))
         elif token not in _STOP_WORDS:
             terms.add(token)
     return terms

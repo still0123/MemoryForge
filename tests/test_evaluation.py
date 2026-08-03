@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 from typer.testing import CliRunner
 
 import memoryforge.evaluation as evaluation_module
 from memoryforge.cli import app
+from memoryforge.models import Sensitivity
+from memoryforge.workspace import init_workspace, register_git_checkout, sync_git_checkout
 
 
 def test_eval_compares_wiki_answers_with_raw_fts(tmp_path: Path, monkeypatch) -> None:
@@ -162,6 +165,78 @@ def test_eval_uses_daily_debug_query_and_separates_raw_audit_reads(
     assert payload["memoryforge"]["average_evidence_characters"] > 0.0
 
 
+def test_eval_keeps_same_relative_paths_separate_across_git_repositories(
+    tmp_path: Path,
+) -> None:
+    first_checkout = _create_git_checkout(tmp_path / "first", "blue")
+    second_checkout = _create_git_checkout(tmp_path / "second", "red")
+    workspace = init_workspace(tmp_path / "workspace")
+    first_repository = register_git_checkout(
+        workspace,
+        first_checkout,
+        sensitivity=Sensitivity.PUBLIC,
+    )
+    second_repository = register_git_checkout(
+        workspace,
+        second_checkout,
+        sensitivity=Sensitivity.PUBLIC,
+    )
+    sync_git_checkout(workspace, first_repository.repository_id)
+    sync_git_checkout(workspace, second_repository.repository_id)
+    runner = CliRunner()
+    ingested = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
+    assert ingested.exit_code == 0, ingested.output
+    changeset_id = json.loads(ingested.stdout)["changeset_id"]
+    applied = runner.invoke(
+        app,
+        ["apply", changeset_id, "--approve", "--workspace", str(workspace)],
+    )
+    assert applied.exit_code == 0, applied.output
+
+    config = tmp_path / "multi-repository-suite.json"
+    config.write_text(
+        json.dumps(
+            {
+                "name": "multi-repository",
+                "cases": [
+                    {
+                        "id": "blue-scheduler",
+                        "category": "single_hop",
+                        "question": "scheduler",
+                        "expected_status": "answered",
+                        "expected_source_paths": ["README.md"],
+                        "required_terms": ["blue"],
+                        "forbidden_terms": ["red"],
+                        "repository_id": first_repository.repository_id,
+                    },
+                    {
+                        "id": "red-scheduler",
+                        "category": "single_hop",
+                        "question": "scheduler",
+                        "expected_status": "answered",
+                        "expected_source_paths": ["README.md"],
+                        "required_terms": ["red"],
+                        "forbidden_terms": ["blue"],
+                        "repository_id": second_repository.repository_id,
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["eval", str(config), "--workspace", str(workspace)])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload["memoryforge"]["answer_accuracy"] == 100.0
+    assert payload["memoryforge"]["source_recall_at_3"] == 100.0
+    assert [case["memoryforge"]["cited_source_paths"] for case in payload["cases"]] == [
+        ["README.md"],
+        ["README.md"],
+    ]
+
+
 def test_eval_cites_all_expected_sources_for_multi_source_case(
     tmp_path: Path,
     monkeypatch,
@@ -263,3 +338,28 @@ def _build_applied_workspace(
     )
     assert applied.exit_code == 0, applied.output
     return runner, workspace
+
+
+def _create_git_checkout(root: Path, color: str) -> Path:
+    checkout = root / "checkout"
+    checkout.mkdir(parents=True)
+    _git(checkout, "init")
+    _git(checkout, "config", "user.email", "test@example.com")
+    _git(checkout, "config", "user.name", "Test User")
+    (checkout / "README.md").write_text(
+        f"# Shared scheduler\n\nThis repository owns the {color} scheduler.\n",
+        encoding="utf-8",
+    )
+    _git(checkout, "add", "README.md")
+    _git(checkout, "commit", "-m", f"Add {color} scheduler")
+    return checkout
+
+
+def _git(checkout: Path, *arguments: str) -> None:
+    subprocess.run(
+        ["git", *arguments],
+        cwd=checkout,
+        check=True,
+        capture_output=True,
+        text=True,
+    )

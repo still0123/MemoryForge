@@ -47,6 +47,44 @@ def test_ask_answers_from_applied_wiki_with_verifiable_citation(
     assert source_text[int(start_text) : int(end_text)] == payload["quote"]
 
 
+def test_ask_prefers_cjk_phrases_over_single_character_overlap(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    runner, workspace, imported = _workspace_with_imported_source(
+        tmp_path,
+        monkeypatch,
+        "# 统计报告\n\n统计器读取 Manifest 真值，避免把模拟实验当成真实结论。\n",
+    )
+    _apply_pending_source(runner, workspace)
+
+    result = query_module.answer_question(
+        workspace,
+        "怎样核验实验统计不是模拟出来的？",
+    )
+
+    assert result["status"] == "answered"
+    assert "Manifest" in result["answer"]
+    assert result["citations"][0]["source_id"] == imported["source_id"]
+
+
+def test_ask_does_not_answer_cjk_question_from_generic_overlap(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    runner, workspace, _ = _workspace_with_imported_source(
+        tmp_path,
+        monkeypatch,
+        "# Evidence\n\nThe system records verified deployment facts.\n",
+    )
+    _apply_pending_source(runner, workspace)
+
+    result = query_module.answer_question(workspace, "作者的生日是什么？")
+
+    assert result["status"] == "unknown"
+    assert result["answer"] == "不知道"
+
+
 def test_ask_llm_summarizes_public_evidence_and_keeps_its_citation(
     tmp_path: Path,
     monkeypatch,

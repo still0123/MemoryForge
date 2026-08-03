@@ -24,6 +24,7 @@ class EvaluationCase(BaseModel):
     expected_source_paths: tuple[str, ...] = ()
     required_terms: tuple[str, ...] = ()
     forbidden_terms: tuple[str, ...] = ()
+    repository_id: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
 
     @model_validator(mode="after")
     def validate_case(self) -> EvaluationCase:
@@ -117,6 +118,7 @@ def _evaluate_case(
         case.question,
         debug=True,
         max_citations=citation_limit,
+        repository_id=case.repository_id,
     )
     answer_text = answer["answer"]
     citations = answer["citations"]
@@ -153,7 +155,12 @@ def _evaluate_case(
     answer_correct = answer["status"] == case.expected_status and all(
         term.casefold() in answer_text.casefold() for term in case.required_terms
     ) and all(term.casefold() not in answer_text.casefold() for term in case.forbidden_terms)
-    raw_results = search_sources(workspace_root, case.question, limit=3)
+    raw_results = search_sources(
+        workspace_root,
+        case.question,
+        limit=3,
+        repository_id=case.repository_id,
+    )
     raw_source_paths = {result.source_path for result in raw_results}
     return {
         "id": case.id,
