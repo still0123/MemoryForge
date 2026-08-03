@@ -103,7 +103,7 @@ def answer_question(
     if not question_terms:
         return _unknown_payload(debug, trace)
 
-    matches: list[tuple[tuple[int, int], str, CitationPayload]] = []
+    matches: list[tuple[tuple[int, ...], str, CitationPayload]] = []
 
     for page in _candidate_pages(
         workspace_root,
@@ -116,7 +116,11 @@ def answer_question(
         trace.append({"level": "L1", "artifact": str(page.relative_to(workspace_root))})
         for citation in _page_citations(content):
             overlap = question_terms & _terms(citation["quote"])
-            score = (len(overlap), sum(len(term) for term in overlap))
+            score = (
+                sum(not _CJK.fullmatch(term) for term in overlap),
+                len(overlap),
+                sum(len(term) for term in overlap),
+            )
             has_cjk_terms = any(_CJK.fullmatch(term) for term in question_terms)
             required_overlap = (
                 1
@@ -133,7 +137,7 @@ def answer_question(
         return _unknown_payload(debug, trace)
 
     if provider is None:
-        selected = _top_matches(matches, max_citations)
+        selected = _top_matches(matches, max_citations, question_terms=question_terms)
         answer = " ".join(citation["quote"] for _, citation in selected)
     else:
         generated = _model_answer(
@@ -194,7 +198,7 @@ def answer_question(
 def _model_answer(
     workspace_root: Path,
     question: str,
-    matches: list[tuple[tuple[int, int], str, CitationPayload]],
+    matches: list[tuple[tuple[int, ...], str, CitationPayload]],
     provider: OpenAICompatibleProvider,
     *,
     allow_local: bool,
@@ -281,7 +285,7 @@ def _candidate_pages(
 ) -> list[Path]:
     wiki_root = workspace_root / "wiki"
     index = wiki_root / "INDEX.md"
-    scored: list[tuple[tuple[int, int], Path]] = []
+    scored: list[tuple[tuple[int, ...], Path]] = []
     allowed_paths = (
         set(repository_page_paths(workspace_root, repository_id))
         if repository_id is not None
@@ -302,7 +306,16 @@ def _candidate_pages(
             title = _unescape_link_text(entry.group("title"))
             overlap = question_terms & _terms(f"{title} {entry.group('summary')}")
             if overlap:
-                scored.append(((len(overlap), sum(len(term) for term in overlap)), page))
+                scored.append(
+                    (
+                        (
+                            sum(not _CJK.fullmatch(term) for term in overlap),
+                            len(overlap),
+                            sum(len(term) for term in overlap),
+                        ),
+                        page,
+                    )
+                )
     fts_paths: tuple[str, ...] = ()
     index_path = workspace_root / ".memoryforge" / "index.sqlite"
     if safe_index is None or (index_path.is_file() and not index_path.is_symlink()):
@@ -330,6 +343,7 @@ def _candidate_pages(
         key=lambda candidate: (
             -candidate[0][0],
             -candidate[0][1],
+            -candidate[0][2],
             str(candidate[1].relative_to(workspace_root)),
         ),
     ):
@@ -353,19 +367,38 @@ def _validate_max_citations(max_citations: int) -> None:
 
 
 def _top_matches(
-    matches: list[tuple[tuple[int, int], str, CitationPayload]],
+    matches: list[tuple[tuple[int, ...], str, CitationPayload]],
     max_citations: int,
+    *,
+    question_terms: set[str],
 ) -> list[tuple[str, CitationPayload]]:
+    # ponytail: greedy page-level coverage is O(n²), sufficient for the 6-citation budget.
     selected: list[tuple[str, CitationPayload]] = []
     seen: set[tuple[str, int, str]] = set()
-    for _, page_path, citation in sorted(matches, key=lambda match: match[0], reverse=True):
+    remaining = sorted(matches, key=lambda match: match[0], reverse=True)
+    covered_terms: set[str] = set()
+    while remaining and len(selected) < max_citations:
+        if not selected:
+            selected_index = 0
+        else:
+            selected_index = max(
+                range(len(remaining)),
+                key=lambda index: (
+                    len(
+                        (_terms(remaining[index][2]["quote"]) & question_terms)
+                        - covered_terms
+                    ),
+                    remaining[index][0][0],
+                    remaining[index][0][1],
+                ),
+            )
+        _, page_path, citation = remaining.pop(selected_index)
         key = (citation["source_id"], citation["source_version"], citation["locator"])
         if key in seen:
             continue
         seen.add(key)
         selected.append((page_path, citation))
-        if len(selected) == max_citations:
-            break
+        covered_terms.update(_terms(citation["quote"]) & question_terms)
     return selected
 
 

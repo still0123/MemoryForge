@@ -579,6 +579,68 @@ def test_ask_can_return_multiple_citations_when_requested(tmp_path: Path, monkey
     assert "Friday" in result["answer"]
 
 
+def test_top_matches_prefers_a_citation_that_covers_new_terms() -> None:
+    first = {
+        "source_id": "a" * 64,
+        "source_version": 1,
+        "locator": "chars:0-10",
+        "quote": "cache expires after sixty",
+    }
+    repeated = {
+        "source_id": "a" * 64,
+        "source_version": 1,
+        "locator": "chars:10-30",
+        "quote": "cache expires deployment",
+    }
+    second = {
+        "source_id": "b" * 64,
+        "source_version": 1,
+        "locator": "chars:0-10",
+        "quote": "deployment Friday",
+    }
+
+    selected = query_module._top_matches(
+        [
+            ((1, 3, 6), "wiki/pages/first.md", first),
+            ((1, 3, 6), "wiki/pages/repeated.md", repeated),
+            ((1, 2, 4), "wiki/pages/second.md", second),
+        ],
+        2,
+        question_terms={"cache", "expires", "sixty", "deployment", "friday"},
+    )
+
+    assert [citation["quote"] for _, citation in selected] == [
+        "cache expires after sixty",
+        "deployment Friday",
+    ]
+
+
+def test_candidate_pages_prioritize_explicit_terms_over_generic_cjk_terms(
+    tmp_path: Path,
+) -> None:
+    pages = tmp_path / "workspace" / "wiki" / "pages"
+    pages.mkdir(parents=True)
+    (pages.parent / "INDEX.md").write_text(
+        "# Knowledge Index\n\n"
+        "- [Generic](pages/generic.md) — 系统运行问题分别解决什么问题\n"
+        "- [Engine](pages/engine.md) — 本地实验引擎依赖 Redis 和 Celery\n",
+        encoding="utf-8",
+    )
+    (pages / "generic.md").write_text("# Generic\n", encoding="utf-8")
+    (pages / "engine.md").write_text("# Engine\n", encoding="utf-8")
+    trace: list[query_module.TraceStep] = []
+
+    selected = query_module._candidate_pages(
+        tmp_path / "workspace",
+        query_module._terms("Redis Celery 与 FailureEvidenceBundle 不重新运行分别解决什么问题？"),
+        max_pages=1,
+        trace=trace,
+        repository_id=None,
+    )
+
+    assert selected == [pages / "engine.md"]
+
+
 def test_ask_uses_multiline_fact_rendered_in_the_wiki_page(
     tmp_path: Path,
     monkeypatch,
