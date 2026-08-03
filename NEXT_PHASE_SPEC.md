@@ -434,7 +434,7 @@ memoryforge agent '<question>' \
 - `apply --approve` 支持 `ARCHIVE_PAGE`，`reject` 会归档提案且不触碰稳定 Wiki；
 - Raw Blob、SourceVersion、Manifest 和 Git 历史均保留。
 
-## 10. Phase 5（P2）：把 MiniClaude 做成小而完整的 Agent
+## 10. Phase 5（P2）：把 MiniClaude 做成小而完整的 Agent（已完成）
 
 ### 要借鉴 learn-claude-code 的部分
 
@@ -489,6 +489,14 @@ TOOLS = {
 ```bash
 .venv/bin/pytest -q tests/test_agent.py tests/test_provider.py
 ```
+
+### 实现结果
+
+- Agent action 改为由循环统一分发，未知工具和缺失参数会作为 observation 返回；
+- Provider 错误会收敛为 `provider_error` 终态，不把一次模型失败变成 CLI 崩溃；
+- 每轮有稳定 `call_id`，最终引用必须来自已读证据；
+- 支持最多 6 个 Citation，并执行 3 页、2,000 字符 evidence、8,000 字符 tool result 上限；
+- Agent Payload 记录 `wiki_pages_read`、`evidence_characters` 和 `tool_result_characters`。
 
 ## 11. Phase 6（P2）：知识变多时先做范围路由，不急着上向量库
 
@@ -624,7 +632,7 @@ git diff --check
 - [ ] Agent 能基于已读原始证据提出最多一个 Wiki ChangeSet；
 - [ ] 所有稳定 Wiki 修改仍经过 `review → apply --approve`；
 - [x] Git 来源删除后可以生成可审核的页面清理方案；
-- [ ] MiniClaude 的工具调用、终止状态和上下文预算可测试；
+- [x] MiniClaude 的工具调用、终止状态和上下文预算可测试；
 - [ ] 多仓查询可以按 repository 范围过滤；
 - [ ] 公开题集不少于 30 题，包含多来源、拒答和改写问题；
 - [ ] Citation grounding 为 100%，关键指标和失败案例如实提交；

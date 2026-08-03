@@ -7,11 +7,11 @@ import os
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from memoryforge.models import CompilationPlan, PageChange, TopicGroup
 
@@ -94,7 +94,8 @@ class AgentStep(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    action: Literal["search_wiki", "read_evidence", "final"]
+    action: str = Field(min_length=1)
+    call_id: str | None = None
     query: str | None = None
     citation_index: int | None = None
     answer: str | None = None

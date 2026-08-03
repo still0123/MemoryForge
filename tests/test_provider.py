@@ -212,6 +212,20 @@ def test_provider_parses_optional_wiki_update() -> None:
     assert payload["max_tokens"] == 2048
 
 
+def test_provider_keeps_unknown_agent_action_for_loop_observation() -> None:
+    provider = OpenAICompatibleProvider(
+        ProviderConfig("https://example.test", "test-key", "test-model"),
+        transport=lambda _request: _chat_response(
+            {"action": "summarize", "call_id": "model-call-7"}
+        ),
+    )
+
+    result = provider.agent_step([{"role": "user", "content": "choose a tool"}])
+
+    assert result.action == "summarize"
+    assert result.call_id == "model-call-7"
+
+
 def test_provider_rejects_invalid_model_json() -> None:
     provider = OpenAICompatibleProvider(
         ProviderConfig("https://example.test", "test-key", "test-model"),

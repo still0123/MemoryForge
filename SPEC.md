@@ -4,10 +4,10 @@
 
 | 字段 | 内容 |
 |---|---|
-| 文档状态 | Draft v0.7 |
+| 文档状态 | Draft v0.8 |
 | 当前基线 | 分支 `agent/phase-1a-local-foundation` |
 | 产品形态 | 单用户、本地优先、CLI |
-| 当前阶段 | Phase 4 已完成，下一步是 Phase 5：MiniClaude Agent 打磨 |
+| 当前阶段 | Phase 5 已完成，下一步是 Phase 6：多仓范围路由 |
 
 ## 1. 项目定义
 
@@ -400,6 +400,8 @@ memoryforge html-import <saved-page.html> --url <public-http-url>
   可信内部模型可用 `--allow-local-llm` 明确放行本地资料。
 - MiniClaude Agent 支持 `--propose-update`：只能基于本次已读取的原始证据生成一个
   `PROPOSED` ChangeSet，不直接修改稳定 Wiki，仍须经过 `review → apply --approve`。
+- MiniClaude Agent 已支持明确的工具错误观察、Provider 错误终态、稳定 `call_id`、多 Citation
+  读取，以及 3 页 / 6 Citation / 2,000 字符证据 / 8,000 字符工具结果预算；Payload 会记录查询成本。
 - 提供纯函数式 Feishu 文本事件到 Wiki 回复 payload 的桥接层，以及复用 `lark-cli` 的
   本地 `feishu-serve` 常驻命令；它只监听私聊文本事件、调用既有 Wiki 问答并回复原消息，
   不引入 HTTP 服务或在项目内保存 App Secret。
