@@ -1,55 +1,60 @@
 # MemoryForge
 
-> 把散落在代码仓库、技术文档和飞书里的信息，整理成一套你自己能长期维护的技术 Wiki。
+> 把散落在代码仓库、设计文档和飞书里的技术资料，编译成一套可维护、可追溯、可以直接在飞书提问的个人技术 Wiki。
 
-写项目久了，真正难找的往往不是代码，而是这些问题的答案：
+![MemoryForge 工作流](assets/memoryforge-flow.svg)
 
-- 这个服务当初为什么这样设计？
-- 缓存时间、限流规则写在哪份文档里？
-- 两个仓库之间是什么关系？
-- 半年前的方案为什么没有采用？
+## 这是什么项目？
 
-资料通常散落在 README、`docs/`、ADR、复盘和飞书文档里。MemoryForge 的目标不是再做一个“聊天窗口”，而是先把这些资料沉淀成可读的 Markdown Wiki；需要时，再从 Wiki 里找到答案和原始出处。
+写项目久了，最难找的往往不是代码，而是“为什么当初这么设计”“这个规则写在哪”“方案为什么被放弃”。这些答案通常散落在 README、`docs/`、ADR、复盘和飞书文档里，而且会持续变化。
 
-它是一个单用户、本地优先的个人知识库项目。核心想解决的问题是：**资料不断变化时，如何持续维护一份可信、可检索、能追溯来源的 Wiki。**
+**MemoryForge 先把资料沉淀为人也能直接阅读的 Markdown Wiki，再提供带来源的渐进式检索和一个最小 Agent。** 它不是把所有文档直接塞进提示词的聊天机器人，而是一个本地优先的“技术知识编译器”。
 
-## 最终用起来是什么感觉？
-
-你把已经克隆到本地的项目仓库、几份设计文档和一篇飞书文档放进来。MemoryForge 会生成类似这样的知识库：
+一句话理解：
 
 ```text
-my-wiki/
-├── wiki/
-│   ├── INDEX.md                 # 总目录：有哪些主题、每页讲什么
-│   └── pages/
-│       ├── order-service.md     # 服务/仓库介绍
-│       ├── cache-policy.md      # 机制、约束、踩坑
-│       └── payment-retry.md     # 方案选择和复盘
-├── raw/                         # 导入时保存的原始资料快照
-├── .memoryforge/                # 本地 SQLite 索引和版本信息
-└── .git/                        # Wiki 的修改历史
+资料进来 -> 生成并审核 Wiki -> 通过 CLI / 飞书提问 -> 得到可回溯的答案
 ```
 
-之后可以直接问：
+## 它解决了什么问题？
 
-```bash
-memoryforge ask '订单服务的缓存多久过期？' --workspace ./my-wiki
+| 常见问题 | MemoryForge 的做法 |
+| --- | --- |
+| 资料散在多个仓库、文档和飞书里 | 将指定资料导入一个本地 Workspace，保留来源与版本 |
+| 文档更新后 Wiki 很容易过期 | 根据来源路由更新受影响页面，不重复生成一堆近似摘要 |
+| 问答容易胡编或找不到出处 | 先查目录和少量 Wiki 页面；需要时再回读原文并返回引用 |
+| 资料敏感，不适合直接上传 | 默认 `local_only`；是否让模型读取本地资料必须显式授权 |
+| 项目只有命令行，不直观 | 可接入飞书私聊机器人，作为项目的展示与交互入口 |
+
+## 核心能力
+
+- **多源资料接入**：本地 Markdown/TXT、已克隆的 Git 仓库、飞书 Docx/Wiki、单篇公开网页或保存的 HTML。
+- **WikiCompiler**：将资料编译为“项目/模块介绍、机制说明、方案与复盘”三类 Markdown 页面；每页都保留来源、版本与原文位置。
+- **增量更新**：新资料优先扩展已有主题；资料更新时只重编译受影响的页面。
+- **渐进式查询**：`INDEX.md → 少量 Wiki 页面 → 按需原文核验`，避免一次把整个知识库塞进上下文。
+- **MiniClaude Agent**：只提供 `search_wiki`、`read_evidence`、`final` 三个工具；必须读取证据后才能给出带引用的答案。
+- **飞书展示入口**：`feishu-serve` 直接接收飞书私聊消息，查询本地 Wiki 后回复；可显式启用模型，将命中的证据组织成更自然的回答。
+- **可验证性**：提供 `lint` 检查页面/来源关系，提供 `eval` 用公开题集检查回答、引用与读取成本。
+
+## 一次提问是怎么完成的？
+
+```text
+“数据面是什么意思？”
+          │
+          ▼
+先读 INDEX.md 和 SQLite FTS5 候选
+          │
+          ▼
+最多展开少量相关 Wiki 页面
+          │
+          ├─ 默认：直接基于已验证事实回答
+          └─ 可选：模型仅阅读命中的证据，整理成自然语言
+          │
+          ▼
+回答 + Wiki 页面标题 + 可回读的原文定位
 ```
 
-程序不会把所有文档都读一遍。它先看 `INDEX.md`，再打开最相关的少量 Wiki 页面；只有加上 `--verify` 时，才回到原始资料核对具体内容。这就是项目最核心的“渐进式 Wiki 记忆”。
-
-## 它现在能做什么？
-
-- 导入 Markdown/TXT 文件，记录资料的历史版本；
-- 从**已经在本地克隆好**的 Git 仓库中读取 README、CHANGELOG、`docs/`、`adr/` 下的文档；
-- 手动导入一篇你有权限访问的飞书 Docx 或 Wiki 文档；
-- 手动导入一篇无需登录、可直接读取的公开网页文章；
-- 把资料编译成三类 Wiki 页面：项目/模块介绍、机制说明、方案与复盘；
-- 为每个导入的 Git 仓库生成一个“项目总览”页，作为进入该仓库文档的导航入口；
-- 新资料或旧资料更新后，只修改受影响的页面，不重复造一堆相似页面；
-- 先生成改动预览，确认后再真正写入 Wiki；
-- 在 Wiki 中全文搜索和提问，并能看到答案来自哪份资料；
-- 检查 Wiki 中的目录链接、引用和来源映射是否损坏。
+这个路径的重点不是“让模型读得越多越好”，而是让每一步都有明确边界：日常查询不读原文，只有 `--verify` 或 Agent 的 `read_evidence` 才展开对应片段。
 
 ## 5 分钟跑通
 
@@ -62,276 +67,127 @@ cd MemoryForge
 python -m venv .venv
 source .venv/bin/activate
 python -m pip install -e '.[dev]'
-```
 
-准备一份资料，例如 `notes/cache.md`：
-
-```md
-# Cache policy
-
-Cache entries expire after sixty seconds.
-```
-
-初始化一个自己的 Wiki，然后导入这份资料：
-
-```bash
+# 1. 初始化你的知识库
 memoryforge init ./my-wiki
 
-memoryforge import ./notes/cache.md \
-  --category design \
-  --workspace ./my-wiki
-```
+# 2. 导入一份资料
+memoryforge import ./notes/cache.md --category design --workspace ./my-wiki
 
-接下来分三步：生成候选页面、看改动、确认写入。
-
-```bash
-# 生成候选 Wiki，命令会输出 changeset_id
+# 3. 先生成变更预览，再确认写入 Wiki
 memoryforge ingest --pending --workspace ./my-wiki
-
-# 先看本次会新建/修改哪些页面
 memoryforge review <changeset-id> --workspace ./my-wiki
-
-# 确认后才写入 wiki/ 并记录 Git 历史
 memoryforge apply <changeset-id> --approve --workspace ./my-wiki
+
+# 4. 提问
+memoryforge ask '缓存多久过期？' --workspace ./my-wiki
 ```
 
-现在就可以检索：
+生成后的 Workspace 大致如下：
+
+```text
+my-wiki/
+├── raw/                 # 原始资料快照
+├── wiki/
+│   ├── INDEX.md         # Wiki 总目录
+│   └── pages/           # 稳定的 Markdown Wiki 页面
+├── .memoryforge/        # SQLite 索引、来源版本和编译路由
+└── .git/                # Wiki 自己的修改历史
+```
+
+## 用飞书展示项目
+
+飞书是 MemoryForge 的**展示与交互层**，不是另一个通用 Agent 平台的外壳：
+
+```text
+飞书私聊消息 -> memoryforge feishu-serve -> 渐进式 Wiki 查询 -> 带来源回复
+```
+
+配置好自建飞书应用和 `lark-cli` 后，在运行项目的机器上启动：
 
 ```bash
-memoryforge search 'cache policy' --workspace ./my-wiki
-memoryforge ask '缓存多久过期？' --workspace ./my-wiki
+# 纯本地、确定性回答：不调用模型
+memoryforge feishu-serve --workspace ./my-wiki
 
-# 查看它依次读取了什么
-memoryforge ask '缓存多久过期？' --debug --workspace ./my-wiki
+# 显式允许已配置模型读取“本次命中的本地证据”，生成更自然的回答
+memoryforge feishu-serve --llm --allow-local-llm --workspace ./my-wiki
+```
 
-# 需要严谨确认时，再读取对应原文
-memoryforge ask '缓存多久过期？' --verify --workspace ./my-wiki
+飞书服务只处理私聊文本并回复原消息。资料仍要先走 `feishu-import → ingest → review → apply`，它不会自动抓取飞书空间或后台同步全部文档。完整配置见 [FEISHU_MVP_SPEC.md](FEISHU_MVP_SPEC.md)。
 
-# 让模型只根据命中的公开证据归纳答案，并保留来源引用
-memoryforge ask '缓存多久过期？' --llm --workspace ./my-wiki
+## MiniClaude Agent 在哪里？
 
-# 运行最小 Wiki-backed MiniClaude Agent
+MemoryForge 不尝试复刻完整 Claude Code。它实现的是一个围绕 Wiki 内核的最小 Agent：
+
+```text
+问题 -> search_wiki -> read_evidence -> final（带引用）
+```
+
+```bash
 memoryforge agent '缓存多久过期？' --workspace ./my-wiki
 ```
 
-`agent` 是一个很小的 Agent Loop：模型在 `search_wiki`、`read_evidence` 和 `final` 三个动作之间选择，
-最多运行有限轮次。它只能看到公开来源的 Wiki 证据，不能执行 Shell、修改文件或把 `local_only` 资料发给模型。
+Agent 没有 Shell、写文件、Subagent 或 MCP 工具；它只负责在有限步数内检索、核验和回答。因此项目的重点始终是 Wiki 编译、来源路由与渐进式查询，而不是堆叠通用 Agent 能力。
 
-## 日常怎么把资料放进来？
+## 用公开资料复现
 
-### 已有的 Git 仓库
-
-MemoryForge 不会替你 clone、fetch，也不会碰远端凭证。你只要把仓库准备在本地：
+仓库提供了仅基于公开 `AgentSkill-Eval` 文档的 Demo，不需要模型 Key，也不上传资料：
 
 ```bash
-memoryforge git-add ~/code/my-service --workspace ./my-wiki
-memoryforge git-list --workspace ./my-wiki
-memoryforge git-sync <repository-id> --workspace ./my-wiki
-# 刷新所有已登记的 Git 仓库和飞书文档；不会自动写入 Wiki
-memoryforge refresh --workspace ./my-wiki
+.venv/bin/python demo/run_public_demo.py \
+  --source-repo ~/code/AgentSkill-Eval \
+  --workspace /private/tmp/memoryforge-public-demo \
+  --output /private/tmp/agent_skill_eval_public.json
 ```
 
-`git-sync` 只读取当前提交（`HEAD`）中的文档。仓库资料更新后，再次执行同步，然后重复 `ingest → review → apply`；系统会定位并更新原来的 Wiki 页面。
-
-Git 仓库默认是 `local_only`，不会发送给模型。只有仓库内容可以公开时，才在登记时显式加上 `--public`；已经登记过的仓库，重新执行一次这条命令即可更新授权，然后重新同步：
-
-```bash
-memoryforge git-add ~/code/AgentSkill-Eval --public --workspace ./my-wiki
-memoryforge git-sync <repository-id> --workspace ./my-wiki
-```
-
-如果某个目录是你想长期理解的核心实现，可以明确加入它的 Go 或 Python 源码；不会扫描整仓库：
-
-```bash
-memoryforge code-add <repository-id> internal/meter --workspace ./my-wiki
-memoryforge refresh --workspace ./my-wiki
-```
-
-它会为选中目录中的每个 Go/Python 文件生成一张代码页，列出包/模块和公开类型、函数，并保留
-对应 Git commit 和代码位置引用。内部仓库仍保持 `local_only`。
-
-如果这些页面已经生成并应用，还可以让模型只根据“页面标题、文件路径和已有摘要”生成一份主题目录。它不会改写原有页面，也不会参与问答：
-
-```bash
-memoryforge topics <repository-id> --workspace ./my-wiki
-memoryforge review <changeset-id> --workspace ./my-wiki
-memoryforge apply <changeset-id> --approve --workspace ./my-wiki
-```
-
-第一次编译后，`INDEX.md` 还会多出一个“`<仓库名> 项目总览`”入口。它只负责把同一仓库的资料页串起来；具体问答仍只使用带原文引用的页面。
-
-### 飞书文档
-
-先使用现有的 `lark-cli` 登录，并确保你自己有文档的阅读权限：
-
-```bash
-memoryforge feishu-import 'https://<tenant>.larkoffice.com/docx/<token>' \
-  --workspace ./my-wiki
-```
-
-第一版先通过 `feishu-import` 指定一篇文档；之后它会被登记到当前 Workspace，日常执行
-`memoryforge refresh` 就能重新读取。长文档会按一级标题拆成“总览 + 章节”来源，后续各自生成
-可检索的 Wiki 页面；命令输出的 `sources` 列表可看到每一部分。它不做后台同步、机器人和权限平台。
-飞书资料默认只留在本地，不会被发送给 LLM。
-
-### 公开网页文章
-
-对于掘金、博客或技术论坛中的文章，可以导入用户明确给出的单个公开链接：
-
-```bash
-memoryforge web-import 'https://example.com/engineering/cache-design' \
-  --workspace ./my-wiki
-```
-
-它只保存当次可读取正文的本地快照、原始链接和标题；不会登录、绕过验证码、批量爬取或后台刷新。
-需要 JavaScript 渲染、登录或验证码的页面（例如当前无法静态读取的掘金文章），请先在浏览器另存为网页后使用下面的 `html-import`；也可以自行保存成 Markdown 再用 `memoryforge import` 导入。
-
-也可以在浏览器打开文章后使用“另存为网页”，再让 MemoryForge 本地转成 Markdown：
-
-```bash
-memoryforge html-import ./article.html \
-  --url 'https://juejin.cn/post/7637856870833635343' \
-  --workspace ./my-wiki
-```
-
-这个命令只读取你指定的 HTML 文件，不读取浏览器 Cookie、登录态或历史记录。
-
-## 这个项目的关键设计
-
-### 0. 一个很小的 Agent 外壳
-
-MemoryForge 不是完整的 Claude Code。当前只提供一个围绕 Wiki 内核的最小 Agent 层：
+脚本会真实执行：
 
 ```text
-问题
-  ↓
-MiniClaude Agent Loop
-  ├─ search_wiki
-  ├─ read_evidence
-  └─ final
-  ↓
-带引用的答案
+init -> git-add --public -> git-sync -> ingest -> review -> apply -> lint -> ask -> eval
 ```
 
-Agent Loop 借鉴了 [learn-claude-code](https://github.com/shareAI-lab/learn-claude-code) 的核心思路，
-但工具范围收窄到知识检索，不执行代码、不改文件、不做 Subagent 和 MCP 编排。
+已提交的公开结果在 [demo/results/agent_skill_eval_public.json](demo/results/agent_skill_eval_public.json)。`eval` 会检查回答是否命中关键事实、引用是否可回溯，以及每题实际展开了多少 Wiki 页面/原文字符。
 
-### 1. 先写成 Wiki，再做检索
+## 关键设计取舍
 
-普通 RAG 往往把文档切块后丢进向量库。MemoryForge 先生成可以直接打开阅读的 Wiki 页面：一个页面讲清一个项目、机制或决策。即使不用模型，Wiki 本身也应该有价值。
+| 选择 | 原因 |
+| --- | --- |
+| Markdown Wiki 而非只存向量 | 即使不问模型，人也能阅读、审核和维护沉淀内容 |
+| `review → apply` 而非直接生成 | 先看 Diff，再确认改变稳定 Wiki；避免自动覆盖已有知识 |
+| `INDEX + FTS5 + 页面展开` 而非全量拼接 | 控制检索范围和上下文成本，便于解释“这次读了什么” |
+| 证据优先的最小 Agent | 让模型负责组织答案，不让它执行代码或扩展为难控的通用助手 |
+| 飞书作为展示入口 | 将真实 Wiki 问答能力放到日常聊天场景中，而不重复实现另一套知识库 |
 
-### 2. 资料更新时，更新原页面
+## 资料与模型边界
 
-每份资料都有自己的版本和归属页面。某篇设计文档更新后，系统知道该改哪一页，而不是重新生成一批重复摘要。多个来源也可以共同支撑同一个页面。
+- 公开 GitHub 仓库只提交代码、虚构或公开 Demo、脱敏评测结果。
+- 公司代码、真实飞书正文、真实 Wiki、Token、App Secret 与运行日志都留在本机，不能提交或上传到 GitHub。
+- Git/飞书资料默认标为 `local_only`，不会被模型读取。
+- 只有你明确传入 `--allow-local-llm`，当前命中的本地证据才会发送给已配置模型；这不会自动将资料变成公开内容。
 
-### 3. 答案要能回到原文
-
-每个页面都保存来源、版本和原文位置。需要确认时，`--verify` 才打开原始片段；日常提问只读取目录和少量页面，速度更快，也不会把无关资料塞进上下文。
-
-```text
-提问
-  ↓
-INDEX.md 找主题
-  ↓
-展开少量 Wiki 页面
-  ↓
-需要时才打开原始资料核验
-```
-
-### 4. 自动生成，但不直接覆盖
-
-无论页面由本地规则还是模型草稿生成，都会先变成可看的 Diff。只有你执行 `apply --approve`，稳定 Wiki 才会更新并提交到它自己的 Git 历史中。
-
-## 可选：让模型参与整理
-
-默认的 `ingest` 使用本地确定性规则，适合基础沉淀和内部资料。
-
-如果你明确允许某些来源发送到模型，也可以接一个 OpenAI-compatible 接口。推荐在项目根目录创建一次 `.env`；它已被 Git 忽略，之后不用每次 `export`：
+## 常用命令
 
 ```bash
-cp .env.example .env
-# 只需把 .env 里的 replace-with-your-key 改成自己的 Key
-
-memoryforge ingest --pending --llm --workspace ./my-wiki
-memoryforge ask '缓存多久过期？' --llm --workspace ./my-wiki
-```
-
-临时设置的同名环境变量优先于 `.env`，适合偶尔切换模型。
-
-模型只负责写页面草稿。本地代码仍负责来源引用、页面格式、改动预览和最终写入。Git 和飞书导入的资料默认是 `local_only`，不会被送到这个接口。Git 资料只有通过 `git-add --public` 明确授权后才会随 `--llm` 发送；飞书资料目前始终只保留在本地。
-
-## 现在不做什么？
-
-为了把核心问题做深，当前刻意不做：
-
-- 完整的 Claude Code / 通用编码 Agent；当前只做 Wiki 检索 Agent 外壳；
-- 飞书机器人、定时同步和权限管理；
-- 向量数据库、知识图谱、多 Agent 编排；
-- Web 管理后台和多用户协作；
-- 自动重试、消息队列等服务端基础设施。
-
-这些能力并非不重要，但不属于这个项目的第一目标：做好一个可维护的个人 Wiki 记忆内核。
-
-## 完整命令
-
-```bash
-memoryforge init <workspace>
-memoryforge import <path> --workspace <workspace> [--category <category>]
-memoryforge git-add <local-checkout> [--public] --workspace <workspace>
-memoryforge git-list --workspace <workspace>
-memoryforge git-sync <repository-id> --workspace <workspace>
-memoryforge code-add <repository-id> <relative-code-path> --workspace <workspace>
-memoryforge refresh --workspace <workspace>
-memoryforge topics <repository-id> --workspace <workspace>
+# 资料导入
+memoryforge import <path> --workspace <workspace>
+memoryforge git-add <local-checkout> --workspace <workspace>
 memoryforge feishu-import <docx-or-wiki-url-or-token> --workspace <workspace>
-memoryforge web-import <public-http-url> [--local-only] --workspace <workspace>
-memoryforge html-import <saved-page.html> --url <public-http-url> --workspace <workspace>
-memoryforge search <query> --workspace <workspace>
-memoryforge ingest --pending [--llm] --workspace <workspace>
+memoryforge web-import <public-http-url> --workspace <workspace>
+
+# Wiki 编译与检查
+memoryforge ingest --pending --workspace <workspace>
 memoryforge review <changeset-id> --workspace <workspace>
 memoryforge apply <changeset-id> --approve --workspace <workspace>
-memoryforge ask <question> [--llm] [--debug] [--verify] [--max-pages 1..10] --workspace <workspace>
-memoryforge agent <question> [--max-steps 1..8] [--max-pages 1..10] --workspace <workspace>
 memoryforge lint --workspace <workspace>
-memoryforge eval <public-suite.json> --workspace <workspace>
+
+# 问答与展示
+memoryforge ask '<question>' --workspace <workspace>
+memoryforge agent '<question>' --workspace <workspace>
+memoryforge feishu-serve --workspace <workspace>
 ```
 
-## 用公开资料做一次小评测
+更多命令请运行 `memoryforge --help`。实现细节、数据模型与阶段计划见 [SPEC.md](SPEC.md)。
 
-`eval` 用一份 JSON 题集检查：回答是否包含预期关键事实、引用是否能回到预期原始资料，以及每题实际展开了几页 Wiki。评测查询本身遵循日常路径，不读取原文；为了检查引用，评测器会在查询结束后单独读取被引用的原文片段，并把这部分成本单列为 `average_citation_audit_characters`。它还会记录同一问题在原始资料 FTS 搜索中的命中情况，作为简单基线；不调用模型。
+## 当前边界
 
-仓库内提供了一份仅面向公开 `AgentSkill-Eval` 文档的示例：
-
-```bash
-memoryforge eval demo/evaluation/agent_skill_eval.json --workspace ./my-wiki
-```
-
-题集中的 `expected_source_path` 和 `required_terms` 是人工写下的验收标准，因此结果可复现、也便于发现检索退化。不要把内部资料题集或评测输出提交到公开仓库。
-
-## 从公开仓库复跑（五分钟）
-
-想亲手验证上面的说法，可以对一个**已经克隆到本地**的公开仓库跑一遍完整链路，无需模型 API Key，也不联网：
-
-1. 准备 `AgentSkill-Eval` 的本地 checkout，例如 `~/code/AgentSkill-Eval`；脚本只读它的 `HEAD`，不 clone/fetch/checkout。
-2. 运行复现脚本（`--workspace` 必须是一个不存在或为空的目录）：
-
-   ```bash
-   .venv/bin/python demo/run_public_demo.py \
-     --source-repo ~/code/AgentSkill-Eval \
-     --workspace /private/tmp/memoryforge-public-demo \
-     --output /private/tmp/agent_skill_eval_public.json
-   ```
-
-3. 仓库里已提交了一份真实运行结果：[demo/results/agent_skill_eval_public.json](./demo/results/agent_skill_eval_public.json)；你的输出应当与它一致（源仓 commit 相同的前提下）。
-
-脚本依次编排 `init → git-add --public → git-sync → ingest --pending → review → apply --approve → lint → ask --debug --verify → eval`，并从每一步真实 JSON 中解析 `repository-id`、`changeset-id`。证据 JSON 中各指标的含义：
-
-- `answer_accuracy`：回答包含预期关键事实的题目比例；
-- `citation_accuracy`：引用能回到预期原始资料的题目比例；
-- `average_wiki_pages_read`：每题平均展开的 Wiki 页数（页面预算）；
-- `average_raw_sources_read`：日常查询读取原文的次数，正常应为 `0`；
-- `average_citation_audit_characters`：查询结束后为核对引用而单独读取的原文字符数。
-
-这组评测只证明现有 Wiki 流程在这组公开问题上的行为和成本边界，并不声称 “MemoryForge 比 Raw FTS 更准确”。复现请只用公开仓库，不要把公司内部仓库或飞书文档用于公开复跑。
-
-实现细节、数据模型和阶段计划在 [SPEC.md](./SPEC.md)。公开演示时请只使用虚构或公开资料，不要提交公司内部代码和文档。
+当前刻意不做公网部署、群聊、多用户权限、定时同步、向量数据库、知识图谱和通用编码 Agent。这些能力可以后续添加，但现在优先把“个人技术 Wiki 如何持续更新、可靠查询并回到证据”这一件事做深。
