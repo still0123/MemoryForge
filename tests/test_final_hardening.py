@@ -42,26 +42,26 @@ def test_workspace_open_rejects_non_workspace_before_writing(tmp_path: Path) -> 
     assert marker.read_text(encoding="utf-8") == "unchanged\n"
 
 
-def test_search_runs_the_complete_workspace_upgrade(tmp_path: Path) -> None:
+def test_search_rejects_an_incomplete_workspace_without_upgrading_it(tmp_path: Path) -> None:
     source_root = tmp_path / "source"
     source_root.mkdir()
     source = source_root / "legacy.md"
     source.write_text("# Legacy\n\nsearch upgrade evidence\n", encoding="utf-8")
     root = tmp_path / "workspace"
     workspace = Workspace.initialize(root)
-    imported = import_local_file(root, source, source_root=source_root)
+    import_local_file(root, source, source_root=source_root)
     shutil.rmtree(root / ".git")
     (root / ".memoryforge/config.yaml").unlink()
     (root / ".memoryforge/schema.yaml").unlink()
     shutil.rmtree(workspace.manifest_dir)
 
-    results = search_sources(root, "upgrade evidence")
+    with pytest.raises(WorkspaceError, match="configuration is missing"):
+        search_sources(root, "upgrade evidence")
 
-    assert [result.source_id for result in results] == [imported.source_id]
-    assert (root / ".git").is_dir()
-    assert (root / ".memoryforge/config.yaml").is_file()
-    assert (root / ".memoryforge/schema.yaml").is_file()
-    assert len(SourceManifestStore(Workspace.open(root).manifest_dir).list_all()) == 1
+    assert not (root / ".git").exists()
+    assert not (root / ".memoryforge/config.yaml").exists()
+    assert not (root / ".memoryforge/schema.yaml").exists()
+    assert not workspace.manifest_dir.exists()
 
 
 def test_open_existing_repository_never_commits_contract_or_staged_work(
@@ -305,7 +305,7 @@ def test_future_cli_commands_have_a_stable_workspace_error_boundary(
     def fail_open(_: Path) -> Workspace:
         raise failure
 
-    monkeypatch.setattr("memoryforge.cli.Workspace.open", fail_open)
+    monkeypatch.setattr("memoryforge.cli.Workspace.open_readonly", fail_open)
     result = CliRunner().invoke(app, ["ask", "question", "--workspace", "unused"])
 
     assert result.exit_code == 1

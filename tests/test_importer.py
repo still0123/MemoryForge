@@ -380,7 +380,7 @@ def test_import_local_file_persists_only_safe_relative_paths(tmp_path: Path) -> 
     assert str(tmp_path) not in repr((source_row, blob_row))
 
 
-def test_source_id_is_full_sha256_of_relative_path_and_stable_across_roots(
+def test_source_id_namespaces_the_same_relative_path_by_source_root(
     tmp_path: Path,
 ) -> None:
     first_root = tmp_path / "first-root"
@@ -397,13 +397,12 @@ def test_source_id_is_full_sha256_of_relative_path_and_stable_across_roots(
     first = import_local_file(workspace, first_root / relative, source_root=first_root)
     second = import_local_file(workspace, second_root / relative, source_root=second_root)
 
-    expected = hashlib.sha256(relative.as_posix().encode("utf-8")).hexdigest()
-    assert first.source_id == expected
-    assert second.source_id == expected
-    assert len(expected) == 64
-    assert second.status == "updated"
+    assert first.source_id != second.source_id
+    assert len(first.source_id) == 64
+    assert len(second.source_id) == 64
+    assert second.status == "created"
     with closing(sqlite3.connect(workspace / ".memoryforge/index.sqlite")) as connection:
-        assert connection.execute("SELECT COUNT(*) FROM sources").fetchone() == (1,)
+        assert connection.execute("SELECT COUNT(*) FROM sources").fetchone() == (2,)
 
 
 @pytest.mark.skipif(sys.platform != "darwin", reason="macOS filesystem alias behavior")

@@ -1,12 +1,34 @@
 from __future__ import annotations
 
 import json
+import socket
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 import memoryforge.web_adapter as web_adapter
 from memoryforge.cli import app
+
+
+@pytest.mark.parametrize(
+    "address",
+    ["127.0.0.1", "10.0.0.1", "169.254.169.254", "::1"],
+)
+def test_web_import_rejects_non_public_network_targets(
+    monkeypatch,
+    address: str,
+) -> None:
+    monkeypatch.setattr(
+        web_adapter.socket,
+        "getaddrinfo",
+        lambda *_args, **_kwargs: [
+            (socket.AF_INET6 if ":" in address else socket.AF_INET, 0, 0, "", (address, 443))
+        ],
+    )
+
+    with pytest.raises(web_adapter.WebPageError, match="public network"):
+        web_adapter._require_public_url("https://example.com/article")
 
 
 def test_web_import_keeps_article_text_and_uses_the_normal_wiki_flow(

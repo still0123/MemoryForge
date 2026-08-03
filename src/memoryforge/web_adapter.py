@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import re
+import socket
 from dataclasses import dataclass
 from html.parser import HTMLParser
+from http.client import HTTPMessage
 from pathlib import Path
+from typing import IO
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit, urlunsplit
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from memoryforge.errors import MemoryForgeError
 from memoryforge.importer import import_local_document, read_local_text_file
@@ -31,6 +35,26 @@ class FetchedWebPage:
     url: str
     media_type: str
     content: str
+
+
+class _PublicRedirectHandler(HTTPRedirectHandler):
+    def redirect_request(
+        self,
+        req: Request,
+        fp: IO[bytes],
+        code: int,
+        msg: str,
+        headers: HTTPMessage,
+        newurl: str,
+    ) -> Request | None:
+        return super().redirect_request(
+            req,
+            fp,
+            code,
+            msg,
+            headers,
+            _require_public_url(newurl),
+        )
 
 
 def import_web_page(
@@ -121,6 +145,7 @@ def _import_fetched_page(
 
 
 def _fetch_web_page(url: str) -> FetchedWebPage:
+    url = _require_public_url(url)
     request = Request(
         url,
         headers={
@@ -129,12 +154,12 @@ def _fetch_web_page(url: str) -> FetchedWebPage:
         },
     )
     try:
-        with urlopen(request, timeout=20) as response:
+        with build_opener(_PublicRedirectHandler()).open(request, timeout=20) as response:
             media_type = response.headers.get_content_type()
             if media_type not in {"text/html", "text/plain"}:
                 raise WebPageError("web page must return text/html or text/plain")
             raw = response.read(_MAX_WEB_BYTES + 1)
-            final_url = _normalise_url(response.geturl())
+            final_url = _require_public_url(response.geturl())
             charset = response.headers.get_content_charset() or "utf-8"
     except HTTPError as exc:
         raise WebPageError(f"web page request failed with HTTP {exc.code}") from exc
@@ -168,6 +193,25 @@ def _normalise_url(value: str) -> str:
     rendered_host = f"[{host}]" if ":" in host else host
     netloc = f"{rendered_host}:{port}" if port is not None else rendered_host
     return urlunsplit((parsed.scheme.lower(), netloc, parsed.path or "/", parsed.query, ""))
+
+
+def _require_public_url(value: str) -> str:
+    url = _normalise_url(value)
+    parsed = urlsplit(url)
+    try:
+        addresses = {
+            ipaddress.ip_address(address[4][0])
+            for address in socket.getaddrinfo(
+                parsed.hostname,
+                parsed.port or (443 if parsed.scheme == "https" else 80),
+                type=socket.SOCK_STREAM,
+            )
+        }
+    except (OSError, ValueError) as exc:
+        raise WebPageError("web page host cannot be resolved safely") from exc
+    if not addresses or any(not address.is_global for address in addresses):
+        raise WebPageError("web page must resolve only to public network addresses")
+    return url
 
 
 def _readable_page(page: FetchedWebPage) -> tuple[str, str]:
