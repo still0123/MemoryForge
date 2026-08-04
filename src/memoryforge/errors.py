@@ -15,3 +15,7 @@ class FeatureUnavailableError(MemoryForgeError):
 
 class ChangeSetStoreError(MemoryForgeError):
     """Raised when staged ChangeSet data is invalid, corrupt, or conflicting."""
+
+
+class LifecycleError(MemoryForgeError):
+    """Raised when a ChangeSet review transition cannot proceed."""

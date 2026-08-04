@@ -49,7 +49,7 @@
   --output /private/tmp/memoryforge-public-result.json
 ```
 
-脚本会真实执行 `init → git-add → git-sync → ingest → review → apply → lint → ask → eval`。完整逐题结果保存在 [`demo/results/agent_skill_eval_public.json`](../demo/results/agent_skill_eval_public.json)。
+脚本会真实执行 `init → git-add → git-sync → ingest → review → approve → apply → lint → ask → eval`。完整逐题结果保存在 [`demo/results/agent_skill_eval_public.json`](../demo/results/agent_skill_eval_public.json)。
 
 ## 结论与边界
 

@@ -2,9 +2,9 @@
 """Run the real MemoryForge CLI over a local public Git checkout and emit reproducible evidence.
 
 This is not a new product feature and it registers no new CLI command. It only chains the
-existing commands (init -> git-add -> git-sync -> ingest -> review -> apply -> lint -> ask ->
-eval) along the real user path, then records their true JSON output as a committable evidence
-file. It never clones, fetches, checks out, calls a model, or reads .env.
+existing commands (init -> git-add -> git-sync -> ingest -> review -> approve -> apply ->
+lint -> ask -> eval) along the real user path, then records their true JSON output as a
+committable evidence file. It never clones, fetches, checks out, calls a model, or reads .env.
 """
 
 from __future__ import annotations
@@ -59,7 +59,8 @@ def _build_evidence(
         synced_repositories.append((registration, sync))
     ingest = _cli_json("ingest", "--pending", *_ws(workspace))
     _cli("review", ingest["changeset_id"], *_ws(workspace))  # run it; never store the full diff
-    applied = _cli_json("apply", ingest["changeset_id"], "--approve", *_ws(workspace))
+    _cli_json("approve", ingest["changeset_id"], *_ws(workspace))
+    applied = _cli_json("apply", ingest["changeset_id"], *_ws(workspace))
     lint = _cli_json("lint", *_ws(workspace))
     ask = _cli_json("ask", question, "--debug", "--verify", *_ws(workspace))
     evaluation = _cli_json("eval", str(eval_config), *_ws(workspace))

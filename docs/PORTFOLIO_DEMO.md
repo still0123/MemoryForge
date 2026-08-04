@@ -18,7 +18,7 @@ MemoryForge 是一个本地优先的技术知识 Wiki 编译器：它把 Git、M
 Source Manifest + 原文快照
    ↓
 WikiCompiler：生成 ChangeSet
-   ↓ review / apply
+   ↓ review / approve / apply
 Markdown Wiki：INDEX.md + pages/
    ↓
 渐进式查询：索引 → 页面 → 必要时原文
@@ -44,7 +44,7 @@ CLI / MiniClaude Agent / 飞书机器人
 它会依次执行：
 
 ```text
-init → git-add → git-sync → ingest → review → apply → lint → ask → eval
+init → git-add → git-sync → ingest → review → approve → apply → lint → ask → eval
 ```
 
 本次公开基线使用 `AgentSkill-Eval@93f5dc0`，会导入 56 个来源文件，生成 57 个 Wiki 文件，运行 30 道题。当前结果是：回答准确率 96.7%、Top-3 来源召回率 96.0%、引用落地准确率 96.0%、拒答准确率 100%。同一题集上的 Raw FTS Top-3 来源召回率为 56.0%，完整方法见 [公开 Benchmark](BENCHMARK.md)。
@@ -132,7 +132,7 @@ memoryforge feishu-serve \
 
 ### Wiki 更新怎么做？
 
-新资料先生成 ChangeSet，不直接覆盖正式 Wiki。用户先 `review` 看变更，再 `apply --approve` 写入；更新失败可以查看历史并回滚。这样 Wiki 是可维护的项目资产，而不是一次性摘要。
+新资料先生成 ChangeSet，不直接覆盖正式 Wiki。用户先 `review` 看变更，再用 `approve` 明确批准，最后由 `apply` 写入；更新失败可以查看历史并回滚。这样 Wiki 是可维护的项目资产，而不是一次性摘要。
 
 ## 项目边界
 
@@ -144,5 +144,5 @@ memoryforge feishu-serve \
 - [ ] 公开 Demo 能从空 Workspace 重新跑通。
 - [ ] `memoryforge lint --workspace <workspace>` 返回 `clean`。
 - [ ] 至少演示一个正常回答和一个拒答。
-- [ ] 至少展示一次 `review → apply` 的 Wiki 变更流程。
+- [ ] 至少展示一次 `review → approve → apply` 的 Wiki 变更流程。
 - [ ] 如果展示模型，单独记录模型耗时，不把私有调用日志提交到 GitHub。

@@ -16,7 +16,7 @@
 - `--output`：证据 JSON 写到哪里。
 - `--eval-config`（默认 `demo/evaluation/agent_skill_eval.json`）、`--question`（默认一条固定问题）可覆盖。
 
-脚本依次编排 `init → git-add --public → git-sync → ingest --pending → review → apply --approve → lint → ask --debug --verify → eval`，并从每一步的真实 JSON 输出解析 `repository-id`、`changeset-id` 等值。任一步非零退出即保留 workspace 并清晰失败，不生成“成功”证据文件。
+脚本依次编排 `init → git-add --public → git-sync → ingest --pending → review → approve → apply → lint → ask --debug --verify → eval`，并从每一步的真实 JSON 输出解析 `repository-id`、`changeset-id` 等值。任一步非零退出即保留 workspace 并清晰失败，不生成“成功”证据文件。
 
 ## 证据 JSON 字段
 

@@ -488,6 +488,18 @@ class StagedChangeSet(BaseModel):
         return self
 
 
+class ChangeSetLifecycle(BaseModel):
+    """Mutable review state stored separately from an immutable proposal."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    changeset_id: str = Field(pattern=r"^chg_[a-zA-Z0-9_-]+$")
+    status: ChangeSetStatus
+    updated_at: datetime
+    reviewed_at: datetime | None = None
+    approved_at: datetime | None = None
+
+
 class LintIssue(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 

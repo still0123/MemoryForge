@@ -24,6 +24,7 @@ from memoryforge.feishu_bot import FeishuBotError, reply_to_feishu_text
 from memoryforge.feishu_service import FeishuServiceError, serve_feishu_bot
 from memoryforge.git_adapter import GitRepositoryError
 from memoryforge.importer import SourceValidationError, import_local_file
+from memoryforge.lifecycle import ChangeSetLifecycleStore
 from memoryforge.linting import lint_workspace
 from memoryforge.models import ChangeOperationType, Sensitivity
 from memoryforge.provider import OpenAICompatibleProvider, ProviderConfig
@@ -380,6 +381,7 @@ def topics(
             compilation.changeset,
             compilation.candidate_files,
         )
+        ChangeSetLifecycleStore(opened).ensure_validated(stored.changeset.changeset_id)
     except (
         MemoryForgeError,
         WorkspaceIntegrityError,
@@ -627,6 +629,7 @@ def ingest(
             compilation.changeset,
             compilation.candidate_files,
         )
+        ChangeSetLifecycleStore(opened).ensure_validated(stored.changeset.changeset_id)
     except (
         MemoryForgeError,
         WorkspaceIntegrityError,
@@ -646,7 +649,7 @@ def review(
     workspace: WorkspaceOption = Path("."),
 ) -> None:
     try:
-        opened = Workspace.open_readonly(workspace)
+        opened = Workspace.open(workspace)
         stored = ChangeSetStore(opened).get(changeset_id)
         diffs: dict[str, str] = {}
         for path, candidate in sorted(stored.candidate_files.items()):
@@ -660,6 +663,7 @@ def review(
                     tofile=f"{path} (proposed)",
                 )
             )
+        ChangeSetLifecycleStore(opened).mark_reviewed(changeset_id)
     except (
         MemoryForgeError,
         WorkspaceIntegrityError,
@@ -684,15 +688,35 @@ def review(
 
 
 @app.command()
+def approve(
+    changeset_id: Annotated[str, typer.Argument()],
+    workspace: WorkspaceOption = Path("."),
+) -> None:
+    """Approve a ChangeSet after its diff has been reviewed."""
+    try:
+        opened = Workspace.open(workspace)
+        state = ChangeSetLifecycleStore(opened).approve(changeset_id)
+    except (MemoryForgeError, WorkspaceIntegrityError, WorkspaceSecurityError, OSError) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(
+        json.dumps(
+            {"changeset_id": changeset_id, "status": state.status.value},
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
+@app.command()
 def apply(
     changeset_id: Annotated[str, typer.Argument()],
     approve: Annotated[bool, typer.Option("--approve")] = False,
     workspace: WorkspaceOption = Path("."),
 ) -> None:
-    if not approve:
-        _exit_with_safe_error(ValueError("apply requires explicit --approve"))
     try:
         opened = Workspace.open(workspace)
+        if not approve and not ChangeSetLifecycleStore(opened).is_approved(changeset_id):
+            raise ValueError("apply requires an approved ChangeSet or explicit --approve")
         with opened.exclusive_lock():
             store = ChangeSetStore(opened)
             stored = store.get(changeset_id)

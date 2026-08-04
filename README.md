@@ -78,7 +78,8 @@ memoryforge import ./notes/cache.md --category design --workspace ./my-wiki
 # 3. 先生成变更预览，再确认写入 Wiki
 memoryforge ingest --pending --workspace ./my-wiki
 memoryforge review <changeset-id> --workspace ./my-wiki
-memoryforge apply <changeset-id> --approve --workspace ./my-wiki
+memoryforge approve <changeset-id> --workspace ./my-wiki
+memoryforge apply <changeset-id> --workspace ./my-wiki
 
 # 4. 提问
 memoryforge ask '缓存多久过期？' --workspace ./my-wiki
@@ -114,7 +115,7 @@ memoryforge feishu-serve --workspace ./my-wiki
 memoryforge feishu-serve --llm --allow-local-llm --workspace ./my-wiki
 ```
 
-飞书服务只处理私聊文本并回复原消息。资料仍要先走 `feishu-import → ingest → review → apply`，它不会自动抓取飞书空间或后台同步全部文档。完整配置见 [FEISHU_MVP_SPEC.md](FEISHU_MVP_SPEC.md)。
+飞书服务只处理私聊文本并回复原消息。资料仍要先走 `feishu-import → ingest → review → approve → apply`，它不会自动抓取飞书空间或后台同步全部文档。完整配置见 [FEISHU_MVP_SPEC.md](FEISHU_MVP_SPEC.md)。
 
 ## MiniClaude Agent 在哪里？
 
@@ -164,7 +165,7 @@ Agent 没有 Shell、通用写文件、Subagent 或 MCP 工具；它只负责在
 脚本会真实执行：
 
 ```text
-init -> git-add --public -> git-sync -> ingest -> review -> apply -> lint -> ask -> eval
+init -> git-add --public -> git-sync -> ingest -> review -> approve -> apply -> lint -> ask -> eval
 ```
 
 已提交的公开结果在 [demo/results/agent_skill_eval_public.json](demo/results/agent_skill_eval_public.json)。`eval` 会检查回答是否命中关键事实、引用是否可回溯，以及每题实际展开了多少 Wiki 页面/原文字符。
@@ -195,7 +196,7 @@ Raw FTS 只负责检索，不生成答案，所以不能拿它计算回答、引
 | 选择 | 原因 |
 | --- | --- |
 | Markdown Wiki 而非只存向量 | 即使不问模型，人也能阅读、审核和维护沉淀内容 |
-| `review → apply` 而非直接生成 | 先看 Diff，再确认改变稳定 Wiki；避免自动覆盖已有知识 |
+| `review → approve → apply` 而非直接生成 | 先看 Diff，再确认改变稳定 Wiki；避免自动覆盖已有知识 |
 | `INDEX + FTS5 + 页面展开` 而非全量拼接 | 控制检索范围和上下文成本，便于解释“这次读了什么” |
 | 证据优先的最小 Agent | 让模型负责组织答案，不让它执行代码或扩展为难控的通用助手 |
 | 飞书作为展示入口 | 将真实 Wiki 问答能力放到日常聊天场景中，而不重复实现另一套知识库 |
@@ -219,7 +220,8 @@ memoryforge web-import <public-http-url> --workspace <workspace>
 # Wiki 编译与检查
 memoryforge ingest --pending --workspace <workspace>
 memoryforge review <changeset-id> --workspace <workspace>
-memoryforge apply <changeset-id> --approve --workspace <workspace>
+memoryforge approve <changeset-id> --workspace <workspace>
+memoryforge apply <changeset-id> --workspace <workspace>
 memoryforge lint --workspace <workspace>
 
 # 问答与展示
