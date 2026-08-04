@@ -263,6 +263,20 @@ class StagedChangeSet(BaseModel):
         return self
 
 
+class ChangeSetLifecycle(BaseModel):
+    """Mutable review state stored separately from an immutable proposal."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    changeset_id: str = Field(pattern=r"^chg_[a-zA-Z0-9_-]+$")
+    status: ChangeSetStatus
+    updated_at: datetime
+    reviewed_at: Optional[datetime] = None
+    approved_at: Optional[datetime] = None
+    applied_at: Optional[datetime] = None
+    applied_commit: Optional[str] = Field(default=None, pattern=r"^[a-f0-9]{40}$")
+
+
 class LintIssue(BaseModel):
     """A deterministic issue discovered by the future knowledge linter."""
 

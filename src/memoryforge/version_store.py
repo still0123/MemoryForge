@@ -53,6 +53,42 @@ class GitVersionStore:
             return None
         return completed.stdout.strip()
 
+    def paths_are_clean(self, paths: tuple[str, ...]) -> bool:
+        """Return whether selected paths have no tracked or untracked changes."""
+
+        completed = self._run(
+            ["status", "--porcelain", "--untracked-files=all", "--", *paths],
+            check=True,
+        )
+        return not completed.stdout.strip()
+
+    def commit(self, paths: tuple[str, ...], message: str) -> str:
+        """Commit only the supplied workspace paths and return the new revision."""
+
+        if not paths:
+            raise WorkspaceError("Cannot create a MemoryForge commit without paths")
+        self._run(["add", "--", *paths], check=True)
+        staged = self._run(["diff", "--cached", "--quiet"], check=False)
+        if staged.returncode == 0:
+            raise WorkspaceError("No staged MemoryForge changes to commit")
+        if staged.returncode != 1:
+            raise WorkspaceError("Unable to inspect staged MemoryForge changes")
+        self._run(
+            ["commit", "--quiet", "-m", message],
+            check=True,
+            extra_config=self._commit_identity(),
+        )
+        commit = self.head()
+        if commit is None:
+            raise WorkspaceError("MemoryForge commit completed without creating HEAD")
+        return commit
+
+    def unstage(self, paths: tuple[str, ...]) -> None:
+        """Remove selected paths from the index without changing working files."""
+
+        if paths:
+            self._run(["reset", "--quiet", "HEAD", "--", *paths], check=True)
+
     def _commit_identity(self) -> tuple[str, ...]:
         """Use repository/user configuration when available, with a local fallback."""
 

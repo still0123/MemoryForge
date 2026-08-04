@@ -9,8 +9,10 @@ from typing import Annotated, Optional
 import typer
 
 from memoryforge import __version__
+from memoryforge.compiler import WikiCompiler
 from memoryforge.errors import FeatureUnavailableError, MemoryForgeError
 from memoryforge.importer import SourceImporter
+from memoryforge.lifecycle import ChangeSetLifecycleStore, ChangeSetService
 from memoryforge.models import Sensitivity, SourceCategory
 from memoryforge.workspace import Workspace
 
@@ -110,9 +112,26 @@ def ingest(
     ] = None,
     workspace: WorkspaceOption = Path("."),
 ) -> None:
-    """Compile sources into a staged ChangeSet (scheduled for milestone two)."""
+    """Compile pending sources into a validated staged ChangeSet."""
 
-    _require_future_feature(workspace, "ingest")
+    try:
+        current_workspace = Workspace.open(workspace)
+        result = WikiCompiler(current_workspace).compile_pending(tuple(source or ()))
+        state = ChangeSetLifecycleStore(current_workspace).ensure_validated(
+            result.stored.changeset.changeset_id
+        )
+    except MemoryForgeError as error:
+        _fail(error)
+    payload = {
+        "changeset_id": result.stored.changeset.changeset_id,
+        "status": state.status.value,
+        "source_ids": list(result.source_ids),
+        "operations": [
+            operation.model_dump(mode="json")
+            for operation in result.stored.changeset.operations
+        ],
+    }
+    typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
 
 
 @app.command()
@@ -120,9 +139,35 @@ def review(
     changeset_id: Annotated[str, typer.Argument(help="ChangeSet to inspect.")],
     workspace: WorkspaceOption = Path("."),
 ) -> None:
-    """Show a structured ChangeSet diff (scheduled for milestone two)."""
+    """Show a structured ChangeSet diff and record human review."""
 
-    _require_future_feature(workspace, "review")
+    try:
+        current_workspace = Workspace.open(workspace)
+        rendered = ChangeSetService(current_workspace).review(changeset_id)
+    except MemoryForgeError as error:
+        _fail(error)
+    typer.echo(rendered, nl=False)
+
+
+@app.command()
+def approve(
+    changeset_id: Annotated[str, typer.Argument(help="Reviewed ChangeSet to approve.")],
+    workspace: WorkspaceOption = Path("."),
+) -> None:
+    """Approve a reviewed ChangeSet without writing stable Wiki content."""
+
+    try:
+        current_workspace = Workspace.open(workspace)
+        state = ChangeSetLifecycleStore(current_workspace).approve(changeset_id)
+    except MemoryForgeError as error:
+        _fail(error)
+    typer.echo(
+        json.dumps(
+            {"changeset_id": changeset_id, "status": state.status.value},
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
 
 
 @app.command()
@@ -130,9 +175,24 @@ def apply(
     changeset_id: Annotated[str, typer.Argument(help="Approved ChangeSet to apply.")],
     workspace: WorkspaceOption = Path("."),
 ) -> None:
-    """Apply an approved ChangeSet to the stable Wiki (milestone two)."""
+    """Apply an approved ChangeSet to the stable Wiki and Git history."""
 
-    _require_future_feature(workspace, "apply")
+    try:
+        current_workspace = Workspace.open(workspace)
+        commit = ChangeSetService(current_workspace).apply(changeset_id)
+    except MemoryForgeError as error:
+        _fail(error)
+    typer.echo(
+        json.dumps(
+            {
+                "changeset_id": changeset_id,
+                "status": "APPLIED",
+                "commit": commit,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
 
 
 @app.command()

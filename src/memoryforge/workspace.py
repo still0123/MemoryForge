@@ -85,6 +85,8 @@ index.sqlite
 index.sqlite-*
 vectors/
 traces/
+staging/
+rejected/
 """
 
 BASELINE_PATHS = (
