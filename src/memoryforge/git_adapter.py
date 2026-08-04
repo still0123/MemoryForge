@@ -53,8 +53,8 @@ def scan_git_snapshot_documentation(
         raise GitRepositoryError(f"could not list HEAD tree in {snapshot.repository_root}")
 
     documents = []
-    for relative_path, object_id in _documentation_blobs(tree_result.stdout):
-        content = _read_text_blob(snapshot.repository_root, object_id)
+    blobs = _documentation_blobs(tree_result.stdout)
+    for relative_path, content in _read_text_blobs(snapshot.repository_root, blobs):
         if content is None:
             continue
         suffix = _document_suffix(relative_path)
@@ -94,12 +94,16 @@ def scan_git_snapshot_code(
     if tree_result.returncode != 0:
         raise GitRepositoryError(f"could not list HEAD tree in {snapshot.repository_root}")
 
-    documents = []
+    selected_blobs = []
     for relative_path, object_id in _tracked_blobs(tree_result.stdout):
         suffix = PurePosixPath(relative_path).suffix.lower()
         if suffix not in {".go", ".py"} or not _matches_code_selection(relative_path, normalized):
             continue
-        content = _read_text_blob(snapshot.repository_root, object_id)
+        selected_blobs.append((relative_path, object_id))
+
+    documents = []
+    for relative_path, content in _read_text_blobs(snapshot.repository_root, tuple(selected_blobs)):
+        suffix = PurePosixPath(relative_path).suffix.lower()
         if content is None or not content.strip():
             continue
         documents.append(
@@ -115,7 +119,7 @@ def scan_git_snapshot_code(
                 tags=("code", suffix.removeprefix(".")),
             )
         )
-    if "." in normalized:
+    if documents:
         documents.extend(
             _code_module_documents(
                 snapshot,
@@ -476,16 +480,38 @@ def _code_suffix(suffix: str) -> Literal[".go", ".py"]:
     return ".py"
 
 
-def _read_text_blob(repository_root: Path, object_id: str) -> str | None:
-    result = _run_git_bytes(repository_root, "cat-file", "-p", object_id)
+def _read_text_blobs(
+    repository_root: Path,
+    blobs: tuple[tuple[str, str], ...],
+) -> tuple[tuple[str, str | None], ...]:
+    if not blobs:
+        return ()
+    result = subprocess.run(
+        ["git", "cat-file", "--batch"],
+        cwd=repository_root,
+        input=("\n".join(object_id for _, object_id in blobs) + "\n").encode(),
+        check=False,
+        capture_output=True,
+    )
     if result.returncode != 0:
-        raise GitRepositoryError(f"could not read Git blob {object_id}")
-    if b"\0" in result.stdout:
-        return None
-    try:
-        return result.stdout.decode("utf-8")
-    except UnicodeDecodeError:
-        return None
+        raise GitRepositoryError("could not read selected Git blobs")
+    offset = 0
+    documents: list[tuple[str, str | None]] = []
+    for relative_path, _ in blobs:
+        header_end = result.stdout.index(b"\n", offset)
+        size = int(result.stdout[offset:header_end].rsplit(b" ", 1)[1])
+        start = header_end + 1
+        raw = result.stdout[start : start + size]
+        offset = start + size + 1
+        if b"\0" in raw:
+            documents.append((relative_path, None))
+            continue
+        try:
+            content = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            content = None
+        documents.append((relative_path, content))
+    return tuple(documents)
 
 
 def _is_documentation_path(relative_path: str) -> bool:

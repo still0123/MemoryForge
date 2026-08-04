@@ -855,9 +855,25 @@ def sync_git_checkout(workspace: Path, repository_id: str) -> GitRepositorySyncR
         {document.source_path: document for document in scanned_documents}.values(),
         key=lambda document: document.source_path,
     )
+    reusable_paths = (
+        _current_git_paths(
+            opened,
+            repository.repository_id,
+            snapshot.revision,
+            repository.sensitivity,
+        )
+        if repository.last_synced_commit == snapshot.revision
+        else set()
+    )
     safe_documents = []
     skipped = []
     for document in scanned_documents:
+        if (
+            document.source_path in reusable_paths
+            and not document.source_path.startswith(".memoryforge/code-modules/")
+        ):
+            safe_documents.append(document)
+            continue
         try:
             validate_local_document(document)
         except SourceValidationError:
@@ -874,6 +890,20 @@ def sync_git_checkout(workspace: Path, repository_id: str) -> GitRepositorySyncR
         source_id = hashlib.sha256(
             f"{repository.repository_id}\0{document.source_path}".encode()
         ).hexdigest()
+        if (
+            document.source_path in reusable_paths
+            and not document.source_path.startswith(".memoryforge/code-modules/")
+        ):
+            counts["unchanged"] += 1
+            documents.append(
+                GitDocumentSyncResult(
+                    source_id=source_id,
+                    relative_path=document.source_path,
+                    revision=snapshot.revision,
+                    status="unchanged",
+                )
+            )
+            continue
         imported = import_local_document(opened.root, document, source_id=source_id)
         _record_git_source_revision(
             opened,
@@ -992,6 +1022,29 @@ def _record_git_source_revision(
             """,
             (current_version_id, repository_id, relative_path, commit_sha),
         )
+
+
+def _current_git_paths(
+    workspace: Workspace,
+    repository_id: str,
+    commit_sha: str,
+    sensitivity: Sensitivity,
+) -> set[str]:
+    with _connect(workspace.index_path) as connection:
+        rows = connection.execute(
+            """
+            SELECT revisions.relative_path
+            FROM git_source_revisions AS revisions
+            JOIN source_versions AS versions
+              ON versions.id = revisions.source_version_id
+            WHERE revisions.repository_id = ?
+              AND revisions.commit_sha = ?
+              AND versions.is_current = 1
+              AND versions.sensitivity = ?
+            """,
+            (repository_id, commit_sha, sensitivity.value),
+        ).fetchall()
+    return {str(row["relative_path"]) for row in rows}
 
 
 def _git_repository_record(row: sqlite3.Row) -> GitRepositoryRecord:

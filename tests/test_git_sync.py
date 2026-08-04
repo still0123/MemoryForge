@@ -327,6 +327,8 @@ func (m *Meter) RecordUsage() {}
         document for document in synced.documents if document.relative_path.endswith("meter.go")
     )
     assert {document.relative_path for document in synced.documents} == {
+        ".memoryforge/code-modules/internal.md",
+        ".memoryforge/code-modules/internal/meter.md",
         "README.md",
         "internal/meter/meter.go",
     }
@@ -355,7 +357,7 @@ func (m *Meter) RecordUsage() {}
     assert lint_workspace(workspace)["status"] == "clean"
     answer = runner.invoke(app, ["ask", "NewMeter", "--workspace", str(workspace)])
     assert answer.exit_code == 0, answer.output
-    assert json.loads(answer.stdout)["quote"] == "func NewMeter"
+    assert "NewMeter" in json.loads(answer.stdout)["quote"]
 
     _write(
         checkout / "internal" / "meter" / "meter.go",
@@ -375,7 +377,15 @@ func Reset() {}
     _commit_all(checkout, "Add meter reset")
     refreshed = sync_git_checkout(workspace, repository.repository_id)
     assert refreshed.created == 0
-    assert refreshed.updated == 1
+    assert {
+        document.relative_path
+        for document in refreshed.documents
+        if document.status == "updated"
+    } == {
+        ".memoryforge/code-modules/internal.md",
+        ".memoryforge/code-modules/internal/meter.md",
+        "internal/meter/meter.go",
+    }
     assert refreshed.unchanged == 1
     assert _current_git_revision(workspace, code_document.source_id) == refreshed.head_commit
 
@@ -454,6 +464,35 @@ def test_whole_repository_adds_a_card_for_each_nested_code_module(tmp_path: Path
     assert "`HandleCreate`" in content
     assert "Imports module `services/jobs`" in content
     assert "`services/accounts/service_test.go`" in content
+
+
+def test_same_commit_reuses_code_files_but_rebuilds_module_cards(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from memoryforge import importer as importer_module
+
+    checkout = _create_repository(tmp_path)
+    _write(checkout / "cmd" / "main.go", "package main\n\nfunc main() {}\n")
+    _commit_all(checkout, "Add command")
+    workspace = init_workspace(tmp_path / "workspace")
+    repository = register_git_checkout(workspace, checkout)
+    register_git_code_module(workspace, repository.repository_id, ".")
+    sync_git_checkout(workspace, repository.repository_id)
+
+    validated = []
+    original_validate = importer_module.validate_local_document
+
+    def track_validation(document) -> None:
+        validated.append(document.source_path)
+        original_validate(document)
+
+    monkeypatch.setattr(importer_module, "validate_local_document", track_validation)
+    refreshed = sync_git_checkout(workspace, repository.repository_id)
+
+    assert "cmd/main.go" not in validated
+    assert ".memoryforge/code-modules/cmd.md" in validated
+    assert refreshed.updated == 0
 
 
 def test_git_sync_rejects_checkout_with_changed_repository_identity(tmp_path: Path) -> None:
