@@ -422,7 +422,15 @@ def test_whole_repository_adds_a_card_for_each_nested_code_module(tmp_path: Path
     checkout = _create_repository(tmp_path)
     _write(
         checkout / "services" / "accounts" / "service.go",
-        "package accounts\n\nfunc CreateAccount() {}\nfunc DescribeAccount() {}\n",
+        'package accounts\n\nimport "example/services/jobs"\n\n'
+        "func CreateAccount() {}\n"
+        "func DescribeAccount() {}\n"
+        "func RegisterRoutes() {}\n"
+        "func HandleCreate() { jobs.StartTask() }\n",
+    )
+    _write(
+        checkout / "services" / "accounts" / "service_test.go",
+        "package accounts\n\nfunc TestCreateAccount() {}\n",
     )
     _write(checkout / "services" / "jobs" / "task.go", "package jobs\n\nfunc StartTask() {}\n")
     _commit_all(checkout, "Add nested modules")
@@ -441,6 +449,11 @@ def test_whole_repository_adds_a_card_for_each_nested_code_module(tmp_path: Path
     assert "Search aliases: `accounts`, `services/accounts`" in content
     assert "`CreateAccount`" in content
     assert "`services/accounts/service.go`" in content
+    assert "## Entry points and handlers" in content
+    assert "`RegisterRoutes`" in content
+    assert "`HandleCreate`" in content
+    assert "Imports module `services/jobs`" in content
+    assert "`services/accounts/service_test.go`" in content
 
 
 def test_git_sync_rejects_checkout_with_changed_repository_identity(tmp_path: Path) -> None:

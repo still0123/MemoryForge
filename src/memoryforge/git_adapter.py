@@ -252,6 +252,7 @@ def _code_module_documents(
             parent = parent.parent
 
     modules = []
+    module_names = set(grouped)
     for module, documents in sorted(grouped.items()):
         source_path = f".memoryforge/code-modules/{module}.md"
         paths = sorted(document.source_path for document in documents)
@@ -264,14 +265,29 @@ def _code_module_documents(
             for directory in grouped
             if PurePosixPath(directory).parent.as_posix() == module
         )
+        implementation_documents = tuple(
+            document for document in documents if not _is_test_file(document.source_path)
+        )
         symbols = tuple(
             dict.fromkeys(
                 symbol
-                for document in (*own_files, *documents)
+                for document in (*own_files, *implementation_documents)
+                if not _is_test_file(document.source_path)
                 for symbol in _exported_code_symbols(document)
             )
         )
         operations = _representative_operations(symbols)
+        entry_points = _code_entry_points(implementation_documents)
+        dependencies = _internal_dependencies(
+            tuple(document for document in own_files if not _is_test_file(document.source_path)),
+            module_names,
+            module,
+        )
+        tests = tuple(
+            document.source_path
+            for document in documents
+            if _is_test_file(document.source_path)
+        )
         aliases = tuple(dict.fromkeys((PurePosixPath(module).name, module)))
         content = "\n".join(
             [
@@ -302,6 +318,27 @@ def _code_module_documents(
                     if symbols
                     else []
                 ),
+                "",
+                "## Entry points and handlers",
+                "",
+                *(
+                    [f"- `{path}`: " + ", ".join(f"`{symbol}`" for symbol in names)
+                     for path, names in entry_points]
+                    if entry_points
+                    else ["- No explicit entry point or handler was detected."]
+                ),
+                "",
+                "## Module dependencies",
+                "",
+                *(
+                    [f"- Imports module `{dependency}`" for dependency in dependencies]
+                    if dependencies
+                    else ["- No direct module import was detected."]
+                ),
+                "",
+                "## Tests",
+                "",
+                *([f"- `{path}`" for path in tests[:12]] if tests else ["- No test file found."]),
                 "",
                 "## Child modules",
                 "",
@@ -360,6 +397,12 @@ def _representative_operations(symbols: tuple[str, ...]) -> tuple[str, ...]:
         "List",
         "Check",
         "Set",
+        "Get",
+        "New",
+        "Run",
+        "Serve",
+        "Handle",
+        "Register",
     )
     for symbol in symbols:
         if symbol.startswith(prefixes):
@@ -369,6 +412,62 @@ def _representative_operations(symbols: tuple[str, ...]) -> tuple[str, ...]:
     if not selected:
         selected.extend(symbols[:8])
     return tuple(selected[:16])
+
+
+def _code_entry_points(
+    documents: tuple[LocalDocument, ...],
+) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    prefixes = ("main", "New", "Run", "Serve", "Handle", "Register", "Execute")
+    entries = []
+    for document in documents:
+        names = tuple(
+            symbol
+            for symbol in _exported_code_symbols(document)
+            if symbol == "main" or symbol.startswith(prefixes[1:])
+        )
+        if document.suffix == ".go" and re.search(r"^func\s+main\s*\(", document.content, re.M):
+            names = tuple(dict.fromkeys(("main", *names)))
+        if document.suffix == ".py" and "if __name__ == \"__main__\":" in document.content:
+            names = tuple(dict.fromkeys(("main", *names)))
+        if names:
+            entries.append((document.source_path, names[:12]))
+    return tuple(entries[:12])
+
+
+def _internal_dependencies(
+    documents: tuple[LocalDocument, ...],
+    modules: set[str],
+    current_module: str,
+) -> tuple[str, ...]:
+    imported = []
+    for document in documents:
+        if document.suffix == ".go":
+            candidates = re.findall(r'"([^"\n]+)"', document.content)
+        else:
+            candidates = re.findall(
+                r"^(?:from|import)\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)",
+                document.content,
+                re.M,
+            )
+        for candidate in candidates:
+            normalized = candidate.replace(".", "/")
+            match = next(
+                (
+                    module
+                    for module in sorted(modules, key=len, reverse=True)
+                    if module != current_module
+                    and (normalized == module or normalized.endswith("/" + module))
+                ),
+                None,
+            )
+            if match:
+                imported.append(match)
+    return tuple(dict.fromkeys(imported))
+
+
+def _is_test_file(path: str) -> bool:
+    name = PurePosixPath(path).name
+    return name.endswith("_test.go") or name.startswith("test_") or name.endswith("_test.py")
 
 
 def _code_suffix(suffix: str) -> Literal[".go", ".py"]:
