@@ -147,7 +147,13 @@ def test_feishu_llm_reply_uses_the_evidence_summarizer(tmp_path: Path, monkeypat
             self, messages: list[dict[str, str]]
         ) -> tuple[str, tuple[int, ...]]:
             facts = json.loads(messages[1]["content"])["facts"]
-            assert facts == [{"index": 0, "quote": "Cache entries expire after sixty seconds."}]
+            assert facts == [
+                {
+                    "index": 0,
+                    "quote": "Cache entries expire after sixty seconds.",
+                    "section": "Cache policy",
+                }
+            ]
             return "缓存会在六十秒后过期。", (0,)
 
     reply = reply_to_feishu_text(

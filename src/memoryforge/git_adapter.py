@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -99,7 +100,7 @@ def scan_git_snapshot_code(
         if suffix not in {".go", ".py"} or not _matches_code_selection(relative_path, normalized):
             continue
         content = _read_text_blob(snapshot.repository_root, object_id)
-        if content is None:
+        if content is None or not content.strip():
             continue
         documents.append(
             LocalDocument(
@@ -112,6 +113,14 @@ def scan_git_snapshot_code(
                 content=content,
                 sensitivity=sensitivity,
                 tags=("code", suffix.removeprefix(".")),
+            )
+        )
+    if "." in normalized:
+        documents.extend(
+            _code_module_documents(
+                snapshot,
+                tuple(documents),
+                sensitivity=sensitivity,
             )
         )
     return tuple(documents)
@@ -197,9 +206,12 @@ def _tracked_blobs(output: bytes) -> tuple[tuple[str, str], ...]:
 
 
 def _normalise_code_selection(selection: str) -> str:
-    path = PurePosixPath(selection.strip())
+    selected = selection.strip()
+    if selected == ".":
+        return "."
+    path = PurePosixPath(selected)
     if (
-        not selection.strip()
+        not selected
         or path.is_absolute()
         or any(part in {"", ".", ".."} for part in path.parts)
         or "\\" in selection
@@ -211,9 +223,152 @@ def _normalise_code_selection(selection: str) -> str:
 def _matches_code_selection(relative_path: str, selections: tuple[str, ...]) -> bool:
     path = PurePosixPath(relative_path)
     return any(
-        path == PurePosixPath(selection) or path.is_relative_to(PurePosixPath(selection))
+        selection == "."
+        or path == PurePosixPath(selection)
+        or path.is_relative_to(PurePosixPath(selection))
         for selection in selections
     )
+
+
+def _code_module_documents(
+    snapshot: GitSnapshot,
+    code_documents: tuple[LocalDocument, ...],
+    *,
+    sensitivity: Sensitivity,
+) -> tuple[LocalDocument, ...]:
+    """Build one small structural source for every code directory."""
+    grouped: dict[str, list[LocalDocument]] = {}
+    direct_files: dict[str, list[LocalDocument]] = {}
+    for document in code_documents:
+        path = PurePosixPath(document.source_path)
+        parent = path.parent
+        if parent == PurePosixPath("."):
+            grouped.setdefault("root", []).append(document)
+            direct_files.setdefault("root", []).append(document)
+            continue
+        direct_files.setdefault(parent.as_posix(), []).append(document)
+        while parent != PurePosixPath("."):
+            grouped.setdefault(parent.as_posix(), []).append(document)
+            parent = parent.parent
+
+    modules = []
+    for module, documents in sorted(grouped.items()):
+        source_path = f".memoryforge/code-modules/{module}.md"
+        paths = sorted(document.source_path for document in documents)
+        own_files = sorted(
+            direct_files.get(module, []),
+            key=lambda document: document.source_path,
+        )
+        children = sorted(
+            directory
+            for directory in grouped
+            if PurePosixPath(directory).parent.as_posix() == module
+        )
+        symbols = tuple(
+            dict.fromkeys(
+                symbol
+                for document in (*own_files, *documents)
+                for symbol in _exported_code_symbols(document)
+            )
+        )
+        operations = _representative_operations(symbols)
+        aliases = tuple(dict.fromkeys((PurePosixPath(module).name, module)))
+        content = "\n".join(
+            [
+                f"# Code module: {module}",
+                "",
+                "## Identity",
+                "",
+                f"- Canonical module path: `{module}`",
+                "- Search aliases: " + ", ".join(f"`{alias}`" for alias in aliases),
+                f"- Contains {len(paths)} tracked Go/Python files; "
+                f"{len(own_files)} are directly inside this directory.",
+                "",
+                "## Responsibilities",
+                "",
+                *(
+                    [
+                        f"- Main exported operations in `{module}`: "
+                        + ", ".join(f"`{symbol}`" for symbol in operations)
+                    ]
+                    if operations
+                    else []
+                ),
+                *(
+                    [
+                        "- Other exported code symbols: "
+                        + ", ".join(f"`{symbol}`" for symbol in symbols[:20])
+                    ]
+                    if symbols
+                    else []
+                ),
+                "",
+                "## Child modules",
+                "",
+                *(
+                    [f"- `{child}`" for child in children]
+                    if children
+                    else ["- No child code directories."]
+                ),
+                "",
+                "## Representative files",
+                "",
+                *(f"- `{document.source_path}`" for document in own_files[:12]),
+                *([f"- `{path}`" for path in paths[:12]] if not own_files else []),
+                "",
+            ]
+        )
+        modules.append(
+            LocalDocument(
+                source_uri=_source_uri(snapshot.repository_identity, source_path),
+                source_path=source_path,
+                media_type="text/markdown",
+                category=SourceCategory.REFS,
+                suffix=".md",
+                title=f"Code module: {module}",
+                content=content,
+                sensitivity=sensitivity,
+                tags=("code-module",),
+            )
+        )
+    return tuple(modules)
+
+
+def _exported_code_symbols(document: LocalDocument) -> tuple[str, ...]:
+    pattern = (
+        r"^(?:type\s+|func\s+(?:\([^)]*\)\s*)?)([A-Z]\w*)"
+        if document.suffix == ".go"
+        else r"^(?:class|def)\s+([A-Za-z]\w*)"
+    )
+    return tuple(dict.fromkeys(re.findall(pattern, document.content, re.MULTILINE)))
+
+
+def _representative_operations(symbols: tuple[str, ...]) -> tuple[str, ...]:
+    selected = []
+    prefixes = (
+        "Create",
+        "Describe",
+        "Update",
+        "Delete",
+        "Enable",
+        "Disable",
+        "Start",
+        "Stop",
+        "Cancel",
+        "Add",
+        "Remove",
+        "List",
+        "Check",
+        "Set",
+    )
+    for symbol in symbols:
+        if symbol.startswith(prefixes):
+            selected.append(symbol)
+        if len(selected) == 16:
+            break
+    if not selected:
+        selected.extend(symbols[:8])
+    return tuple(selected[:16])
 
 
 def _code_suffix(suffix: str) -> Literal[".go", ".py"]:

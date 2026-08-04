@@ -29,6 +29,7 @@ _INDEX_ENTRY = re.compile(
     re.MULTILINE,
 )
 _FRONTMATTER = re.compile(r"\A---\n(?P<fields>.*?)\n---\n", re.DOTALL)
+_FACT_SECTION = re.compile(r"^### (?P<section>.+?)\s*$", re.MULTILINE)
 _WORDS = re.compile(r"[a-z0-9]+|[\u4e00-\u9fff]+", re.IGNORECASE)
 _CAMEL_CASE_PARTS = re.compile(r"[A-Z]+(?=[A-Z][a-z]|$)|[A-Z]?[a-z]+")
 _CJK = re.compile(r"^[\u4e00-\u9fff]+$")
@@ -56,6 +57,10 @@ _STOP_WORDS = {
 }
 # ponytail: downweight two generic verbs; learn weights only if the fixed suite regresses.
 _RANKING_STOP_WORDS = {"不能", "运行"}
+_QUESTION_NOISE_TERMS = {"在哪"}
+_FAILURE_TERM_EXPANSIONS = {"超时", "异常", "失败", "缺失", "回退"}
+_ENVIRONMENT_ASSIGNMENT = re.compile(r"\b(?:export\s+)?[A-Z][A-Z0-9_]{2,}=")
+_CODE_FACT = re.compile(r"^(?:package|type|func|class|def)\b")
 
 
 class CitationPayload(TypedDict):
@@ -63,6 +68,7 @@ class CitationPayload(TypedDict):
     source_version: int
     locator: str
     quote: str
+    section_path: NotRequired[str]
 
 
 class EvidencePayload(CitationPayload):
@@ -103,8 +109,12 @@ def answer_question(
     """Answer from a bounded set of Wiki pages, expanding raw evidence only on request."""
     _validate_max_pages(max_pages)
     _validate_max_citations(max_citations)
-    question_terms = _terms(question)
-    focus_terms = _yes_no_focus_terms(question)
+    question_terms = _expanded_question_terms(_terms(question))
+    identifier_terms = {term for term in question_terms if not _CJK.fullmatch(term)}
+    focus_terms = _question_focus_terms(question) | _yes_no_focus_terms(question)
+    answer_citation_limit = _answer_citation_limit(question, max_citations)
+    prefer_environment_assignments = "环境变量" in question
+    prefer_code_modules = any(marker in question.lower() for marker in ("模块", "文件夹", "module"))
     trace: list[TraceStep] = []
     if not question_terms:
         return _unknown_payload(debug, trace)
@@ -124,7 +134,7 @@ def answer_question(
         content = page.read_text(encoding="utf-8")
         trace.append({"level": "L1", "artifact": str(page.relative_to(workspace_root))})
         for citation in _page_citations(content):
-            overlap = question_terms & _terms(citation["quote"])
+            overlap = _matching_terms(question_terms, citation)
             page_path = str(page.relative_to(workspace_root))
             raw_candidate_matches.append((frozenset(overlap), page_path, citation))
             has_cjk_terms = any(_CJK.fullmatch(term) for term in question_terms)
@@ -134,42 +144,66 @@ def answer_question(
                 if len(overlap) >= 2 and any(not _CJK.fullmatch(term) for term in overlap):
                     required_overlap = 2
             sufficient_match = len(overlap) >= required_overlap
+            if identifier_terms and not overlap & identifier_terms:
+                sufficient_match = False
             if sufficient_match:
                 raw_matches.append((frozenset(overlap), page_path, citation))
 
-    matches = _rank_matches(raw_matches, focus_terms=focus_terms)
-    candidate_matches = _rank_matches(raw_candidate_matches, focus_terms=focus_terms)
+    matches = _rank_matches(
+        raw_matches,
+        question_terms=question_terms,
+        focus_terms=focus_terms,
+        prefer_environment_assignments=prefer_environment_assignments,
+        prefer_code_modules=prefer_code_modules,
+    )
+    candidate_matches = _rank_matches(
+        raw_candidate_matches,
+        question_terms=question_terms,
+        focus_terms=focus_terms,
+        prefer_environment_assignments=prefer_environment_assignments,
+        prefer_code_modules=prefer_code_modules,
+    )
+    model_candidates = [
+        match
+        for match in candidate_matches
+        if _has_direct_evidence(question_terms, match[2])
+    ]
 
-    if not matches and provider is None:
+    if not matches and (provider is None or not model_candidates):
         return _unknown_payload(debug, trace)
 
     model_status: Literal["used", "fallback"] | None = None
     if provider is None:
-        selected = _top_matches(matches, max_citations, question_terms=question_terms)
+        selected = _top_matches(matches, answer_citation_limit, question_terms=question_terms)
         answer = " ".join(citation["quote"] for _, citation in selected)
     else:
         try:
             generated = _model_answer(
                 workspace_root,
                 question,
-                matches or candidate_matches,
+                matches or model_candidates,
                 provider,
                 allow_local=allow_local,
             )
         except ProviderUnavailableError:
+            module_fallbacks = [
+                match
+                for match in model_candidates
+                if match[2]["quote"].startswith("Main exported operations in `")
+            ]
             fallback_matches = _usable_matches(
                 workspace_root,
-                matches or candidate_matches,
+                module_fallbacks or matches,
                 allow_local=allow_local,
             )
             if not fallback_matches:
                 return _unknown_payload(debug, trace)
             selected = _top_matches(
                 fallback_matches,
-                max_citations,
+                answer_citation_limit,
                 question_terms=question_terms,
             )
-            answer = " ".join(citation["quote"] for _, citation in selected)
+            answer = _fallback_answer(question, selected)
             model_status = "fallback"
         else:
             if generated is None:
@@ -279,7 +313,12 @@ def _answer_messages(
     matches: list[tuple[str, CitationPayload]],
 ) -> list[dict[str, str]]:
     facts = [
-        {"index": index, "quote": citation["quote"]} for index, (_, citation) in enumerate(matches)
+        {
+            "index": index,
+            "quote": citation["quote"],
+            **({"section": citation["section_path"]} if "section_path" in citation else {}),
+        }
+        for index, (_, citation) in enumerate(matches)
     ]
     return [
         {
@@ -290,7 +329,13 @@ def _answer_messages(
                 "facts that support the answer. If the facts do not answer the question, "
                 'return {"answer":"不知道","citation_indexes":[]}. Reply in the question language.'
                 " You may restate an explicit contrast in direct language, but do not add details "
-                "beyond the facts. Prefer facts that answer the question's condition or conclusion "
+                "beyond the facts. When asked what a code module does, treat its directory paths "
+                "and exported code symbol names as answerable evidence: translate and summarize "
+                "those names into a concise capability list instead of returning unknown. Do not "
+                "invent implementation details. A section named Identity only describes the "
+                "module path and aliases; it never means authentication. Prefer facts that answer "
+                "the question's condition "
+                "or conclusion "
                 "over broad background facts that only share the same topic. For a yes-or-no "
                 "question, answer directly and do not return a Markdown table when a concise "
                 "fact states the conclusion."
@@ -301,6 +346,19 @@ def _answer_messages(
             "content": json.dumps({"question": question, "facts": facts}, ensure_ascii=False),
         },
     ]
+
+
+def _fallback_answer(
+    question: str,
+    selected: list[tuple[str, CitationPayload]],
+) -> str:
+    quote = selected[0][1]["quote"]
+    if len(selected) == 1 and quote.startswith("Main exported operations in `"):
+        module = quote.split("`", maxsplit=2)[1]
+        operations = quote.partition(": ")[2]
+        if any(_CJK.fullmatch(term) for term in _terms(question)):
+            return f"{module} 模块主要导出这些操作：{operations}。"
+    return " ".join(citation["quote"] for _, citation in selected)
 
 
 def _unknown_payload(debug: bool, trace: list[TraceStep]) -> AskPayload:
@@ -352,9 +410,20 @@ def _candidate_pages(
             title = _unescape_link_text(entry.group("title"))
             overlap = question_terms & _terms(f"{title} {entry.group('summary')}")
             if overlap:
+                module_path = _title_module_path(title)
+                question_identifiers = {
+                    term for term in question_terms if not _CJK.fullmatch(term)
+                }
+                extra_module_parts = (
+                    len(set(module_path.split("/")) - question_identifiers)
+                    if module_path
+                    else 0
+                )
                 scored.append(
                     (
                         (
+                            int(module_path is not None),
+                            -extra_module_parts if module_path is not None else 0,
                             sum(not _CJK.fullmatch(term) for term in overlap),
                             len(overlap),
                             sum(len(term) for term in overlap),
@@ -382,33 +451,37 @@ def _candidate_pages(
             )
     if strict_fts_paths or relaxed_fts_paths:
         trace.append({"level": "L0", "artifact": "SQLite FTS5 applied-source index"})
-    candidates: list[Path] = []
-    for path in strict_fts_paths:
-        if (page := _safe_wiki_page(workspace_root, workspace_root / path)) is not None:
-            candidates.append(page)
-    index_pages = [
+    strict_pages = [
         page
-        for _, page in sorted(
-            scored,
-            key=lambda candidate: (
-                -candidate[0][0],
-                -candidate[0][1],
-                -candidate[0][2],
-                str(candidate[1].relative_to(workspace_root)),
-            ),
-        )
+        for path in strict_fts_paths
+        if (page := _safe_wiki_page(workspace_root, workspace_root / path)) is not None
     ]
+    ranked_index = sorted(
+        scored,
+        key=lambda candidate: (
+            -candidate[0][0],
+            -candidate[0][1],
+            -candidate[0][2],
+            -candidate[0][3],
+            -candidate[0][4],
+            str(candidate[1].relative_to(workspace_root)),
+        ),
+    )
+    module_pages = [page for score, page in ranked_index if score[0]]
+    index_pages = [page for score, page in ranked_index if not score[0]]
     relaxed_pages = [
         page
         for path in relaxed_fts_paths
         if (page := _safe_wiki_page(workspace_root, workspace_root / path)) is not None
     ]
-    fallback_pages = (
+    ordered_pages = (*module_pages, *strict_pages)
+    ordered_pages += (
         (*index_pages, *relaxed_pages)
         if prefer_index_routes
         else (*relaxed_pages, *index_pages)
     )
-    for page in fallback_pages:
+    candidates: list[Path] = []
+    for page in ordered_pages:
         if page not in candidates:
             candidates.append(page)
     return candidates[:max_pages]
@@ -426,6 +499,15 @@ def _validate_max_citations(max_citations: int) -> None:
         or not 1 <= max_citations <= 10
     ):
         raise ValueError("max_citations must be an integer between 1 and 10")
+
+
+def _answer_citation_limit(question: str, max_citations: int) -> int:
+    """Give a two-part question room for two complementary source facts."""
+    if max_citations == 1 and any(
+        marker in question for marker in ("分别", "以及", "、", "，", "什么时候")
+    ):
+        return 2
+    return max_citations
 
 
 def _top_matches(
@@ -446,7 +528,7 @@ def _top_matches(
             selected_index = max(
                 range(len(remaining)),
                 key=lambda index: (
-                    len((_terms(remaining[index][2]["quote"]) & question_terms) - covered_terms),
+                    len(_matching_terms(question_terms, remaining[index][2]) - covered_terms),
                     remaining[index][0][0],
                     remaining[index][0][1],
                 ),
@@ -457,14 +539,17 @@ def _top_matches(
             continue
         seen.add(key)
         selected.append((page_path, citation))
-        covered_terms.update(_terms(citation["quote"]) & question_terms)
+        covered_terms.update(_matching_terms(question_terms, citation))
     return selected
 
 
 def _rank_matches(
     matches: list[tuple[frozenset[str], str, CitationPayload]],
     *,
+    question_terms: set[str],
     focus_terms: set[str] | None = None,
+    prefer_environment_assignments: bool = False,
+    prefer_code_modules: bool = False,
 ) -> list[tuple[tuple[int, ...], str, CitationPayload]]:
     focus_terms = focus_terms or set()
     frequencies = Counter(
@@ -474,20 +559,58 @@ def _rank_matches(
     for overlap, page_path, citation in matches:
         ranking_overlap = overlap - _RANKING_STOP_WORDS
         non_cjk_terms = [term for term in ranking_overlap if not _CJK.fullmatch(term)]
+        distinctive_non_cjk_terms = [
+            term
+            for term in non_cjk_terms
+            if frequencies[term] <= max(1, len(matches) // 2)
+        ]
+        direct_overlap = _direct_matching_terms(question_terms, citation)
+        module_path = _citation_module_path(citation)
+        module_section_score = (
+            2
+            if " / Responsibilities" in citation.get("section_path", "")
+            else int(" / Child modules" in citation.get("section_path", ""))
+        )
+        question_identifiers = {term for term in question_terms if not _CJK.fullmatch(term)}
+        extra_module_parts = (
+            len(set(module_path.split("/")) - question_identifiers) if module_path else 0
+        )
         score = (
-            max((len(term) for term in non_cjk_terms), default=0),
-            len(non_cjk_terms),
+            int(prefer_code_modules and module_path is not None),
+            -extra_module_parts if prefer_code_modules and module_path is not None else 0,
+            module_section_score if prefer_code_modules else 0,
+            int(
+                prefer_environment_assignments
+                and bool(_ENVIRONMENT_ASSIGNMENT.search(citation["quote"]))
+            ),
+            max((len(term) for term in distinctive_non_cjk_terms), default=0),
+            len(distinctive_non_cjk_terms),
             int(
                 bool(ranking_overlap & focus_terms)
                 and not citation["quote"].lstrip().startswith("|")
             ),
             len(ranking_overlap & focus_terms),
             sum(1000 // frequencies[term] for term in ranking_overlap),
+            int(bool(direct_overlap)),
+            len(direct_overlap),
             len(ranking_overlap),
             sum(len(term) for term in ranking_overlap),
         )
         ranked.append((score, page_path, citation))
     return sorted(ranked, key=lambda match: (match[0], match[1]), reverse=True)
+
+
+def _citation_module_path(citation: CitationPayload) -> str | None:
+    section = citation.get("section_path", "")
+    if not section.startswith("Code module: "):
+        return None
+    return section.removeprefix("Code module: ").partition(" / ")[0]
+
+
+def _title_module_path(title: str) -> str | None:
+    if not title.lower().startswith("code module: "):
+        return None
+    return title.partition(": ")[2].lower()
 
 
 def _yes_no_focus_terms(question: str) -> set[str]:
@@ -498,6 +621,19 @@ def _yes_no_focus_terms(question: str) -> set[str]:
             # ponytail: only explicit yes/no questions need this.
             # General tail weighting regressed recall.
             return _terms(token[len(token) // 2 :])
+    return set()
+
+
+def _question_focus_terms(question: str) -> set[str]:
+    """Treat the suffix after a Chinese possessive as the question's subject.
+
+    Repository names are commonly placed before ``的``. They identify where to
+    search, while the suffix identifies which setting or behaviour to answer.
+    """
+    for match in _WORDS.finditer(question):
+        token = match.group()
+        if _CJK.fullmatch(token) and "的" in token:
+            return _terms(token.rsplit("的", maxsplit=1)[1])
     return set()
 
 
@@ -574,15 +710,57 @@ def _page_citations(content: str) -> list[CitationPayload]:
         footnote = footnotes.get(fact.group("footnote"))
         if footnote is None:
             continue
-        citations.append(
-            {
-                "source_id": footnote["source_id"],
-                "source_version": int(footnote["source_version"]),
-                "locator": footnote["locator"],
-                "quote": fact.group("quote"),
-            }
+        citation: CitationPayload = {
+            "source_id": footnote["source_id"],
+            "source_version": int(footnote["source_version"]),
+            "locator": footnote["locator"],
+            "quote": fact.group("quote"),
+        }
+        section = next(
+            (
+                match.group("section")
+                for match in reversed(list(_FACT_SECTION.finditer(section_match.group("section"))))
+                if match.start() <= fact.start()
+            ),
+            "",
         )
+        if section:
+            citation["section_path"] = section
+        citations.append(citation)
     return citations
+
+
+def _citation_terms(citation: CitationPayload) -> set[str]:
+    return _terms(f"{citation.get('section_path', '')} {citation['quote']}")
+
+
+def _matching_terms(question_terms: set[str], citation: CitationPayload) -> set[str]:
+    return (question_terms & _citation_terms(citation)) - _QUESTION_NOISE_TERMS
+
+
+def _direct_matching_terms(question_terms: set[str], citation: CitationPayload) -> set[str]:
+    return (question_terms & _terms(citation["quote"])) - _QUESTION_NOISE_TERMS
+
+
+def _has_direct_evidence(question_terms: set[str], citation: CitationPayload) -> bool:
+    """Keep heading-only routes out of the model context.
+
+    A heading is useful to find a fact whose wording differs from the question,
+    but it is not evidence by itself. The model may see a weak candidate only
+    when the fact text itself shares a term with the question.
+    """
+    direct_overlap = _direct_matching_terms(question_terms, citation)
+    if any(_CJK.fullmatch(term) for term in question_terms):
+        return any(_CJK.fullmatch(term) for term in direct_overlap) or (
+            bool(_CODE_FACT.match(citation["quote"]))
+            and any(not _CJK.fullmatch(term) for term in direct_overlap)
+        ) or (
+            citation.get("section_path", "").startswith("Code module:")
+            and any(
+                not _CJK.fullmatch(term) for term in _matching_terms(question_terms, citation)
+            )
+        )
+    return bool(direct_overlap)
 
 
 def _page_matches_frontmatter(content: str) -> bool:
@@ -620,3 +798,9 @@ def _terms(text: str) -> set[str]:
             if len(parts) > 1:
                 terms.update("".join(parts[index:]).lower() for index in range(1, len(parts) - 1))
     return terms
+
+
+def _expanded_question_terms(question_terms: set[str]) -> set[str]:
+    if {"不可", "可用"} & question_terms:
+        return question_terms | _FAILURE_TERM_EXPANSIONS
+    return question_terms

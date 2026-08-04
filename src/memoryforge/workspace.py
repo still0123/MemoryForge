@@ -823,7 +823,11 @@ def sync_git_checkout(workspace: Path, repository_id: str) -> GitRepositorySyncR
         scan_git_snapshot_documentation,
         snapshot_git_repository,
     )
-    from memoryforge.importer import import_local_document, validate_local_document
+    from memoryforge.importer import (
+        SourceValidationError,
+        import_local_document,
+        validate_local_document,
+    )
 
     opened = Workspace.open(workspace)
     repository = _get_git_repository(opened, repository_id)
@@ -851,8 +855,18 @@ def sync_git_checkout(workspace: Path, repository_id: str) -> GitRepositorySyncR
         {document.source_path: document for document in scanned_documents}.values(),
         key=lambda document: document.source_path,
     )
+    safe_documents = []
+    skipped = []
     for document in scanned_documents:
-        validate_local_document(document)
+        try:
+            validate_local_document(document)
+        except SourceValidationError:
+            if "code" not in document.tags:
+                raise
+            skipped.append(document.source_path)
+            continue
+        safe_documents.append(document)
+    scanned_documents = safe_documents
 
     documents: list[GitDocumentSyncResult] = []
     counts = {"created": 0, "updated": 0, "unchanged": 0}
@@ -898,6 +912,7 @@ def sync_git_checkout(workspace: Path, repository_id: str) -> GitRepositorySyncR
         created=counts["created"],
         updated=counts["updated"],
         unchanged=counts["unchanged"],
+        skipped=tuple(skipped),
         documents=tuple(documents),
     )
 

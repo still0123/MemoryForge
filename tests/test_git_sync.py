@@ -35,6 +35,7 @@ from memoryforge.workspace import (
     list_git_checkouts,
     list_git_code_modules,
     register_git_checkout,
+    register_git_code_module,
     search_sources,
     sync_git_checkout,
 )
@@ -297,6 +298,7 @@ func NewMeter() *Meter {
 func (m *Meter) RecordUsage() {}
 """,
     )
+    _write(checkout / "internal" / "meter" / "__init__.py", "")
     _write(checkout / "cmd" / "main.py", "def main():\n    pass\n")
     _commit_all(checkout, "Add meter module")
     workspace = init_workspace(tmp_path / "workspace")
@@ -339,6 +341,7 @@ func (m *Meter) RecordUsage() {}
         .candidate_files[f"wiki/pages/{code_document.source_id}.md"]
     )
     assert "# Code: internal/meter/meter.go" in code_page
+    assert "### internal/meter/meter.go" in code_page
     assert "- package meter [^source-1]" in code_page
     assert "- type Meter [^source-2]" in code_page
     assert "- func NewMeter [^source-3]" in code_page
@@ -375,6 +378,69 @@ func Reset() {}
     assert refreshed.updated == 1
     assert refreshed.unchanged == 1
     assert _current_git_revision(workspace, code_document.source_id) == refreshed.head_commit
+
+
+def test_whole_repository_code_selection_skips_secrets_and_adds_module_sources(
+    tmp_path: Path,
+) -> None:
+    checkout = _create_repository(tmp_path)
+    _write(checkout / "README.md", "# Service\n\nRepository overview.\n")
+    _write(checkout / "cmd" / "main.go", "package main\n\nfunc main() {}\n")
+    _write(checkout / "internal" / "meter.go", "package internal\n\ntype Meter struct{}\n")
+    _write(
+        checkout / "internal" / "private.go",
+        'package internal\n\nconst API_KEY = "' + "sk-" + "a" * 26 + '"\n',
+    )
+    _commit_all(checkout, "Add repository code")
+    workspace = init_workspace(tmp_path / "workspace")
+    repository = register_git_checkout(workspace, checkout)
+
+    selected = CliRunner().invoke(
+        app,
+        ["code-add", repository.repository_id, ".", "--workspace", str(workspace)],
+    )
+    assert selected.exit_code == 0, selected.output
+    assert json.loads(selected.stdout)["path"] == "."
+
+    synced = sync_git_checkout(workspace, repository.repository_id)
+    paths = {document.relative_path for document in synced.documents}
+    assert synced.skipped == ("internal/private.go",)
+    assert "cmd/main.go" in paths
+    assert "internal/meter.go" in paths
+    assert "internal/private.go" not in paths
+    assert ".memoryforge/code-modules/cmd.md" in paths
+    assert ".memoryforge/code-modules/internal.md" in paths
+    module = search_sources(workspace, "Code module internal")[0]
+    module_content = (workspace / module.snapshot_path).read_text(encoding="utf-8")
+    assert "Canonical module path: `internal`" in module_content
+    assert "Search aliases: `internal`" in module_content
+    assert "Contains 2 tracked Go/Python files" in module_content
+    assert "Main exported operations in `internal`: `Meter`" in module_content
+
+
+def test_whole_repository_adds_a_card_for_each_nested_code_module(tmp_path: Path) -> None:
+    checkout = _create_repository(tmp_path)
+    _write(
+        checkout / "services" / "accounts" / "service.go",
+        "package accounts\n\nfunc CreateAccount() {}\nfunc DescribeAccount() {}\n",
+    )
+    _write(checkout / "services" / "jobs" / "task.go", "package jobs\n\nfunc StartTask() {}\n")
+    _commit_all(checkout, "Add nested modules")
+    workspace = init_workspace(tmp_path / "workspace")
+    repository = register_git_checkout(workspace, checkout)
+    register_git_code_module(workspace, repository.repository_id, ".")
+
+    synced = sync_git_checkout(workspace, repository.repository_id)
+    paths = {document.relative_path for document in synced.documents}
+
+    assert ".memoryforge/code-modules/services.md" in paths
+    assert ".memoryforge/code-modules/services/accounts.md" in paths
+    accounts = search_sources(workspace, '"Code module" "services/accounts"')[0]
+    content = (workspace / accounts.snapshot_path).read_text(encoding="utf-8")
+    assert "# Code module: services/accounts" in content
+    assert "Search aliases: `accounts`, `services/accounts`" in content
+    assert "`CreateAccount`" in content
+    assert "`services/accounts/service.go`" in content
 
 
 def test_git_sync_rejects_checkout_with_changed_repository_identity(tmp_path: Path) -> None:

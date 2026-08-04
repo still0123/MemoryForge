@@ -129,6 +129,7 @@ class GitRepositorySyncResult(BaseModel):
     created: int = Field(ge=0)
     updated: int = Field(ge=0)
     unchanged: int = Field(ge=0)
+    skipped: tuple[str, ...] = ()
     documents: tuple[GitDocumentSyncResult, ...] = ()
 
 

@@ -74,7 +74,17 @@ _INDEX_ENTRY = re.compile(
 _WORDS = re.compile(r"[a-z0-9]+|[\u4e00-\u9fff]+", re.IGNORECASE)
 _CJK = re.compile(r"^[\u4e00-\u9fff]+$")
 _RELATED_PAGE_LINK = re.compile(r"^- \[[^\]]+\]\((?P<path>[^)]+\.md)\)$", re.MULTILINE)
-_LOCAL_FACT_LIMIT = 24
+_MARKDOWN_HEADING = re.compile(
+    r"^(?P<marks>#{1,6})[ \t]+(?P<title>.+?)(?:[ \t]+#+)?[ \t]*$",
+    re.MULTILINE,
+)
+_MARKDOWN_LIST_ITEM = re.compile(
+    r"^[ \t]*(?:[-*+]|\d+[.)])[ \t]+(?P<fact>.+?)[ \t]*$",
+    re.MULTILINE,
+)
+# Markdown lists are compiled as separate facts. Keep enough facts to retain
+# later sections of a normal README instead of truncating after the quick-start.
+_LOCAL_FACT_LIMIT = 48
 
 
 @dataclass(frozen=True)
@@ -90,6 +100,15 @@ class CurrentSource:
     repository_id: str | None
     repository_name: str | None
     relative_path: str | None
+
+
+@dataclass(frozen=True)
+class SourceFact:
+    """One exact source excerpt plus the Markdown section that owns it."""
+
+    quote: str
+    start: int
+    section_path: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -1600,7 +1619,7 @@ def _read_source_text(workspace: Workspace, source: CurrentSource) -> str:
     return (workspace.root / source.snapshot_path).read_text(encoding="utf-8")
 
 
-def _meaningful_paragraphs(content: str) -> list[tuple[str, int]]:
+def _meaningful_paragraphs(content: str) -> list[SourceFact]:
     facts: list[tuple[str, int]] = []
     structured_ranges: list[tuple[int, int]] = []
     for match in re.finditer(
@@ -1617,6 +1636,14 @@ def _meaningful_paragraphs(content: str) -> list[tuple[str, int]]:
         quote = match.group().strip()
         if quote:
             facts.append((quote, match.start()))
+        structured_ranges.append(match.span())
+    for match in _MARKDOWN_LIST_ITEM.finditer(content):
+        if any(start < match.end() and match.start() < end for start, end in structured_ranges):
+            continue
+        quote = match.group("fact").strip()
+        if quote:
+            leading = len(match.group("fact")) - len(match.group("fact").lstrip())
+            facts.append((quote, match.start("fact") + leading))
         structured_ranges.append(match.span())
     for match in re.finditer(
         r"(?:\A|\n[ \t]*\n)(?P<paragraph>.*?)(?=\n[ \t]*\n|\Z)",
@@ -1635,12 +1662,47 @@ def _meaningful_paragraphs(content: str) -> list[tuple[str, int]]:
         if quote and not quote.startswith(("#", "```", "|")):
             facts.append((quote, match.start("paragraph") + leading))
     if facts:
-        return sorted(facts, key=lambda fact: fact[1])[:_LOCAL_FACT_LIMIT]
+        headings = _markdown_headings(content)
+        return [
+            SourceFact(
+                quote=quote,
+                start=start,
+                section_path=_section_path_at(headings, start),
+            )
+            for quote, start in sorted(facts, key=lambda fact: fact[1])[:_LOCAL_FACT_LIMIT]
+        ]
     for line in content.splitlines():
         candidate = line.lstrip("#").strip()
         if candidate:
-            return [(candidate, content.index(candidate))]
+            start = content.index(candidate)
+            return [
+                SourceFact(
+                    quote=candidate,
+                    start=start,
+                    section_path=_section_path_at(_markdown_headings(content), start),
+                )
+            ]
     raise ValueError("source contains no meaningful text")
+
+
+def _markdown_headings(content: str) -> list[tuple[int, tuple[str, ...]]]:
+    stack: list[str] = []
+    headings: list[tuple[int, tuple[str, ...]]] = []
+    for match in _MARKDOWN_HEADING.finditer(content):
+        level = len(match["marks"])
+        title = match["title"].strip()
+        if not title:
+            continue
+        stack[level - 1 :] = [title]
+        headings.append((match.start(), tuple(stack)))
+    return headings
+
+
+def _section_path_at(
+    headings: list[tuple[int, tuple[str, ...]]],
+    position: int,
+) -> tuple[str, ...]:
+    return next((path for start, path in reversed(headings) if start <= position), ())
 
 
 def _page_type(source: CurrentSource) -> PageType:
@@ -1684,9 +1746,18 @@ def _target_page_path(
     return _canonical_page_path(change.source_ids)
 
 
-def _render_page(source: CurrentSource, facts: list[tuple[str, int]]) -> str:
-    displayed_facts = [(" ".join(quote.splitlines()), start) for quote, start in facts]
-    summary = displayed_facts[0][0]
+def _render_page(source: CurrentSource, facts: list[SourceFact]) -> str:
+    displayed_facts = [
+        SourceFact(
+            quote=" ".join(fact.quote.splitlines()),
+            start=fact.start,
+            section_path=fact.section_path,
+        )
+        for fact in facts
+    ]
+    first_fact = displayed_facts[0]
+    summary_prefix = " / ".join(first_fact.section_path)
+    summary = f"{summary_prefix}: {first_fact.quote}" if summary_prefix else first_fact.quote
     tags = tuple(dict.fromkeys((source.category, *source.tags)))
     lines = [
         "---",
@@ -1704,13 +1775,19 @@ def _render_page(source: CurrentSource, facts: list[tuple[str, int]]) -> str:
         "## Verified facts",
         "",
     ]
-    for index, (quote, _start) in enumerate(displayed_facts, start=1):
-        lines.append(f"- {quote} [^source-{source.source_id[:8]}-{index}]")
+    section_path: tuple[str, ...] = ()
+    for index, fact in enumerate(displayed_facts, start=1):
+        if fact.section_path != section_path:
+            section_path = fact.section_path
+            if section_path:
+                lines.extend(["", f"### {' / '.join(section_path)}", ""])
+        lines.append(f"- {fact.quote} [^source-{source.source_id[:8]}-{index}]")
     lines.append("")
-    for index, (_quote, start) in enumerate(displayed_facts, start=1):
+    for index, fact in enumerate(displayed_facts, start=1):
+        end = fact.start + len(facts[index - 1].quote)
         lines.append(
             f"[^source-{source.source_id[:8]}-{index}]: source `{source.source_id}` · revision "
-            f"`{source.source_version}` · `chars:{start}-{start + len(facts[index - 1][0])}`"
+            f"`{source.source_version}` · `chars:{fact.start}-{end}`"
         )
     return "\n".join(lines) + "\n"
 
@@ -1745,6 +1822,8 @@ def _render_code_page(source: CurrentSource, content: str) -> str:
         f"- File: `{source.relative_path or source.title}`",
         "",
         "## Verified facts",
+        "",
+        f"### {source.relative_path or source.title}",
         "",
     ]
     for index, (quote, _) in enumerate(facts, start=1):
@@ -1787,12 +1866,12 @@ def _render_deterministic_group_page(
     """Use source excerpts as the local fallback for a previously merged Wiki page."""
     excerpts: list[tuple[CurrentSource, str, str]] = []
     for source in sources:
-        quote, start = _meaningful_paragraphs(_read_source_text(workspace, source))[0]
+        fact = _meaningful_paragraphs(_read_source_text(workspace, source))[0]
         excerpts.append(
             (
                 source,
-                " ".join(quote.splitlines()),
-                f"chars:{start}-{start + len(quote)}",
+                " ".join(fact.quote.splitlines()),
+                f"chars:{fact.start}-{fact.start + len(fact.quote)}",
             )
         )
 

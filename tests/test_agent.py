@@ -250,6 +250,21 @@ def test_short_standalone_question_does_not_inherit_session_context(tmp_path: Pa
     assert rewrite_query("数据库架构？", store.load(allow_local=True)) == "数据库架构？"
 
 
+def test_named_child_module_inherits_the_previous_module_context(tmp_path: Path) -> None:
+    store = SessionStore(tmp_path, "module-followup")
+    store.append(
+        "sm 文件夹是做什么的？",
+        "sm 包含 user 和 ops 子模块。",
+        [],
+        model_safe=True,
+    )
+
+    rewritten = rewrite_query("user模块主要做什么？", store.load(allow_local=True))
+
+    assert "sm 文件夹是做什么的？" in rewritten
+    assert "user模块主要做什么？" in rewritten
+
+
 def test_session_without_public_citation_is_not_reused_by_model(tmp_path: Path) -> None:
     save_turn(
         tmp_path,
@@ -341,6 +356,40 @@ def test_agent_returns_unknown_tool_observation(tmp_path: Path, monkeypatch) -> 
 
     assert result["status"] == "max_steps"
     assert "unknown action: summarize" in result["events"][0]["result"]
+
+
+def test_agent_can_search_code_before_returning_to_citable_wiki(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workspace = _applied_public_workspace(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        agent_module,
+        "search_sources",
+        lambda *_args, **_kwargs: [
+            type(
+                "CodeMatch",
+                (),
+                {
+                    "source_path": "services/accounts/service.go",
+                    "snippet": "func CreateUser()",
+                },
+            )()
+        ],
+    )
+
+    result = run_agent(
+        workspace,
+        "user 模块做什么？",
+        provider=StubAgentProvider([AgentStep(action="search_code", query="user")]),
+        max_steps=1,
+        allow_local=True,
+    )
+
+    assert result["status"] == "max_steps"
+    assert result["events"][0]["action"] == "search_code"
+    assert "services/accounts/service.go" in result["events"][0]["result"]
+    assert "CreateUser" in result["events"][0]["result"]
 
 
 def test_agent_rejects_read_evidence_without_citation_index(

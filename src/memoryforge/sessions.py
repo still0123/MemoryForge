@@ -163,7 +163,9 @@ def save_turn(
 
 def _looks_like_followup(question: str) -> bool:
     lowered = question.lower()
-    return any(marker in lowered for marker in _FOLLOWUP_MARKERS)
+    return any(marker in lowered for marker in _FOLLOWUP_MARKERS) or bool(
+        re.match(r"^[a-z0-9_.@/-]+\s*(?:模块|文件夹)", lowered)
+    )
 
 
 def _session_citations(citations: list[dict[str, Any]]) -> list[SessionCitation]:
