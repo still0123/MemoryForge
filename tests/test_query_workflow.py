@@ -199,6 +199,24 @@ def test_ask_routes_module_question_to_module_structure_page(tmp_path: Path, mon
     assert "translate and summarize" in captured[0]["messages"][0]["content"]
 
 
+def test_ask_understands_chinese_child_module_question(tmp_path: Path, monkeypatch) -> None:
+    runner, workspace, _ = _workspace_with_imported_source(
+        tmp_path,
+        monkeypatch,
+        "# Code module: storage\n\n"
+        "## Child modules\n\n"
+        "- `storage/ops`\n"
+        "- `storage/accounts`\n",
+    )
+    _apply_pending_source(runner, workspace)
+
+    result = query_module.answer_question(workspace, "storage 有哪些子模块？")
+
+    assert result["status"] == "answered"
+    assert "storage/ops" in result["answer"]
+    assert "storage/accounts" in result["answer"]
+
+
 def test_module_question_falls_back_to_exported_operations_when_provider_times_out(
     tmp_path: Path,
     monkeypatch,

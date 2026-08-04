@@ -59,6 +59,14 @@ _STOP_WORDS = {
 _RANKING_STOP_WORDS = {"不能", "运行"}
 _QUESTION_NOISE_TERMS = {"在哪"}
 _FAILURE_TERM_EXPANSIONS = {"超时", "异常", "失败", "缺失", "回退"}
+_CODE_QUERY_EXPANSIONS = {
+    "模块": {"module", "modules"},
+    "子模": {"child", "children"},
+    "入口": {"entry", "entries", "point", "points", "handler", "handlers"},
+    "依赖": {"depend", "dependency", "dependencies", "import", "imports"},
+    "操作": {"operation", "operations"},
+    "职责": {"responsibility", "responsibilities"},
+}
 _ENVIRONMENT_ASSIGNMENT = re.compile(r"\b(?:export\s+)?[A-Z][A-Z0-9_]{2,}=")
 _CODE_FACT = re.compile(r"^(?:package|type|func|class|def)\b")
 
@@ -109,9 +117,12 @@ def answer_question(
     """Answer from a bounded set of Wiki pages, expanding raw evidence only on request."""
     _validate_max_pages(max_pages)
     _validate_max_citations(max_citations)
-    question_terms = _expanded_question_terms(_terms(question))
-    identifier_terms = {term for term in question_terms if not _CJK.fullmatch(term)}
+    base_question_terms = _terms(question)
+    question_terms = _expanded_question_terms(base_question_terms)
+    identifier_terms = {term for term in base_question_terms if not _CJK.fullmatch(term)}
     focus_terms = _question_focus_terms(question) | _yes_no_focus_terms(question)
+    if "子模" in base_question_terms:
+        focus_terms.update({"child", "children", "modules"})
     answer_citation_limit = _answer_citation_limit(question, max_citations)
     prefer_environment_assignments = "环境变量" in question
     prefer_code_modules = any(marker in question.lower() for marker in ("模块", "文件夹", "module"))
@@ -503,6 +514,8 @@ def _validate_max_citations(max_citations: int) -> None:
 
 def _answer_citation_limit(question: str, max_citations: int) -> int:
     """Give a two-part question room for two complementary source facts."""
+    if max_citations == 1 and "子模块" in question:
+        return 6
     if max_citations == 1 and any(
         marker in question for marker in ("分别", "以及", "、", "，", "什么时候")
     ):
@@ -567,9 +580,14 @@ def _rank_matches(
         direct_overlap = _direct_matching_terms(question_terms, citation)
         module_path = _citation_module_path(citation)
         module_section_score = (
-            2
-            if " / Responsibilities" in citation.get("section_path", "")
-            else int(" / Child modules" in citation.get("section_path", ""))
+            3
+            if "child" in focus_terms
+            and " / Child modules" in citation.get("section_path", "")
+            else (
+                2
+                if " / Responsibilities" in citation.get("section_path", "")
+                else int(" / Child modules" in citation.get("section_path", ""))
+            )
         )
         question_identifiers = {term for term in question_terms if not _CJK.fullmatch(term)}
         extra_module_parts = (
@@ -801,6 +819,10 @@ def _terms(text: str) -> set[str]:
 
 
 def _expanded_question_terms(question_terms: set[str]) -> set[str]:
+    expanded = set(question_terms)
+    for term, expansions in _CODE_QUERY_EXPANSIONS.items():
+        if term in question_terms:
+            expanded.update(expansions)
     if {"不可", "可用"} & question_terms:
-        return question_terms | _FAILURE_TERM_EXPANSIONS
-    return question_terms
+        expanded.update(_FAILURE_TERM_EXPANSIONS)
+    return expanded
