@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any, NotRequired, TypedDict
 
 from memoryforge.workspace import is_public_source_version
 
@@ -16,6 +16,9 @@ _MAX_ANSWER_CHARS = 1_200
 _MAX_QUOTE_CHARS = 320
 _MAX_REWRITE_CHARS = 1_600
 _SESSION_ID = re.compile(r"^[A-Za-z0-9_.:@-]{1,128}$")
+_DEFINITION_QUESTION = re.compile(
+    r"^(?P<subject>.{2,40}?)(?:是什么意思|是什么|是做什么的|做什么|怎么做|如何实现)[？?]?$"
+)
 _FOLLOWUP_MARKERS = (
     "它",
     "这个",
@@ -36,6 +39,7 @@ class SessionCitation(TypedDict):
     source_version: int
     locator: str
     quote: str
+    section_path: NotRequired[str]
 
 
 class SessionTurn(TypedDict):
@@ -125,11 +129,16 @@ def render_context(turns: list[SessionTurn]) -> str:
 def rewrite_query(question: str, turns: list[SessionTurn]) -> str:
     """Add the latest bounded turn only when the new question looks referential."""
     question = question.strip()
-    if not turns or not _looks_like_followup(question):
+    if not turns:
         return question
     latest = turns[-1]
-    parts = [latest["question"], question, latest["answer"]]
-    parts.extend(citation["quote"] for citation in latest["citations"])
+    if not _looks_like_followup(question) and not _mentions_previous_concept(question, latest):
+        return question
+    parts = [question, latest["question"]]
+    for citation in latest["citations"]:
+        parts.extend((citation.get("section_path", ""), citation["quote"]))
+    if not latest["citations"]:
+        parts.append(latest["answer"])
     return " ".join(part for part in parts if part)[:_MAX_REWRITE_CHARS]
 
 
@@ -168,17 +177,34 @@ def _looks_like_followup(question: str) -> bool:
     )
 
 
+def _mentions_previous_concept(question: str, latest: SessionTurn) -> bool:
+    """Resolve a definition follow-up only when its subject came from the last turn."""
+    match = _DEFINITION_QUESTION.fullmatch(question.strip())
+    if match is None:
+        return False
+    subject = match.group("subject").strip()
+    context = " ".join(
+        (
+            latest["answer"],
+            *(citation.get("section_path", "") for citation in latest["citations"]),
+            *(citation["quote"] for citation in latest["citations"]),
+        )
+    )
+    return subject in context
+
+
 def _session_citations(citations: list[dict[str, Any]]) -> list[SessionCitation]:
     result: list[SessionCitation] = []
     for citation in citations[:6]:
-        result.append(
-            {
-                "source_id": str(citation["source_id"]),
-                "source_version": int(citation["source_version"]),
-                "locator": str(citation["locator"]),
-                "quote": str(citation["quote"])[:_MAX_QUOTE_CHARS],
-            }
-        )
+        stored: SessionCitation = {
+            "source_id": str(citation["source_id"]),
+            "source_version": int(citation["source_version"]),
+            "locator": str(citation["locator"]),
+            "quote": str(citation["quote"])[:_MAX_QUOTE_CHARS],
+        }
+        if citation.get("section_path"):
+            stored["section_path"] = str(citation["section_path"])[:240]
+        result.append(stored)
     return result
 
 
