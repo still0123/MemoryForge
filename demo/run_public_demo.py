@@ -23,19 +23,20 @@ DEFAULT_QUESTION = "本地配对实验引擎依赖哪些服务？"
 
 def main(argv: list[str] | None = None) -> None:
     args = _parse_args(argv)
-    source_repo: Path = args.source_repo.resolve()
+    source_repositories = tuple(source_repo.resolve() for source_repo in args.source_repos)
     workspace: Path = args.workspace.resolve()
     output: Path = args.output.resolve()
     eval_config: Path = args.eval_config.resolve()
 
-    if not (source_repo / ".git").exists():
-        raise SystemExit(f"--source-repo must be an existing local Git checkout: {source_repo}")
+    for source_repo in source_repositories:
+        if not (source_repo / ".git").exists():
+            raise SystemExit(f"--source-repo must be an existing local Git checkout: {source_repo}")
     if workspace.exists() and any(workspace.iterdir()):
         raise SystemExit(f"--workspace must be absent or empty; refusing to touch it: {workspace}")
     if not eval_config.is_file():
         raise SystemExit(f"--eval-config does not exist: {eval_config}")
 
-    evidence = _build_evidence(source_repo, workspace, eval_config, args.question)
+    evidence = _build_evidence(source_repositories, workspace, eval_config, args.question)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(
         json.dumps(evidence, ensure_ascii=False, indent=2) + "\n",
@@ -45,14 +46,17 @@ def main(argv: list[str] | None = None) -> None:
 
 
 def _build_evidence(
-    source_repo: Path,
+    source_repositories: tuple[Path, ...],
     workspace: Path,
     eval_config: Path,
     question: str,
 ) -> dict[str, Any]:
     _cli("init", str(workspace))
-    registration = _cli_json("git-add", str(source_repo), "--public", *_ws(workspace))
-    sync = _cli_json("git-sync", registration["repository_id"], *_ws(workspace))
+    synced_repositories = []
+    for source_repo in source_repositories:
+        registration = _cli_json("git-add", str(source_repo), "--public", *_ws(workspace))
+        sync = _cli_json("git-sync", registration["repository_id"], *_ws(workspace))
+        synced_repositories.append((registration, sync))
     ingest = _cli_json("ingest", "--pending", *_ws(workspace))
     _cli("review", ingest["changeset_id"], *_ws(workspace))  # run it; never store the full diff
     applied = _cli_json("apply", ingest["changeset_id"], "--approve", *_ws(workspace))
@@ -63,12 +67,20 @@ def _build_evidence(
     return {
         "schema_version": 1,
         "memoryforge_commit": _git_head(REPO_ROOT),
-        "source_repository": {
-            "remote_url": registration["remote_url"],
-            "commit": sync["head_commit"],
-        },
+        "source_repositories": [
+            {
+                "repository_id": registration["repository_id"],
+                "remote_url": registration["remote_url"],
+                "commit": sync["head_commit"],
+                "source_count": sync["created"] + sync["updated"] + sync["unchanged"],
+            }
+            for registration, sync in synced_repositories
+        ],
         "workflow": {
-            "source_count": sync["created"] + sync["updated"] + sync["unchanged"],
+            "source_count": sum(
+                sync["created"] + sync["updated"] + sync["unchanged"]
+                for _registration, sync in synced_repositories
+            ),
             "wiki_file_count": sum(path.startswith("wiki/pages/") for path in applied["files"]),
             "lint": lint,
         },
@@ -119,7 +131,14 @@ def _git_head(repo: Path) -> str:
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source-repo", type=Path, required=True, help="Existing local checkout.")
+    parser.add_argument(
+        "--source-repo",
+        dest="source_repos",
+        type=Path,
+        action="append",
+        required=True,
+        help="Existing local checkout. Repeat to compile several public repositories together.",
+    )
     parser.add_argument("--workspace", type=Path, required=True, help="Absent or empty workspace.")
     parser.add_argument("--output", type=Path, required=True, help="Evidence JSON path to write.")
     parser.add_argument("--eval-config", type=Path, default=DEFAULT_EVAL_CONFIG, help="Eval suite.")

@@ -212,6 +212,7 @@ def test_ask_llm_uses_candidate_facts_after_strict_match_misses(
     assert result["answer"] == "统计报告必须基于终态证据。"
     assert captured
     assert captured[0]["messages"][1]["content"].find("RunMeasurement") >= 0
+    assert "question's condition or conclusion" in captured[0]["messages"][0]["content"]
 
 
 def test_ask_llm_rejects_local_only_evidence_before_calling_provider(
@@ -420,6 +421,30 @@ def test_ask_uses_applied_source_fts_when_index_has_no_candidate(
     }
 
 
+def test_ask_uses_any_query_term_to_route_a_natural_language_question(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    runner, workspace, _ = _workspace_with_imported_source(
+        tmp_path,
+        monkeypatch,
+        "# Agent\n\nMiniClaude Agent exposes search, read, and final tools.\n",
+    )
+    _apply_pending_source(runner, workspace)
+    (workspace / "wiki/INDEX.md").write_text(
+        "# Knowledge Index\n\n- [Unrelated](pages/unrelated.md) — unrelated notes\n",
+        encoding="utf-8",
+    )
+
+    payload = query_module.answer_question(
+        workspace,
+        "Which MiniClaude Agent tools are available now?",
+    )
+
+    assert payload["status"] == "answered"
+    assert "search, read, and final" in payload["answer"]
+
+
 def test_ask_prefers_fts_candidate_over_a_weak_index_match(
     tmp_path: Path,
     monkeypatch,
@@ -601,15 +626,22 @@ def test_ask_ignores_symlinked_index_outside_wiki_and_falls_back_safely(
     index = wiki / "INDEX.md"
     index.symlink_to(external)
     original_read_text = Path.read_text
-    fts_queries: list[tuple[str, int]] = []
+    fts_queries: list[tuple[str, int, bool]] = []
 
     def fail_index_read(path: Path, *args: object, **kwargs: object) -> str:
         if path == index:
             raise AssertionError("ask must not read a symlinked INDEX.md")
         return original_read_text(path, *args, **kwargs)
 
-    def empty_fts(_workspace: Path, query: str, *, limit: int) -> tuple[str, ...]:
-        fts_queries.append((query, limit))
+    def empty_fts(
+        _workspace: Path,
+        query: str,
+        *,
+        limit: int,
+        repository_id: str | None = None,
+        require_all_terms: bool = True,
+    ) -> tuple[str, ...]:
+        fts_queries.append((query, limit, require_all_terms))
         return ()
 
     monkeypatch.setattr(query_module.Path, "read_text", fail_index_read)
@@ -619,7 +651,7 @@ def test_ask_ignores_symlinked_index_outside_wiki_and_falls_back_safely(
 
     assert payload["status"] == "unknown"
     assert payload["trace"] == []
-    assert fts_queries == [("cache", 3)]
+    assert fts_queries == [("cache", 3, True), ("cache", 3, False)]
 
 
 @pytest.mark.parametrize("max_pages", [0, 11, True])
@@ -714,6 +746,7 @@ def test_candidate_pages_prioritize_explicit_terms_over_generic_cjk_terms(
 
     selected = query_module._candidate_pages(
         tmp_path / "workspace",
+        "Redis Celery 与 FailureEvidenceBundle 不重新运行分别解决什么问题？",
         query_module._terms("Redis Celery 与 FailureEvidenceBundle 不重新运行分别解决什么问题？"),
         max_pages=1,
         trace=trace,
@@ -721,6 +754,124 @@ def test_candidate_pages_prioritize_explicit_terms_over_generic_cjk_terms(
     )
 
     assert selected == [pages / "engine.md"]
+
+
+def test_candidate_pages_fill_the_remaining_budget_with_relaxed_fts_matches(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pages = tmp_path / "workspace" / "wiki" / "pages"
+    pages.mkdir(parents=True)
+    (pages.parent / "INDEX.md").write_text("# Knowledge Index\n", encoding="utf-8")
+    index_path = tmp_path / "workspace" / ".memoryforge" / "index.sqlite"
+    index_path.parent.mkdir()
+    index_path.touch()
+    strict_page = pages / "strict.md"
+    relaxed_page = pages / "relaxed.md"
+    strict_page.write_text("# Strict\n", encoding="utf-8")
+    relaxed_page.write_text("# Relaxed\n", encoding="utf-8")
+    calls: list[tuple[int, bool]] = []
+
+    def fake_fts(
+        _workspace: Path,
+        _question: str,
+        *,
+        limit: int,
+        repository_id: str | None = None,
+        require_all_terms: bool = True,
+    ) -> tuple[str, ...]:
+        calls.append((limit, require_all_terms))
+        return ("wiki/pages/strict.md",) if require_all_terms else ("wiki/pages/relaxed.md",)
+
+    monkeypatch.setattr(query_module, "find_applied_page_paths", fake_fts)
+
+    selected = query_module._candidate_pages(
+        tmp_path / "workspace",
+        "cache policy expires",
+        {"cache", "policy", "expires"},
+        max_pages=2,
+        trace=[],
+        repository_id=None,
+    )
+
+    assert selected == [strict_page, relaxed_page]
+    assert calls == [(2, True), (2, False)]
+
+
+def test_ask_keeps_the_original_question_when_querying_fts(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workspace = tmp_path / "workspace"
+    calls: list[tuple[str, int, bool]] = []
+
+    def empty_fts(
+        _workspace: Path,
+        query: str,
+        *,
+        limit: int,
+        repository_id: str | None = None,
+        require_all_terms: bool = True,
+    ) -> tuple[str, ...]:
+        calls.append((query, limit, require_all_terms))
+        return ()
+
+    question = "AgentSkill-Eval 中哪个 RunnerAdapter 用于生产执行？"
+    monkeypatch.setattr(query_module, "find_applied_page_paths", empty_fts)
+
+    result = query_module.answer_question(workspace, question)
+
+    assert result["status"] == "unknown"
+    assert calls == [(question, 3, True), (question, 3, False)]
+
+
+def test_terms_match_camel_case_identifier_suffixes() -> None:
+    question_terms = query_module._terms("RunnerAdapter")
+    fact_terms = query_module._terms("SkillUpRunnerAdapter")
+
+    assert "runneradapter" in question_terms & fact_terms
+
+
+def test_ask_prefers_a_camel_case_identifier_over_project_background(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workspace = tmp_path / "workspace"
+    pages = workspace / "wiki" / "pages"
+    pages.mkdir(parents=True)
+    (workspace / "wiki/INDEX.md").write_text("# Knowledge Index\n", encoding="utf-8")
+    index_path = workspace / ".memoryforge" / "index.sqlite"
+    index_path.parent.mkdir()
+    index_path.touch()
+    background_page = pages / "background.md"
+    adapter_page = pages / "adapter.md"
+    background_page.write_text(
+        _wiki_page("AgentSkill-Eval explains the project background."),
+        encoding="utf-8",
+    )
+    adapter_page.write_text(
+        _wiki_page("SkillUpRunnerAdapter 用于生产执行。"),
+        encoding="utf-8",
+    )
+
+    def fake_fts(
+        _workspace: Path,
+        _question: str,
+        *,
+        limit: int,
+        repository_id: str | None = None,
+        require_all_terms: bool = True,
+    ) -> tuple[str, ...]:
+        return ("wiki/pages/background.md", "wiki/pages/adapter.md")
+
+    monkeypatch.setattr(query_module, "find_applied_page_paths", fake_fts)
+
+    result = query_module.answer_question(
+        workspace,
+        "AgentSkill-Eval 中哪个 RunnerAdapter 用于生产执行？",
+    )
+
+    assert result["answer"] == "SkillUpRunnerAdapter 用于生产执行。"
 
 
 def test_ask_prefers_specific_configuration_fact_over_runtime_overlap(
@@ -750,6 +901,27 @@ def test_ask_prefers_specific_configuration_fact_over_runtime_overlap(
 
     assert result["status"] == "answered"
     assert "配置中声明了 Skill" in result["answer"]
+
+
+def test_ask_prefers_a_specific_cjk_fact_over_repeated_generic_terms(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    source_text = (
+        "# 广告视频系统\n\n"
+        "广告视频分析系统会整理素材和证据。\n\n"
+        "项目默认使用本地证据分析，不配置外部大模型也能启动。\n\n"
+        "| 模式 | 外部依赖 | 用途 |\n|---|---|---|\n| 本地证据分析 | 无 | 默认模式 |\n\n"
+        "广告视频分析系统支持素材管理和内容检索。\n"
+        "\n外部大模型只是默认模式的可选增强。\n"
+    )
+    runner, workspace, _ = _workspace_with_imported_source(tmp_path, monkeypatch, source_text)
+    _apply_pending_source(runner, workspace)
+
+    result = query_module.answer_question(workspace, "广告视频分析系统默认依赖外部大模型吗？")
+
+    assert result["status"] == "answered"
+    assert "不配置外部大模型" in result["answer"]
 
 
 def test_ask_uses_multiline_fact_rendered_in_the_wiki_page(

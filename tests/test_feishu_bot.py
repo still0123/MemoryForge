@@ -14,6 +14,7 @@ from memoryforge.feishu_bot import (
     reply_to_feishu_text,
 )
 from memoryforge.feishu_service import _send_reply
+from memoryforge.provider import ProviderUnavailableError
 
 
 def test_feishu_event_returns_a_citable_wiki_reply(tmp_path: Path, monkeypatch) -> None:
@@ -118,12 +119,14 @@ def test_lark_cli_event_passes_chat_id_as_session_and_missing_id_is_single_turn(
     assert captured == ["oc_chat_123", None]
 
 
-def test_feishu_agent_falls_back_to_wiki_when_provider_fails(tmp_path: Path, monkeypatch) -> None:
+def test_feishu_llm_falls_back_to_wiki_when_provider_is_unavailable(
+    tmp_path: Path, monkeypatch
+) -> None:
     workspace = _applied_workspace(tmp_path, monkeypatch)
 
     class FailingProvider:
-        def agent_step(self, _messages: object) -> object:
-            raise ValueError("provider temporarily unavailable")
+        def answer_with_evidence(self, _messages: object) -> object:
+            raise ProviderUnavailableError("provider temporarily unavailable")
 
     reply = reply_to_feishu_text(
         workspace,
@@ -133,6 +136,27 @@ def test_feishu_agent_falls_back_to_wiki_when_provider_fails(tmp_path: Path, mon
     )
 
     assert reply["content"]["text"].startswith("Cache entries expire after sixty seconds.")
+    assert "来源：Cache policy" in reply["content"]["text"]
+
+
+def test_feishu_llm_reply_uses_the_evidence_summarizer(tmp_path: Path, monkeypatch) -> None:
+    workspace = _applied_workspace(tmp_path, monkeypatch)
+
+    class EvidenceProvider:
+        def answer_with_evidence(
+            self, messages: list[dict[str, str]]
+        ) -> tuple[str, tuple[int, ...]]:
+            facts = json.loads(messages[1]["content"])["facts"]
+            assert facts == [{"index": 0, "quote": "Cache entries expire after sixty seconds."}]
+            return "缓存会在六十秒后过期。", (0,)
+
+    reply = reply_to_feishu_text(
+        workspace,
+        "When do cache entries expire?",
+        provider=EvidenceProvider(),  # type: ignore[arg-type]
+    )
+
+    assert reply["content"]["text"].startswith("缓存会在六十秒后过期。")
     assert "来源：Cache policy" in reply["content"]["text"]
 
 

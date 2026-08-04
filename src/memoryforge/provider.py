@@ -21,7 +21,7 @@ _PROVIDER_ENV_NAMES = (
     "MEMORYFORGE_API_KEY",
     "MEMORYFORGE_MODEL",
 )
-_REQUEST_TIMEOUT_SECONDS = 12
+_REQUEST_TIMEOUT_SECONDS = 30
 _TRANSIENT_HTTP_CODES = frozenset({429, 500, 502, 503, 504})
 
 
@@ -129,7 +129,7 @@ class OpenAICompatibleProvider:
         self._transport = transport
 
     def compile_pages(self, messages: Sequence[Mapping[str, str]]) -> tuple[PageChange, ...]:
-        decoded = self._request_json(messages)
+        decoded = self._request_json(messages, disable_thinking=True, max_tokens=4096)
         try:
             return _ProviderResponse.model_validate(decoded).changes
         except ValidationError as exc:
@@ -139,8 +139,13 @@ class OpenAICompatibleProvider:
         decoded = self._request_json(messages, disable_thinking=True, max_tokens=2048)
         try:
             return _PlanResponse.model_validate(decoded).plan
-        except ValidationError as exc:
-            raise ValueError("provider response does not match CompilationPlan contract") from exc
+        except ValidationError:
+            try:
+                return CompilationPlan.model_validate(decoded)
+            except ValidationError as exc:
+                raise ValueError(
+                    "provider response does not match CompilationPlan contract"
+                ) from exc
 
     def organize_topics(self, messages: Sequence[Mapping[str, str]]) -> tuple[TopicGroup, ...]:
         """Return small navigation groups for public, already-compiled source pages."""

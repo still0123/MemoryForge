@@ -1,6 +1,6 @@
 # 公开证据脚本
 
-`demo/run_public_demo.py` 把 MemoryForge 现有 CLI 按真实用户路径串起来，对一个**已经克隆好的**本地公开 Git 仓库跑出一份可提交、可复现的证据 JSON。它不注册新命令、不 clone/fetch/checkout、不调用模型、不读取 `.env`。
+`demo/run_public_demo.py` 把 MemoryForge 现有 CLI 按真实用户路径串起来，对一个或多个**已经克隆好的**本地公开 Git 仓库跑出一份可提交、可复现的证据 JSON。它不注册新命令、不 clone/fetch/checkout、不调用模型、不读取 `.env`。
 
 ## 运行
 
@@ -11,7 +11,7 @@
   --output demo/results/agent_skill_eval_public.json
 ```
 
-- `--source-repo`：已存在的本地 Git checkout；脚本只读它的 `HEAD`。
+- `--source-repo`：已存在的本地 Git checkout；脚本只读它的 `HEAD`，可重复传入以汇总多个公开仓库。
 - `--workspace`：必须不存在或为空；脚本绝不删除已有目录。
 - `--output`：证据 JSON 写到哪里。
 - `--eval-config`（默认 `demo/evaluation/agent_skill_eval.json`）、`--question`（默认一条固定问题）可覆盖。
@@ -20,7 +20,7 @@
 
 ## 证据 JSON 字段
 
-- `memoryforge_commit`、`source_repository.{remote_url,commit}`：主仓与源仓的真实 commit。
+- `memoryforge_commit`、`source_repositories[].{repository_id,remote_url,commit}`：主仓与每个源仓的真实身份和 commit。
 - `workflow.source_count`、`workflow.wiki_file_count`、`workflow.lint`：本次 `git-sync` / `apply` / `lint` 的真实结果。
 - `sample_query`：固定问题的答案、引用、渐进式查询 trace。
 - `evaluation`：题集 `eval` 的完整汇总。
@@ -54,3 +54,22 @@
 `local_only` 模型授权和飞书回复桥接由仓库测试覆盖，因为这些功能不应把公司内部资料写进公开 Demo。
 
 完整方法和失败案例见 [`docs/BENCHMARK.md`](../docs/BENCHMARK.md)。
+
+## 多仓库个人资料演示
+
+仓库里的 [`evaluation/personal_public_repositories.json`](evaluation/personal_public_repositories.json)
+是一套只引用公开资料的个人题集：`AgentSkill-Eval`、广告视频分析系统和 MemoryForge 本身。它不是
+对公司资料或飞书正文的评测，也不会把本机路径写入结果。
+
+```bash
+.venv/bin/python demo/run_public_demo.py \
+  --source-repo /absolute/path/to/AgentSkill-Eval \
+  --source-repo /absolute/path/to/ad-video-analysis-system \
+  --source-repo "$PWD" \
+  --workspace /private/tmp/memoryforge-personal-demo \
+  --output /private/tmp/memoryforge-personal-result.json \
+  --eval-config demo/evaluation/personal_public_repositories.json \
+  --question '广告视频分析系统默认依赖外部模型吗？'
+```
+
+题集用每个公开远程仓库的稳定 `repository_id` 区分同名的 `README.md`，因此不会把不同仓库的同名文件混为一谈。

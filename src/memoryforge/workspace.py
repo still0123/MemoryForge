@@ -1374,6 +1374,7 @@ def find_applied_page_paths(
     *,
     limit: int = 10,
     repository_id: str | None = None,
+    require_all_terms: bool = True,
 ) -> tuple[str, ...]:
     """Use FTS5 to find Wiki pages backed by applied source revisions only."""
     if not query.strip():
@@ -1383,7 +1384,7 @@ def find_applied_page_paths(
 
     opened = Workspace.open_readonly(workspace)
     with _connect_readonly(opened.index_path) as connection:
-        parameters: list[object] = [_fts_query(query)]
+        parameters: list[object] = [_fts_query(query, require_all_terms=require_all_terms)]
         repository_filter = ""
         if repository_id is not None:
             _validate_repository_scope(connection, repository_id)

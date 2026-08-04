@@ -149,8 +149,11 @@ def test_llm_compiler_uses_workspace_contract_and_stages_plan_details(
     assert compilation is not None
     assert provider.plan_messages is not None
     assert "Use the team glossary." in json.dumps(provider.plan_messages, ensure_ascii=False)
+    assert '"pages"' in provider.plan_messages[0]["content"]
     assert provider.messages is not None
     assert "page_types:" in json.dumps(provider.messages, ensure_ascii=False)
+    assert '"summary"' in provider.messages[0]["content"]
+    assert "Do not include action in changes" in provider.messages[0]["content"]
     details = compilation.changeset.operations[0].details
     assert details["compilation_plan"]["reason"] == "Create the first concept page."
 
@@ -178,6 +181,56 @@ def test_llm_compiler_rejects_invalid_output_before_staging(
     assert not (workspace_path / ".memoryforge/staging/proposed").exists()
     assert repository.exists()
     assert source_id
+
+
+def test_llm_compiler_normalizes_a_heading_only_citation_before_staging(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _repository, workspace_path, source_id = _workspace_with_one_source(tmp_path, monkeypatch)
+    change = PageChange(
+        path="wiki/pages/note.md",
+        title="Note",
+        page_type="concept",
+        summary="A useful local fact.",
+        body="The note documents one useful fact.",
+        source_ids=(source_id,),
+        citations=({"source_id": source_id, "locator": "chars:0-6"},),
+    )
+
+    compilation = compile_pending_sources(
+        Workspace.open(workspace_path),
+        provider=FakeProvider((change,)),
+    )
+
+    assert compilation is not None
+    assert "A useful local fact." in compilation.candidate_files[f"wiki/pages/{source_id}.md"]
+
+
+def test_llm_compiler_normalizes_a_partial_sentence_citation_before_staging(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository, workspace_path, source_id = _workspace_with_one_source(tmp_path, monkeypatch)
+    source_text = (repository / "note.md").read_text(encoding="utf-8")
+    fact_start = source_text.index("A useful")
+    change = PageChange(
+        path="wiki/pages/note.md",
+        title="Note",
+        page_type="concept",
+        summary="A useful local fact.",
+        body="The note documents one useful fact.",
+        source_ids=(source_id,),
+        citations=({"source_id": source_id, "locator": f"chars:{fact_start}-{fact_start + 8}"},),
+    )
+
+    compilation = compile_pending_sources(
+        Workspace.open(workspace_path),
+        provider=FakeProvider((change,)),
+    )
+
+    assert compilation is not None
+    assert "A useful local fact." in compilation.candidate_files[f"wiki/pages/{source_id}.md"]
 
 
 def test_llm_compiler_rejects_raw_path_before_staging(

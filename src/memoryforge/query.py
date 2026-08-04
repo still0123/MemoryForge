@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections import Counter
 from pathlib import Path, PurePosixPath
 from typing import Literal, NotRequired, TypedDict
 
@@ -29,6 +30,7 @@ _INDEX_ENTRY = re.compile(
 )
 _FRONTMATTER = re.compile(r"\A---\n(?P<fields>.*?)\n---\n", re.DOTALL)
 _WORDS = re.compile(r"[a-z0-9]+|[\u4e00-\u9fff]+", re.IGNORECASE)
+_CAMEL_CASE_PARTS = re.compile(r"[A-Z]+(?=[A-Z][a-z]|$)|[A-Z]?[a-z]+")
 _CJK = re.compile(r"^[\u4e00-\u9fff]+$")
 _REPOSITORY_OVERVIEW_LINK = re.compile(r"^pages/repository-[a-f0-9]{12}\.md$")
 _STOP_WORDS = {
@@ -102,15 +104,17 @@ def answer_question(
     _validate_max_pages(max_pages)
     _validate_max_citations(max_citations)
     question_terms = _terms(question)
+    focus_terms = _yes_no_focus_terms(question)
     trace: list[TraceStep] = []
     if not question_terms:
         return _unknown_payload(debug, trace)
 
-    matches: list[tuple[tuple[int, ...], str, CitationPayload]] = []
-    candidate_matches: list[tuple[tuple[int, ...], str, CitationPayload]] = []
+    raw_matches: list[tuple[frozenset[str], str, CitationPayload]] = []
+    raw_candidate_matches: list[tuple[frozenset[str], str, CitationPayload]] = []
 
     for page in _candidate_pages(
         workspace_root,
+        question,
         question_terms,
         max_pages=max_pages,
         trace=trace,
@@ -120,13 +124,8 @@ def answer_question(
         trace.append({"level": "L1", "artifact": str(page.relative_to(workspace_root))})
         for citation in _page_citations(content):
             overlap = question_terms & _terms(citation["quote"])
-            ranking_overlap = overlap - _RANKING_STOP_WORDS
-            score = (
-                sum(not _CJK.fullmatch(term) for term in ranking_overlap),
-                len(ranking_overlap),
-                sum(len(term) for term in ranking_overlap),
-            )
-            candidate_matches.append((score, str(page.relative_to(workspace_root)), citation))
+            page_path = str(page.relative_to(workspace_root))
+            raw_candidate_matches.append((frozenset(overlap), page_path, citation))
             has_cjk_terms = any(_CJK.fullmatch(term) for term in question_terms)
             required_overlap = 1 if len(question_terms) == 1 else 2
             if has_cjk_terms:
@@ -135,7 +134,10 @@ def answer_question(
                     required_overlap = 2
             sufficient_match = len(overlap) >= required_overlap
             if sufficient_match:
-                matches.append((score, str(page.relative_to(workspace_root)), citation))
+                raw_matches.append((frozenset(overlap), page_path, citation))
+
+    matches = _rank_matches(raw_matches, focus_terms=focus_terms)
+    candidate_matches = _rank_matches(raw_candidate_matches, focus_terms=focus_terms)
 
     if not matches and provider is None:
         return _unknown_payload(debug, trace)
@@ -287,7 +289,10 @@ def _answer_messages(
                 "facts that support the answer. If the facts do not answer the question, "
                 'return {"answer":"不知道","citation_indexes":[]}. Reply in the question language.'
                 " You may restate an explicit contrast in direct language, but do not add details "
-                "beyond the facts."
+                "beyond the facts. Prefer facts that answer the question's condition or conclusion "
+                "over broad background facts that only share the same topic. For a yes-or-no "
+                "question, answer directly and do not return a Markdown table when a concise "
+                "fact states the conclusion."
             ),
         },
         {
@@ -315,6 +320,7 @@ def _unknown_payload(debug: bool, trace: list[TraceStep]) -> AskPayload:
 
 def _candidate_pages(
     workspace_root: Path,
+    question: str,
     question_terms: set[str],
     *,
     max_pages: int,
@@ -357,19 +363,21 @@ def _candidate_pages(
     fts_paths: tuple[str, ...] = ()
     index_path = workspace_root / ".memoryforge" / "index.sqlite"
     if safe_index is None or (index_path.is_file() and not index_path.is_symlink()):
-        if repository_id is None:
-            fts_paths = find_applied_page_paths(
+        fts_paths = find_applied_page_paths(
+            workspace_root,
+            question,
+            limit=max_pages,
+            repository_id=repository_id,
+        )
+        if len(fts_paths) < max_pages:
+            relaxed_paths = find_applied_page_paths(
                 workspace_root,
-                " ".join(sorted(question_terms)),
-                limit=max_pages,
-            )
-        else:
-            fts_paths = find_applied_page_paths(
-                workspace_root,
-                " ".join(sorted(question_terms)),
+                question,
                 limit=max_pages,
                 repository_id=repository_id,
+                require_all_terms=False,
             )
+            fts_paths = tuple(dict.fromkeys((*fts_paths, *relaxed_paths)))[:max_pages]
     if fts_paths:
         trace.append({"level": "L0", "artifact": "SQLite FTS5 applied-source index"})
     candidates: list[Path] = []
@@ -435,6 +443,46 @@ def _top_matches(
         selected.append((page_path, citation))
         covered_terms.update(_terms(citation["quote"]) & question_terms)
     return selected
+
+
+def _rank_matches(
+    matches: list[tuple[frozenset[str], str, CitationPayload]],
+    *,
+    focus_terms: set[str] | None = None,
+) -> list[tuple[tuple[int, ...], str, CitationPayload]]:
+    focus_terms = focus_terms or set()
+    frequencies = Counter(
+        term for overlap, _page_path, _citation in matches for term in overlap - _RANKING_STOP_WORDS
+    )
+    ranked = []
+    for overlap, page_path, citation in matches:
+        ranking_overlap = overlap - _RANKING_STOP_WORDS
+        non_cjk_terms = [term for term in ranking_overlap if not _CJK.fullmatch(term)]
+        score = (
+            max((len(term) for term in non_cjk_terms), default=0),
+            len(non_cjk_terms),
+            int(
+                bool(ranking_overlap & focus_terms)
+                and not citation["quote"].lstrip().startswith("|")
+            ),
+            len(ranking_overlap & focus_terms),
+            sum(1000 // frequencies[term] for term in ranking_overlap),
+            len(ranking_overlap),
+            sum(len(term) for term in ranking_overlap),
+        )
+        ranked.append((score, page_path, citation))
+    return sorted(ranked, key=lambda match: (match[0], match[1]), reverse=True)
+
+
+def _yes_no_focus_terms(question: str) -> set[str]:
+    """Return the condition half of one compact Chinese yes-or-no question."""
+    for match in _WORDS.finditer(question):
+        token = match.group().lower()
+        if _CJK.fullmatch(token) and token.endswith("吗"):
+            # ponytail: only explicit yes/no questions need this.
+            # General tail weighting regressed recall.
+            return _terms(token[len(token) // 2 :])
+    return set()
 
 
 def _safe_wiki_index(workspace_root: Path, index: Path) -> Path | None:
@@ -541,7 +589,8 @@ def _unescape_link_text(value: str) -> str:
 def _terms(text: str) -> set[str]:
     terms: set[str] = set()
     for match in _WORDS.finditer(text):
-        token = match.group().lower()
+        raw_token = match.group()
+        token = raw_token.lower()
         if _CJK.fullmatch(token):
             if token in _STOP_WORDS:
                 continue
@@ -551,4 +600,7 @@ def _terms(text: str) -> set[str]:
                 terms.update(token[index : index + 2] for index in range(len(token) - 1))
         elif token not in _STOP_WORDS:
             terms.add(token)
+            parts = _CAMEL_CASE_PARTS.findall(raw_token)
+            if len(parts) > 1:
+                terms.update("".join(parts[index:]).lower() for index in range(1, len(parts) - 1))
     return terms

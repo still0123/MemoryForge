@@ -103,6 +103,8 @@ def test_provider_posts_expected_chat_completions_request() -> None:
         "model": "test-model",
         "messages": [{"role": "user", "content": "compile this"}],
         "response_format": {"type": "json_object"},
+        "thinking": {"type": "disabled"},
+        "max_tokens": 4096,
     }
 
 
@@ -147,6 +149,27 @@ def test_provider_parses_compilation_plan() -> None:
     payload = json.loads(captured[0].data or b"")
     assert payload["thinking"] == {"type": "disabled"}
     assert payload["max_tokens"] == 2048
+
+
+def test_provider_accepts_a_bare_compilation_plan() -> None:
+    plan = {
+        "pages": [
+            {
+                "path": "wiki/pages/cache-design.md",
+                "action": "create",
+                "source_ids": [SOURCE_ID],
+                "reason": "Create the cache concept page.",
+                "related_pages": [],
+            }
+        ],
+        "conflicts": [],
+    }
+    provider = OpenAICompatibleProvider(
+        ProviderConfig("https://example.test", "test-key", "test-model"),
+        transport=lambda _request: _chat_response(plan),
+    )
+
+    assert provider.plan_pages([]) == CompilationPlan.model_validate(plan)
 
 
 def test_provider_parses_topic_groups() -> None:

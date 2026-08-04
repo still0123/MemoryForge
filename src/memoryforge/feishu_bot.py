@@ -6,7 +6,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-from memoryforge.agent import AgentPayload, run_agent
 from memoryforge.errors import MemoryForgeError
 from memoryforge.provider import OpenAICompatibleProvider
 from memoryforge.query import AskPayload, answer_question
@@ -27,40 +26,23 @@ def reply_to_feishu_text(
     session_id: str | None = None,
 ) -> dict[str, Any]:
     """Answer one Feishu text message, optionally summarizing explicitly allowed evidence."""
-    result: AskPayload | AgentPayload
-    if provider is None:
-        result = _deterministic_session_answer(
-            workspace,
-            text,
-            max_pages=max_pages,
-            allow_local=allow_local,
-            session_id=session_id,
-        )
-    else:
-        result = run_agent(
-            workspace,
-            text,
-            provider=provider,
-            max_pages=min(max_pages, 3),
-            allow_local=allow_local,
-            session_id=session_id,
-        )
-        if result["status"] == "provider_error":
-            result = _deterministic_session_answer(
-                workspace,
-                text,
-                max_pages=max_pages,
-                allow_local=allow_local,
-                session_id=session_id,
-            )
+    result = _session_answer(
+        workspace,
+        text,
+        max_pages=max_pages,
+        provider=provider,
+        allow_local=allow_local,
+        session_id=session_id,
+    )
     return _text_reply(workspace, result)
 
 
-def _deterministic_session_answer(
+def _session_answer(
     workspace: Path,
     text: str,
     *,
     max_pages: int,
+    provider: OpenAICompatibleProvider | None,
     allow_local: bool,
     session_id: str | None,
 ) -> AskPayload:
@@ -69,6 +51,7 @@ def _deterministic_session_answer(
         workspace,
         rewrite_query(text, turns),
         max_pages=max_pages,
+        provider=provider,
         allow_local=allow_local,
     )
     save_turn(
@@ -159,7 +142,7 @@ def handle_lark_cli_event(
     }
 
 
-def _text_reply(workspace: Path, result: AskPayload | AgentPayload) -> dict[str, Any]:
+def _text_reply(workspace: Path, result: AskPayload) -> dict[str, Any]:
     text = result["answer"]
     titles = [_page_title(workspace / path) for path in result["wiki_pages"]]
     if titles := [title for title in titles if title]:

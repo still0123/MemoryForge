@@ -212,6 +212,68 @@ def test_multiline_markdown_keeps_exact_citation_and_wiki_footnote(
     assert "quote_sha256" not in candidate
 
 
+def test_deterministic_compiler_keeps_multiple_citable_paragraphs(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    source_text = (
+        "# Cache policy\n\n"
+        "Cache entries expire after sixty seconds.\n\n"
+        "When the remote model is unavailable, the system falls back to local evidence.\n"
+    )
+    runner, workspace, _ = _initialized_workspace(tmp_path, monkeypatch, source_text=source_text)
+
+    ingested = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
+    assert ingested.exit_code == 0, ingested.output
+    changeset_id = json.loads(ingested.stdout)["changeset_id"]
+    reviewed = runner.invoke(app, ["review", changeset_id, "--workspace", str(workspace)])
+
+    assert reviewed.exit_code == 0, reviewed.output
+    candidate_files = json.loads(reviewed.stdout)["candidate_files"]
+    page = next(
+        content for path, content in candidate_files.items() if path.startswith("wiki/pages/")
+    )
+    assert "Cache entries expire after sixty seconds." in page
+    assert "system falls back to local evidence." in page
+    assert page.count("[^source-") == 4
+
+
+def test_deterministic_compiler_keeps_markdown_table_and_config_block_facts(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    source_text = (
+        "# Service configuration\n\n"
+        "| Service | Address |\n"
+        "| --- | --- |\n"
+        "| Java Web | http://127.0.0.1:8766 |\n"
+        "| Python AI | http://127.0.0.1:8765 |\n\n"
+        "```bash\n"
+        "export AD_VIDEO_LLM_ENABLED=1\n"
+        "export AD_VIDEO_LLM_API_KEY=example-key\n"
+        "```\n"
+    )
+    runner, workspace, _ = _initialized_workspace(tmp_path, monkeypatch, source_text=source_text)
+
+    ingested = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
+    assert ingested.exit_code == 0, ingested.output
+    reviewed = runner.invoke(
+        app,
+        ["review", json.loads(ingested.stdout)["changeset_id"], "--workspace", str(workspace)],
+    )
+
+    assert reviewed.exit_code == 0, reviewed.output
+    page = next(
+        content
+        for path, content in json.loads(reviewed.stdout)["candidate_files"].items()
+        if path.startswith("wiki/pages/")
+    )
+    assert "http://127.0.0.1:8766" in page
+    assert "http://127.0.0.1:8765" in page
+    assert "AD_VIDEO_LLM_ENABLED=1" in page
+    assert "AD_VIDEO_LLM_API_KEY=example-key" in page
+
+
 def test_ingest_rejects_unknown_source_id(tmp_path: Path, monkeypatch) -> None:
     runner, workspace, _ = _initialized_workspace(tmp_path, monkeypatch)
     unknown_source_id = "0" * 64

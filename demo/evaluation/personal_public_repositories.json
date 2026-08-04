@@ -1,0 +1,186 @@
+{
+  "name": "Personal public repositories",
+  "cases": [
+    {
+      "id": "agent-statistics-truth",
+      "category": "single_hop",
+      "question": "统计器如何避免把模拟实验结果当成真实结论？",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/statistics-and-reports.md"],
+      "required_terms": ["Manifest", "RunMeasurement"],
+      "repository_id": "db29dfd06f0a2853c9764f1393b680d6a592b1a5771a012b6e1387fc17aac597"
+    },
+    {
+      "id": "agent-trace-boundary",
+      "category": "single_hop",
+      "question": "Trace Intelligence 不保存什么？",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/trace-intelligence.md"],
+      "required_terms": ["隐藏思维过程", "unavailable"],
+      "repository_id": "db29dfd06f0a2853c9764f1393b680d6a592b1a5771a012b6e1387fc17aac597"
+    },
+    {
+      "id": "agent-real-provider-boundary",
+      "category": "single_hop",
+      "question": "Real Agent 模块会不会引入新的 Provider 编排框架？",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/real-agent-evidence.md"],
+      "required_terms": ["Provider", "模拟结果"],
+      "repository_id": "db29dfd06f0a2853c9764f1393b680d6a592b1a5771a012b6e1387fc17aac597"
+    },
+    {
+      "id": "agent-statistics-provider",
+      "category": "multi_source",
+      "question": "Manifest、RunMeasurement 和 Provider 模拟结果分别如何保证实验结论可信？",
+      "expected_status": "answered",
+      "expected_source_paths": [
+        "docs/statistics-and-reports.md",
+        "docs/real-agent-evidence.md"
+      ],
+      "required_terms": ["Manifest", "RunMeasurement", "Provider", "模拟结果"],
+      "repository_id": "db29dfd06f0a2853c9764f1393b680d6a592b1a5771a012b6e1387fc17aac597"
+    },
+    {
+      "id": "ad-video-local-default",
+      "category": "single_hop",
+      "question": "广告视频分析系统默认依赖外部大模型吗？",
+      "expected_status": "answered",
+      "expected_source_paths": ["README.md"],
+      "required_terms": ["本地证据分析", "外部大模型"],
+      "repository_id": "ef373e66ce758f5ed76b7326a4c289b7b21f120b4c20f30b79ad41fa11adadce"
+    },
+    {
+      "id": "ad-video-service-ports",
+      "category": "single_hop",
+      "question": "广告视频分析系统的 Java Web 后端和 Python AI 侧车分别使用什么端口？",
+      "expected_status": "answered",
+      "expected_source_paths": ["README.md"],
+      "required_terms": ["8766", "8765"],
+      "repository_id": "ef373e66ce758f5ed76b7326a4c289b7b21f120b4c20f30b79ad41fa11adadce"
+    },
+    {
+      "id": "ad-video-llm-fallback",
+      "category": "single_hop",
+      "question": "广告视频分析系统的在线大模型不可用时会怎样？",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/advanced-configuration.md"],
+      "required_terms": ["本地分析", "回退"],
+      "repository_id": "ef373e66ce758f5ed76b7326a4c289b7b21f120b4c20f30b79ad41fa11adadce"
+    },
+    {
+      "id": "ad-video-model-settings",
+      "category": "single_hop",
+      "question": "启用广告视频分析系统的在线大模型至少需要设置哪两个环境变量？",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/advanced-configuration.md"],
+      "required_terms": ["AD_VIDEO_LLM_ENABLED", "AD_VIDEO_LLM_API_KEY"],
+      "repository_id": "ef373e66ce758f5ed76b7326a4c289b7b21f120b4c20f30b79ad41fa11adadce"
+    },
+    {
+      "id": "ad-video-evidence-and-fallback",
+      "category": "multi_source",
+      "question": "广告视频系统的证据构建负责什么，远程模型不可用时如何处理？",
+      "expected_status": "answered",
+      "expected_source_paths": ["README.md", "docs/advanced-configuration.md"],
+      "required_terms": ["证据", "本地分析", "回退"],
+      "repository_id": "ef373e66ce758f5ed76b7326a4c289b7b21f120b4c20f30b79ad41fa11adadce"
+    },
+    {
+      "id": "memoryforge-review-apply",
+      "category": "single_hop",
+      "question": "MemoryForge 为什么要先 review 再 apply，而不是直接覆盖 Wiki？",
+      "expected_status": "answered",
+      "expected_source_paths": ["README.md"],
+      "required_terms": ["review", "apply"],
+      "repository_id": "bc14928b8a3bec2edcfa2a2f20a3fe3fc0b109ee6dc0dc114a7a1784fa97afd8"
+    },
+    {
+      "id": "memoryforge-agent-tools",
+      "category": "single_hop",
+      "question": "MemoryForge 的 MiniClaude Agent 只有哪三个工具？",
+      "expected_status": "answered",
+      "expected_source_paths": ["README.md"],
+      "required_terms": ["search_wiki", "read_evidence", "final"],
+      "repository_id": "bc14928b8a3bec2edcfa2a2f20a3fe3fc0b109ee6dc0dc114a7a1784fa97afd8"
+    },
+    {
+      "id": "memoryforge-local-model-boundary",
+      "category": "single_hop",
+      "question": "MemoryForge 默认如何保护本地资料，什么时候才允许模型读取？",
+      "expected_status": "answered",
+      "expected_source_paths": ["README.md"],
+      "required_terms": ["local_only", "--allow-local-llm"],
+      "repository_id": "bc14928b8a3bec2edcfa2a2f20a3fe3fc0b109ee6dc0dc114a7a1784fa97afd8"
+    },
+    {
+      "id": "memoryforge-feishu-role",
+      "category": "single_hop",
+      "question": "飞书在 MemoryForge 中是核心知识库还是展示入口？",
+      "expected_status": "answered",
+      "expected_source_paths": ["README.md"],
+      "required_terms": ["展示", "feishu-serve"],
+      "repository_id": "bc14928b8a3bec2edcfa2a2f20a3fe3fc0b109ee6dc0dc114a7a1784fa97afd8"
+    },
+    {
+      "id": "memoryforge-fts-benchmark",
+      "category": "multi_source",
+      "question": "MemoryForge 为什么当前使用 SQLite FTS5 而不引入 Embedding，公开评测又说明了什么？",
+      "expected_status": "answered",
+      "expected_source_paths": ["README.md", "docs/BENCHMARK.md"],
+      "required_terms": ["SQLite FTS5", "Embedding"],
+      "repository_id": "bc14928b8a3bec2edcfa2a2f20a3fe3fc0b109ee6dc0dc114a7a1784fa97afd8"
+    },
+    {
+      "id": "memoryforge-unanswerable",
+      "category": "unanswerable",
+      "question": "MemoryForge 的作者出生在哪一天？",
+      "expected_status": "unknown",
+      "repository_id": "bc14928b8a3bec2edcfa2a2f20a3fe3fc0b109ee6dc0dc114a7a1784fa97afd8"
+    },
+    {
+      "id": "agent-runner-production-adapter",
+      "category": "single_hop",
+      "question": "AgentSkill-Eval 中哪个 RunnerAdapter 用于生产执行？",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/runner-adapters.md"],
+      "required_terms": ["SkillUpRunnerAdapter", "生产"],
+      "repository_id": "db29dfd06f0a2853c9764f1393b680d6a592b1a5771a012b6e1387fc17aac597"
+    },
+    {
+      "id": "agent-grader-environment",
+      "category": "single_hop",
+      "question": "AgentSkill-Eval 的 grader 缺少 pytest 时应该怎么处理？",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/real-agent-evidence.md"],
+      "required_terms": ["pytest", "虚拟环境"],
+      "repository_id": "db29dfd06f0a2853c9764f1393b680d6a592b1a5771a012b6e1387fc17aac597"
+    },
+    {
+      "id": "agent-optimizer-runtime-boundary",
+      "category": "single_hop",
+      "question": "Real Optimizer Evaluator 会不会再实现一套 Agent Runtime？",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/real-optimizer-evaluator.md"],
+      "required_terms": ["SkillUpRunnerAdapter", "第二套 Agent Runtime"],
+      "repository_id": "db29dfd06f0a2853c9764f1393b680d6a592b1a5771a012b6e1387fc17aac597"
+    },
+    {
+      "id": "ad-video-asr-ocr-dependencies",
+      "category": "single_hop",
+      "question": "广告视频系统的本地 ASR/OCR 依赖哪些识别组件？",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/advanced-configuration.md"],
+      "required_terms": ["FFmpeg", "Tesseract"],
+      "repository_id": "ef373e66ce758f5ed76b7326a4c289b7b21f120b4c20f30b79ad41fa11adadce"
+    },
+    {
+      "id": "memoryforge-model-fallback",
+      "category": "single_hop",
+      "question": "MemoryForge 的模型服务超时或 503 时，飞书回复会怎样？",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/PORTFOLIO_DEMO.md"],
+      "required_terms": ["回退", "model_status: fallback"],
+      "repository_id": "bc14928b8a3bec2edcfa2a2f20a3fe3fc0b109ee6dc0dc114a7a1784fa97afd8"
+    }
+  ]
+}

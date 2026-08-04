@@ -18,6 +18,7 @@ from memoryforge.models import (
     ChangeSetStatus,
     CompilationPlan,
     PageChange,
+    PageCitation,
     PlannedPage,
     Sensitivity,
     TopicGroup,
@@ -73,6 +74,7 @@ _INDEX_ENTRY = re.compile(
 _WORDS = re.compile(r"[a-z0-9]+|[\u4e00-\u9fff]+", re.IGNORECASE)
 _CJK = re.compile(r"^[\u4e00-\u9fff]+$")
 _RELATED_PAGE_LINK = re.compile(r"^- \[[^\]]+\]\((?P<path>[^)]+\.md)\)$", re.MULTILINE)
+_LOCAL_FACT_LIMIT = 24
 
 
 @dataclass(frozen=True)
@@ -302,12 +304,7 @@ def _compile_deterministically(
             if "code" in source.tags:
                 candidate_files[path] = _render_code_page(source, content)
             else:
-                quote, start = _first_meaningful_paragraph(content)
-                candidate_files[path] = _render_page(
-                    source,
-                    quote,
-                    f"chars:{start}-{start + len(quote)}",
-                )
+                candidate_files[path] = _render_page(source, _meaningful_paragraphs(content))
         else:
             candidate_files[path] = _render_deterministic_group_page(
                 workspace,
@@ -476,11 +473,9 @@ def _compile_stale_pages(
             if "code" in source.tags:
                 candidate_files[stale_page.path] = _render_code_page(source, content)
             else:
-                quote, start = _first_meaningful_paragraph(content)
                 candidate_files[stale_page.path] = _render_page(
                     source,
-                    quote,
-                    f"chars:{start}-{start + len(quote)}",
+                    _meaningful_paragraphs(content),
                 )
         else:
             candidate_files[stale_page.path] = _render_deterministic_group_page(
@@ -647,7 +642,7 @@ def _compile_with_provider(
         plan=plan,
         prompt_context=prompt_context,
     )
-    changes = provider.compile_pages(messages)
+    changes = _normalize_llm_citations(provider.compile_pages(messages), source_texts)
     sources_by_id = {source.source_id: source for source in available_sources}
     _validate_llm_changes(
         workspace,
@@ -786,8 +781,15 @@ def _llm_messages(
         {
             "role": "system",
             "content": (
-                "You propose concise Markdown Wiki page changes. Return JSON with "
-                '{"changes":[...]} matching the PageChange contract. Every pending source '
+                "You propose concise Markdown Wiki page changes. Return exactly "
+                '{"changes":[{"path":"wiki/pages/<slug>.md","title":"...",'
+                '"page_type":"concept","summary":"one line","body":"...",'
+                '"source_ids":["<source_id>"],"citations":[{"source_id":"<source_id>",'
+                '"locator":"chars:0-10"}]}]}. Do not include action in changes; action '
+                "belongs to the plan only. Every pending source must have one citation with "
+                "an exact character locator covering a complete factual sentence, never only a "
+                "Markdown heading or source title, and never ending mid-sentence. Every pending "
+                "source "
                 "must appear in exactly one change. You may extend one existing page card by "
                 "including all of its listed source IDs plus relevant pending sources; do not "
                 "move sources between existing pages. Paths must be wiki/pages/<filename>.md. "
@@ -831,7 +833,9 @@ def _planning_messages(
         {
             "role": "system",
             "content": (
-                "Return JSON with a plan object matching the CompilationPlan contract. "
+                'Return exactly {"plan":{"pages":[{"path":"wiki/pages/<slug>.md",'
+                '"action":"create","source_ids":["<source_id>"],"reason":"...",'
+                '"related_pages":[]}],"conflicts":[]}}. '
                 "List every pending source exactly once, choose create or update, and explain "
                 "the routing in one short reason. Do not write Markdown or hidden reasoning."
                 + ("\n\nWORKSPACE CONTRACT:\n" + prompt_context if prompt_context else "")
@@ -924,6 +928,11 @@ def _validate_llm_changes(
             start, end = _locator_range(citation.locator)
             if end > len(source_text):
                 raise ValueError(f"provider returned an out-of-range citation: {citation.locator}")
+            cited_text = source_text[start:end].strip()
+            if "\n" not in cited_text and cited_text.startswith("#"):
+                raise ValueError("provider citation must quote a source fact, not a heading")
+            if end < len(source_text) and source_text[end - 1] not in ".!?。！？；;\n":
+                raise ValueError("provider citation must end at a source sentence boundary")
         matching_routed_pages = [
             page for page in routed_pages if change_source_ids & set(page.source_ids)
         ]
@@ -996,6 +1005,36 @@ def _locator_range(locator: str) -> tuple[int, int]:
     if match is None:
         raise ValueError(f"invalid citation locator: {locator}")
     return int(match.group(1)), int(match.group(2))
+
+
+def _normalize_llm_citations(
+    changes: tuple[PageChange, ...],
+    source_texts: dict[str, str],
+) -> tuple[PageChange, ...]:
+    """Keep model-proposed citations on complete source facts before validation."""
+    normalized_changes = []
+    for change in changes:
+        citations = []
+        for raw_citation in change.citations:
+            citation = PageCitation.model_validate(raw_citation)
+            locator = citation.locator
+            if citation.source_id in source_texts:
+                locator = _normalized_citation_locator(locator, source_texts[citation.source_id])
+            citations.append(citation.model_copy(update={"locator": locator}))
+        normalized_changes.append(change.model_copy(update={"citations": tuple(citations)}))
+    return tuple(normalized_changes)
+
+
+def _normalized_citation_locator(locator: str, source_text: str) -> str:
+    start, end = _locator_range(locator)
+    if source_text[start:end].lstrip().startswith("#"):
+        first_paragraph = source_text.find("\n\n", start)
+        if first_paragraph != -1:
+            start = first_paragraph + 2
+    end = max(start, end)
+    while end < len(source_text) and (end == start or source_text[end - 1] not in ".!?。！？；;\n"):
+        end += 1
+    return f"chars:{start}-{end}"
 
 
 def _render_llm_page(
@@ -1561,21 +1600,46 @@ def _read_source_text(workspace: Workspace, source: CurrentSource) -> str:
     return (workspace.root / source.snapshot_path).read_text(encoding="utf-8")
 
 
-def _first_meaningful_paragraph(content: str) -> tuple[str, int]:
+def _meaningful_paragraphs(content: str) -> list[tuple[str, int]]:
+    facts: list[tuple[str, int]] = []
+    structured_ranges: list[tuple[int, int]] = []
+    for match in re.finditer(
+        r"^```[^\n]*\n(?P<fact>.*?)^```[ \t]*$", content, re.MULTILINE | re.DOTALL
+    ):
+        quote = match.group("fact").strip()
+        if quote:
+            leading = len(match.group("fact")) - len(match.group("fact").lstrip())
+            facts.append((quote, match.start("fact") + leading))
+        structured_ranges.append(match.span())
+    for match in re.finditer(r"^(?:\|.*\|\n?){2,}", content, re.MULTILINE):
+        if any(start < match.end() and match.start() < end for start, end in structured_ranges):
+            continue
+        quote = match.group().strip()
+        if quote:
+            facts.append((quote, match.start()))
+        structured_ranges.append(match.span())
     for match in re.finditer(
         r"(?:\A|\n[ \t]*\n)(?P<paragraph>.*?)(?=\n[ \t]*\n|\Z)",
         content,
         re.DOTALL,
     ):
+        overlaps_structured = any(
+            start < match.end("paragraph") and match.start("paragraph") < end
+            for start, end in structured_ranges
+        )
+        if overlaps_structured:
+            continue
         paragraph = match.group("paragraph")
         leading = len(paragraph) - len(paragraph.lstrip())
         quote = paragraph.strip()
-        if quote and not quote.startswith("#"):
-            return quote, match.start("paragraph") + leading
+        if quote and not quote.startswith(("#", "```", "|")):
+            facts.append((quote, match.start("paragraph") + leading))
+    if facts:
+        return sorted(facts, key=lambda fact: fact[1])[:_LOCAL_FACT_LIMIT]
     for line in content.splitlines():
         candidate = line.lstrip("#").strip()
         if candidate:
-            return candidate, content.index(candidate)
+            return [(candidate, content.index(candidate))]
     raise ValueError("source contains no meaningful text")
 
 
@@ -1620,26 +1684,35 @@ def _target_page_path(
     return _canonical_page_path(change.source_ids)
 
 
-def _render_page(source: CurrentSource, quote: str, locator: str) -> str:
-    footnote = f"source-{source.source_id[:8]}"
-    displayed_quote = " ".join(quote.splitlines())
+def _render_page(source: CurrentSource, facts: list[tuple[str, int]]) -> str:
+    displayed_facts = [(" ".join(quote.splitlines()), start) for quote, start in facts]
+    summary = displayed_facts[0][0]
     tags = tuple(dict.fromkeys((source.category, *source.tags)))
-    return (
-        "---\n"
-        f"title: {json.dumps(source.title, ensure_ascii=False)}\n"
-        f"type: {_page_type(source)}\n"
-        f"summary: {json.dumps(displayed_quote, ensure_ascii=False)}\n"
-        f"tags: {json.dumps(tags, ensure_ascii=False)}\n"
-        f"sources: {json.dumps((source.source_id,), ensure_ascii=False)}\n"
-        f"source_version: {source.source_version}\n"
-        f"updated: {source.updated}\n"
-        "---\n\n"
-        f"# {source.title}\n\n"
-        "## Verified facts\n\n"
-        f"- {displayed_quote} [^{footnote}]\n\n"
-        f"[^{footnote}]: source `{source.source_id}` · revision `{source.source_version}` · "
-        f"`{locator}`\n"
-    )
+    lines = [
+        "---",
+        f"title: {json.dumps(source.title, ensure_ascii=False)}",
+        f"type: {_page_type(source)}",
+        f"summary: {json.dumps(summary, ensure_ascii=False)}",
+        f"tags: {json.dumps(tags, ensure_ascii=False)}",
+        f"sources: {json.dumps((source.source_id,), ensure_ascii=False)}",
+        f"source_version: {source.source_version}",
+        f"updated: {source.updated}",
+        "---",
+        "",
+        f"# {source.title}",
+        "",
+        "## Verified facts",
+        "",
+    ]
+    for index, (quote, _start) in enumerate(displayed_facts, start=1):
+        lines.append(f"- {quote} [^source-{source.source_id[:8]}-{index}]")
+    lines.append("")
+    for index, (_quote, start) in enumerate(displayed_facts, start=1):
+        lines.append(
+            f"[^source-{source.source_id[:8]}-{index}]: source `{source.source_id}` · revision "
+            f"`{source.source_version}` · `chars:{start}-{start + len(facts[index - 1][0])}`"
+        )
+    return "\n".join(lines) + "\n"
 
 
 def _render_code_page(source: CurrentSource, content: str) -> str:
@@ -1714,7 +1787,7 @@ def _render_deterministic_group_page(
     """Use source excerpts as the local fallback for a previously merged Wiki page."""
     excerpts: list[tuple[CurrentSource, str, str]] = []
     for source in sources:
-        quote, start = _first_meaningful_paragraph(_read_source_text(workspace, source))
+        quote, start = _meaningful_paragraphs(_read_source_text(workspace, source))[0]
         excerpts.append(
             (
                 source,
