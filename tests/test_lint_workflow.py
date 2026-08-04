@@ -148,8 +148,7 @@ def test_lint_reports_missing_related_page(tmp_path: Path, monkeypatch) -> None:
     _, workspace, _ = _workspace_with_applied_source(tmp_path, monkeypatch)
     page = next((workspace / "wiki/pages").glob("*.md"))
     page.write_text(
-        page.read_text(encoding="utf-8")
-        + "\n## Related pages\n\n- [Missing](missing.md)\n",
+        page.read_text(encoding="utf-8") + "\n## Related pages\n\n- [Missing](missing.md)\n",
         encoding="utf-8",
     )
 
@@ -186,9 +185,7 @@ def test_lint_rejects_reversed_citation_range(tmp_path: Path, monkeypatch) -> No
     result = runner.invoke(app, ["lint", "--workspace", str(workspace)])
 
     assert result.exit_code == 0, result.output
-    assert [issue["code"] for issue in json.loads(result.stdout)["issues"]] == [
-        "invalid_citation"
-    ]
+    assert [issue["code"] for issue in json.loads(result.stdout)["issues"]] == ["invalid_citation"]
 
 
 def test_lint_reports_each_declared_source_without_a_citation(
@@ -373,8 +370,11 @@ def _workspace_with_applied_source(
     ingested = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
     assert ingested.exit_code == 0
     changeset_id = json.loads(ingested.stdout)["changeset_id"]
-    assert runner.invoke(
-        app,
-        ["apply", changeset_id, "--approve", "--workspace", str(workspace)],
-    ).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            ["apply", changeset_id, "--approve", "--workspace", str(workspace)],
+        ).exit_code
+        == 0
+    )
     return runner, workspace, json.loads(imported_result.stdout)

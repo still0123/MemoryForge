@@ -246,9 +246,7 @@ def _agent_messages(
     prompt_context: str = "",
     conversation_context: str = "",
 ) -> list[dict[str, str]]:
-    workspace_rules = (
-        "\nWorkspace contract:\n" + prompt_context if prompt_context else ""
-    )
+    workspace_rules = "\nWorkspace contract:\n" + prompt_context if prompt_context else ""
     conversation_rules = (
         "\nConversation context:\n" + conversation_context if conversation_context else ""
     )
@@ -265,9 +263,7 @@ def _agent_messages(
                 "final. A final answer must cite at least one citation index returned by "
                 "read_evidence. If evidence is insufficient, "
                 'return {"action":"final","answer":"不知道","citation_indexes":[]}. '
-                "Do not invent tools or file paths."
-                + workspace_rules
-                + conversation_rules
+                "Do not invent tools or file paths." + workspace_rules + conversation_rules
             ),
         },
         {"role": "user", "content": question},
@@ -387,10 +383,7 @@ def _citations_are_read(
     citations: list[CitationPayload],
     evidence: list[EvidencePayload],
 ) -> bool:
-    read = {
-        (item["source_id"], item["source_version"], item["locator"])
-        for item in evidence
-    }
+    read = {(item["source_id"], item["source_version"], item["locator"]) for item in evidence}
     return bool(citations) and all(
         (citation["source_id"], citation["source_version"], citation["locator"]) in read
         for citation in citations
@@ -404,8 +397,7 @@ def _citation_indexes_are_valid(
     if latest is None:
         return not indexes
     return all(
-        not isinstance(index, bool) and 0 <= index < len(latest["citations"])
-        for index in indexes
+        not isinstance(index, bool) and 0 <= index < len(latest["citations"]) for index in indexes
     )
 
 

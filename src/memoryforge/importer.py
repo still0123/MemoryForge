@@ -204,9 +204,7 @@ def import_local_file(
         )
 
     root_id = hashlib.sha256(allowed_root.as_posix().encode("utf-8")).hexdigest()
-    source_id = hashlib.sha256(
-        f"local:{root_id}:{relative_source_path}".encode()
-    ).hexdigest()
+    source_id = hashlib.sha256(f"local:{root_id}:{relative_source_path}".encode()).hexdigest()
     source_uri = f"mf://source/{source_id}"
 
     canonical_path = Path(relative_source_path)
@@ -266,9 +264,7 @@ def _store_local_document(
     source_id: str,
     content_sha256: str,
 ) -> ImportResult:
-    stored_document = document.model_copy(
-        update={"source_uri": f"mf://source/{source_id}"}
-    )
+    stored_document = document.model_copy(update={"source_uri": f"mf://source/{source_id}"})
     result = store_source(
         workspace.root,
         source_id=source_id,

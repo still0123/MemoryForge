@@ -56,9 +56,7 @@ def test_llm_compiler_merges_two_pending_sources_and_keeps_review_gate(
     second_result = runner.invoke(app, ["import", str(second), "--workspace", str(workspace_path)])
     first_import = json.loads(first_result.stdout)
     second_import = json.loads(second_result.stdout)
-    first_end = first_text.index("Cache entries") + len(
-        "Cache entries expire after sixty seconds."
-    )
+    first_end = first_text.index("Cache entries") + len("Cache entries expire after sixty seconds.")
     second_end = second_text.index("Storage uses") + len("Storage uses a local disk.")
 
     change = PageChange(
@@ -452,9 +450,7 @@ def test_llm_compiler_keeps_distinct_pages_when_model_paths_collide(
     with sqlite3.connect(workspace_path / ".memoryforge/index.sqlite") as connection:
         applied_ids = {
             source_id
-            for (source_id,) in connection.execute(
-                "SELECT source_id FROM applied_source_versions"
-            )
+            for (source_id,) in connection.execute("SELECT source_id FROM applied_source_versions")
         }
     assert {first_id, second_id} <= applied_ids
 
@@ -581,9 +577,12 @@ def test_llm_compiler_rejects_update_owned_by_another_source(
     assert conflicting_path.read_text(encoding="utf-8") == original_page
     assert not (workspace_path / ".memoryforge/staging/proposed").exists()
     with sqlite3.connect(workspace_path / ".memoryforge/index.sqlite") as connection:
-        assert connection.execute(
-            "SELECT 1 FROM applied_source_versions WHERE source_id = ?", (second_id,)
-        ).fetchone() is None
+        assert (
+            connection.execute(
+                "SELECT 1 FROM applied_source_versions WHERE source_id = ?", (second_id,)
+            ).fetchone()
+            is None
+        )
 
 
 def test_llm_compiler_allows_update_with_same_page_ownership(
@@ -609,10 +608,19 @@ def test_llm_compiler_allows_update_with_same_page_ownership(
     stored = ChangeSetStore(Workspace.open(workspace_path)).create(
         first_compilation.changeset, first_compilation.candidate_files
     )
-    assert runner.invoke(
-        app,
-        ["apply", stored.changeset.changeset_id, "--approve", "--workspace", str(workspace_path)],
-    ).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            [
+                "apply",
+                stored.changeset.changeset_id,
+                "--approve",
+                "--workspace",
+                str(workspace_path),
+            ],
+        ).exit_code
+        == 0
+    )
 
     source = repository / "note.md"
     source.write_text("# Note\n\nAn updated local fact.\n", encoding="utf-8")
@@ -641,21 +649,23 @@ def test_llm_compiler_uses_canonical_single_source_path(
 ) -> None:
     repository, workspace_path, source_id = _workspace_with_one_source(tmp_path, monkeypatch)
     runner = CliRunner()
-    deterministic = runner.invoke(
-        app, ["ingest", "--pending", "--workspace", str(workspace_path)]
-    )
+    deterministic = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace_path)])
     assert deterministic.exit_code == 0
     deterministic_id = json.loads(deterministic.stdout)["changeset_id"]
-    assert runner.invoke(
-        app,
-        ["apply", deterministic_id, "--approve", "--workspace", str(workspace_path)],
-    ).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            ["apply", deterministic_id, "--approve", "--workspace", str(workspace_path)],
+        ).exit_code
+        == 0
+    )
 
     source = repository / "note.md"
     source.write_text("# Note\n\nA newer local fact.\n", encoding="utf-8")
-    assert runner.invoke(
-        app, ["import", str(source), "--workspace", str(workspace_path)]
-    ).exit_code == 0
+    assert (
+        runner.invoke(app, ["import", str(source), "--workspace", str(workspace_path)]).exit_code
+        == 0
+    )
     text = source.read_text(encoding="utf-8")
     change = PageChange(
         path="wiki/pages/model-picked-name.md",
@@ -726,25 +736,30 @@ def test_llm_compiler_uses_stable_canonical_merged_path(
     first_stored = ChangeSetStore(Workspace.open(workspace_path)).create(
         first_compilation.changeset, first_compilation.candidate_files
     )
-    assert runner.invoke(
-        app,
-        [
-            "apply",
-            first_stored.changeset.changeset_id,
-            "--approve",
-            "--workspace",
-            str(workspace_path),
-        ],
-    ).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            [
+                "apply",
+                first_stored.changeset.changeset_id,
+                "--approve",
+                "--workspace",
+                str(workspace_path),
+            ],
+        ).exit_code
+        == 0
+    )
 
     first.write_text("# First\n\nUpdated first fact.\n", encoding="utf-8")
     second.write_text("# Second\n\nUpdated second fact.\n", encoding="utf-8")
-    assert runner.invoke(
-        app, ["import", str(first), "--workspace", str(workspace_path)]
-    ).exit_code == 0
-    assert runner.invoke(
-        app, ["import", str(second), "--workspace", str(workspace_path)]
-    ).exit_code == 0
+    assert (
+        runner.invoke(app, ["import", str(first), "--workspace", str(workspace_path)]).exit_code
+        == 0
+    )
+    assert (
+        runner.invoke(app, ["import", str(second), "--workspace", str(workspace_path)]).exit_code
+        == 0
+    )
     texts = {
         first_id: first.read_text(encoding="utf-8"),
         second_id: second.read_text(encoding="utf-8"),
@@ -806,10 +821,19 @@ def test_llm_compiler_routes_one_pending_source_without_source_filter(
     stored = ChangeSetStore(Workspace.open(workspace_path)).create(
         initial.changeset, initial.candidate_files
     )
-    assert runner.invoke(
-        app,
-        ["apply", stored.changeset.changeset_id, "--approve", "--workspace", str(workspace_path)],
-    ).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            [
+                "apply",
+                stored.changeset.changeset_id,
+                "--approve",
+                "--workspace",
+                str(workspace_path),
+            ],
+        ).exit_code
+        == 0
+    )
 
     first.write_text("# First\n\nUpdated first fact.\n", encoding="utf-8")
     updated = runner.invoke(app, ["import", str(first), "--workspace", str(workspace_path)])
@@ -889,15 +913,25 @@ def test_llm_compiler_routes_mixed_pending_sources_to_existing_and_new_pages(
     stored = ChangeSetStore(Workspace.open(workspace_path)).create(
         initial.changeset, initial.candidate_files
     )
-    assert runner.invoke(
-        app,
-        ["apply", stored.changeset.changeset_id, "--approve", "--workspace", str(workspace_path)],
-    ).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            [
+                "apply",
+                stored.changeset.changeset_id,
+                "--approve",
+                "--workspace",
+                str(workspace_path),
+            ],
+        ).exit_code
+        == 0
+    )
 
     first.write_text("# First\n\nUpdated first fact.\n", encoding="utf-8")
-    assert runner.invoke(
-        app, ["import", str(first), "--workspace", str(workspace_path)]
-    ).exit_code == 0
+    assert (
+        runner.invoke(app, ["import", str(first), "--workspace", str(workspace_path)]).exit_code
+        == 0
+    )
     third = repository / "third.md"
     third.write_text("# Third\n\nThird fact.\n", encoding="utf-8")
     third_id = json.loads(
@@ -979,15 +1013,25 @@ def test_deterministic_compiler_routes_mixed_pending_sources_to_existing_and_new
     stored = ChangeSetStore(Workspace.open(workspace_path)).create(
         initial.changeset, initial.candidate_files
     )
-    assert runner.invoke(
-        app,
-        ["apply", stored.changeset.changeset_id, "--approve", "--workspace", str(workspace_path)],
-    ).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            [
+                "apply",
+                stored.changeset.changeset_id,
+                "--approve",
+                "--workspace",
+                str(workspace_path),
+            ],
+        ).exit_code
+        == 0
+    )
 
     first.write_text("# First\n\nUpdated first fact.\n", encoding="utf-8")
-    assert runner.invoke(
-        app, ["import", str(first), "--workspace", str(workspace_path)]
-    ).exit_code == 0
+    assert (
+        runner.invoke(app, ["import", str(first), "--workspace", str(workspace_path)]).exit_code
+        == 0
+    )
     third = repository / "third.md"
     third.write_text("# Third\n\nThird fact.\n", encoding="utf-8")
     third_id = json.loads(
@@ -1059,10 +1103,19 @@ def test_llm_compiler_can_extend_a_related_existing_page(
     stored = ChangeSetStore(Workspace.open(workspace_path)).create(
         initial.changeset, initial.candidate_files
     )
-    assert runner.invoke(
-        app,
-        ["apply", stored.changeset.changeset_id, "--approve", "--workspace", str(workspace_path)],
-    ).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            [
+                "apply",
+                stored.changeset.changeset_id,
+                "--approve",
+                "--workspace",
+                str(workspace_path),
+            ],
+        ).exit_code
+        == 0
+    )
 
     second.write_text(second_text, encoding="utf-8")
     second_id = json.loads(
@@ -1103,9 +1156,7 @@ def test_llm_compiler_rejects_duplicate_source_ownership_before_staging(
     second = repository / "second.md"
     second.write_text("# Second\n\nSecond fact.\n", encoding="utf-8")
     second_id = json.loads(
-        CliRunner().invoke(
-            app, ["import", str(second), "--workspace", str(workspace_path)]
-        ).stdout
+        CliRunner().invoke(app, ["import", str(second), "--workspace", str(workspace_path)]).stdout
     )["source_id"]
     texts = {
         first_id: (repository / "note.md").read_text(encoding="utf-8"),
@@ -1166,10 +1217,19 @@ def test_llm_compiler_rejects_routed_page_ownership_changes(
     stored = ChangeSetStore(Workspace.open(workspace_path)).create(
         initial.changeset, initial.candidate_files
     )
-    assert runner.invoke(
-        app,
-        ["apply", stored.changeset.changeset_id, "--approve", "--workspace", str(workspace_path)],
-    ).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            [
+                "apply",
+                stored.changeset.changeset_id,
+                "--approve",
+                "--workspace",
+                str(workspace_path),
+            ],
+        ).exit_code
+        == 0
+    )
     source = repository / "note.md"
     source.write_text("# Note\n\nUpdated fact.\n", encoding="utf-8")
     updated = runner.invoke(app, ["import", str(source), "--workspace", str(workspace_path)])

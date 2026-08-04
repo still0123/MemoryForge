@@ -237,10 +237,13 @@ def test_refresh_registers_a_preexisting_feishu_source(tmp_path: Path, monkeypat
             "content": "# Handbook\n\nExisting version.",
         },
     )
-    assert runner.invoke(
-        app,
-        ["feishu-import", "doxcn12345678", "--workspace", str(workspace)],
-    ).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            ["feishu-import", "doxcn12345678", "--workspace", str(workspace)],
+        ).exit_code
+        == 0
+    )
     with sqlite3.connect(Workspace.open(workspace).index_path) as connection:
         connection.execute("DELETE FROM feishu_documents")
 

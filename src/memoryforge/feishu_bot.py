@@ -64,9 +64,7 @@ def _deterministic_session_answer(
     allow_local: bool,
     session_id: str | None,
 ) -> AskPayload:
-    turns = (
-        SessionStore(workspace, session_id).load(allow_local=allow_local) if session_id else []
-    )
+    turns = SessionStore(workspace, session_id).load(allow_local=allow_local) if session_id else []
     result = answer_question(
         workspace,
         rewrite_query(text, turns),

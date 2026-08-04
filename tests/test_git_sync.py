@@ -112,9 +112,7 @@ def test_git_sync_uses_remote_identity_and_tracks_source_revisions(tmp_path: Pat
 
     identity = "https://code.example.com/team/service.git"
     expected_repository_id = hashlib.sha256(identity.encode("utf-8")).hexdigest()
-    expected_source_id = hashlib.sha256(
-        f"{expected_repository_id}\0README.md".encode()
-    ).hexdigest()
+    expected_source_id = hashlib.sha256(f"{expected_repository_id}\0README.md".encode()).hexdigest()
     assert repository.repository_id == expected_repository_id
     assert repository.remote_url == identity
     assert "user" not in repository.remote_url
@@ -335,9 +333,11 @@ func (m *Meter) RecordUsage() {}
     staged = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
     assert staged.exit_code == 0, staged.output
     changeset_id = json.loads(staged.stdout)["changeset_id"]
-    code_page = ChangeSetStore(Workspace.open(workspace)).get(changeset_id).candidate_files[
-        f"wiki/pages/{code_document.source_id}.md"
-    ]
+    code_page = (
+        ChangeSetStore(Workspace.open(workspace))
+        .get(changeset_id)
+        .candidate_files[f"wiki/pages/{code_document.source_id}.md"]
+    )
     assert "# Code: internal/meter/meter.go" in code_page
     assert "- package meter [^source-1]" in code_page
     assert "- type Meter [^source-2]" in code_page
@@ -432,10 +432,13 @@ def test_deleted_git_document_generates_reviewable_archive_and_apply_removes_pag
     staged = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
     assert staged.exit_code == 0, staged.output
     initial_id = json.loads(staged.stdout)["changeset_id"]
-    assert runner.invoke(
-        app,
-        ["apply", initial_id, "--approve", "--workspace", str(workspace)],
-    ).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            ["apply", initial_id, "--approve", "--workspace", str(workspace)],
+        ).exit_code
+        == 0
+    )
     page_path = workspace / "wiki/pages" / f"{source_id}.md"
     assert page_path.is_file()
 
@@ -489,9 +492,7 @@ def test_deleted_source_rebuilds_shared_page_from_remaining_source(tmp_path: Pat
             changeset_id="chg_shared_page",
             base_commit=Workspace.open(workspace).current_commit(),
             source_ids=tuple(source.source_id for source in sources),
-            source_versions={
-                source.source_id: source.source_version for source in sources
-            },
+            source_versions={source.source_id: source.source_version for source in sources},
             status=ChangeSetStatus.PROPOSED,
             operations=(
                 ChangeOperation(
@@ -507,10 +508,13 @@ def test_deleted_source_rebuilds_shared_page_from_remaining_source(tmp_path: Pat
         {shared_path: shared_content, "wiki/INDEX.md": index_content},
     )
     runner = CliRunner()
-    assert runner.invoke(
-        app,
-        ["apply", changeset.changeset.changeset_id, "--approve", "--workspace", str(workspace)],
-    ).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            ["apply", changeset.changeset.changeset_id, "--approve", "--workspace", str(workspace)],
+        ).exit_code
+        == 0
+    )
 
     (checkout / "README.md").unlink()
     _commit_all(checkout, "Remove service overview")
@@ -565,16 +569,19 @@ def test_repository_scope_keeps_same_keyword_queries_in_one_git_checkout(
     runner = CliRunner()
     staged = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
     assert staged.exit_code == 0, staged.output
-    assert runner.invoke(
-        app,
-        [
-            "apply",
-            json.loads(staged.stdout)["changeset_id"],
-            "--approve",
-            "--workspace",
-            str(workspace),
-        ],
-    ).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            [
+                "apply",
+                json.loads(staged.stdout)["changeset_id"],
+                "--approve",
+                "--workspace",
+                str(workspace),
+            ],
+        ).exit_code
+        == 0
+    )
 
     scoped_sources = search_sources(
         workspace,

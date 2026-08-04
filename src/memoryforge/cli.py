@@ -473,9 +473,7 @@ def feishu_reply(
     """Print the reply payload that a Feishu bot can send back to one text message."""
     try:
         opened = (
-            Workspace.open(workspace)
-            if session is not None
-            else Workspace.open_readonly(workspace)
+            Workspace.open(workspace) if session is not None else Workspace.open_readonly(workspace)
         )
         provider = OpenAICompatibleProvider(ProviderConfig.from_environment()) if llm else None
         reply = reply_to_feishu_text(
@@ -606,9 +604,7 @@ def ingest(
         _exit_with_safe_error(ValueError("ingest currently requires --pending"))
     try:
         opened = Workspace.open(workspace)
-        provider = (
-            OpenAICompatibleProvider(ProviderConfig.from_environment()) if llm else None
-        )
+        provider = OpenAICompatibleProvider(ProviderConfig.from_environment()) if llm else None
         compilation = compile_pending_sources(
             opened,
             source_ids=tuple(source or ()),
@@ -906,9 +902,7 @@ def agent(
 ) -> None:
     try:
         opened = (
-            Workspace.open(workspace)
-            if session is not None
-            else Workspace.open_readonly(workspace)
+            Workspace.open(workspace) if session is not None else Workspace.open_readonly(workspace)
         )
         typer.echo("正在运行 Wiki-backed MiniClaude Agent…", err=True)
         result = run_agent(

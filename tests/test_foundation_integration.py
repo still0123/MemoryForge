@@ -43,9 +43,7 @@ def test_local_agent_sessions_stay_out_of_workspace_git(tmp_path: Path) -> None:
         model_safe=True,
     )
 
-    assert "/.memoryforge/sessions/" in (workspace.root / ".gitignore").read_text(
-        encoding="utf-8"
-    )
+    assert "/.memoryforge/sessions/" in (workspace.root / ".gitignore").read_text(encoding="utf-8")
     assert _git(workspace.root, "status", "--porcelain") == ""
 
 

@@ -128,9 +128,7 @@ def test_agent_includes_workspace_contract_in_prompt(tmp_path: Path, monkeypatch
     assert "Answer using the glossary." in json.dumps(provider.messages[0], ensure_ascii=False)
 
 
-def test_agent_uses_recent_session_context_for_followup_search(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_agent_uses_recent_session_context_for_followup_search(tmp_path: Path, monkeypatch) -> None:
     workspace = _applied_public_workspace(tmp_path, monkeypatch)
     session_id = "chat-followup"
 
@@ -266,9 +264,7 @@ def test_session_without_public_citation_is_not_reused_by_model(tmp_path: Path) 
     assert len(SessionStore(tmp_path, "chat-a").load(allow_local=True)) == 1
 
 
-def test_local_session_requires_authorization_on_each_call(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_local_session_requires_authorization_on_each_call(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(
         "memoryforge.sessions.is_public_source_version",
         lambda *_args, **_kwargs: False,
@@ -568,8 +564,9 @@ def test_agent_proposes_update_as_reviewable_changeset(tmp_path: Path, monkeypat
     page = next((workspace / "wiki/pages").glob("*.md"))
     page_content = page.read_text(encoding="utf-8")
     source_id = json.loads(
-        next(line for line in page_content.splitlines() if line.startswith("sources:"))
-        .split(":", 1)[1]
+        next(line for line in page_content.splitlines() if line.startswith("sources:")).split(
+            ":", 1
+        )[1]
     )[0]
     source_text = "# Cache policy\n\nCache entries expire after sixty seconds.\n"
     start = source_text.index("Cache entries")
@@ -669,8 +666,11 @@ def _applied_public_workspace(tmp_path: Path, monkeypatch, *, local_only: bool =
     assert runner.invoke(app, import_args).exit_code == 0
     ingested = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
     changeset_id = json.loads(ingested.stdout)["changeset_id"]
-    assert runner.invoke(
-        app,
-        ["apply", changeset_id, "--approve", "--workspace", str(workspace)],
-    ).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            ["apply", changeset_id, "--approve", "--workspace", str(workspace)],
+        ).exit_code
+        == 0
+    )
     return workspace

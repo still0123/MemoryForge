@@ -79,9 +79,7 @@ def run_experiment(
         if case["baseline_recalled"] is not None
     ]
     proxy_values = [
-        bool(case["proxy_recalled"])
-        for case in result_cases
-        if case["proxy_recalled"] is not None
+        bool(case["proxy_recalled"]) for case in result_cases if case["proxy_recalled"] is not None
     ]
     baseline_paraphrase = _category_values(result_cases, "paraphrase", "baseline_recalled")
     proxy_paraphrase = _category_values(result_cases, "paraphrase", "proxy_recalled")
@@ -156,9 +154,7 @@ def _rank_proxy_pages(workspace_root: Path, question: str, *, max_pages: int) ->
         return []
     pages = _wiki_pages(workspace_root)
     documents = [(page, _features(page.read_text(encoding="utf-8"))) for page in pages]
-    document_frequency = Counter(
-        feature for _, features in documents for feature in set(features)
-    )
+    document_frequency = Counter(feature for _, features in documents for feature in set(features))
     scored: list[tuple[float, str, Path]] = []
     for page, features in documents:
         score = _weighted_cosine(query_features, features, document_frequency, len(documents))
@@ -186,10 +182,7 @@ def _features(text: str) -> Counter[str]:
         token = match.group()
         if _CJK.fullmatch(token):
             for size in (2, 3):
-                ngrams = (
-                    token[index : index + size]
-                    for index in range(len(token) - size + 1)
-                )
+                ngrams = (token[index : index + size] for index in range(len(token) - size + 1))
                 features.update(ngrams)
             if len(token) == 1:
                 features[token] += 1
@@ -245,9 +238,7 @@ def _recall(expected: set[str], actual: set[str], case: EvaluationCase) -> bool:
     return bool(expected & actual)
 
 
-def _category_values(
-    cases: list[dict[str, object]], category: str, key: str
-) -> list[bool]:
+def _category_values(cases: list[dict[str, object]], category: str, key: str) -> list[bool]:
     return [bool(case[key]) for case in cases if case["category"] == category]
 
 

@@ -169,7 +169,24 @@ init -> git-add --public -> git-sync -> ingest -> review -> apply -> lint -> ask
 
 已提交的公开结果在 [demo/results/agent_skill_eval_public.json](demo/results/agent_skill_eval_public.json)。`eval` 会检查回答是否命中关键事实、引用是否可回溯，以及每题实际展开了多少 Wiki 页面/原文字符。
 
+### 公开对照结果
+
+同一份 30 题公开题集上，MemoryForge 与“直接在原始资料上做 OR + BM25 Top-3”的 Raw FTS 基线结果如下：
+
+| 指标 | MemoryForge | Raw FTS |
+| --- | ---: | ---: |
+| Top-3 来源召回率 | **96.0%** | 56.0% |
+| 多来源完整覆盖率 | **100.0%** | 20.0% |
+| 回答准确率 | 96.7% | 不适用 |
+| 引用落地准确率 | 96.0% | 不适用 |
+| 无答案拒答准确率 | 100.0% | 不适用 |
+| 平均证据/候选文本字符数 | 140.17 | 728.0 |
+
+Raw FTS 只负责检索，不生成答案，所以不能拿它计算回答、引用或拒答准确率。完整方法、失败案例和复现说明见 [公开 Benchmark](docs/BENCHMARK.md)。
+
 如果要按秋招面试的方式完整演示，直接看 [秋招演示与面试说明](docs/PORTFOLIO_DEMO.md)。里面包含 3 分钟讲解顺序、公开 Demo 命令、飞书展示命令和常见追问。
+
+发布范围与验证结果见 [CHANGELOG.md](CHANGELOG.md)；可直接用于简历的中文项目描述见 [简历表述](docs/RESUME.md)。
 
 ## 关键设计取舍
 

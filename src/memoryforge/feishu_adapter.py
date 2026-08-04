@@ -58,9 +58,7 @@ def import_feishu_document(
     results: list[ImportResult] = []
     for part_id, part_title, part_content in _document_parts(title, content):
         source_key = (
-            f"feishu:{document_id}"
-            if part_id == "document"
-            else f"feishu:{document_id}:{part_id}"
+            f"feishu:{document_id}" if part_id == "document" else f"feishu:{document_id}:{part_id}"
         )
         source_id = hashlib.sha256(source_key.encode()).hexdigest()
         local_document = LocalDocument(

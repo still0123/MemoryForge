@@ -118,9 +118,7 @@ def test_lark_cli_event_passes_chat_id_as_session_and_missing_id_is_single_turn(
     assert captured == ["oc_chat_123", None]
 
 
-def test_feishu_agent_falls_back_to_wiki_when_provider_fails(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_feishu_agent_falls_back_to_wiki_when_provider_fails(tmp_path: Path, monkeypatch) -> None:
     workspace = _applied_workspace(tmp_path, monkeypatch)
 
     class FailingProvider:
@@ -134,9 +132,7 @@ def test_feishu_agent_falls_back_to_wiki_when_provider_fails(
         session_id="oc_chat_123",
     )
 
-    assert reply["content"]["text"].startswith(
-        "Cache entries expire after sixty seconds."
-    )
+    assert reply["content"]["text"].startswith("Cache entries expire after sixty seconds.")
     assert "来源：Cache policy" in reply["content"]["text"]
 
 
@@ -195,14 +191,20 @@ def _applied_workspace(tmp_path: Path, monkeypatch) -> Path:
     workspace = tmp_path / "workspace"
     runner = CliRunner()
     assert runner.invoke(app, ["init", str(workspace)]).exit_code == 0
-    assert runner.invoke(
-        app,
-        ["import", str(source), "--workspace", str(workspace)],
-    ).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            ["import", str(source), "--workspace", str(workspace)],
+        ).exit_code
+        == 0
+    )
     ingested = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
     changeset_id = json.loads(ingested.stdout)["changeset_id"]
-    assert runner.invoke(
-        app,
-        ["apply", changeset_id, "--approve", "--workspace", str(workspace)],
-    ).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            ["apply", changeset_id, "--approve", "--workspace", str(workspace)],
+        ).exit_code
+        == 0
+    )
     return workspace

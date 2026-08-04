@@ -80,9 +80,7 @@ def lint_workspace(workspace_root: Path) -> LintPayload:
         return {"status": "issues", "checked_pages": 0, "issues": issues}
 
     pages = sorted(
-        path
-        for path in pages_root.glob("*.md")
-        if path.is_file() and not path.is_symlink()
+        path for path in pages_root.glob("*.md") if path.is_file() and not path.is_symlink()
     )
     for path in sorted(path for path in pages_root.glob("*.md") if path.is_symlink()):
         issues.append(
@@ -91,7 +89,7 @@ def lint_workspace(workspace_root: Path) -> LintPayload:
                 str(path.relative_to(workspace_root)),
                 "page must be a real Markdown file inside wiki/pages",
             )
-    )
+        )
     page_paths = {str(path.relative_to(workspace_root)) for path in pages}
     linked_paths: set[str] = set()
     for path in pages:
@@ -101,9 +99,7 @@ def lint_workspace(workspace_root: Path) -> LintPayload:
         except (OSError, UnicodeDecodeError):
             continue
         linked_paths.update(
-            target
-            for target in _related_page_paths(relative_path, content)
-            if target in page_paths
+            target for target in _related_page_paths(relative_path, content) if target in page_paths
         )
 
     try:
@@ -268,9 +264,13 @@ def _page_source_ids(content: str) -> tuple[str, ...] | None:
         source_ids = json.loads(fields["sources"])
     except (KeyError, json.JSONDecodeError):
         return None
-    if not isinstance(source_ids, list) or not source_ids or not all(
-        isinstance(source_id, str) and re.fullmatch(r"[a-f0-9]{64}", source_id)
-        for source_id in source_ids
+    if (
+        not isinstance(source_ids, list)
+        or not source_ids
+        or not all(
+            isinstance(source_id, str) and re.fullmatch(r"[a-f0-9]{64}", source_id)
+            for source_id in source_ids
+        )
     ):
         return None
     if len(source_ids) != len(set(source_ids)):

@@ -131,9 +131,7 @@ def answer_question(
             required_overlap = 1 if len(question_terms) == 1 else 2
             if has_cjk_terms:
                 required_overlap = min(3, len(question_terms))
-                if len(overlap) >= 2 and any(
-                    not _CJK.fullmatch(term) for term in overlap
-                ):
+                if len(overlap) >= 2 and any(not _CJK.fullmatch(term) for term in overlap):
                     required_overlap = 2
             sufficient_match = len(overlap) >= required_overlap
             if sufficient_match:
@@ -278,8 +276,7 @@ def _answer_messages(
     matches: list[tuple[str, CitationPayload]],
 ) -> list[dict[str, str]]:
     facts = [
-        {"index": index, "quote": citation["quote"]}
-        for index, (_, citation) in enumerate(matches)
+        {"index": index, "quote": citation["quote"]} for index, (_, citation) in enumerate(matches)
     ]
     return [
         {
@@ -425,10 +422,7 @@ def _top_matches(
             selected_index = max(
                 range(len(remaining)),
                 key=lambda index: (
-                    len(
-                        (_terms(remaining[index][2]["quote"]) & question_terms)
-                        - covered_terms
-                    ),
+                    len((_terms(remaining[index][2]["quote"]) & question_terms) - covered_terms),
                     remaining[index][0][0],
                     remaining[index][0][1],
                 ),

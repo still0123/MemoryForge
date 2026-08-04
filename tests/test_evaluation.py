@@ -48,10 +48,13 @@ def test_eval_compares_wiki_answers_with_raw_fts(tmp_path: Path, monkeypatch) ->
     ingested = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
     assert ingested.exit_code == 0, ingested.output
     changeset_id = json.loads(ingested.stdout)["changeset_id"]
-    assert runner.invoke(
-        app,
-        ["apply", changeset_id, "--approve", "--workspace", str(workspace)],
-    ).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            ["apply", changeset_id, "--approve", "--workspace", str(workspace)],
+        ).exit_code
+        == 0
+    )
 
     result = runner.invoke(app, ["eval", str(config), "--workspace", str(workspace)])
 
@@ -163,6 +166,53 @@ def test_eval_uses_daily_debug_query_and_separates_raw_audit_reads(
     assert debug_flags == [True]
     assert payload["memoryforge"]["average_raw_sources_read"] == 0.0
     assert payload["memoryforge"]["average_evidence_characters"] > 0.0
+
+
+def test_eval_does_not_count_an_answer_without_citations_as_grounded(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    runner, workspace = _build_applied_workspace(
+        tmp_path,
+        monkeypatch,
+        {"cache.md": "# Cache policy\n\nCache entries expire after sixty seconds.\n"},
+    )
+    config = tmp_path / "suite.json"
+    config.write_text(
+        json.dumps(
+            {
+                "name": "missing-citation",
+                "cases": [
+                    {
+                        "id": "cache-expiry",
+                        "category": "single_hop",
+                        "question": "When do cache entries expire?",
+                        "expected_status": "answered",
+                        "expected_source_paths": ["cache.md"],
+                        "required_terms": ["sixty", "seconds"],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        evaluation_module,
+        "answer_question",
+        lambda *args, **kwargs: {
+            "status": "answered",
+            "answer": "Cache entries expire after sixty seconds.",
+            "citations": [],
+            "wiki_pages": [],
+            "trace": [],
+        },
+    )
+
+    result = runner.invoke(app, ["eval", str(config), "--workspace", str(workspace)])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload["memoryforge"]["citation_grounding_accuracy"] == 0.0
 
 
 def test_eval_keeps_same_relative_paths_separate_across_git_repositories(
@@ -278,6 +328,48 @@ def test_eval_cites_all_expected_sources_for_multi_source_case(
         "cache.md",
         "deploy.md",
     ]
+
+
+def test_eval_raw_baseline_requires_all_sources_for_multi_source_recall(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    runner, workspace = _build_applied_workspace(
+        tmp_path,
+        monkeypatch,
+        {
+            "cache.md": "# Cache\n\nCache expires after sixty seconds.\n",
+            "deploy.md": "# Deploy\n\nDeployment runs every Friday.\n",
+        },
+    )
+    config = tmp_path / "suite.json"
+    config.write_text(
+        json.dumps(
+            {
+                "name": "raw-multi-source",
+                "cases": [
+                    {
+                        "id": "cache-and-deploy",
+                        "category": "multi_source",
+                        "question": "Cache expires sixty seconds",
+                        "expected_status": "answered",
+                        "expected_source_paths": ["cache.md", "deploy.md"],
+                        "required_terms": ["sixty"],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["eval", str(config), "--workspace", str(workspace)])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload["cases"][0]["raw_fts_baseline"]["expected_source_in_top_3"] is True
+    assert payload["cases"][0]["raw_fts_baseline"]["expected_sources_in_top_3"] is False
+    assert payload["raw_fts_baseline"]["expected_source_recall_at_3"] == 0.0
+    assert payload["raw_fts_baseline"]["multi_source_coverage"] == 0.0
 
 
 def test_eval_accepts_and_scores_unanswerable_case(tmp_path: Path, monkeypatch) -> None:

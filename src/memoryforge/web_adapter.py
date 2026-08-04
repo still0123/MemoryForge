@@ -135,9 +135,7 @@ def _import_fetched_page(
         category=category,
         suffix=".md",
         title=title,
-        content=(
-            f"# {title}\n\n{body}\n\n## Web source\n\n{page.url}\n"
-        ),
+        content=(f"# {title}\n\n{body}\n\n## Web source\n\n{page.url}\n"),
         sensitivity=sensitivity,
         tags=tuple(sorted({"web", *(tag.strip() for tag in tags if tag.strip())})),
     )

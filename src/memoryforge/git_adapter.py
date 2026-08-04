@@ -61,9 +61,7 @@ def scan_git_snapshot_documentation(
             LocalDocument(
                 source_uri=_source_uri(snapshot.repository_identity, relative_path),
                 source_path=relative_path,
-                media_type=(
-                    "text/markdown" if suffix in {".md", ".markdown"} else "text/plain"
-                ),
+                media_type=("text/markdown" if suffix in {".md", ".markdown"} else "text/plain"),
                 category=SourceCategory.REFS,
                 suffix=suffix,
                 title=PurePosixPath(relative_path).stem,
@@ -132,9 +130,7 @@ def snapshot_git_repository(checkout: Path) -> GitSnapshot:
 
     remote_result = _run_git(repository_root, "config", "--get", "remote.origin.url")
     configured_remote = remote_result.stdout.strip() if remote_result.returncode == 0 else ""
-    remote_url = _sanitize_remote_url(configured_remote) or _sanitize_scp_remote(
-        configured_remote
-    )
+    remote_url = _sanitize_remote_url(configured_remote) or _sanitize_scp_remote(configured_remote)
     return GitSnapshot(
         repository_root=repository_root,
         revision=revision_result.stdout.strip(),
@@ -273,8 +269,8 @@ def _source_uri(repository_identity: str, relative_path: str) -> str:
 
 def _repository_identity(remote_url: str, repository_root: Path) -> str:
     """Return a credential-free remote identity, or the local root when unsure."""
-    return _sanitize_remote_url(remote_url) or _sanitize_scp_remote(remote_url) or str(
-        repository_root
+    return (
+        _sanitize_remote_url(remote_url) or _sanitize_scp_remote(remote_url) or str(repository_root)
     )
 
 

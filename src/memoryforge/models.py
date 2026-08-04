@@ -239,9 +239,7 @@ class PageChange(BaseModel):
         declared_sources = set(self.source_ids)
         cited_sources = {citation.source_id for citation in self.citations}
         if cited_sources != declared_sources:
-            raise ValueError(
-                "PageChange citations must cover exactly all declared source_ids"
-            )
+            raise ValueError("PageChange citations must cover exactly all declared source_ids")
         validate_llm_title(self.title)
         validate_llm_summary(self.summary)
         validate_llm_body(self.body)

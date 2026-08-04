@@ -4,10 +4,10 @@
 
 | 字段 | 内容 |
 |---|---|
-| 文档状态 | Draft v0.9 |
-| 当前基线 | 分支 `agent/phase-1a-local-foundation` |
+| 文档状态 | Implemented v1.0 |
+| 当前基线 | 分支 `main` |
 | 产品形态 | 单用户、本地优先、CLI |
-| 当前阶段 | Phase 6 已完成，下一步是按评测结果决定是否进入混合检索 |
+| 当前阶段 | 核心闭环与飞书展示已完成，正在补公开 Benchmark 与发布材料 |
 
 ## 1. 项目定义
 
@@ -410,7 +410,8 @@ memoryforge html-import <saved-page.html> --url <public-http-url>
 
 已实现一个离线 `eval <suite.json>`：题集为每道题声明预期来源路径和关键事实；
 它检查 Wiki 回答正确率、引用正确率、每题展开的 Wiki 页数和查询期间的原文读取数；
-引用核验读取的原文片段单独统计。它还记录原始资料 FTS 在 Top 3 中是否命中预期来源。
+引用核验读取的原文片段单独统计。它还使用任意词匹配和 BM25 Top-3，记录原始资料 FTS 是否命中预期来源；
+多来源题要求完整命中全部来源，避免和 MemoryForge 使用不同口径。
 第一版不伪造完整 Chunk RAG，先把现有可复现的
 Raw FTS 基线跑通；只有它证明需要更强语义检索时，才加入 Chunk/Embedding 基线。
 

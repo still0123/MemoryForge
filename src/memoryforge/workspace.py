@@ -329,9 +329,7 @@ class Workspace:
                 """.format(", ".join("?" for _ in source_versions)),
                 tuple(source_versions),
             ).fetchall()
-            previous: dict[str, int | None] = {
-                source_id: None for source_id in source_versions
-            }
+            previous: dict[str, int | None] = {source_id: None for source_id in source_versions}
             previous.update({str(row[0]): int(row[1]) for row in previous_rows})
             connection.executemany(
                 """
@@ -475,11 +473,7 @@ class Workspace:
             ).fetchall()
         return tuple(
             sorted(
-                {
-                    path
-                    for row in rows
-                    if _is_stable_wiki_page_path(path := str(row["page_path"]))
-                }
+                {path for row in rows if _is_stable_wiki_page_path(path := str(row["page_path"]))}
             )
         )
 
@@ -623,9 +617,7 @@ def register_git_checkout(
     opened = Workspace.open(workspace)
     snapshot = snapshot_git_repository(checkout)
     checkout_path = str(snapshot.repository_root)
-    repository_id = hashlib.sha256(
-        snapshot.repository_identity.encode("utf-8")
-    ).hexdigest()
+    repository_id = hashlib.sha256(snapshot.repository_identity.encode("utf-8")).hexdigest()
 
     with _connect(opened.index_path) as connection:
         existing_checkout = connection.execute(
@@ -838,9 +830,7 @@ def sync_git_checkout(workspace: Path, repository_id: str) -> GitRepositorySyncR
     snapshot = snapshot_git_repository(Path(repository.checkout_path))
     if str(snapshot.repository_root) != repository.checkout_path:
         raise WorkspaceError("registered Git checkout path no longer matches its repository root")
-    current_repository_id = hashlib.sha256(
-        snapshot.repository_identity.encode("utf-8")
-    ).hexdigest()
+    current_repository_id = hashlib.sha256(snapshot.repository_identity.encode("utf-8")).hexdigest()
     if current_repository_id != repository.repository_id:
         raise WorkspaceError("registered Git checkout identity changed; add it as a new checkout")
 
@@ -931,9 +921,7 @@ def _reconcile_git_snapshot_sources(
             (repository_id,),
         ).fetchall()
         stale_version_ids = [
-            int(row["id"])
-            for row in rows
-            if str(row["relative_path"]) not in current_paths
+            int(row["id"]) for row in rows if str(row["relative_path"]) not in current_paths
         ]
         connection.executemany(
             "UPDATE source_versions SET is_current = 0 WHERE id = ?",
@@ -1001,9 +989,7 @@ def _git_repository_record(row: sqlite3.Row) -> GitRepositoryRecord:
         sensitivity=Sensitivity(str(row["sensitivity"])),
         registered_at=datetime.fromisoformat(str(row["registered_at"])),
         last_synced_commit=(
-            str(row["last_synced_commit"])
-            if row["last_synced_commit"] is not None
-            else None
+            str(row["last_synced_commit"]) if row["last_synced_commit"] is not None else None
         ),
     )
 
@@ -1306,6 +1292,7 @@ def search_sources(
     *,
     limit: int = 10,
     repository_id: str | None = None,
+    require_all_terms: bool = True,
 ) -> list[SearchResult]:
     if not query.strip():
         raise ValueError("search query must not be empty")
@@ -1314,7 +1301,7 @@ def search_sources(
 
     opened = Workspace.open_readonly(workspace)
     root = opened.root
-    match_query = _fts_query(query)
+    match_query = _fts_query(query, require_all_terms=require_all_terms)
     with _connect_readonly(opened.index_path) as connection:
         parameters: list[object] = [match_query]
         repository_filter = ""
@@ -2412,12 +2399,13 @@ def _search_terms(text: str) -> str:
     return " ".join(terms)
 
 
-def _fts_query(query: str) -> str:
+def _fts_query(query: str, *, require_all_terms: bool = True) -> str:
     terms = _search_terms(query).split()
     if not terms:
         raise ValueError("search query must contain a word or number")
     escaped = [term.replace('"', '""') for term in terms]
-    return "search_terms : (" + " AND ".join(f'"{term}"' for term in escaped) + ")"
+    operator = " AND " if require_all_terms else " OR "
+    return "search_terms : (" + operator.join(f'"{term}"' for term in escaped) + ")"
 
 
 def _make_snippet(content: str, query: str, *, max_chars: int = 240) -> str:

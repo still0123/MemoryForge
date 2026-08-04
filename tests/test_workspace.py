@@ -34,10 +34,10 @@ def test_init_workspace_creates_minimal_directories_and_fts_schema(tmp_path: Pat
         "/.memoryforge/staging/\n"
         "/.memoryforge/workspace.lock\n"
         "/.memoryforge/rejected/\n"
-            "/.memoryforge/traces/\n"
-            "/.memoryforge/vectors/\n"
-            "/.memoryforge/sessions/\n"
-        )
+        "/.memoryforge/traces/\n"
+        "/.memoryforge/vectors/\n"
+        "/.memoryforge/sessions/\n"
+    )
     assert stat.S_IMODE(workspace.stat().st_mode) == 0o700
     assert stat.S_IMODE((workspace / "raw").stat().st_mode) == 0o700
     assert stat.S_IMODE((workspace / "wiki").stat().st_mode) == 0o700
@@ -153,6 +153,20 @@ def test_search_sources_supports_chinese_partial_terms(tmp_path: Path, query: st
     results = search_sources(workspace, query)
 
     assert [result.title for result in results] == ["缓存设计"]
+
+
+def test_search_sources_can_match_any_query_term(tmp_path: Path) -> None:
+    source_root = tmp_path / "repository"
+    source_root.mkdir()
+    source = source_root / "cache-design.md"
+    source.write_text("# Cache design\n\nThe cache uses a namespace.", encoding="utf-8")
+    workspace = init_workspace(tmp_path / "knowledge")
+    import_local_file(workspace, source, source_root=source_root)
+
+    assert search_sources(workspace, "cache missing") == []
+    results = search_sources(workspace, "cache missing", require_all_terms=False)
+
+    assert [result.title for result in results] == ["Cache design"]
 
 
 def test_search_sources_only_returns_current_version_with_immutable_uri(tmp_path: Path) -> None:

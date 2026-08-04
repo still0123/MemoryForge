@@ -753,14 +753,10 @@ def _stage_routed_page_changeset(
     )
     page = (
         "---\n"
-        "title: \"Cache storage\"\n"
+        'title: "Cache storage"\n'
         "type: concept\n"
-        "summary: \"Cache storage documentation.\"\n"
-        + (
-            f"sources: {json.dumps(declared_source_ids or source_ids)}\n"
-            if include_sources
-            else ""
-        )
+        'summary: "Cache storage documentation."\n'
+        + (f"sources: {json.dumps(declared_source_ids or source_ids)}\n" if include_sources else "")
         + "---\n\n"
         + "# Cache storage\n"
     )

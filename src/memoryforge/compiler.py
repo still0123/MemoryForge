@@ -157,9 +157,7 @@ def compile_pending_sources(
 
     routed_pages = _routed_pages_for_pending_sources(workspace, pending)
     routed_source_ids = {
-        source_id
-        for routed_page in routed_pages
-        for source_id in routed_page.source_ids
+        source_id for routed_page in routed_pages for source_id in routed_page.source_ids
     }
     compilation_source_ids = {source.source_id for source in pending} | routed_source_ids
     candidate_pages: tuple[PageCard, ...] = ()
@@ -187,8 +185,7 @@ def compile_pending_sources(
         ]
         if local_only and not allow_local:
             raise ValueError(
-                "LLM compilation cannot include local_only sources: "
-                + ", ".join(local_only)
+                "LLM compilation cannot include local_only sources: " + ", ".join(local_only)
             )
         return _compile_with_provider(
             workspace,
@@ -249,10 +246,7 @@ def compile_repository_topics(
             base_commit,
             "topics",
             repository_id,
-            *(
-                f"{topic.title}:{','.join(sorted(topic.source_ids))}"
-                for topic in topics
-            ),
+            *(f"{topic.title}:{','.join(sorted(topic.source_ids))}" for topic in topics),
         ]
     )
     return Compilation(
@@ -279,9 +273,7 @@ def _compile_deterministically(
     candidate_files: dict[str, str] = {}
     source_by_id = {source.source_id: source for source in sources}
     routed_source_ids = {
-        source_id
-        for routed_page in routed_pages
-        for source_id in routed_page.source_ids
+        source_id for routed_page in routed_pages for source_id in routed_page.source_ids
     }
     page_groups: list[tuple[str, list[CurrentSource]]] = [
         (
@@ -651,9 +643,7 @@ def _compile_with_provider(
         pending,
         source_texts,
         candidate_pages,
-        routed_source_ids={
-            source_id for page in routed_pages for source_id in page.source_ids
-        },
+        routed_source_ids={source_id for page in routed_pages for source_id in page.source_ids},
         plan=plan,
         prompt_context=prompt_context,
     )
@@ -786,12 +776,9 @@ def _llm_messages(
         )
         for page in candidate_pages
     )
-    workspace_context = (
-        "\n\nWORKSPACE CONTRACT:\n" + prompt_context if prompt_context else ""
-    )
+    workspace_context = "\n\nWORKSPACE CONTRACT:\n" + prompt_context if prompt_context else ""
     plan_context = (
-        "\n\nCOMPILATION PLAN:\n"
-        + json.dumps(plan.model_dump(mode="json"), ensure_ascii=False)
+        "\n\nCOMPILATION PLAN:\n" + json.dumps(plan.model_dump(mode="json"), ensure_ascii=False)
         if plan is not None
         else ""
     )
@@ -800,14 +787,13 @@ def _llm_messages(
             "role": "system",
             "content": (
                 "You propose concise Markdown Wiki page changes. Return JSON with "
-                "{\"changes\":[...]} matching the PageChange contract. Every pending source "
+                '{"changes":[...]} matching the PageChange contract. Every pending source '
                 "must appear in exactly one change. You may extend one existing page card by "
                 "including all of its listed source IDs plus relevant pending sources; do not "
                 "move sources between existing pages. Paths must be wiki/pages/<filename>.md. "
                 "Do not return frontmatter in body; the local compiler adds it. "
                 "Every citation locator must be a character range in its source. "
-                "Return no INDEX or raw file changes."
-                + workspace_context
+                "Return no INDEX or raw file changes." + workspace_context
             ),
         },
         {
@@ -816,8 +802,7 @@ def _llm_messages(
             + "\n\n---\n\n".join(source_blocks)
             + (
                 "\n\nEXISTING SOURCE CONTEXT (only use it when preserving an existing "
-                "source group):\n"
-                + routed_context
+                "source group):\n" + routed_context
                 if routed_context
                 else ""
             )
@@ -968,9 +953,7 @@ def _validate_llm_changes(
             expected_existing_sources=expected_existing_sources,
         )
     for routed_page in routed_pages:
-        if not any(
-            set(change.source_ids) == set(routed_page.source_ids) for change in changes
-        ):
+        if not any(set(change.source_ids) == set(routed_page.source_ids) for change in changes):
             raise ValueError(
                 "provider must update each routed Wiki page with exactly its existing "
                 f"sources: {routed_page.path}"
@@ -999,17 +982,13 @@ def _validate_page_ownership(
     try:
         decoded = json.loads(raw_sources)
     except json.JSONDecodeError as exc:
-        raise ValueError(
-            f"existing Wiki page has invalid sources ownership: {path}"
-        ) from exc
+        raise ValueError(f"existing Wiki page has invalid sources ownership: {path}") from exc
     if not isinstance(decoded, list) or not all(
         isinstance(source_id, str) for source_id in decoded
     ):
         raise ValueError(f"existing Wiki page has invalid sources ownership: {path}")
     if set(decoded) != set(expected_existing_sources):
-        raise ValueError(
-            f"provider cannot update Wiki page owned by different sources: {path}"
-        )
+        raise ValueError(f"provider cannot update Wiki page owned by different sources: {path}")
 
 
 def _locator_range(locator: str) -> tuple[int, int]:
@@ -1053,19 +1032,21 @@ def _render_llm_page(
         lines.append("")
     lines.extend(
         [
-        "## Verified facts",
-        "",
+            "## Verified facts",
+            "",
         ]
     )
     for index, citation in enumerate(change.citations):
         footnote = f"source-{index + 1}-{citation.source_id[:8]}"
         quote = _citation_excerpt(citation.locator, citation.source_id, source_texts)
         lines.append(f"- {quote} [^{footnote}]")
-    lines.extend([
-        "",
-        "## Sources",
-        "",
-    ])
+    lines.extend(
+        [
+            "",
+            "## Sources",
+            "",
+        ]
+    )
     for index, citation in enumerate(change.citations):
         quote = _citation_excerpt(citation.locator, citation.source_id, source_texts)
         footnote = f"source-{index + 1}-{citation.source_id[:8]}"
@@ -1380,19 +1361,13 @@ def _load_current_sources(
                 snapshot_path=str(row["snapshot_path"]),
                 sensitivity=Sensitivity(str(row["sensitivity"])),
                 repository_id=(
-                    str(row["repository_id"])
-                    if row["repository_id"] is not None
-                    else None
+                    str(row["repository_id"]) if row["repository_id"] is not None else None
                 ),
                 repository_name=(
-                    str(row["repository_name"])
-                    if row["repository_name"] is not None
-                    else None
+                    str(row["repository_name"]) if row["repository_name"] is not None else None
                 ),
                 relative_path=(
-                    str(row["relative_path"])
-                    if row["relative_path"] is not None
-                    else None
+                    str(row["relative_path"]) if row["relative_path"] is not None else None
                 ),
             )
         )
@@ -1410,9 +1385,7 @@ def _routed_pages_for_pending_sources(
         if not page_paths:
             continue
         if len(page_paths) != 1:
-            raise ValueError(
-                "source belongs to multiple Wiki pages: " + source.source_id
-            )
+            raise ValueError("source belongs to multiple Wiki pages: " + source.source_id)
         page_path = page_paths[0]
         source_ids = workspace.source_ids_for_page(page_path)
         if source.source_id not in source_ids:
@@ -1440,15 +1413,15 @@ def _add_relations_page(
     page_contents = {
         str(path.relative_to(workspace.root)): path.read_text(encoding="utf-8")
         for path in pages_root.glob("*.md")
-        if path.is_file() and not path.is_symlink()
+        if path.is_file()
+        and not path.is_symlink()
         and str(path.relative_to(workspace.root)) not in removed
     }
     page_contents.update(
         {
             path: content
             for path, content in candidate_files.items()
-            if path.startswith("wiki/pages/")
-            and path not in removed
+            if path.startswith("wiki/pages/") and path not in removed
         }
     )
     titles = {
@@ -1518,9 +1491,7 @@ def _candidate_pages_for_pending_sources(
     the public evaluation shows this local router misses real topic updates.
     """
     pending_terms = _terms(
-        " ".join(
-            " ".join((source.title, source.category, *source.tags)) for source in pending
-        )
+        " ".join(" ".join((source.title, source.category, *source.tags)) for source in pending)
     )
     if not pending_terms:
         return ()
@@ -1794,17 +1765,13 @@ def _repository_overview_pages(
 ) -> dict[str, str]:
     """Create a small navigation page for each Git repository touched by this run."""
     changed_repositories = {
-        source.repository_id
-        for source in changed_sources
-        if source.repository_id is not None
+        source.repository_id for source in changed_sources if source.repository_id is not None
     }
     if not changed_repositories:
         return {}
 
     candidate_paths = {
-        source.source_id: page_path
-        for page_path, sources in page_groups
-        for source in sources
+        source.source_id: page_path for page_path, sources in page_groups for source in sources
     }
     pages: dict[str, str] = {}
     all_sources = _load_current_sources(workspace, set())
@@ -1852,9 +1819,7 @@ def _existing_repository_topics(
     overview_path = workspace.root / _repository_overview_path(repository_id)
     if not overview_path.is_file():
         return ()
-    raw_topics = _frontmatter_fields(overview_path.read_text(encoding="utf-8")).get(
-        "topic_groups"
-    )
+    raw_topics = _frontmatter_fields(overview_path.read_text(encoding="utf-8")).get("topic_groups")
     if raw_topics is None:
         return ()
     try:
@@ -1943,8 +1908,8 @@ def _topic_messages(
             "role": "system",
             "content": (
                 "Group the provided Wiki page cards into concise semantic navigation topics. "
-                "Return JSON matching {\"topics\":[{\"title\":...,\"summary\":...,"
-                "\"source_ids\":[...]}]}. Every provided SOURCE_ID must appear in exactly one "
+                'Return JSON matching {"topics":[{"title":...,"summary":...,'
+                '"source_ids":[...]}]}. Every provided SOURCE_ID must appear in exactly one '
                 "topic. Use 3-8 topics when possible. Topic titles and summaries must be one line. "
                 "Only describe the grouping; do not invent facts beyond the cards."
             ),
@@ -1990,11 +1955,7 @@ def _render_index(
     ]
     changed_paths = {page.path for page in changed}
     pages = sorted(
-        [
-            page
-            for page in existing
-            if page.path not in changed_paths and page.path not in removed
-        ]
+        [page for page in existing if page.path not in changed_paths and page.path not in removed]
         + changed,
         key=lambda page: (page.page_type, page.title.lower(), page.path),
     )

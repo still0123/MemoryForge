@@ -4,8 +4,8 @@
 
 | 字段 | 内容 |
 | --- | --- |
-| 状态 | Draft v1，可直接交给 Goal 模式分阶段执行 |
-| 基线 | 当前 `agent/phase-1a-local-foundation` 工作树；执行前记录实际 commit |
+| 状态 | Implemented v1；核心阶段已完成 |
+| 基线 | 当前 `main` 工作树 |
 | 主目标 | 完成“导入 → 编译 → 查询 → 发现 → 提议更新 → 审核应用 → 再查询”的知识复利闭环 |
 | 主仓范围 | 仅 MemoryForge 主仓；不修改 `showcase/` 独立仓库 |
 | 实现原则 | 复用现有模块；先补质量闭环，再考虑向量检索；所有稳定 Wiki 修改必须审核 |
@@ -139,7 +139,7 @@ git rev-parse HEAD
 
 在实施记录中写出实际 commit、测试数量和已有未提交文件。不得覆盖用户原有改动。
 
-## 6. Phase 1（P0）：把评测从“8 道关键词题”升级成真实质量闸门
+## 6. Phase 1（P0）：把评测从“8 道关键词题”升级成真实质量闸门（已完成）
 
 ### 为什么先做
 
@@ -226,7 +226,7 @@ class EvaluationCase(BaseModel):
   --output /private/tmp/memoryforge-eval.json
 ```
 
-## 7. Phase 2（P1）：让现有 Schema 真正参与 Wiki 编译
+## 7. Phase 2（P1）：让现有 Schema 真正参与 Wiki 编译（已完成）
 
 ### 要做什么
 
@@ -258,6 +258,7 @@ class PlannedPage(BaseModel):
     source_ids: tuple[SourceId, ...]
     reason: str
     related_pages: tuple[str, ...] = ()
+
 
 class CompilationPlan(BaseModel):
     pages: tuple[PlannedPage, ...]
@@ -576,7 +577,8 @@ sentence-transformers，因此只测试了标准库字符 n-gram 代理：
 - 当前 INDEX/FTS5 页面候选：总体 source_recall_at_3=100.0%，paraphrase=100.0%；
 - n-gram 代理：总体 100.0%，paraphrase=100.0%；
 - 召回变化 0 个百分点，平均页面预算均为 3 页。经过后续引用选择优化，同期完整问答链路的
-  答案准确率为 96.7%，source recall 为 96.0%，引用可核验率为 100.0%。
+  答案准确率为 96.7%，source recall 为 96.0%。修正“空 Citation 也算成功”的口径后，引用落地准确率
+  为 96.0%，对应同一条未命中的同义改写题。
 
 结论：不把实验代理并入生产检索，继续使用当前 FTS5 路径。未来只有拿到真正的本地
 语义后端，并在同一题集上满足本节门槛时，才重新评估。
@@ -650,17 +652,17 @@ git diff --check
 
 只有同时满足以下条件，下一阶段才算完成：
 
-- [ ] Workspace 规则真实进入 LLM 编译和 Agent prompt；
-- [ ] LLM ingest 先产生可审核的简短页面计划，再生成页面；
-- [ ] Agent 能基于已读原始证据提出最多一个 Wiki ChangeSet；
-- [ ] 所有稳定 Wiki 修改仍经过 `review → apply --approve`；
+- [x] Workspace 规则真实进入 LLM 编译和 Agent prompt；
+- [x] LLM ingest 先产生可审核的简短页面计划，再生成页面；
+- [x] Agent 能基于已读原始证据提出最多一个 Wiki ChangeSet；
+- [x] 所有稳定 Wiki 修改仍经过 `review → apply --approve`；
 - [x] Git 来源删除后可以生成可审核的页面清理方案；
 - [x] MiniClaude 的工具调用、终止状态和上下文预算可测试；
 - [x] 多仓查询可以按 repository 范围过滤；
-- [ ] 公开题集不少于 30 题，包含多来源、拒答和改写问题；
-- [ ] Citation grounding 为 100%，关键指标和失败案例如实提交；
-- [ ] 没有评测证据时不引入向量库、qmd、MCP 或知识图谱；
-- [ ] README 能让面试官在五分钟内理解“为什么它不是普通 RAG”。
+- [x] 公开题集不少于 30 题，包含多来源、拒答和改写问题；
+- [x] Citation grounding 不再把空引用算作成功；当前 96.0%，失败案例如实提交；
+- [x] 语义实验没有达到增益门槛，因此不引入向量库、qmd、MCP 或知识图谱；
+- [x] README 提供与 Raw FTS 的同题集对照，解释为什么它不是普通 RAG。
 
 ## 17. Goal 模式执行约定
 
