@@ -132,6 +132,56 @@ def test_ask_llm_summarizes_public_evidence_and_keeps_its_citation(
     ]
 
 
+def test_ask_llm_uses_candidate_facts_after_strict_match_misses(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    runner, workspace, _ = _workspace_with_imported_source(
+        tmp_path,
+        monkeypatch,
+        "# Statistics\n\n统计器读取 Manifest 和 RunMeasurement，保证报告基于终态证据。\n",
+    )
+    _apply_pending_source(runner, workspace)
+    strict_result = query_module.answer_question(
+        workspace,
+        "怎样核验实验统计不是模拟出来的？",
+    )
+    assert strict_result["status"] == "unknown"
+    captured: list[dict[str, object]] = []
+
+    def transport(request) -> bytes:
+        captured.append(json.loads(request.data or b""))
+        return json.dumps(
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "answer": "统计报告必须基于终态证据。",
+                                    "citation_indexes": [0],
+                                }
+                            )
+                        }
+                    }
+                ]
+            }
+        ).encode("utf-8")
+
+    result = query_module.answer_question(
+        workspace,
+        "怎样核验实验统计不是模拟出来的？",
+        provider=OpenAICompatibleProvider(
+            ProviderConfig("https://example.test", "test-key", "test-model"),
+            transport=transport,
+        ),
+    )
+
+    assert result["answer"] == "统计报告必须基于终态证据。"
+    assert captured
+    assert captured[0]["messages"][1]["content"].find("RunMeasurement") >= 0
+
+
 def test_ask_llm_rejects_local_only_evidence_before_calling_provider(
     tmp_path: Path,
     monkeypatch,

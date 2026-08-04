@@ -106,6 +106,7 @@ def answer_question(
         return _unknown_payload(debug, trace)
 
     matches: list[tuple[tuple[int, ...], str, CitationPayload]] = []
+    candidate_matches: list[tuple[tuple[int, ...], str, CitationPayload]] = []
 
     for page in _candidate_pages(
         workspace_root,
@@ -124,6 +125,7 @@ def answer_question(
                 len(ranking_overlap),
                 sum(len(term) for term in ranking_overlap),
             )
+            candidate_matches.append((score, str(page.relative_to(workspace_root)), citation))
             has_cjk_terms = any(_CJK.fullmatch(term) for term in question_terms)
             required_overlap = 1 if len(question_terms) == 1 else 2
             if has_cjk_terms:
@@ -136,7 +138,7 @@ def answer_question(
             if sufficient_match:
                 matches.append((score, str(page.relative_to(workspace_root)), citation))
 
-    if not matches:
+    if not matches and provider is None:
         return _unknown_payload(debug, trace)
 
     if provider is None:
@@ -146,7 +148,7 @@ def answer_question(
         generated = _model_answer(
             workspace_root,
             question,
-            matches,
+            matches or candidate_matches,
             provider,
             allow_local=allow_local,
         )
