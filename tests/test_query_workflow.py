@@ -641,6 +641,35 @@ def test_candidate_pages_prioritize_explicit_terms_over_generic_cjk_terms(
     assert selected == [pages / "engine.md"]
 
 
+def test_ask_prefers_specific_configuration_fact_over_runtime_overlap(
+    tmp_path: Path,
+) -> None:
+    pages = tmp_path / "wiki" / "pages"
+    pages.mkdir(parents=True)
+    (tmp_path / "wiki/INDEX.md").write_text(
+        "# Knowledge Index\n\n"
+        "- [Evidence](pages/target.md) — Skill 配置证据\n"
+        "- [Runtime](pages/wrong.md) — Skill 运行失败\n",
+        encoding="utf-8",
+    )
+    (pages / "target.md").write_text(
+        _wiki_page("配置中声明了 Skill 不等于 Skill 生效。"),
+        encoding="utf-8",
+    )
+    (pages / "wrong.md").write_text(
+        _wiki_page("Skill 优化必须从可复现失败开始，不能把运行错误当成优化信号。"),
+        encoding="utf-8",
+    )
+
+    result = query_module.answer_question(
+        tmp_path,
+        "只写 Skill 配置为什么还不能说明它运行过？",
+    )
+
+    assert result["status"] == "answered"
+    assert "配置中声明了 Skill" in result["answer"]
+
+
 def test_ask_uses_multiline_fact_rendered_in_the_wiki_page(
     tmp_path: Path,
     monkeypatch,

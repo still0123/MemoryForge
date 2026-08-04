@@ -52,6 +52,8 @@ _STOP_WORDS = {
     "是",
     "的",
 }
+# ponytail: downweight two generic verbs; learn weights only if the fixed suite regresses.
+_RANKING_STOP_WORDS = {"不能", "运行"}
 
 
 class CitationPayload(TypedDict):
@@ -116,19 +118,20 @@ def answer_question(
         trace.append({"level": "L1", "artifact": str(page.relative_to(workspace_root))})
         for citation in _page_citations(content):
             overlap = question_terms & _terms(citation["quote"])
+            ranking_overlap = overlap - _RANKING_STOP_WORDS
             score = (
-                sum(not _CJK.fullmatch(term) for term in overlap),
-                len(overlap),
-                sum(len(term) for term in overlap),
+                sum(not _CJK.fullmatch(term) for term in ranking_overlap),
+                len(ranking_overlap),
+                sum(len(term) for term in ranking_overlap),
             )
             has_cjk_terms = any(_CJK.fullmatch(term) for term in question_terms)
-            required_overlap = (
-                1
-                if len(question_terms) == 1
-                else min(3, len(question_terms))
-                if has_cjk_terms
-                else 2
-            )
+            required_overlap = 1 if len(question_terms) == 1 else 2
+            if has_cjk_terms:
+                required_overlap = min(3, len(question_terms))
+                if len(overlap) >= 2 and any(
+                    not _CJK.fullmatch(term) for term in overlap
+                ):
+                    required_overlap = 2
             sufficient_match = len(overlap) >= required_overlap
             if sufficient_match:
                 matches.append((score, str(page.relative_to(workspace_root)), citation))
