@@ -798,6 +798,57 @@ def test_candidate_pages_fill_the_remaining_budget_with_relaxed_fts_matches(
     assert calls == [(2, True), (2, False)]
 
 
+def test_candidate_pages_prefers_index_routes_before_relaxed_fts_matches(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workspace = tmp_path / "workspace"
+    pages = workspace / "wiki" / "pages"
+    pages.mkdir(parents=True)
+    index_page = pages / "statistics.md"
+    broad_page = pages / "broad.md"
+    another_broad_page = pages / "another-broad.md"
+    (workspace / "wiki/INDEX.md").write_text(
+        "# Knowledge Index\n\n"
+        "- [Statistics](pages/statistics.md) — Manifest RunMeasurement report truth\n",
+        encoding="utf-8",
+    )
+    for page in (index_page, broad_page, another_broad_page):
+        page.write_text("# Page\n", encoding="utf-8")
+    index_path = workspace / ".memoryforge" / "index.sqlite"
+    index_path.parent.mkdir()
+    index_path.touch()
+    calls: list[bool] = []
+
+    def fake_fts(
+        _workspace: Path,
+        _question: str,
+        *,
+        limit: int,
+        repository_id: str | None = None,
+        require_all_terms: bool = True,
+    ) -> tuple[str, ...]:
+        calls.append(require_all_terms)
+        if require_all_terms:
+            return ()
+        return ("wiki/pages/broad.md", "wiki/pages/another-broad.md")
+
+    monkeypatch.setattr(query_module, "find_applied_page_paths", fake_fts)
+
+    selected = query_module._candidate_pages(
+        workspace,
+        "Manifest RunMeasurement Provider",
+        {"manifest", "runmeasurement", "provider"},
+        max_pages=2,
+        trace=[],
+        repository_id=None,
+        prefer_index_routes=True,
+    )
+
+    assert selected == [index_page, broad_page]
+    assert calls == [True, False]
+
+
 def test_ask_keeps_the_original_question_when_querying_fts(
     tmp_path: Path,
     monkeypatch,

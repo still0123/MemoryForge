@@ -119,6 +119,7 @@ def answer_question(
         max_pages=max_pages,
         trace=trace,
         repository_id=repository_id,
+        prefer_index_routes=max_citations > 1,
     ):
         content = page.read_text(encoding="utf-8")
         trace.append({"level": "L1", "artifact": str(page.relative_to(workspace_root))})
@@ -326,6 +327,7 @@ def _candidate_pages(
     max_pages: int,
     trace: list[TraceStep],
     repository_id: str | None,
+    prefer_index_routes: bool = False,
 ) -> list[Path]:
     wiki_root = workspace_root / "wiki"
     index = wiki_root / "INDEX.md"
@@ -360,39 +362,53 @@ def _candidate_pages(
                         page,
                     )
                 )
-    fts_paths: tuple[str, ...] = ()
+    strict_fts_paths: tuple[str, ...] = ()
+    relaxed_fts_paths: tuple[str, ...] = ()
     index_path = workspace_root / ".memoryforge" / "index.sqlite"
     if safe_index is None or (index_path.is_file() and not index_path.is_symlink()):
-        fts_paths = find_applied_page_paths(
+        strict_fts_paths = find_applied_page_paths(
             workspace_root,
             question,
             limit=max_pages,
             repository_id=repository_id,
         )
-        if len(fts_paths) < max_pages:
-            relaxed_paths = find_applied_page_paths(
+        if len(strict_fts_paths) < max_pages:
+            relaxed_fts_paths = find_applied_page_paths(
                 workspace_root,
                 question,
                 limit=max_pages,
                 repository_id=repository_id,
                 require_all_terms=False,
             )
-            fts_paths = tuple(dict.fromkeys((*fts_paths, *relaxed_paths)))[:max_pages]
-    if fts_paths:
+    if strict_fts_paths or relaxed_fts_paths:
         trace.append({"level": "L0", "artifact": "SQLite FTS5 applied-source index"})
     candidates: list[Path] = []
-    for path in fts_paths:
+    for path in strict_fts_paths:
         if (page := _safe_wiki_page(workspace_root, workspace_root / path)) is not None:
             candidates.append(page)
-    for _, page in sorted(
-        scored,
-        key=lambda candidate: (
-            -candidate[0][0],
-            -candidate[0][1],
-            -candidate[0][2],
-            str(candidate[1].relative_to(workspace_root)),
-        ),
-    ):
+    index_pages = [
+        page
+        for _, page in sorted(
+            scored,
+            key=lambda candidate: (
+                -candidate[0][0],
+                -candidate[0][1],
+                -candidate[0][2],
+                str(candidate[1].relative_to(workspace_root)),
+            ),
+        )
+    ]
+    relaxed_pages = [
+        page
+        for path in relaxed_fts_paths
+        if (page := _safe_wiki_page(workspace_root, workspace_root / path)) is not None
+    ]
+    fallback_pages = (
+        (*index_pages, *relaxed_pages)
+        if prefer_index_routes
+        else (*relaxed_pages, *index_pages)
+    )
+    for page in fallback_pages:
         if page not in candidates:
             candidates.append(page)
     return candidates[:max_pages]
