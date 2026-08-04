@@ -7,7 +7,12 @@ import pytest
 from typer.testing import CliRunner
 
 from memoryforge.cli import app
-from memoryforge.feishu_bot import FeishuBotError, handle_feishu_event, handle_lark_cli_event
+from memoryforge.feishu_bot import (
+    FeishuBotError,
+    handle_feishu_event,
+    handle_lark_cli_event,
+    reply_to_feishu_text,
+)
 from memoryforge.feishu_service import _send_reply
 
 
@@ -75,6 +80,64 @@ def test_lark_cli_event_uses_flattened_text_and_skips_bot_messages(
         )
         is None
     )
+
+
+def test_lark_cli_event_passes_chat_id_as_session_and_missing_id_is_single_turn(
+    tmp_path: Path, monkeypatch
+) -> None:
+    captured: list[object] = []
+
+    def fake_reply(*_args: object, **kwargs: object) -> dict[str, object]:
+        captured.append(kwargs.get("session_id"))
+        return {"msg_type": "text", "content": {"text": "ok"}}
+
+    monkeypatch.setattr("memoryforge.feishu_bot.reply_to_feishu_text", fake_reply)
+
+    result = handle_lark_cli_event(
+        tmp_path,
+        {
+            "message_id": "om_123",
+            "chat_id": "oc_chat_123",
+            "message_type": "text",
+            "content": "那数据面呢",
+            "sender_type": "user",
+        },
+    )
+    assert result is not None
+    assert result["session_id"] == "oc_chat_123"
+
+    handle_lark_cli_event(
+        tmp_path,
+        {
+            "message_id": "om_124",
+            "message_type": "text",
+            "content": "单轮问题",
+            "sender_type": "user",
+        },
+    )
+    assert captured == ["oc_chat_123", None]
+
+
+def test_feishu_agent_falls_back_to_wiki_when_provider_fails(
+    tmp_path: Path, monkeypatch
+) -> None:
+    workspace = _applied_workspace(tmp_path, monkeypatch)
+
+    class FailingProvider:
+        def agent_step(self, _messages: object) -> object:
+            raise ValueError("provider temporarily unavailable")
+
+    reply = reply_to_feishu_text(
+        workspace,
+        "When do cache entries expire?",
+        provider=FailingProvider(),  # type: ignore[arg-type]
+        session_id="oc_chat_123",
+    )
+
+    assert reply["content"]["text"].startswith(
+        "Cache entries expire after sixty seconds."
+    )
+    assert "来源：Cache policy" in reply["content"]["text"]
 
 
 def test_feishu_service_replies_as_bot_with_message_idempotency(monkeypatch) -> None:

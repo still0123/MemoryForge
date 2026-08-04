@@ -6,9 +6,11 @@ import json
 from pathlib import Path
 from typing import Any
 
+from memoryforge.agent import AgentPayload, run_agent
 from memoryforge.errors import MemoryForgeError
 from memoryforge.provider import OpenAICompatibleProvider
 from memoryforge.query import AskPayload, answer_question
+from memoryforge.sessions import SessionStore, is_valid_session_id, rewrite_query, save_turn
 
 
 class FeishuBotError(MemoryForgeError):
@@ -22,16 +24,64 @@ def reply_to_feishu_text(
     max_pages: int = 3,
     provider: OpenAICompatibleProvider | None = None,
     allow_local: bool = False,
+    session_id: str | None = None,
 ) -> dict[str, Any]:
     """Answer one Feishu text message, optionally summarizing explicitly allowed evidence."""
+    result: AskPayload | AgentPayload
+    if provider is None:
+        result = _deterministic_session_answer(
+            workspace,
+            text,
+            max_pages=max_pages,
+            allow_local=allow_local,
+            session_id=session_id,
+        )
+    else:
+        result = run_agent(
+            workspace,
+            text,
+            provider=provider,
+            max_pages=min(max_pages, 3),
+            allow_local=allow_local,
+            session_id=session_id,
+        )
+        if result["status"] == "provider_error":
+            result = _deterministic_session_answer(
+                workspace,
+                text,
+                max_pages=max_pages,
+                allow_local=allow_local,
+                session_id=session_id,
+            )
+    return _text_reply(workspace, result)
+
+
+def _deterministic_session_answer(
+    workspace: Path,
+    text: str,
+    *,
+    max_pages: int,
+    allow_local: bool,
+    session_id: str | None,
+) -> AskPayload:
+    turns = (
+        SessionStore(workspace, session_id).load(allow_local=allow_local) if session_id else []
+    )
     result = answer_question(
         workspace,
-        text,
+        rewrite_query(text, turns),
         max_pages=max_pages,
-        provider=provider,
         allow_local=allow_local,
     )
-    return _text_reply(workspace, result)
+    save_turn(
+        workspace,
+        session_id,
+        question=text,
+        answer=result["answer"],
+        citations=[dict(citation) for citation in result["citations"]],
+        wiki_pages=result["wiki_pages"],
+    )
+    return result
 
 
 def handle_feishu_event(
@@ -61,10 +111,17 @@ def handle_feishu_event(
         raise FeishuBotError("Feishu event must contain one non-empty text message") from exc
     if not text:
         raise FeishuBotError("Feishu event must contain one non-empty text message")
+    session_id = _event_session_id(event, message)
     return {
         "message_id": message.get("message_id"),
+        "session_id": session_id,
         "reply": reply_to_feishu_text(
-            workspace, text, max_pages=max_pages, provider=provider, allow_local=allow_local
+            workspace,
+            text,
+            max_pages=max_pages,
+            provider=provider,
+            allow_local=allow_local,
+            session_id=session_id,
         ),
     }
 
@@ -89,24 +146,43 @@ def handle_lark_cli_event(
         or not text.strip()
     ):
         raise FeishuBotError("lark-cli event must contain one non-empty text message")
+    session_id = _event_session_id(event)
     return {
         "message_id": message_id,
+        "session_id": session_id,
         "reply": reply_to_feishu_text(
             workspace,
             text.strip(),
             max_pages=max_pages,
             provider=provider,
             allow_local=allow_local,
+            session_id=session_id,
         ),
     }
 
 
-def _text_reply(workspace: Path, result: AskPayload) -> dict[str, Any]:
+def _text_reply(workspace: Path, result: AskPayload | AgentPayload) -> dict[str, Any]:
     text = result["answer"]
     titles = [_page_title(workspace / path) for path in result["wiki_pages"]]
     if titles := [title for title in titles if title]:
         text += "\n\n来源：" + "、".join(dict.fromkeys(titles))
     return {"msg_type": "text", "content": {"text": text}}
+
+
+def _event_session_id(event: dict[str, Any], message: dict[str, Any] | None = None) -> str | None:
+    candidates: list[object] = []
+    if message is not None:
+        candidates.append(message.get("chat_id"))
+    candidates.extend((event.get("chat_id"), event.get("open_id")))
+    sender = event.get("sender")
+    if isinstance(sender, dict):
+        sender_id = sender.get("sender_id")
+        if isinstance(sender_id, dict):
+            candidates.append(sender_id.get("open_id"))
+    for candidate in candidates:
+        if isinstance(candidate, str) and is_valid_session_id(candidate):
+            return candidate
+    return None
 
 
 def _page_title(path: Path) -> str | None:

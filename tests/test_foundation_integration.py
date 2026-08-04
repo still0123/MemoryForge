@@ -12,6 +12,7 @@ from memoryforge.cli import app
 from memoryforge.importer import import_local_file
 from memoryforge.manifests import SourceManifestStore
 from memoryforge.models import ChangeSet, ChangeSetStatus, Claim, ClaimStatus, Sensitivity
+from memoryforge.sessions import SessionStore
 from memoryforge.workspace import Workspace
 
 
@@ -31,6 +32,21 @@ def test_workspace_has_clean_git_baseline_and_tracked_contract(tmp_path: Path) -
         "AGENTS.md",
         "wiki/INDEX.md",
     }
+
+
+def test_local_agent_sessions_stay_out_of_workspace_git(tmp_path: Path) -> None:
+    workspace = Workspace.initialize(tmp_path / "wiki")
+    SessionStore(workspace.root, "chat-a").append(
+        "question",
+        "answer",
+        [],
+        model_safe=True,
+    )
+
+    assert "/.memoryforge/sessions/" in (workspace.root / ".gitignore").read_text(
+        encoding="utf-8"
+    )
+    assert _git(workspace.root, "status", "--porcelain") == ""
 
 
 def test_import_preserves_source_versions_in_database_and_manifest(tmp_path: Path) -> None:

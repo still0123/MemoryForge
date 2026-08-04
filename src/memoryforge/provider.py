@@ -21,6 +21,12 @@ _PROVIDER_ENV_NAMES = (
     "MEMORYFORGE_API_KEY",
     "MEMORYFORGE_MODEL",
 )
+_REQUEST_TIMEOUT_SECONDS = 12
+_TRANSIENT_HTTP_CODES = frozenset({429, 500, 502, 503, 504})
+
+
+class ProviderUnavailableError(ValueError):
+    """The configured model service did not respond normally."""
 
 
 @dataclass(frozen=True)
@@ -103,7 +109,7 @@ class AgentStep(BaseModel):
 
 
 def _urlopen_transport(request: Request) -> bytes:
-    with urlopen(request, timeout=30) as response:
+    with urlopen(request, timeout=_REQUEST_TIMEOUT_SECONDS) as response:
         body = response.read()
     if not isinstance(body, bytes):
         raise ValueError("provider transport returned non-bytes response")
@@ -201,11 +207,17 @@ class OpenAICompatibleProvider:
         try:
             response = self._transport(request)
         except TimeoutError as exc:
-            raise ValueError("provider request timed out after 30 seconds") from exc
+            raise ProviderUnavailableError(
+                f"provider request timed out after {_REQUEST_TIMEOUT_SECONDS} seconds"
+            ) from exc
         except HTTPError as exc:
+            if exc.code in _TRANSIENT_HTTP_CODES:
+                raise ProviderUnavailableError(
+                    f"provider temporarily unavailable (HTTP {exc.code})"
+                ) from exc
             raise ValueError(f"provider request failed with HTTP {exc.code}") from exc
         except URLError as exc:
-            raise ValueError(f"provider request failed: {exc.reason}") from exc
+            raise ProviderUnavailableError(f"provider connection failed: {exc.reason}") from exc
 
         content = _response_content(response)
         try:

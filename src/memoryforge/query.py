@@ -7,7 +7,7 @@ import re
 from pathlib import Path, PurePosixPath
 from typing import Literal, NotRequired, TypedDict
 
-from memoryforge.provider import OpenAICompatibleProvider
+from memoryforge.provider import OpenAICompatibleProvider, ProviderUnavailableError
 from memoryforge.workspace import (
     find_applied_page_paths,
     is_public_source_version,
@@ -76,6 +76,7 @@ class AskPayload(TypedDict):
     source_version: int | None
     locator: str | None
     quote: str | None
+    model_status: NotRequired[Literal["used", "fallback"]]
     trace: NotRequired[list[TraceStep]]
     evidence: NotRequired[list[EvidencePayload]]
 
@@ -141,20 +142,39 @@ def answer_question(
     if not matches and provider is None:
         return _unknown_payload(debug, trace)
 
+    model_status: Literal["used", "fallback"] | None = None
     if provider is None:
         selected = _top_matches(matches, max_citations, question_terms=question_terms)
         answer = " ".join(citation["quote"] for _, citation in selected)
     else:
-        generated = _model_answer(
-            workspace_root,
-            question,
-            matches or candidate_matches,
-            provider,
-            allow_local=allow_local,
-        )
-        if generated is None:
-            return _unknown_payload(debug, trace)
-        answer, selected = generated
+        try:
+            generated = _model_answer(
+                workspace_root,
+                question,
+                matches or candidate_matches,
+                provider,
+                allow_local=allow_local,
+            )
+        except ProviderUnavailableError:
+            fallback_matches = _usable_matches(
+                workspace_root,
+                matches or candidate_matches,
+                allow_local=allow_local,
+            )
+            if not fallback_matches:
+                return _unknown_payload(debug, trace)
+            selected = _top_matches(
+                fallback_matches,
+                max_citations,
+                question_terms=question_terms,
+            )
+            answer = " ".join(citation["quote"] for _, citation in selected)
+            model_status = "fallback"
+        else:
+            if generated is None:
+                return _unknown_payload(debug, trace)
+            answer, selected = generated
+            model_status = "used"
 
     citations = [citation for _, citation in selected]
     pages = list(dict.fromkeys(page_path for page_path, _ in selected))
@@ -171,6 +191,8 @@ def answer_question(
         "locator": citation["locator"],
         "quote": citation["quote"],
     }
+    if model_status is not None:
+        result["model_status"] = model_status
     if verify:
         evidence: list[EvidencePayload] = []
         for selected_citation in citations:
@@ -210,12 +232,8 @@ def _model_answer(
 ) -> tuple[str, list[tuple[str, CitationPayload]]] | None:
     usable_matches = [
         (page_path, citation)
-        for _, page_path, citation in matches
-        if allow_local
-        or is_public_source_version(
-            workspace_root,
-            source_id=citation["source_id"],
-            source_version=citation["source_version"],
+        for _, page_path, citation in _usable_matches(
+            workspace_root, matches, allow_local=allow_local
         )
     ][:12]
     if not usable_matches:
@@ -235,6 +253,24 @@ def _model_answer(
     if not answer.strip() or answer.strip() == "不知道" or not selected:
         return None
     return answer.strip(), selected
+
+
+def _usable_matches(
+    workspace_root: Path,
+    matches: list[tuple[tuple[int, ...], str, CitationPayload]],
+    *,
+    allow_local: bool,
+) -> list[tuple[tuple[int, ...], str, CitationPayload]]:
+    return [
+        match
+        for match in matches
+        if allow_local
+        or is_public_source_version(
+            workspace_root,
+            source_id=match[2]["source_id"],
+            source_version=match[2]["source_version"],
+        )
+    ]
 
 
 def _answer_messages(

@@ -29,6 +29,7 @@ from memoryforge.models import ChangeOperationType, Sensitivity
 from memoryforge.provider import OpenAICompatibleProvider, ProviderConfig
 from memoryforge.query import answer_question
 from memoryforge.refresh import refresh_workspace
+from memoryforge.sessions import SessionStore
 from memoryforge.web_adapter import WebPageError, import_html_file, import_web_page
 from memoryforge.workspace import (
     Workspace,
@@ -463,11 +464,19 @@ def feishu_reply(
             help="Allow the configured model to receive local_only evidence for this reply.",
         ),
     ] = False,
+    session: Annotated[
+        str | None,
+        typer.Option("--session", help="Reuse this local conversation session."),
+    ] = None,
     workspace: WorkspaceOption = Path("."),
 ) -> None:
     """Print the reply payload that a Feishu bot can send back to one text message."""
     try:
-        opened = Workspace.open_readonly(workspace)
+        opened = (
+            Workspace.open(workspace)
+            if session is not None
+            else Workspace.open_readonly(workspace)
+        )
         provider = OpenAICompatibleProvider(ProviderConfig.from_environment()) if llm else None
         reply = reply_to_feishu_text(
             opened.root,
@@ -475,6 +484,7 @@ def feishu_reply(
             max_pages=max_pages,
             provider=provider,
             allow_local=allow_local_llm,
+            session_id=session,
         )
     except (
         FeishuBotError,
@@ -511,7 +521,7 @@ def feishu_serve(
 ) -> None:
     """Listen for direct Feishu bot messages and reply from the local Wiki."""
     try:
-        opened = Workspace.open_readonly(workspace)
+        opened = Workspace.open(workspace)
         typer.echo("Listening for Feishu bot messages. Press Ctrl+C to stop.")
         provider = OpenAICompatibleProvider(ProviderConfig.from_environment()) if llm else None
         serve_feishu_bot(
@@ -888,10 +898,18 @@ def agent(
         str | None,
         typer.Option("--repository", help="Limit the Agent to one registered Git repository."),
     ] = None,
+    session: Annotated[
+        str | None,
+        typer.Option("--session", help="Reuse this local conversation session."),
+    ] = None,
     workspace: WorkspaceOption = Path("."),
 ) -> None:
     try:
-        opened = Workspace.open_readonly(workspace)
+        opened = (
+            Workspace.open(workspace)
+            if session is not None
+            else Workspace.open_readonly(workspace)
+        )
         typer.echo("正在运行 Wiki-backed MiniClaude Agent…", err=True)
         result = run_agent(
             opened.root,
@@ -902,6 +920,7 @@ def agent(
             allow_local=allow_local_llm,
             propose_update=propose_update,
             repository_id=repository_id,
+            session_id=session,
         )
     except (
         MemoryForgeError,
@@ -914,6 +933,27 @@ def agent(
     ) as exc:
         _exit_with_safe_error(exc)
     typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+@app.command("agent-clear")
+def agent_clear(
+    session: Annotated[str, typer.Argument(help="Local Agent session to clear.")],
+    workspace: WorkspaceOption = Path("."),
+) -> None:
+    try:
+        opened = Workspace.open(workspace)
+        SessionStore(opened.root, session).clear()
+    except (
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(json.dumps({"session_id": session, "status": "CLEARED"}, ensure_ascii=False))
 
 
 @app.command()

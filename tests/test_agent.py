@@ -12,6 +12,7 @@ from memoryforge.changesets import ChangeSetStore
 from memoryforge.cli import app
 from memoryforge.models import PageChange
 from memoryforge.provider import AgentStep, OpenAICompatibleProvider
+from memoryforge.sessions import SessionStore, rewrite_query, save_turn
 from memoryforge.workspace import Workspace
 
 
@@ -125,6 +126,171 @@ def test_agent_includes_workspace_contract_in_prompt(tmp_path: Path, monkeypatch
 
     assert provider.messages
     assert "Answer using the glossary." in json.dumps(provider.messages[0], ensure_ascii=False)
+
+
+def test_agent_uses_recent_session_context_for_followup_search(
+    tmp_path: Path, monkeypatch
+) -> None:
+    workspace = _applied_public_workspace(tmp_path, monkeypatch)
+    session_id = "chat-followup"
+
+    first = run_agent(
+        workspace,
+        "When do cache entries expire?",
+        provider=StubAgentProvider(
+            [
+                AgentStep(action="search_wiki", query="When do cache entries expire?"),
+                AgentStep(action="read_evidence", citation_index=0),
+                AgentStep(
+                    action="final",
+                    answer="Cache entries expire after sixty seconds.",
+                    citation_indexes=(0,),
+                ),
+            ]
+        ),
+        session_id=session_id,
+    )
+    assert first["status"] == "answered"
+
+    original_search = agent_module._search_wiki
+    searched_queries: list[str] = []
+
+    def capture_search(*args: object, **kwargs: object):
+        searched_queries.append(str(args[1]))
+        return original_search(*args, **kwargs)
+
+    monkeypatch.setattr(agent_module, "_search_wiki", capture_search)
+    captured = CapturingAgentProvider(
+        [
+            AgentStep(action="search_wiki", query="那它呢"),
+            AgentStep(action="read_evidence", citation_index=0),
+            AgentStep(
+                action="final",
+                answer="Cache entries expire after sixty seconds.",
+                citation_indexes=(0,),
+            ),
+        ]
+    )
+    second = run_agent(
+        workspace,
+        "那它呢",
+        provider=captured,
+        session_id=session_id,
+    )
+
+    assert second["status"] == "answered"
+    assert "When do cache entries expire?" in json.dumps(captured.messages[0], ensure_ascii=False)
+    assert "Cache entries expire after sixty seconds." in json.dumps(
+        captured.messages[0], ensure_ascii=False
+    )
+    assert searched_queries == [
+        "When do cache entries expire? 那它呢 Cache entries expire after sixty seconds. "
+        "Cache entries expire after sixty seconds."
+    ]
+
+
+def test_agent_session_keeps_three_latest_turns_and_isolates_sessions(
+    tmp_path: Path, monkeypatch
+) -> None:
+    workspace = _applied_public_workspace(tmp_path, monkeypatch)
+
+    for index in range(4):
+        result = run_agent(
+            workspace,
+            f"When do cache entries expire? turn {index}",
+            provider=StubAgentProvider(
+                [
+                    AgentStep(action="search_wiki", query="When do cache entries expire?"),
+                    AgentStep(action="read_evidence", citation_index=0),
+                    AgentStep(
+                        action="final",
+                        answer=f"answer {index}",
+                        citation_indexes=(0,),
+                    ),
+                ]
+            ),
+            session_id="chat-a",
+        )
+        assert result["status"] == "answered"
+
+    turns = SessionStore(workspace, "chat-a").load(allow_local=True)
+    assert len(turns) == 3
+    assert [turn["question"] for turn in turns] == [
+        "When do cache entries expire? turn 1",
+        "When do cache entries expire? turn 2",
+        "When do cache entries expire? turn 3",
+    ]
+
+    isolated = CapturingAgentProvider([AgentStep(action="final", answer="不知道")])
+    result = run_agent(
+        workspace,
+        "What is the database schema?",
+        provider=isolated,
+        session_id="chat-b",
+    )
+    assert result["status"] == "unknown"
+    assert "turn 3" not in json.dumps(isolated.messages[0], ensure_ascii=False)
+
+
+def test_agent_without_session_keeps_single_turn_behavior(tmp_path: Path, monkeypatch) -> None:
+    workspace = _applied_public_workspace(tmp_path, monkeypatch)
+
+    result = run_agent(
+        workspace,
+        "What is the database schema?",
+        provider=StubAgentProvider([AgentStep(action="final", answer="不知道")]),
+    )
+
+    assert result["status"] == "unknown"
+    assert not (workspace / ".memoryforge" / "sessions").exists()
+
+
+def test_short_standalone_question_does_not_inherit_session_context(tmp_path: Path) -> None:
+    store = SessionStore(tmp_path, "chat-a")
+    store.append("缓存多久过期？", "六十秒。", [], model_safe=True)
+
+    assert rewrite_query("数据库架构？", store.load(allow_local=True)) == "数据库架构？"
+
+
+def test_session_without_public_citation_is_not_reused_by_model(tmp_path: Path) -> None:
+    save_turn(
+        tmp_path,
+        "chat-a",
+        question="内部系统叫什么？",
+        answer="不知道",
+        citations=[],
+        wiki_pages=[],
+    )
+
+    assert SessionStore(tmp_path, "chat-a").load(allow_local=False) == []
+    assert len(SessionStore(tmp_path, "chat-a").load(allow_local=True)) == 1
+
+
+def test_local_session_requires_authorization_on_each_call(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        "memoryforge.sessions.is_public_source_version",
+        lambda *_args, **_kwargs: False,
+    )
+    save_turn(
+        tmp_path,
+        "chat-a",
+        question="内部缓存多久过期？",
+        answer="六十秒。",
+        citations=[
+            {
+                "source_id": "a" * 64,
+                "source_version": 1,
+                "locator": "chars:0-3",
+                "quote": "六十秒",
+            }
+        ],
+        wiki_pages=["wiki/pages/cache.md"],
+    )
+
+    assert SessionStore(tmp_path, "chat-a").load(allow_local=False) == []
+    assert len(SessionStore(tmp_path, "chat-a").load(allow_local=True)) == 1
 
 
 def test_agent_rejects_final_without_reading_its_citation(tmp_path: Path, monkeypatch) -> None:

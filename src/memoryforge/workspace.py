@@ -44,6 +44,7 @@ _GITIGNORE_RULES = (
     "/.memoryforge/rejected/",
     "/.memoryforge/traces/",
     "/.memoryforge/vectors/",
+    "/.memoryforge/sessions/",
 )
 _CJK_RUN = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]+")
 _SEARCH_RUN = re.compile(r"[A-Za-z0-9_]+|[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]+")

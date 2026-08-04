@@ -11,7 +11,11 @@ import memoryforge.cli as cli_module
 import memoryforge.query as query_module
 import memoryforge.workspace as workspace_module
 from memoryforge.cli import app
-from memoryforge.provider import OpenAICompatibleProvider, ProviderConfig
+from memoryforge.provider import (
+    OpenAICompatibleProvider,
+    ProviderConfig,
+    ProviderUnavailableError,
+)
 
 
 def test_ask_answers_from_applied_wiki_with_verifiable_citation(
@@ -130,6 +134,34 @@ def test_ask_llm_summarizes_public_evidence_and_keeps_its_citation(
     assert json.loads(captured[0]["messages"][1]["content"])["facts"] == [
         {"index": 0, "quote": "Cache entries expire after sixty seconds."}
     ]
+
+
+def test_ask_llm_falls_back_to_verified_wiki_when_provider_is_unavailable(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    runner, workspace, imported = _workspace_with_imported_source(
+        tmp_path,
+        monkeypatch,
+        "# Cache policy\n\nCache entries expire after sixty seconds.\n",
+    )
+    _apply_pending_source(runner, workspace)
+
+    def unavailable(_request) -> bytes:
+        raise ProviderUnavailableError("provider temporarily unavailable (HTTP 503)")
+
+    result = query_module.answer_question(
+        workspace,
+        "When do cache entries expire?",
+        provider=OpenAICompatibleProvider(
+            ProviderConfig("https://example.test", "test-key", "test-model"),
+            transport=unavailable,
+        ),
+    )
+
+    assert result["answer"] == "Cache entries expire after sixty seconds."
+    assert result["model_status"] == "fallback"
+    assert result["citations"][0]["source_id"] == imported["source_id"]
 
 
 def test_ask_llm_uses_candidate_facts_after_strict_match_misses(

@@ -7,6 +7,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from memoryforge.cli import app
+from memoryforge.sessions import SessionStore
 
 
 def test_cli_init_import_and_search_local_file(
@@ -89,6 +90,30 @@ def test_query_commands_expose_repository_scope() -> None:
     assert "--repository" in runner.invoke(app, ["search", "--help"]).stdout
     assert "--repository" in runner.invoke(app, ["ask", "--help"]).stdout
     assert "--repository" in runner.invoke(app, ["agent", "--help"]).stdout
+
+
+def test_agent_clear_removes_one_local_session(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    runner = CliRunner()
+    assert runner.invoke(app, ["init", str(workspace)]).exit_code == 0
+    SessionStore(workspace, "chat-clear").append(
+        "old question",
+        "old answer",
+        [],
+        model_safe=True,
+    )
+
+    result = runner.invoke(
+        app,
+        ["agent-clear", "chat-clear", "--workspace", str(workspace)],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.stdout) == {
+        "session_id": "chat-clear",
+        "status": "CLEARED",
+    }
+    assert SessionStore(workspace, "chat-clear").load(allow_local=True) == []
 
 
 def test_cli_registers_lists_and_syncs_existing_git_checkout(tmp_path: Path) -> None:

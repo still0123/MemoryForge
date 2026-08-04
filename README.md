@@ -34,6 +34,7 @@
 - **渐进式查询**：`INDEX.md → 少量 Wiki 页面 → 按需原文核验`，避免一次把整个知识库塞进上下文。
 - **MiniClaude Agent**：只提供 `search_wiki`、`read_evidence`、`final` 三个工具；必须读取证据后才能给出带引用的答案。
 - **飞书展示入口**：`feishu-serve` 直接接收飞书私聊消息，查询本地 Wiki 后回复；可显式启用模型，将命中的证据组织成更自然的回答。
+- **模型不可用时可降级**：模型服务超时或临时繁忙时，`ask` 和飞书入口回退到已验证的 Wiki 原文，不让用户一直等待或得到无引用的错误答案。
 - **可验证性**：提供 `lint` 检查页面/来源关系，提供 `eval` 用公开题集检查回答、引用与读取成本。
 
 ## 一次提问是怎么完成的？
@@ -127,7 +128,27 @@ MemoryForge 不尝试复刻完整 Claude Code。它实现的是一个围绕 Wiki
 memoryforge agent '缓存多久过期？' --workspace ./my-wiki
 ```
 
-Agent 没有 Shell、写文件、Subagent 或 MCP 工具；它只负责在有限步数内检索、核验和回答。因此项目的重点始终是 Wiki 编译、来源路由与渐进式查询，而不是堆叠通用 Agent 能力。
+如果连续追问，可以给 Agent 一个本地 session。它只保留最近 3 轮问题、回答和引用片段，
+只用来理解“它/这个方案/那数据面”等追问；每一轮仍然必须重新执行
+`search_wiki → read_evidence → final`：
+
+```bash
+memoryforge agent '管控面主要做什么？' \
+  --session interview \
+  --workspace ./my-wiki
+memoryforge agent '那数据面呢？' \
+  --session interview \
+  --workspace ./my-wiki
+
+# 清空一个本地会话
+memoryforge agent-clear interview --workspace ./my-wiki
+```
+
+会话文件只写入 Workspace 的 `.memoryforge/sessions/`，该目录默认被 `.gitignore` 忽略，
+不会进入 Wiki 或 Git 提交。没有传 `--session` 时，Agent 仍保持原来的单轮行为。飞书服务则优先
+使用事件里的 `chat_id`（缺失时使用 `open_id`）作为 session；事件没有稳定标识时自动退回单轮。
+
+Agent 没有 Shell、通用写文件、Subagent 或 MCP 工具；它只负责在有限步数内检索、核验和回答。session 由系统写入专用本地目录，不是模型可调用的工具。因此项目的重点始终是 Wiki 编译、来源路由与渐进式查询，而不是堆叠通用 Agent 能力。
 
 ## 用公开资料复现
 
@@ -147,6 +168,8 @@ init -> git-add --public -> git-sync -> ingest -> review -> apply -> lint -> ask
 ```
 
 已提交的公开结果在 [demo/results/agent_skill_eval_public.json](demo/results/agent_skill_eval_public.json)。`eval` 会检查回答是否命中关键事实、引用是否可回溯，以及每题实际展开了多少 Wiki 页面/原文字符。
+
+如果要按秋招面试的方式完整演示，直接看 [秋招演示与面试说明](docs/PORTFOLIO_DEMO.md)。里面包含 3 分钟讲解顺序、公开 Demo 命令、飞书展示命令和常见追问。
 
 ## 关键设计取舍
 

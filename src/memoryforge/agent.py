@@ -15,6 +15,7 @@ from memoryforge.query import (
     EvidencePayload,
     answer_question,
 )
+from memoryforge.sessions import SessionStore, render_context, rewrite_query, save_turn
 from memoryforge.workspace import (
     Workspace,
     is_public_source_version,
@@ -58,12 +59,16 @@ def run_agent(
     allow_local: bool = False,
     propose_update: bool = False,
     repository_id: str | None = None,
+    session_id: str | None = None,
 ) -> AgentPayload:
     """Run a bounded model/tool loop over public Wiki evidence by default."""
     _validate_limits(max_steps, max_pages)
+    session = SessionStore(workspace_root, session_id) if session_id is not None else None
+    recent_turns = session.load(allow_local=allow_local) if session is not None else []
     messages = _agent_messages(
         question,
         Workspace.open_readonly(workspace_root).prompt_context(),
+        render_context(recent_turns),
     )
     latest: AskPayload | None = None
     evidence: list[EvidencePayload] = []
@@ -110,7 +115,7 @@ def run_agent(
                         "result": _event_result({"status": "unknown"}),
                     }
                 )
-                return {
+                result: AgentPayload = {
                     "status": "unknown",
                     "answer": "不知道",
                     "citations": [],
@@ -122,6 +127,13 @@ def run_agent(
                     "evidence_characters": evidence_characters,
                     "tool_result_characters": tool_result_characters,
                 }
+                _save_agent_turn(
+                    workspace_root,
+                    session_id,
+                    question,
+                    result,
+                )
+                return result
             if not _citation_indexes_are_valid(latest, decision.citation_indexes):
                 tool_result = {"error": "citation_indexes contain an unknown citation"}
             elif answer and citations and _citations_are_read(citations, evidence):
@@ -150,7 +162,7 @@ def run_agent(
                         "result": _event_result({"citation_indexes": decision.citation_indexes}),
                     }
                 )
-                return {
+                result = {
                     "status": "answered",
                     "answer": answer,
                     "citations": citations,
@@ -162,6 +174,13 @@ def run_agent(
                     "evidence_characters": evidence_characters,
                     "tool_result_characters": tool_result_characters,
                 }
+                _save_agent_turn(
+                    workspace_root,
+                    session_id,
+                    question,
+                    result,
+                )
+                return result
             else:
                 tool_result = {
                     "error": "final answer needs at least one citation returned by read_evidence"
@@ -172,7 +191,7 @@ def run_agent(
             else:
                 latest = _search_wiki(
                     workspace_root,
-                    decision.query,
+                    rewrite_query(decision.query, recent_turns),
                     max_pages,
                     allow_local=allow_local,
                     repository_id=repository_id,
@@ -222,9 +241,16 @@ def run_agent(
     }
 
 
-def _agent_messages(question: str, prompt_context: str = "") -> list[dict[str, str]]:
+def _agent_messages(
+    question: str,
+    prompt_context: str = "",
+    conversation_context: str = "",
+) -> list[dict[str, str]]:
     workspace_rules = (
         "\nWorkspace contract:\n" + prompt_context if prompt_context else ""
+    )
+    conversation_rules = (
+        "\nConversation context:\n" + conversation_context if conversation_context else ""
     )
     return [
         {
@@ -241,10 +267,27 @@ def _agent_messages(question: str, prompt_context: str = "") -> list[dict[str, s
                 'return {"action":"final","answer":"不知道","citation_indexes":[]}. '
                 "Do not invent tools or file paths."
                 + workspace_rules
+                + conversation_rules
             ),
         },
         {"role": "user", "content": question},
     ]
+
+
+def _save_agent_turn(
+    workspace_root: Path,
+    session_id: str | None,
+    question: str,
+    result: AgentPayload,
+) -> None:
+    save_turn(
+        workspace_root,
+        session_id,
+        question=question,
+        answer=result["answer"],
+        citations=[dict(citation) for citation in result["citations"]],
+        wiki_pages=result["wiki_pages"],
+    )
 
 
 def _search_wiki(

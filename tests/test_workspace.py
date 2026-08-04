@@ -34,9 +34,10 @@ def test_init_workspace_creates_minimal_directories_and_fts_schema(tmp_path: Pat
         "/.memoryforge/staging/\n"
         "/.memoryforge/workspace.lock\n"
         "/.memoryforge/rejected/\n"
-        "/.memoryforge/traces/\n"
-        "/.memoryforge/vectors/\n"
-    )
+            "/.memoryforge/traces/\n"
+            "/.memoryforge/vectors/\n"
+            "/.memoryforge/sessions/\n"
+        )
     assert stat.S_IMODE(workspace.stat().st_mode) == 0o700
     assert stat.S_IMODE((workspace / "raw").stat().st_mode) == 0o700
     assert stat.S_IMODE((workspace / "wiki").stat().st_mode) == 0o700

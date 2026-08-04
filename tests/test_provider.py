@@ -8,7 +8,11 @@ import pytest
 from pydantic import ValidationError
 
 from memoryforge.models import CompilationPlan, PageChange, TopicGroup
-from memoryforge.provider import OpenAICompatibleProvider, ProviderConfig
+from memoryforge.provider import (
+    OpenAICompatibleProvider,
+    ProviderConfig,
+    ProviderUnavailableError,
+)
 
 SOURCE_ID = "a" * 64
 
@@ -256,6 +260,19 @@ def test_provider_reports_http_errors() -> None:
     )
 
     with pytest.raises(ValueError, match="HTTP 401"):
+        provider.compile_pages([])
+
+
+def test_provider_classifies_transient_http_errors() -> None:
+    def transport(request: Request) -> bytes:
+        raise HTTPError(request.full_url, 503, "Service Unavailable", None, None)
+
+    provider = OpenAICompatibleProvider(
+        ProviderConfig("https://example.test", "test-key", "test-model"),
+        transport=transport,
+    )
+
+    with pytest.raises(ProviderUnavailableError, match="temporarily unavailable"):
         provider.compile_pages([])
 
 
