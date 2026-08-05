@@ -167,6 +167,12 @@ def main(argv: list[str] | None = None) -> None:
             }
         ),
     }
+    if args.code_evidence_output:
+        _publish(code_output, args.code_evidence_output.resolve())
+    if args.public_evidence_output:
+        if public_evidence is None:
+            raise SystemExit("--public-evidence-output requires --public-source-repo")
+        _publish(workdir / "public_evidence.json", args.public_evidence_output.resolve())
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(
         json.dumps(provenance, ensure_ascii=False, indent=2) + "\n",
@@ -277,12 +283,19 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _publish(source: Path, target: Path) -> None:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(source.read_bytes())
+
+
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--wheel", type=Path, required=True)
     parser.add_argument("--workdir", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--public-source-repo", type=Path)
+    parser.add_argument("--code-evidence-output", type=Path)
+    parser.add_argument("--public-evidence-output", type=Path)
     return parser.parse_args(argv)
 
 

@@ -75,6 +75,8 @@ uv build --wheel --out-dir dist
   --wheel dist/memoryforge-0.2.0-py3-none-any.whl \
   --workdir /private/tmp/memoryforge-release-check \
   --output demo/results/release_provenance.json \
+  --code-evidence-output demo/results/code_wiki_public.json \
+  --public-evidence-output demo/results/agent_skill_eval_public.json \
   --public-source-repo /absolute/path/to/AgentSkill-Eval
 ```
 
