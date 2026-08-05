@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "memoryforge_commit": "05b7ad5195fe0f874985e9f836b17f746db3a2a3",
+  "memoryforge_commit": "dc9449d5eed65d56b0abdfe1e9a23c5fbe776a2e",
   "memoryforge_worktree_dirty": true,
   "fixture": {
     "path": "demo/fixtures/code_wiki_project",
@@ -34,6 +34,9 @@
       "module_assignment_accuracy": 100.0,
       "citation_grounding_accuracy": 100.0,
       "architecture_edge_grounding": 100.0,
+      "mermaid_edge_coverage": 100.0,
+      "architecture_citation_coverage": 100.0,
+      "architecture_mermaid_determinism": 100.0,
       "deterministic_replay": 100.0
     },
     "gates": {
@@ -41,6 +44,7 @@
       "core_relations": true,
       "module_assignment": true,
       "citations": true,
+      "architecture_wiki": true,
       "deterministic": true
     },
     "cases": {
