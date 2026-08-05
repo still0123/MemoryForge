@@ -202,9 +202,11 @@
     },
     {
       "id": "unknown-frontend-framework",
-      "category": "unanswerable",
+      "category": "single_hop",
       "question": "前端页面使用 React 还是 Vue？",
-      "expected_status": "unknown"
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/evolution-timeline-dashboard.md"],
+      "required_terms": ["Vue"]
     },
     {
       "id": "paraphrase-statistics",

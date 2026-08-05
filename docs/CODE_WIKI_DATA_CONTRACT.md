@@ -176,3 +176,16 @@ CodeIndexSnapshot -> ModulePlan -> PROPOSED
 `demo/evaluation/code_wiki_eval.json` 固定 Symbol、Relation、Module、Citation 和增量预期。
 关系分为必须通过的 `core` 与禁止删除的 `known_gap`；复现脚本不调用模型，并要求连续两次
 输出字节一致。
+
+## 10. 外部实现参考
+
+本实现只借鉴算法结构，没有复制以下仓库代码：
+
+| 项目 | 固定 Commit | 参考点 | 许可证边界 |
+| --- | --- | --- | --- |
+| CodeWiki | `3c4b4c244a94848d7ceacbc2a8efd31184b0ed16` | canonical import binding、仓库级唯一解析、浅层 receiver type inference | README/pyproject 声明 MIT，但该 Commit 缺少 LICENSE 文件 |
+| RepoDoc | `306becd0f143211c0dde2bdbd480578356280e28` | 语言分析后统一解析关系、按依赖传播增量影响 | 仓库未提供明确许可证 |
+
+MemoryForge 使用自己的 Tree-sitter 数据契约、稳定 Symbol ID、不可变 SourceVersion 和
+Citation 证据重新实现。没有采用 RepoDoc 的尾名模糊兜底，也没有引入其 NetworkX、LLM 或
+增量框架。

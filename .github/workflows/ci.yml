@@ -32,3 +32,10 @@ jobs:
       - run: ruff format --check .
       - run: mypy
       - run: pytest -W error::ResourceWarning --cov=memoryforge --cov-report=term-missing
+      - if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
+        run: |
+          python -m pip wheel . --no-deps --wheel-dir dist
+          python demo/run_release_check.py \
+            --wheel dist/memoryforge-*.whl \
+            --workdir /tmp/memoryforge-release-check \
+            --output /tmp/memoryforge-release-provenance.json

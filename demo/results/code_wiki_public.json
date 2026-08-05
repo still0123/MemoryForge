@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "memoryforge_commit": "f5ae7475512276c491fa658c577dafe4a31ba1fe",
-  "memoryforge_worktree_dirty": true,
+  "memoryforge_commit": "479f54904513beaec9dfd247014f9086162e9ef0",
+  "memoryforge_worktree_dirty": false,
   "fixture": {
     "path": "demo/fixtures/code_wiki_project",
     "suite_sha256": "e2253d9c66acde8e27e6e13c8f9ac9354a9e84ddc9c5d9266fd9b41040a0c106",
@@ -21,19 +21,22 @@
     "schema_version": 1,
     "counts": {
       "symbols": 20,
-      "relations": 20,
+      "relations": 24,
       "modules": 8,
-      "architecture_edges": 2
+      "architecture_edges": 4
     },
     "metrics": {
       "expected_source_coverage": 100.0,
       "symbol_recall": 100.0,
       "core_relation_recall": 100.0,
-      "known_gap_relation_recall": 0.0,
-      "overall_relation_recall": 60.0,
+      "known_gap_relation_recall": 100.0,
+      "overall_relation_recall": 100.0,
       "module_assignment_accuracy": 100.0,
       "citation_grounding_accuracy": 100.0,
       "architecture_edge_grounding": 100.0,
+      "mermaid_edge_coverage": 100.0,
+      "architecture_citation_coverage": 100.0,
+      "architecture_mermaid_determinism": 100.0,
       "deterministic_replay": 100.0
     },
     "gates": {
@@ -41,6 +44,7 @@
       "core_relations": true,
       "module_assignment": true,
       "citations": true,
+      "architecture_wiki": true,
       "deterministic": true
     },
     "cases": {
@@ -155,28 +159,28 @@
           "type": "imports",
           "source": "py.app",
           "target": "py.helpers",
-          "found": false
+          "found": true
         },
         {
           "tier": "known_gap",
           "type": "calls",
           "source": "py.app.run_imported",
           "target": "py.helpers.normalize",
-          "found": false
+          "found": true
         },
         {
           "tier": "known_gap",
           "type": "calls",
           "source": "go.meter.Use",
           "target": "go.meter.Meter.Reset",
-          "found": false
+          "found": true
         },
         {
           "tier": "known_gap",
           "type": "calls",
           "source": "ts.service.run",
           "target": "ts.service.Service.greet",
-          "found": false
+          "found": true
         }
       ],
       "modules": [

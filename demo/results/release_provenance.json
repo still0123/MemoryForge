@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "memoryforge_commit": "479f54904513beaec9dfd247014f9086162e9ef0",
+  "memoryforge_worktree_dirty": false,
+  "package": {
+    "version": "0.2.0",
+    "wheel": "memoryforge-0.2.0-py3-none-any.whl",
+    "wheel_sha256": "2c568e35d2f59bf8cd7332ab2850e8ab17d553fe9aefddfe0dca85c7fb51adad",
+    "import_path": ".venv/lib/python3.11/site-packages/memoryforge/__init__.py",
+    "import_from_fresh_venv": true,
+    "dependencies": {
+      "pydantic": "2.13.4",
+      "tree-sitter": "0.25.2",
+      "tree-sitter-go": "0.25.0",
+      "tree-sitter-python": "0.25.0",
+      "tree-sitter-typescript": "0.23.2",
+      "typer": "0.27.1"
+    }
+  },
+  "runtime": {
+    "implementation": "CPython",
+    "python": "3.11.15",
+    "platform": "macOS-26.5.2-arm64-arm-64bit"
+  },
+  "commands": [
+    "python -m pip install <wheel>",
+    "python -m pip check",
+    "python -m memoryforge --help",
+    "python demo/run_code_wiki_benchmark.py",
+    "python demo/run_public_demo.py"
+  ],
+  "checks": {
+    "pip_check": "passed",
+    "cli_help": "passed",
+    "code_wiki_benchmark": "passed",
+    "public_demo": "passed"
+  },
+  "code_wiki": {
+    "evidence_sha256": "5fec7b96d4266a0600f2c2dd150836f3296e013bb5d66cd0e4b58f4a38011883",
+    "metrics": {
+      "expected_source_coverage": 100.0,
+      "symbol_recall": 100.0,
+      "core_relation_recall": 100.0,
+      "known_gap_relation_recall": 100.0,
+      "overall_relation_recall": 100.0,
+      "module_assignment_accuracy": 100.0,
+      "citation_grounding_accuracy": 100.0,
+      "architecture_edge_grounding": 100.0,
+      "mermaid_edge_coverage": 100.0,
+      "architecture_citation_coverage": 100.0,
+      "architecture_mermaid_determinism": 100.0,
+      "deterministic_replay": 100.0
+    },
+    "gates": {
+      "core_symbols": true,
+      "core_relations": true,
+      "module_assignment": true,
+      "citations": true,
+      "architecture_wiki": true,
+      "deterministic": true
+    },
+    "incremental": {
+      "changed_symbols": [
+        "py.app",
+        "py.app.run_local"
+      ],
+      "expected_changed_symbols": [
+        "py.app",
+        "py.app.run_local"
+      ],
+      "changed_pages": [
+        "wiki/pages/code/py/app.md"
+      ],
+      "expected_changed_pages": [
+        "wiki/pages/code/py/app.md"
+      ],
+      "changed_page_ratio": 0.2,
+      "max_changed_page_ratio": 0.25,
+      "stable_symbol_ids": true,
+      "passed": true
+    }
+  },
+  "public_demo": {
+    "evidence_sha256": "90f4b908a0440d53f923f9070eca61dd7b4a1379e51ef2805c0bc481b0c620d6",
+    "source_repositories": [
+      {
+        "repository_id": "db29dfd06f0a2853c9764f1393b680d6a592b1a5771a012b6e1387fc17aac597",
+        "remote_url": "https://github.com/ranmaoxia0123/AgentSkill-Eval.git",
+        "commit": "93f5dc05229da250b041850ad8deeeec886ef304",
+        "source_count": 56
+      }
+    ],
+    "workflow": {
+      "source_count": 56,
+      "wiki_file_count": 57,
+      "lint": {
+        "status": "clean",
+        "checked_pages": 57,
+        "issues": []
+      }
+    },
+    "metrics": {
+      "answer_accuracy": 96.7,
+      "source_recall_at_3": 96.2,
+      "citation_grounding_accuracy": 96.2,
+      "multi_source_coverage": 100.0,
+      "abstention_accuracy": 100.0,
+      "average_wiki_pages_read": 3.0,
+      "average_raw_sources_read": 0.0,
+      "average_evidence_characters": 143.17
+    },
+    "raw_fts_baseline": {
+      "expected_source_recall_at_3": 57.7,
+      "multi_source_coverage": 20.0,
+      "average_exposed_characters": 728.0
+    }
+  }
+}

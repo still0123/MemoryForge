@@ -4,6 +4,7 @@ import json
 import subprocess
 from pathlib import Path
 
+from typer.main import get_command
 from typer.testing import CliRunner
 
 from memoryforge.cli import app
@@ -85,11 +86,14 @@ def test_cli_help_describes_source_version_category() -> None:
 
 
 def test_query_commands_expose_repository_scope() -> None:
-    runner = CliRunner()
+    commands = get_command(app).commands
 
-    assert "--repository" in runner.invoke(app, ["search", "--help"]).stdout
-    assert "--repository" in runner.invoke(app, ["ask", "--help"]).stdout
-    assert "--repository" in runner.invoke(app, ["agent", "--help"]).stdout
+    for name in ("search", "ask", "agent"):
+        assert any(
+            "--repository" in getattr(parameter, "opts", ())
+            and not getattr(parameter, "hidden", False)
+            for parameter in commands[name].params
+        )
 
 
 def test_agent_clear_removes_one_local_session(tmp_path: Path) -> None:

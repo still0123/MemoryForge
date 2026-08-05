@@ -10,7 +10,7 @@ run_code_wiki_benchmark = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(run_code_wiki_benchmark)
 
 
-def test_code_wiki_benchmark_preserves_core_passes_and_known_gaps(
+def test_code_wiki_benchmark_closes_known_gaps_without_regression(
     tmp_path: Path,
 ) -> None:
     evidence = run_code_wiki_benchmark.build_evidence(tmp_path / "benchmark")
@@ -20,10 +20,13 @@ def test_code_wiki_benchmark_preserves_core_passes_and_known_gaps(
     assert metrics["expected_source_coverage"] == 100.0
     assert metrics["symbol_recall"] == 100.0
     assert metrics["core_relation_recall"] == 100.0
-    assert metrics["known_gap_relation_recall"] == 0.0
-    assert metrics["overall_relation_recall"] == 60.0
+    assert metrics["known_gap_relation_recall"] == 100.0
+    assert metrics["overall_relation_recall"] == 100.0
     assert metrics["module_assignment_accuracy"] == 100.0
     assert metrics["citation_grounding_accuracy"] == 100.0
+    assert metrics["mermaid_edge_coverage"] == 100.0
+    assert metrics["architecture_citation_coverage"] == 100.0
+    assert metrics["architecture_mermaid_determinism"] == 100.0
     assert metrics["deterministic_replay"] == 100.0
     assert evidence["workflow"]["lint"]["status"] == "clean"
     assert evidence["incremental"]["passed"] is True

@@ -109,8 +109,8 @@ def answer_question(
     if not question_terms:
         return _unknown_payload(debug, trace)
 
-    raw_matches: list[tuple[frozenset[str], str, CitationPayload]] = []
-    raw_candidate_matches: list[tuple[frozenset[str], str, CitationPayload]] = []
+    raw_matches: list[tuple[frozenset[str], bool, str, CitationPayload]] = []
+    raw_candidate_matches: list[tuple[frozenset[str], bool, str, CitationPayload]] = []
 
     for page in _candidate_pages(
         workspace_root,
@@ -119,14 +119,14 @@ def answer_question(
         max_pages=max_pages,
         trace=trace,
         repository_id=repository_id,
-        prefer_index_routes=max_citations > 1,
+        prefer_index_routes=True,
     ):
         content = page.read_text(encoding="utf-8")
         trace.append({"level": "L1", "artifact": str(page.relative_to(workspace_root))})
-        for citation in _page_citations(content):
+        for index, citation in enumerate(_page_citations(content)):
             overlap = question_terms & _terms(citation["quote"])
             page_path = str(page.relative_to(workspace_root))
-            raw_candidate_matches.append((frozenset(overlap), page_path, citation))
+            raw_candidate_matches.append((frozenset(overlap), index == 0, page_path, citation))
             has_cjk_terms = any(_CJK.fullmatch(term) for term in question_terms)
             required_overlap = 1 if len(question_terms) == 1 else 2
             if has_cjk_terms:
@@ -135,7 +135,7 @@ def answer_question(
                     required_overlap = 2
             sufficient_match = len(overlap) >= required_overlap
             if sufficient_match:
-                raw_matches.append((frozenset(overlap), page_path, citation))
+                raw_matches.append((frozenset(overlap), index == 0, page_path, citation))
 
     matches = _rank_matches(raw_matches, focus_terms=focus_terms)
     candidate_matches = _rank_matches(raw_candidate_matches, focus_terms=focus_terms)
@@ -386,27 +386,26 @@ def _candidate_pages(
     for path in strict_fts_paths:
         if (page := _safe_wiki_page(workspace_root, workspace_root / path)) is not None:
             candidates.append(page)
-    index_pages = [
-        page
-        for _, page in sorted(
-            scored,
-            key=lambda candidate: (
-                -candidate[0][0],
-                -candidate[0][1],
-                -candidate[0][2],
-                str(candidate[1].relative_to(workspace_root)),
-            ),
-        )
-    ]
+    ordered_index_pages = sorted(
+        scored,
+        key=lambda candidate: (
+            -candidate[0][0],
+            -candidate[0][1],
+            -candidate[0][2],
+            str(candidate[1].relative_to(workspace_root)),
+        ),
+    )
+    strong_index_pages = [page for score, page in ordered_index_pages if score[1] >= 2]
+    weak_index_pages = [page for score, page in ordered_index_pages if score[1] < 2]
     relaxed_pages = [
         page
         for path in relaxed_fts_paths
         if (page := _safe_wiki_page(workspace_root, workspace_root / path)) is not None
     ]
     fallback_pages = (
-        (*index_pages, *relaxed_pages)
+        (*strong_index_pages, *relaxed_pages, *weak_index_pages)
         if prefer_index_routes
-        else (*relaxed_pages, *index_pages)
+        else (*relaxed_pages, *strong_index_pages, *weak_index_pages)
     )
     for page in fallback_pages:
         if page not in candidates:
@@ -446,6 +445,12 @@ def _top_matches(
             selected_index = max(
                 range(len(remaining)),
                 key=lambda index: (
+                    sum(
+                        not _CJK.fullmatch(term)
+                        for term in (
+                            (_terms(remaining[index][2]["quote"]) & question_terms) - covered_terms
+                        )
+                    ),
                     len((_terms(remaining[index][2]["quote"]) & question_terms) - covered_terms),
                     remaining[index][0][0],
                     remaining[index][0][1],
@@ -462,28 +467,34 @@ def _top_matches(
 
 
 def _rank_matches(
-    matches: list[tuple[frozenset[str], str, CitationPayload]],
+    matches: list[tuple[frozenset[str], bool, str, CitationPayload]],
     *,
     focus_terms: set[str] | None = None,
 ) -> list[tuple[tuple[int, ...], str, CitationPayload]]:
     focus_terms = focus_terms or set()
     frequencies = Counter(
-        term for overlap, _page_path, _citation in matches for term in overlap - _RANKING_STOP_WORDS
+        term
+        for overlap, _summary, _page_path, _citation in matches
+        for term in overlap - _RANKING_STOP_WORDS
     )
     ranked = []
-    for overlap, page_path, citation in matches:
+    for overlap, summary, page_path, citation in matches:
         ranking_overlap = overlap - _RANKING_STOP_WORDS
         non_cjk_terms = [term for term in ranking_overlap if not _CJK.fullmatch(term)]
+        longest_identifier = max((len(term) for term in non_cjk_terms), default=0)
+        # ponytail: long code identifiers outrank ordinary English words.
         score = (
-            max((len(term) for term in non_cjk_terms), default=0),
-            len(non_cjk_terms),
+            longest_identifier if longest_identifier >= 10 else 0,
             int(
                 bool(ranking_overlap & focus_terms)
                 and not citation["quote"].lstrip().startswith("|")
             ),
             len(ranking_overlap & focus_terms),
-            sum(1000 // frequencies[term] for term in ranking_overlap),
+            int(summary),
             len(ranking_overlap),
+            sum(1000 // frequencies[term] for term in ranking_overlap),
+            longest_identifier,
+            len(non_cjk_terms),
             sum(len(term) for term in ranking_overlap),
         )
         ranked.append((score, page_path, citation))
@@ -492,12 +503,14 @@ def _rank_matches(
 
 def _yes_no_focus_terms(question: str) -> set[str]:
     """Return the condition half of one compact Chinese yes-or-no question."""
-    for match in _WORDS.finditer(question):
-        token = match.group().lower()
-        if _CJK.fullmatch(token) and token.endswith("吗"):
-            # ponytail: only explicit yes/no questions need this.
-            # General tail weighting regressed recall.
-            return _terms(token[len(token) // 2 :])
+    tokens = [
+        match.group().lower()
+        for match in _WORDS.finditer(question)
+        if _CJK.fullmatch(match.group())
+    ]
+    if len(tokens) == 1 and tokens[0].endswith("吗"):
+        # ponytail: only one uninterrupted Chinese condition gets tail weighting.
+        return _terms(tokens[0][len(tokens[0]) // 2 :])
     return set()
 
 

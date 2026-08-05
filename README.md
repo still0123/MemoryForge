@@ -179,14 +179,34 @@ init -> git-add --public -> git-sync -> ingest -> review -> approve -> apply -> 
 
 | 指标 | MemoryForge | Raw FTS |
 | --- | ---: | ---: |
-| Top-3 来源召回率 | **96.0%** | 56.0% |
+| Top-3 来源召回率 | **96.2%** | 57.7% |
 | 多来源完整覆盖率 | **100.0%** | 20.0% |
 | 回答准确率 | 96.7% | 不适用 |
-| 引用落地准确率 | 96.0% | 不适用 |
+| 引用落地准确率 | 96.2% | 不适用 |
 | 无答案拒答准确率 | 100.0% | 不适用 |
-| 平均证据/候选文本字符数 | 140.17 | 728.0 |
+| 平均证据/候选文本字符数 | 143.17 | 728.0 |
 
 Raw FTS 只负责检索，不生成答案，所以不能拿它计算回答、引用或拒答准确率。完整方法、失败案例和复现说明见 [公开 Benchmark](docs/BENCHMARK.md)。
+
+### 从 Wheel 独立复现
+
+发布检查会创建全新虚拟环境，只安装 Wheel，并运行 CLI、代码 Wiki Benchmark 和可选的完整公开
+Demo。脚本会拒绝从源码 checkout 导入 `memoryforge`：
+
+```bash
+uv build --wheel --out-dir dist
+.venv/bin/python demo/run_release_check.py \
+  --wheel dist/memoryforge-0.2.0-py3-none-any.whl \
+  --workdir /private/tmp/memoryforge-release-check \
+  --output /private/tmp/memoryforge-release-provenance.json \
+  --code-evidence-output demo/results/code_wiki_public.json \
+  --public-evidence-output demo/results/agent_skill_eval_public.json \
+  --public-source-repo /absolute/path/to/AgentSkill-Eval
+```
+
+公开仓库必须 checkout 到 `93f5dc05229da250b041850ad8deeeec886ef304`。提交的
+[`release_provenance.json`](demo/results/release_provenance.json) 记录实际 import 路径、依赖版本、
+Wheel SHA256、两套 Benchmark 结果和产物哈希。
 
 如果要按秋招面试的方式完整演示，直接看 [秋招演示与面试说明](docs/PORTFOLIO_DEMO.md)。里面包含 3 分钟讲解顺序、公开 Demo 命令、飞书展示命令和常见追问。
 

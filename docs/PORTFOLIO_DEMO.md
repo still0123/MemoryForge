@@ -47,7 +47,15 @@ CLI / MiniClaude Agent / 飞书机器人
 init → git-add → git-sync → ingest → review → apply → lint → ask → eval
 ```
 
-本次公开基线使用 `AgentSkill-Eval@93f5dc0`，会导入 56 个来源文件，生成 57 个 Wiki 文件，运行 30 道题。当前结果是：回答准确率 96.7%、Top-3 来源召回率 96.0%、引用落地准确率 96.0%、拒答准确率 100%。同一题集上的 Raw FTS Top-3 来源召回率为 56.0%，完整方法见 [公开 Benchmark](BENCHMARK.md)。
+本次公开基线使用 `AgentSkill-Eval@93f5dc0`，会导入 56 个来源文件，生成 57 个 Wiki 文件，运行
+30 道题。当前结果是：回答准确率 96.7%、Top-3 来源召回率 96.2%、引用落地准确率 96.2%、
+拒答准确率 100%。同一题集上的 Raw FTS Top-3 来源召回率为 57.7%，完整方法见
+[公开 Benchmark](BENCHMARK.md)。
+
+再打开 [`code_wiki_public.json`](../demo/results/code_wiki_public.json) 和
+[`release_provenance.json`](../demo/results/release_provenance.json)：前者证明三语言 Symbol、
+Relation、Module、Mermaid edge 和 Citation 指标均为 100%，单文件更新只影响 20% 的源码模块页；
+后者证明发布 Wheel 在全新 venv 中安装，实际 import 不依赖源码 checkout。
 
 ### 3. 展示带引用的回答
 
@@ -134,6 +142,12 @@ memoryforge feishu-serve \
 
 新资料先生成 ChangeSet，不直接覆盖正式 Wiki。用户先 `review` 看变更，再 `apply --approve` 写入；更新失败可以查看历史并回滚。这样 Wiki 是可维护的项目资产，而不是一次性摘要。
 
+### Mermaid 架构图为什么可信？
+
+图节点来自确定性 `ModulePlan`，图边来自真实 `CodeRelation` 聚合；每条边都带完整 edge ID 和
+Relation Citation，可回读到固定 Git Blob 的字符范围。系统不让模型猜边，证据不属于源模块时直接
+拒绝编译。
+
 ## 项目边界
 
 当前版本刻意不做公网部署、群聊、多用户权限、定时同步、向量数据库、知识图谱和通用编码 Agent。这些不是遗漏，而是为了把“个人技术 Wiki 的编译、增量更新、可信查询和证据回溯”做深。
@@ -142,6 +156,7 @@ memoryforge feishu-serve \
 
 - [ ] 只使用公开或脱敏资料；不把公司代码、飞书正文、Token、App Secret 放进仓库。
 - [ ] 公开 Demo 能从空 Workspace 重新跑通。
+- [ ] 发布 Wheel 能在全新 venv 通过 `run_release_check.py`，并核对 SHA256。
 - [ ] `memoryforge lint --workspace <workspace>` 返回 `clean`。
 - [ ] 至少演示一个正常回答和一个拒答。
 - [ ] 至少展示一次 `review → apply` 的 Wiki 变更流程。
