@@ -642,7 +642,11 @@ def test_agent_does_not_create_update_when_provider_declines(tmp_path: Path, mon
 
 
 def test_cli_agent_help_exposes_update_proposal_flag() -> None:
-    result = CliRunner().invoke(app, ["agent", "--help"])
+    result = CliRunner().invoke(
+        app,
+        ["agent", "--help"],
+        env={"COLUMNS": "160", "NO_COLOR": "1"},
+    )
 
     assert result.exit_code == 0
     assert "--propose-update" in result.stdout

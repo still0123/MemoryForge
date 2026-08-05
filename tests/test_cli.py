@@ -86,10 +86,11 @@ def test_cli_help_describes_source_version_category() -> None:
 
 def test_query_commands_expose_repository_scope() -> None:
     runner = CliRunner()
+    help_env = {"COLUMNS": "160", "NO_COLOR": "1"}
 
-    assert "--repository" in runner.invoke(app, ["search", "--help"]).stdout
-    assert "--repository" in runner.invoke(app, ["ask", "--help"]).stdout
-    assert "--repository" in runner.invoke(app, ["agent", "--help"]).stdout
+    assert "--repository" in runner.invoke(app, ["search", "--help"], env=help_env).stdout
+    assert "--repository" in runner.invoke(app, ["ask", "--help"], env=help_env).stdout
+    assert "--repository" in runner.invoke(app, ["agent", "--help"], env=help_env).stdout
 
 
 def test_agent_clear_removes_one_local_session(tmp_path: Path) -> None:
