@@ -66,6 +66,8 @@ _CODE_QUERY_EXPANSIONS = {
     "依赖": {"depend", "dependency", "dependencies", "import", "imports"},
     "操作": {"operation", "operations"},
     "职责": {"responsibility", "responsibilities"},
+    "方法": {"method", "methods", "func", "function", "functions"},
+    "字段": {"field", "fields", "struct", "attribute", "attributes"},
 }
 _ENVIRONMENT_ASSIGNMENT = re.compile(r"\b(?:export\s+)?[A-Z][A-Z0-9_]{2,}=")
 _CODE_FACT = re.compile(r"^(?:package|type|func|class|def)\b")
@@ -123,6 +125,10 @@ def answer_question(
     focus_terms = _question_focus_terms(question) | _yes_no_focus_terms(question)
     if "子模" in base_question_terms:
         focus_terms.update({"child", "children", "modules"})
+    if "方法" in base_question_terms:
+        focus_terms.update({"method", "methods", "func", "function", "functions"})
+    if "字段" in base_question_terms:
+        focus_terms.update({"field", "fields", "struct", "attribute", "attributes"})
     answer_citation_limit = _answer_citation_limit(question, max_citations)
     prefer_environment_assignments = "环境变量" in question
     prefer_code_modules = any(marker in question.lower() for marker in ("模块", "文件夹", "module"))
@@ -155,7 +161,11 @@ def answer_question(
                 if len(overlap) >= 2 and any(not _CJK.fullmatch(term) for term in overlap):
                     required_overlap = 2
             sufficient_match = len(overlap) >= required_overlap
-            if identifier_terms and not overlap & identifier_terms:
+            if "字段" in base_question_terms and overlap & focus_terms:
+                sufficient_match = True
+            if identifier_terms and not overlap & identifier_terms and not (
+                "字段" in base_question_terms and overlap & focus_terms
+            ):
                 sufficient_match = False
             if sufficient_match:
                 raw_matches.append((frozenset(overlap), page_path, citation))
@@ -486,6 +496,13 @@ def _candidate_pages(
         if (page := _safe_wiki_page(workspace_root, workspace_root / path)) is not None
     ]
     ordered_pages = (*module_pages, *strict_pages)
+    exact_code_pages = _exact_code_pages(
+        workspace_root,
+        question,
+        max_pages=max_pages,
+        repository_id=repository_id,
+    )
+    ordered_pages = (*exact_code_pages, *ordered_pages)
     ordered_pages += (
         (*index_pages, *relaxed_pages)
         if prefer_index_routes
@@ -496,6 +513,51 @@ def _candidate_pages(
         if page not in candidates:
             candidates.append(page)
     return candidates[:max_pages]
+
+
+def _exact_code_pages(
+    workspace_root: Path,
+    question: str,
+    *,
+    max_pages: int,
+    repository_id: str | None,
+) -> tuple[Path, ...]:
+    """Route explicit CamelCase symbols and code paths to code pages first."""
+    if not any(marker in question for marker in ("方法", "字段", "属性", "函数")):
+        return ()
+    if not (workspace_root / ".memoryforge" / "index.sqlite").is_file():
+        return ()
+    identifiers = tuple(
+        dict.fromkeys(
+            match.group()
+            for match in re.finditer(r"[A-Za-z_][A-Za-z0-9_./-]*", question)
+            if any(character.isupper() for character in match.group())
+            or "/" in match.group()
+            or "_" in match.group()
+            or ".go" in match.group()
+            or ".py" in match.group()
+        )
+    )
+    pages: list[Path] = []
+    for identifier in identifiers[:3]:
+        for path in find_applied_page_paths(
+            workspace_root,
+            identifier,
+            limit=max_pages,
+            repository_id=repository_id,
+            require_all_terms=False,
+        ):
+            page = _safe_wiki_page(workspace_root, workspace_root / path)
+            if page is None or not _is_code_page(page):
+                continue
+            if page not in pages:
+                pages.append(page)
+    return tuple(pages)
+
+
+def _is_code_page(page: Path) -> bool:
+    prefix = page.read_text(encoding="utf-8")[:400]
+    return 'title: "Code:' in prefix or 'title: "Code module:' in prefix
 
 
 def _validate_max_pages(max_pages: int) -> None:
@@ -514,7 +576,7 @@ def _validate_max_citations(max_citations: int) -> None:
 
 def _answer_citation_limit(question: str, max_citations: int) -> int:
     """Give a two-part question room for two complementary source facts."""
-    if max_citations == 1 and "子模块" in question:
+    if max_citations == 1 and any(marker in question for marker in ("子模块", "字段", "属性")):
         return 6
     if max_citations == 1 and any(
         marker in question for marker in ("分别", "以及", "、", "，", "什么时候")

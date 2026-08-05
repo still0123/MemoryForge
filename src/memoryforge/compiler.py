@@ -1838,11 +1838,9 @@ def _render_code_page(source: CurrentSource, content: str) -> str:
 
 
 def _code_facts(content: str, language: str) -> list[tuple[str, int]]:
-    patterns = (
-        (r"^package\s+[A-Za-z_]\w*\s*$", r"^(?:type\s+[A-Z]\w*|func\s+(?:\([^)]*\)\s*)?[A-Z]\w*)")
-        if language == "Go"
-        else (r"^(?:class|def)\s+[A-Za-z]\w*",)
-    )
+    if language == "Go":
+        return _go_code_facts(content)
+    patterns = (r"^(?:class|def)\s+[A-Za-z]\w*",)
     facts: list[tuple[str, int]] = []
     for pattern in patterns:
         for match in re.finditer(pattern, content, re.MULTILINE):
@@ -1852,6 +1850,57 @@ def _code_facts(content: str, language: str) -> list[tuple[str, int]]:
                 facts.append((quote, match.start() + leading))
     if facts:
         return facts[:8]
+    for match in re.finditer(r"^.+$", content, re.MULTILINE):
+        quote = match.group().strip()
+        if quote:
+            return [(quote, match.start() + len(match.group()) - len(match.group().lstrip()))]
+    raise ValueError("source contains no meaningful code")
+
+
+def _go_code_facts(content: str) -> list[tuple[str, int]]:
+    """Extract declarations and struct fields without pretending to parse Go."""
+    facts: list[tuple[str, int]] = []
+    in_struct = False
+    brace_depth = 0
+    for line_match in re.finditer(r"^.*$", content, re.MULTILINE):
+        raw_line = line_match.group()
+        line = raw_line.strip()
+        if not line:
+            continue
+        start = line_match.start() + len(raw_line) - len(raw_line.lstrip())
+        package = re.match(r"package\s+[A-Za-z_]\w*\s*$", line)
+        type_decl = re.match(r"type\s+[A-Za-z_]\w*(?:\s+struct\s*\{)?", line)
+        func_decl = re.match(
+            r"func\s+(?P<receiver>\([^)]*\)\s*)?(?P<name>[A-Za-z_]\w*)\s*\(",
+            line,
+        )
+        if package or type_decl or func_decl:
+            if type_decl:
+                quote = f"type {type_decl.group(0).split()[1]}"
+            elif func_decl:
+                receiver = (func_decl.group("receiver") or "").strip()
+                quote = f"func {receiver + ' ' if receiver else ''}{func_decl.group('name')}"
+            else:
+                quote = line.split("{")[0].rstrip()
+            facts.append((quote, start))
+        if type_decl and "struct" in line and "{" in line:
+            in_struct = True
+            brace_depth = line.count("{") - line.count("}")
+            if brace_depth <= 0:
+                in_struct = False
+            continue
+        if in_struct:
+            field = re.match(
+                r"([A-Za-z_]\w*)\s+([^{}]+?)(?:\s+`[^`]+`)?$",
+                line,
+            )
+            if field and not line.startswith(("//", "func ")):
+                facts.append((f"Field {field.group(1)} {field.group(2).strip()}", start))
+        brace_depth += line.count("{") - line.count("}")
+        if in_struct and brace_depth <= 0:
+            in_struct = False
+    if facts:
+        return facts
     for match in re.finditer(r"^.+$", content, re.MULTILINE):
         quote = match.group().strip()
         if quote:

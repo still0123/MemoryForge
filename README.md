@@ -83,7 +83,13 @@ memoryforge apply <changeset-id> --workspace ./my-wiki
 
 # 4. 提问
 memoryforge ask '缓存多久过期？' --workspace ./my-wiki
+
+# 5. 查询代码里的具体方法或字段
+memoryforge ask 'CheckFileSystem 方法做什么？' --workspace ./my-wiki
+memoryforge ask 'FileSystem 有哪些字段？' --workspace ./my-wiki
 ```
+
+代码仓库被选中后，Go 代码页会记录包、结构体、方法和结构体字段；Python 代码页会记录类和函数。询问具体符号时，MemoryForge 会优先路由到对应代码页，并保留原始代码行作为引用。
 
 生成后的 Workspace 大致如下：
 

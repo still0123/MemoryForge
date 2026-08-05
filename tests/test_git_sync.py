@@ -390,6 +390,64 @@ func Reset() {}
     assert _current_git_revision(workspace, code_document.source_id) == refreshed.head_commit
 
 
+def test_code_symbol_queries_answer_methods_and_struct_fields(tmp_path: Path) -> None:
+    checkout = _create_repository(tmp_path)
+    _write(
+        checkout / "internal" / "meter" / "meter.go",
+        """package meter
+
+type FileSystem struct {
+	ID string
+	RootPath string
+}
+
+type Manager struct{}
+
+func (m *Manager) CheckFileSystem(fs FileSystem) error { return nil }
+""",
+    )
+    _commit_all(checkout, "Add file system manager")
+    workspace = init_workspace(tmp_path / "workspace")
+    repository = register_git_checkout(workspace, checkout)
+    sync_git_checkout(workspace, repository.repository_id)
+
+    runner = CliRunner()
+    selected = runner.invoke(
+        app,
+        [
+            "code-add",
+            repository.repository_id,
+            "internal/meter/",
+            "--workspace",
+            str(workspace),
+        ],
+    )
+    assert selected.exit_code == 0, selected.output
+    synced = sync_git_checkout(workspace, repository.repository_id)
+    assert any(document.relative_path.endswith("meter.go") for document in synced.documents)
+
+    staged = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
+    assert staged.exit_code == 0, staged.output
+    changeset_id = json.loads(staged.stdout)["changeset_id"]
+    applied = runner.invoke(
+        app,
+        ["apply", changeset_id, "--approve", "--workspace", str(workspace)],
+    )
+    assert applied.exit_code == 0, applied.output
+
+    method = answer_question(workspace, "CheckFileSystem 方法做什么？")
+    assert method["status"] == "answered"
+    assert "CheckFileSystem" in method["answer"]
+    assert 'title: "Code: internal/meter/meter.go"' in (
+        workspace / method["wiki_pages"][0]
+    ).read_text(encoding="utf-8")
+
+    fields = answer_question(workspace, "FileSystem 有哪些字段？")
+    assert fields["status"] == "answered"
+    assert "Field ID string" in fields["answer"]
+    assert "Field RootPath string" in fields["answer"]
+
+
 def test_whole_repository_code_selection_skips_secrets_and_adds_module_sources(
     tmp_path: Path,
 ) -> None:
