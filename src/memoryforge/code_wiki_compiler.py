@@ -13,6 +13,7 @@ from memoryforge.code_models import (
     ArchitectureGraph,
     CodeIndexSnapshot,
     CodeLocation,
+    CodeRelation,
     CodeSymbol,
     ModuleNode,
     ModulePlan,
@@ -57,6 +58,7 @@ def compile_code_wiki(
     modules = _flatten_modules(plan.modules)
     modules_by_id = {module.module_id: module for module in modules}
     symbols_by_id = {symbol.symbol_id: symbol for symbol in snapshot.symbols}
+    relations_by_id = {relation.relation_id: relation for relation in snapshot.relations}
     outgoing = _outgoing_edges(graph)
 
     all_candidates: dict[str, str] = {}
@@ -67,13 +69,12 @@ def compile_code_wiki(
                 symbols_by_id,
                 modules_by_id,
                 outgoing.get(module.module_id, ()),
+                relations_by_id,
                 snapshot,
             )
         else:
             all_candidates[module.wiki_path] = _render_navigation_module_page(
                 module,
-                modules_by_id,
-                outgoing.get(module.module_id, ()),
                 snapshot,
             )
 
@@ -254,6 +255,7 @@ def _render_source_module_page(
     symbols_by_id: dict[str, CodeSymbol],
     modules_by_id: dict[str, ModuleNode],
     outgoing: tuple[ArchitectureEdge, ...],
+    relations_by_id: dict[str, CodeRelation],
     snapshot: CodeIndexSnapshot,
 ) -> str:
     symbols = [symbols_by_id[symbol_id] for symbol_id in module.symbol_ids]
@@ -284,7 +286,14 @@ def _render_source_module_page(
         "",
     ]
     _append_child_modules(lines, module)
-    _append_dependencies(lines, module, modules_by_id, outgoing)
+    dependency_citations = _append_source_architecture(
+        lines,
+        module,
+        modules_by_id,
+        outgoing,
+        relations_by_id,
+        set(source_ids),
+    )
     lines.extend(["## Verified symbols", ""])
     for index, symbol in enumerate(symbols, start=1):
         footnote = f"code-{index}-{symbol.location.source_id[:8]}"
@@ -300,13 +309,18 @@ def _render_source_module_page(
             f"[^{footnote}]: source `{symbol.location.source_id}` · revision "
             f"`{symbol.location.source_version}` · `{symbol.location.locator}`"
         )
-    return "\n".join(lines) + "\n"
+    for label, location in dependency_citations:
+        lines.append(
+            f"[^{label}]: source `{location.source_id}` · revision "
+            f"`{location.source_version}` · `{location.locator}`"
+        )
+    content = "\n".join(lines) + "\n"
+    _validate_rendered_architecture(content, outgoing)
+    return content
 
 
 def _render_navigation_module_page(
     module: ModuleNode,
-    modules_by_id: dict[str, ModuleNode],
-    outgoing: tuple[ArchitectureEdge, ...],
     snapshot: CodeIndexSnapshot,
 ) -> str:
     summary = f"Navigation for deterministic code module {module.path}."
@@ -328,8 +342,8 @@ def _render_navigation_module_page(
         "- This page is generated from the deterministic module hierarchy.",
         "",
     ]
+    _append_navigation_architecture(lines, module)
     _append_child_modules(lines, module)
-    _append_dependencies(lines, module, modules_by_id, outgoing)
     return "\n".join(lines) + "\n"
 
 
@@ -342,24 +356,88 @@ def _append_child_modules(lines: list[str], module: ModuleNode) -> None:
     lines.append("")
 
 
-def _append_dependencies(
+def _append_source_architecture(
     lines: list[str],
     module: ModuleNode,
     modules_by_id: dict[str, ModuleNode],
     outgoing: tuple[ArchitectureEdge, ...],
-) -> None:
+    relations_by_id: dict[str, CodeRelation],
+    source_ids: set[str],
+) -> tuple[tuple[str, CodeLocation], ...]:
     if not outgoing:
-        return
-    lines.extend(["## Dependencies", ""])
+        return ()
+    nodes = {module.module_id: module}
+    for edge in outgoing:
+        nodes[edge.target_module_id] = modules_by_id[edge.target_module_id]
+    lines.extend(["## Architecture", "", "```mermaid", "flowchart LR"])
+    for node in sorted(nodes.values(), key=lambda item: item.path):
+        lines.append(f"  m_{node.module_id}[{json.dumps(node.title, ensure_ascii=False)}]")
+    for edge in outgoing:
+        lines.append(f"  %% architecture-edge:{edge.edge_id}")
+        lines.append(
+            f"  m_{edge.source_module_id} -->|{edge.type.value} "
+            f"({len(edge.relation_ids)})| m_{edge.target_module_id}"
+        )
+    lines.extend(["```", "", "## Verified dependencies", ""])
+    citations: list[tuple[str, CodeLocation]] = []
     for edge in outgoing:
         target = modules_by_id[edge.target_module_id]
+        references: list[str] = []
+        for relation_id in edge.relation_ids:
+            relation = relations_by_id.get(relation_id)
+            if relation is None or relation.source_symbol_id not in module.symbol_ids:
+                raise CodeWikiCompilationError(
+                    f"architecture edge contains an invalid relation: {edge.edge_id}"
+                )
+            evidence = relation.evidence[0]
+            if evidence.source_id not in source_ids:
+                raise CodeWikiCompilationError(
+                    f"architecture evidence is not owned by its source module: {relation_id}"
+                )
+            label = f"relation-{relation_id}"
+            references.append(f"[^{label}]")
+            citations.append((label, evidence))
         lines.append(
             f"- `{edge.type.value}` → "
             f"[{target.title}]({_relative_link(module.wiki_path, target.wiki_path)}) "
             f"({len(edge.relation_ids)} verified relation"
-            f"{'s' if len(edge.relation_ids) != 1 else ''})"
+            f"{'s' if len(edge.relation_ids) != 1 else ''}) " + " ".join(references)
         )
     lines.append("")
+    return tuple(citations)
+
+
+def _append_navigation_architecture(lines: list[str], module: ModuleNode) -> None:
+    if not module.children:
+        return
+    lines.extend(["## Architecture", "", "```mermaid", "flowchart TD"])
+    lines.append(f"  m_{module.module_id}[{json.dumps(module.title, ensure_ascii=False)}]")
+    for child in sorted(module.children, key=lambda item: item.path):
+        lines.append(f"  m_{child.module_id}[{json.dumps(child.title, ensure_ascii=False)}]")
+        lines.append(f"  m_{module.module_id} -. contains .-> m_{child.module_id}")
+    lines.extend(["```", ""])
+
+
+def _validate_rendered_architecture(
+    content: str,
+    outgoing: tuple[ArchitectureEdge, ...],
+) -> None:
+    if not outgoing:
+        return
+    if "```mermaid\nflowchart LR\n" not in content:
+        raise CodeWikiCompilationError("source module architecture is missing Mermaid")
+    for edge in outgoing:
+        marker = f"architecture-edge:{edge.edge_id}"
+        if content.count(marker) != 1:
+            raise CodeWikiCompilationError(
+                f"architecture edge is not rendered once: {edge.edge_id}"
+            )
+        for relation_id in edge.relation_ids:
+            label = f"relation-{relation_id}"
+            if f"[^{label}]" not in content or f"[^{label}]: source " not in content:
+                raise CodeWikiCompilationError(
+                    f"architecture relation is missing a citation: {relation_id}"
+                )
 
 
 def _outgoing_edges(

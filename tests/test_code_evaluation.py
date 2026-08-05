@@ -24,6 +24,9 @@ def test_code_wiki_benchmark_closes_known_gaps_without_regression(
     assert metrics["overall_relation_recall"] == 100.0
     assert metrics["module_assignment_accuracy"] == 100.0
     assert metrics["citation_grounding_accuracy"] == 100.0
+    assert metrics["mermaid_edge_coverage"] == 100.0
+    assert metrics["architecture_citation_coverage"] == 100.0
+    assert metrics["architecture_mermaid_determinism"] == 100.0
     assert metrics["deterministic_replay"] == 100.0
     assert evidence["workflow"]["lint"]["status"] == "clean"
     assert evidence["incremental"]["passed"] is True

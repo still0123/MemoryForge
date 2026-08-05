@@ -11,6 +11,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from memoryforge.code_index import build_code_index
 from memoryforge.code_models import (
+    ArchitectureEdge,
+    ArchitectureGraph,
+    CodeRelation,
     CodeRelationType,
     CodeSymbolKind,
     ModuleNode,
@@ -112,10 +115,9 @@ def run_code_evaluation(
         }
         for expected in suite.relations
     ]
+    modules = _flatten_modules(plan.modules)
     symbol_modules = {
-        symbol_id: module.path
-        for module in _flatten_modules(plan.modules)
-        for symbol_id in module.symbol_ids
+        symbol_id: module.path for module in modules for symbol_id in module.symbol_ids
     }
     module_cases = [
         {
@@ -158,6 +160,12 @@ def run_code_evaluation(
     )
     relation_ids = {relation.relation_id for relation in snapshot.relations}
     graph_grounded = all(set(edge.relation_ids) <= relation_ids for edge in graph.edges)
+    mermaid_checks, architecture_citations, mermaid_ordering = _architecture_rendering_checks(
+        workspace_root,
+        graph,
+        modules,
+        {relation.relation_id: relation for relation in snapshot.relations},
+    )
     core_relations = [case for case in relation_cases if case["tier"] == "core"]
     known_gaps = [case for case in relation_cases if case["tier"] == "known_gap"]
     return {
@@ -178,6 +186,9 @@ def run_code_evaluation(
             "module_assignment_accuracy": _percentage(bool(case["found"]) for case in module_cases),
             "citation_grounding_accuracy": _percentage(grounding_checks),
             "architecture_edge_grounding": 100.0 if graph_grounded else 0.0,
+            "mermaid_edge_coverage": _percentage(mermaid_checks),
+            "architecture_citation_coverage": _percentage(architecture_citations),
+            "architecture_mermaid_determinism": _percentage(mermaid_ordering),
             "deterministic_replay": 100.0 if deterministic else 0.0,
         },
         "gates": {
@@ -185,6 +196,9 @@ def run_code_evaluation(
             "core_relations": all(bool(case["found"]) for case in core_relations),
             "module_assignment": all(bool(case["found"]) for case in module_cases),
             "citations": all(grounding_checks),
+            "architecture_wiki": (
+                all(mermaid_checks) and all(architecture_citations) and all(mermaid_ordering)
+            ),
             "deterministic": deterministic,
         },
         "cases": {
@@ -194,6 +208,54 @@ def run_code_evaluation(
             "modules": module_cases,
         },
     }
+
+
+def _architecture_rendering_checks(
+    workspace_root: Path,
+    graph: ArchitectureGraph,
+    modules: tuple[ModuleNode, ...],
+    relations: dict[str, CodeRelation],
+) -> tuple[list[bool], list[bool], list[bool]]:
+    modules_by_id = {module.module_id: module for module in modules}
+    grouped: dict[str, list[ArchitectureEdge]] = {}
+    mermaid_checks: list[bool] = []
+    citation_checks: list[bool] = []
+    contents: dict[str, str] = {}
+    for edge in graph.edges:
+        module = modules_by_id[edge.source_module_id]
+        content = contents.setdefault(
+            module.module_id,
+            (workspace_root / module.wiki_path).read_text(encoding="utf-8"),
+        )
+        marker = f"%% architecture-edge:{edge.edge_id}"
+        arrow = (
+            f"m_{edge.source_module_id} -->|{edge.type.value} "
+            f"({len(edge.relation_ids)})| m_{edge.target_module_id}"
+        )
+        mermaid_checks.append(content.count(marker) == 1 and arrow in content)
+        grouped.setdefault(module.module_id, []).append(edge)
+        for relation_id in edge.relation_ids:
+            relation = relations[relation_id]
+            evidence = relation.evidence[0]
+            definition = (
+                f"[^relation-{relation_id}]: source `{evidence.source_id}` · revision "
+                f"`{evidence.source_version}` · `{evidence.locator}`"
+            )
+            citation_checks.append(definition in content)
+    ordering_checks = []
+    for module_id, edges in grouped.items():
+        content = contents[module_id]
+        ordered = sorted(
+            edges,
+            key=lambda edge: (edge.type.value, edge.target_module_id),
+        )
+        positions = [content.find(f"%% architecture-edge:{edge.edge_id}") for edge in ordered]
+        ordering_checks.append(
+            content.count("```mermaid\nflowchart LR\n") == 1
+            and all(position >= 0 for position in positions)
+            and positions == sorted(positions)
+        )
+    return mermaid_checks, citation_checks, ordering_checks
 
 
 def _flatten_modules(modules: tuple[ModuleNode, ...]) -> tuple[ModuleNode, ...]:

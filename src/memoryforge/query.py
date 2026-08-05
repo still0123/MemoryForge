@@ -404,9 +404,7 @@ def _candidate_pages(
         if (page := _safe_wiki_page(workspace_root, workspace_root / path)) is not None
     ]
     fallback_pages = (
-        (*index_pages, *relaxed_pages)
-        if prefer_index_routes
-        else (*relaxed_pages, *index_pages)
+        (*index_pages, *relaxed_pages) if prefer_index_routes else (*relaxed_pages, *index_pages)
     )
     for page in fallback_pages:
         if page not in candidates:
