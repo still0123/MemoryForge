@@ -35,6 +35,7 @@ from memoryforge.workspace import (
 )
 
 PageType = Literal["entity", "concept", "synthesis"]
+CodeFact = tuple[str, int, str | None]
 _PAGE_TYPES: tuple[PageType, ...] = ("entity", "concept", "synthesis")
 _CATEGORY_PAGE_TYPES: dict[str, PageType] = {
     "summary": "entity",
@@ -1796,7 +1797,7 @@ def _render_code_page(source: CurrentSource, content: str) -> str:
     """Render a small, citable outline without pretending to fully understand code."""
     language = "Go" if "go" in source.tags else "Python"
     facts = _code_facts(content, language)
-    symbols = [quote for quote, _ in facts[1:]]
+    symbols = [quote for quote, _, _ in facts[1:]]
     summary = f"{language} code"
     if facts:
         summary += f": {facts[0][0]}"
@@ -1826,10 +1827,14 @@ def _render_code_page(source: CurrentSource, content: str) -> str:
         f"### {source.relative_path or source.title}",
         "",
     ]
-    for index, (quote, _) in enumerate(facts, start=1):
+    current_section: str | None = None
+    for index, (quote, _, section) in enumerate(facts, start=1):
+        if section and section != current_section:
+            lines.extend([f"#### {section}", ""])
+            current_section = section
         lines.append(f"- {quote} [^source-{index}]")
     lines.append("")
-    for index, (quote, start) in enumerate(facts, start=1):
+    for index, (quote, start, _) in enumerate(facts, start=1):
         lines.append(
             f"[^source-{index}]: source `{source.source_id}` · revision "
             f"`{source.source_version}` · `chars:{start}-{start + len(quote)}`"
@@ -1837,29 +1842,31 @@ def _render_code_page(source: CurrentSource, content: str) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _code_facts(content: str, language: str) -> list[tuple[str, int]]:
+def _code_facts(content: str, language: str) -> list[CodeFact]:
     if language == "Go":
         return _go_code_facts(content)
     patterns = (r"^(?:class|def)\s+[A-Za-z]\w*",)
-    facts: list[tuple[str, int]] = []
+    facts: list[CodeFact] = []
     for pattern in patterns:
         for match in re.finditer(pattern, content, re.MULTILINE):
             quote = match.group().strip()
             if quote:
                 leading = len(match.group()) - len(match.group().lstrip())
-                facts.append((quote, match.start() + leading))
+                facts.append((quote, match.start() + leading, None))
     if facts:
         return facts[:8]
     for match in re.finditer(r"^.+$", content, re.MULTILINE):
         quote = match.group().strip()
         if quote:
-            return [(quote, match.start() + len(match.group()) - len(match.group().lstrip()))]
+            return [
+                (quote, match.start() + len(match.group()) - len(match.group().lstrip()), None)
+            ]
     raise ValueError("source contains no meaningful code")
 
 
-def _go_code_facts(content: str) -> list[tuple[str, int]]:
+def _go_code_facts(content: str) -> list[CodeFact]:
     """Extract declarations and struct fields without pretending to parse Go."""
-    facts: list[tuple[str, int]] = []
+    facts: list[CodeFact] = []
     in_struct = False
     brace_depth = 0
     for line_match in re.finditer(r"^.*$", content, re.MULTILINE):
@@ -1879,10 +1886,12 @@ def _go_code_facts(content: str) -> list[tuple[str, int]]:
                 quote = f"type {type_decl.group(0).split()[1]}"
             elif func_decl:
                 receiver = (func_decl.group("receiver") or "").strip()
-                quote = f"func {receiver + ' ' if receiver else ''}{func_decl.group('name')}"
+                function_name = func_decl.group("name")
+                quote = f"func {receiver + ' ' if receiver else ''}{function_name}"
             else:
                 quote = line.split("{")[0].rstrip()
-            facts.append((quote, start))
+                function_name = None
+            facts.append((quote, start, function_name if func_decl else None))
         if type_decl and "struct" in line and "{" in line:
             in_struct = True
             brace_depth = line.count("{") - line.count("}")
@@ -1895,17 +1904,54 @@ def _go_code_facts(content: str) -> list[tuple[str, int]]:
                 line,
             )
             if field and not line.startswith(("//", "func ")):
-                facts.append((f"Field {field.group(1)} {field.group(2).strip()}", start))
+                facts.append((f"Field {field.group(1)} {field.group(2).strip()}", start, None))
         brace_depth += line.count("{") - line.count("}")
         if in_struct and brace_depth <= 0:
             in_struct = False
     if facts:
-        return facts
+        return [*facts, *_go_function_body_facts(content)]
     for match in re.finditer(r"^.+$", content, re.MULTILINE):
         quote = match.group().strip()
         if quote:
-            return [(quote, match.start() + len(match.group()) - len(match.group().lstrip()))]
+            return [
+                (quote, match.start() + len(match.group()) - len(match.group().lstrip()), None)
+            ]
     raise ValueError("source contains no meaningful code")
+
+
+def _go_function_body_facts(content: str) -> list[CodeFact]:
+    """Keep a few exact body lines so method questions have implementation evidence."""
+    lines = list(re.finditer(r"^.*$", content, re.MULTILINE))
+    facts: list[CodeFact] = []
+    declaration = re.compile(
+        r"func\s+(?P<receiver>\([^)]*\)\s*)?(?P<name>[A-Za-z_]\w*)\s*\("
+    )
+    for index, match in enumerate(lines):
+        line = match.group().strip()
+        function = declaration.match(line)
+        if function is None or "{" not in line:
+            continue
+        function_name = function.group("name")
+        depth = line.count("{") - line.count("}")
+        if depth <= 0:
+            continue
+        included = 0
+        for body_match in lines[index + 1 :]:
+            body_raw = body_match.group()
+            body_line = body_raw.strip()
+            body_start = body_match.start() + len(body_raw) - len(body_raw.lstrip())
+            if (
+                body_line not in {"{", "}"}
+                and bool(body_line)
+                and not body_line.startswith("//")
+                and included < 6
+            ):
+                facts.append((body_line, body_start, function_name))
+                included += 1
+            depth += body_line.count("{") - body_line.count("}")
+            if depth <= 0:
+                break
+    return facts
 
 
 def _render_deterministic_group_page(

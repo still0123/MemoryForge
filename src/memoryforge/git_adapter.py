@@ -16,7 +16,7 @@ class GitRepositoryError(ValueError):
     """Raised when a path cannot be scanned as a Git checkout."""
 
 
-CODE_WIKI_VERSION = "symbols-v2"
+CODE_WIKI_VERSION = "symbols-v3"
 
 
 @dataclass(frozen=True)

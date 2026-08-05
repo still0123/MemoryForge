@@ -29,7 +29,7 @@ _INDEX_ENTRY = re.compile(
     re.MULTILINE,
 )
 _FRONTMATTER = re.compile(r"\A---\n(?P<fields>.*?)\n---\n", re.DOTALL)
-_FACT_SECTION = re.compile(r"^### (?P<section>.+?)\s*$", re.MULTILINE)
+_FACT_SECTION = re.compile(r"^#{3,6} (?P<section>.+?)\s*$", re.MULTILINE)
 _WORDS = re.compile(r"[a-z0-9]+|[\u4e00-\u9fff]+", re.IGNORECASE)
 _CAMEL_CASE_PARTS = re.compile(r"[A-Z]+(?=[A-Z][a-z]|$)|[A-Z]?[a-z]+")
 _CJK = re.compile(r"^[\u4e00-\u9fff]+$")
@@ -163,12 +163,28 @@ def answer_question(
             sufficient_match = len(overlap) >= required_overlap
             if "字段" in base_question_terms and overlap & focus_terms:
                 sufficient_match = True
+            if "方法" in base_question_terms and overlap & identifier_terms:
+                sufficient_match = True
             if identifier_terms and not overlap & identifier_terms and not (
-                "字段" in base_question_terms and overlap & focus_terms
+                ("字段" in base_question_terms and overlap & focus_terms)
+                or ("方法" in base_question_terms and overlap & identifier_terms)
             ):
                 sufficient_match = False
             if sufficient_match:
                 raw_matches.append((frozenset(overlap), page_path, citation))
+
+    if "方法" in base_question_terms and identifier_terms:
+        method_symbol = max(identifier_terms, key=len)
+        raw_matches = [
+            match
+            for match in raw_matches
+            if method_symbol in _citation_terms(match[2])
+        ]
+        raw_candidate_matches = [
+            match
+            for match in raw_candidate_matches
+            if method_symbol in _citation_terms(match[2])
+        ]
 
     matches = _rank_matches(
         raw_matches,
@@ -196,7 +212,11 @@ def answer_question(
     model_status: Literal["used", "fallback"] | None = None
     if provider is None:
         selected = _top_matches(matches, answer_citation_limit, question_terms=question_terms)
-        answer = " ".join(citation["quote"] for _, citation in selected)
+        answer = (
+            _fallback_answer(question, selected)
+            if "方法" in question
+            else " ".join(citation["quote"] for _, citation in selected)
+        )
     else:
         try:
             generated = _model_answer(
@@ -374,6 +394,22 @@ def _fallback_answer(
     selected: list[tuple[str, CitationPayload]],
 ) -> str:
     quote = selected[0][1]["quote"]
+    if "方法" in _terms(question):
+        signature = next(
+            (
+                citation["quote"]
+                for _, citation in selected
+                if citation["quote"].startswith("func ")
+            ),
+            quote,
+        )
+        body_lines = [
+            citation["quote"].strip().rstrip("{").strip()
+            for _, citation in selected
+            if not citation["quote"].startswith("func ")
+        ]
+        if body_lines:
+            return f"{signature} 的关键代码逻辑是：" + "；".join(body_lines) + "。"
     if len(selected) == 1 and quote.startswith("Main exported operations in `"):
         module = quote.split("`", maxsplit=2)[1]
         operations = quote.partition(": ")[2]
@@ -503,6 +539,10 @@ def _candidate_pages(
         repository_id=repository_id,
     )
     ordered_pages = (*exact_code_pages, *ordered_pages)
+    if exact_code_pages and any(
+        marker in question for marker in ("方法", "字段", "属性", "函数")
+    ):
+        return list(exact_code_pages[:max_pages])
     ordered_pages += (
         (*index_pages, *relaxed_pages)
         if prefer_index_routes
@@ -601,6 +641,8 @@ def _validate_max_citations(max_citations: int) -> None:
 
 def _answer_citation_limit(question: str, max_citations: int) -> int:
     """Give a two-part question room for two complementary source facts."""
+    if max_citations == 1 and "方法" in question:
+        return 8
     if max_citations == 1 and any(marker in question for marker in ("子模块", "字段", "属性")):
         return 6
     if max_citations == 1 and any(

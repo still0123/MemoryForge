@@ -403,7 +403,12 @@ type FileSystem struct {
 
 type Manager struct{}
 
-func (m *Manager) CheckFileSystem(fs FileSystem) error { return nil }
+func (m *Manager) CheckFileSystem(fs FileSystem) error {
+	if fs.ID == "" {
+		return nil
+	}
+	return nil
+}
 """,
     )
     _commit_all(checkout, "Add file system manager")
@@ -438,6 +443,7 @@ func (m *Manager) CheckFileSystem(fs FileSystem) error { return nil }
     method = answer_question(workspace, "CheckFileSystem 方法做什么？")
     assert method["status"] == "answered"
     assert "CheckFileSystem" in method["answer"]
+    assert 'if fs.ID == ""' in method["answer"]
     assert 'title: "Code: internal/meter/meter.go"' in (
         workspace / method["wiki_pages"][0]
     ).read_text(encoding="utf-8")

@@ -862,6 +862,7 @@ def sync_git_checkout(workspace: Path, repository_id: str) -> GitRepositorySyncR
             repository.repository_id,
             snapshot.revision,
             repository.sensitivity,
+            code_wiki_version=CODE_WIKI_VERSION,
         )
         if repository.last_synced_commit == snapshot.revision
         else set()
@@ -1036,6 +1037,8 @@ def _current_git_paths(
     repository_id: str,
     commit_sha: str,
     sensitivity: Sensitivity,
+    *,
+    code_wiki_version: str,
 ) -> set[str]:
     with _connect(workspace.index_path) as connection:
         rows = connection.execute(
@@ -1050,11 +1053,16 @@ def _current_git_paths(
               AND versions.sensitivity = ?
               AND (
                 instr(versions.tags_json, '"code"') = 0
-                OR instr(versions.tags_json, '"symbols-v2"') > 0
+                OR instr(versions.tags_json, ?) > 0
                 OR instr(versions.tags_json, '"code-module"') > 0
               )
             """,
-            (repository_id, commit_sha, sensitivity.value),
+            (
+                repository_id,
+                commit_sha,
+                sensitivity.value,
+                json.dumps(code_wiki_version),
+            ),
         ).fetchall()
     return {str(row["relative_path"]) for row in rows}
 
