@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
 import tree_sitter_python
-from tree_sitter import Language, Node, Parser
+from tree_sitter import Language, Node, Parser, Tree
 
 from memoryforge._code_index_common import (
     CodeIndexError,
@@ -52,6 +52,14 @@ class _ParsedDefinition:
 @dataclass(frozen=True)
 class _PythonSource(ParsedCodeSource):
     module_name: str
+
+
+@dataclass(frozen=True)
+class _PythonAnalysis:
+    source: _PythonSource
+    tree: Tree
+    module_symbol: CodeSymbol
+    definitions: tuple[_ParsedDefinition, ...]
 
 
 def build_code_index(
@@ -133,6 +141,7 @@ def _build_python_code_index(
         raise CodeIndexError("current Python sources do not belong to the last synced commit")
 
     symbols: list[CodeSymbol] = []
+    analyses: list[_PythonAnalysis] = []
     relation_evidence = new_relation_evidence()
     source_versions: dict[str, int] = {}
 
@@ -152,16 +161,23 @@ def _build_python_code_index(
             content=text.encode(),
             module_name=_python_module_name(record.relative_path),
         )
-        parsed_symbols, parsed_relations = _parse_python_source(
+        analysis, parsed_relations = _parse_python_source(
             repository_id,
             repository.last_synced_commit,
             source,
         )
-        symbols.extend(parsed_symbols)
+        analyses.append(analysis)
+        symbols.extend(
+            [
+                analysis.module_symbol,
+                *(definition.symbol for definition in analysis.definitions),
+            ]
+        )
         for key, evidence in parsed_relations.items():
             relation_evidence[key].extend(evidence)
         source_versions[record.source_id] = record.source_version
 
+    _add_python_imports_and_calls(analyses, relation_evidence)
     symbols.sort(
         key=lambda symbol: (
             symbol.location.relative_path,
@@ -190,7 +206,7 @@ def _parse_python_source(
     commit_sha: str,
     source: _PythonSource,
 ) -> tuple[
-    list[CodeSymbol],
+    _PythonAnalysis,
     RelationEvidence,
 ]:
     parser = Parser(_PYTHON_LANGUAGE)
@@ -215,13 +231,15 @@ def _parse_python_source(
         definitions=definitions,
         relation_evidence=relation_evidence,
     )
-    _collect_local_calls(
-        tree.root_node,
-        source=source,
-        definitions=definitions,
-        relation_evidence=relation_evidence,
+    return (
+        _PythonAnalysis(
+            source=source,
+            tree=tree,
+            module_symbol=module_symbol,
+            definitions=tuple(definitions),
+        ),
+        relation_evidence,
     )
-    return [module_symbol, *(definition.symbol for definition in definitions)], relation_evidence
 
 
 def _collect_definitions(
@@ -358,11 +376,104 @@ def _collect_definitions(
         )
 
 
-def _collect_local_calls(
+def _add_python_imports_and_calls(
+    analyses: list[_PythonAnalysis],
+    relation_evidence: RelationEvidence,
+) -> None:
+    modules = {analysis.source.module_name: analysis.module_symbol for analysis in analyses}
+    definitions = {
+        (
+            definition.symbol.qualified_name.rsplit(".", 1)[0],
+            definition.symbol.display_name,
+        ): definition.symbol
+        for analysis in analyses
+        for definition in analysis.definitions
+        if definition.symbol.kind is not CodeSymbolKind.METHOD
+    }
+    for analysis in analyses:
+        imported: dict[str, CodeSymbol] = {}
+        imported_modules: dict[str, str] = {}
+        for statement in analysis.tree.root_node.children:
+            if statement.type == "import_from_statement":
+                module_node = statement.child_by_field_name("module_name")
+                if module_node is None:
+                    continue
+                module_name = node_text(analysis.source, module_node)
+                target_module = modules.get(module_name)
+                if target_module is None:
+                    continue
+                append_relation_evidence(
+                    relation_evidence,
+                    CodeRelationType.IMPORTS,
+                    analysis.module_symbol.symbol_id,
+                    target_module.symbol_id,
+                    node_location(analysis.source, statement),
+                )
+                for imported_name, local_name in _python_imported_names(
+                    analysis.source,
+                    statement,
+                    excluded=module_node,
+                ):
+                    target = definitions.get((module_name, imported_name))
+                    if target is not None:
+                        imported[local_name] = target
+            elif statement.type == "import_statement":
+                for module_name, local_name in _python_imported_names(
+                    analysis.source,
+                    statement,
+                ):
+                    target_module = modules.get(module_name)
+                    if target_module is None:
+                        continue
+                    append_relation_evidence(
+                        relation_evidence,
+                        CodeRelationType.IMPORTS,
+                        analysis.module_symbol.symbol_id,
+                        target_module.symbol_id,
+                        node_location(analysis.source, statement),
+                    )
+                    imported_modules[local_name] = module_name
+        _collect_python_calls(
+            analysis.tree.root_node,
+            source=analysis.source,
+            definitions=list(analysis.definitions),
+            imported=imported,
+            imported_modules=imported_modules,
+            definitions_by_scope=definitions,
+            relation_evidence=relation_evidence,
+        )
+
+
+def _python_imported_names(
+    source: _PythonSource,
+    statement: Node,
+    *,
+    excluded: Node | None = None,
+) -> tuple[tuple[str, str], ...]:
+    items: list[tuple[str, str]] = []
+    excluded_key = node_key(excluded) if excluded is not None else None
+    for child in statement.children:
+        if excluded_key is not None and node_key(child) == excluded_key:
+            continue
+        if child.type == "aliased_import":
+            name_node = child.child_by_field_name("name")
+            alias = child.child_by_field_name("alias")
+            if name_node is not None and alias is not None:
+                items.append((node_text(source, name_node), node_text(source, alias)))
+        elif child.type in {"dotted_name", "identifier"}:
+            imported_name = node_text(source, child)
+            items.append((imported_name, imported_name.rsplit(".", 1)[-1]))
+    return tuple(items)
+
+
+def _collect_python_calls(
     root: Node,
     *,
     source: _PythonSource,
     definitions: list[_ParsedDefinition],
+    imported: dict[str, CodeSymbol],
+    imported_modules: dict[str, str],
+    definitions_by_scope: dict[tuple[str, str], CodeSymbol],
     relation_evidence: RelationEvidence,
 ) -> None:
     by_node = {
@@ -414,6 +525,9 @@ def _collect_local_calls(
                 top_level=top_level,
                 classes_by_name=classes_by_name,
                 methods_by_class=methods_by_class,
+                imported=imported,
+                imported_modules=imported_modules,
+                definitions_by_scope=definitions_by_scope,
             )
             if target is not None:
                 append_relation_evidence(
@@ -437,12 +551,16 @@ def _resolve_local_call(
     top_level: dict[str, CodeSymbol],
     classes_by_name: dict[str, _ParsedDefinition],
     methods_by_class: dict[str, dict[str, CodeSymbol]],
+    imported: dict[str, CodeSymbol],
+    imported_modules: dict[str, str],
+    definitions_by_scope: dict[tuple[str, str], CodeSymbol],
 ) -> CodeSymbol | None:
     function = call.child_by_field_name("function")
     if function is None:
         return None
     if function.type == "identifier":
-        return top_level.get(node_text(source, function))
+        name = node_text(source, function)
+        return top_level.get(name) or imported.get(name)
     if function.type != "attribute":
         return None
     owner = function.child_by_field_name("object")
@@ -451,6 +569,9 @@ def _resolve_local_call(
         return None
     owner_name = node_text(source, owner)
     method_name = node_text(source, attribute)
+    imported_module = imported_modules.get(owner_name)
+    if imported_module is not None:
+        return definitions_by_scope.get((imported_module, method_name))
     if owner_name in {"self", "cls"} and current_class_id is not None:
         return methods_by_class.get(current_class_id, {}).get(method_name)
     class_definition = classes_by_name.get(owner_name)

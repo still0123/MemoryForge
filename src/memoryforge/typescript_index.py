@@ -441,7 +441,32 @@ def _resolve_call(
         return methods.get((source.module_scope, class_name, method_name))
     if owner.type == "identifier":
         owner_name = node_text(source, owner)
-        return methods.get((source.module_scope, owner_name, method_name))
+        owner_type = _local_variable_type(call, caller, source, owner_name) or owner_name
+        return methods.get((source.module_scope, owner_type, method_name))
+    return None
+
+
+def _local_variable_type(
+    call: Node,
+    caller: _TypeScriptDefinition,
+    source: _TypeScriptSource,
+    variable_name: str,
+) -> str | None:
+    for node in _walk(caller.node):
+        if node.type != "variable_declarator" or node.start_byte >= call.start_byte:
+            continue
+        name = node.child_by_field_name("name")
+        value = node.child_by_field_name("value")
+        if (
+            name is None
+            or node_text(source, name) != variable_name
+            or value is None
+            or value.type != "new_expression"
+        ):
+            continue
+        constructor = value.child_by_field_name("constructor")
+        if constructor is not None and constructor.type in {"identifier", "type_identifier"}:
+            return node_text(source, constructor)
     return None
 
 

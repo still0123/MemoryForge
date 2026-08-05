@@ -340,7 +340,32 @@ def _resolve_go_call(
     method_name = node_text(source, field)
     if caller.receiver_name is not None and operand_name == caller.receiver_name:
         return methods.get((source.package_scope, caller.receiver_type, method_name))
+    parameter_type = _go_parameter_types(caller.node, source).get(operand_name)
+    if parameter_type is not None:
+        return methods.get((source.package_scope, parameter_type, method_name))
     return methods.get((source.package_scope, operand_name.lstrip("*"), method_name))
+
+
+def _go_parameter_types(node: Node, source: _GoSource) -> dict[str, str]:
+    parameters = node.child_by_field_name("parameters")
+    if parameters is None:
+        return {}
+    result: dict[str, str] = {}
+    for parameter in parameters.children:
+        if parameter.type != "parameter_declaration":
+            continue
+        name = parameter.child_by_field_name("name")
+        type_node = parameter.child_by_field_name("type")
+        if type_node is None:
+            continue
+        type_name = (
+            type_node
+            if type_node.type == "type_identifier"
+            else _first_descendant(type_node, {"type_identifier"})
+        )
+        if name is not None and type_name is not None:
+            result[node_text(source, name)] = node_text(source, type_name)
+    return result
 
 
 def _enclosing_go_definition(

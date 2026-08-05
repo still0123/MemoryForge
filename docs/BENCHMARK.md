@@ -68,14 +68,15 @@
 | Source 覆盖率 | 100% |
 | Symbol 召回率 | 100% |
 | Core Relation 召回率 | 100% |
-| Known-gap Relation 召回率 | 0% |
-| 总体 Relation 召回率 | 60% |
+| 原 Known-gap Relation 召回率 | 100% |
+| 总体 Relation 召回率 | 100% |
 | 模块归属准确率 | 100% |
 | Citation 落地准确率 | 100% |
 | 确定性重放 | 100% |
 | 单文件更新页面比例 | 20% |
 
-保留的失败为 Python 跨文件 import/call、Go 参数接收者方法调用和 TypeScript 局部变量方法调用。
+题集未修改；原先失败的 Python 跨文件 import/call、Go 参数接收者方法调用和 TypeScript
+局部变量方法调用现已全部命中。
 复现命令：
 
 ```bash

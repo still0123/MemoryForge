@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "memoryforge_commit": "f5ae7475512276c491fa658c577dafe4a31ba1fe",
+  "memoryforge_commit": "05b7ad5195fe0f874985e9f836b17f746db3a2a3",
   "memoryforge_worktree_dirty": true,
   "fixture": {
     "path": "demo/fixtures/code_wiki_project",
@@ -21,16 +21,16 @@
     "schema_version": 1,
     "counts": {
       "symbols": 20,
-      "relations": 20,
+      "relations": 24,
       "modules": 8,
-      "architecture_edges": 2
+      "architecture_edges": 4
     },
     "metrics": {
       "expected_source_coverage": 100.0,
       "symbol_recall": 100.0,
       "core_relation_recall": 100.0,
-      "known_gap_relation_recall": 0.0,
-      "overall_relation_recall": 60.0,
+      "known_gap_relation_recall": 100.0,
+      "overall_relation_recall": 100.0,
       "module_assignment_accuracy": 100.0,
       "citation_grounding_accuracy": 100.0,
       "architecture_edge_grounding": 100.0,
@@ -155,28 +155,28 @@
           "type": "imports",
           "source": "py.app",
           "target": "py.helpers",
-          "found": false
+          "found": true
         },
         {
           "tier": "known_gap",
           "type": "calls",
           "source": "py.app.run_imported",
           "target": "py.helpers.normalize",
-          "found": false
+          "found": true
         },
         {
           "tier": "known_gap",
           "type": "calls",
           "source": "go.meter.Use",
           "target": "go.meter.Meter.Reset",
-          "found": false
+          "found": true
         },
         {
           "tier": "known_gap",
           "type": "calls",
           "source": "ts.service.run",
           "target": "ts.service.Service.greet",
-          "found": false
+          "found": true
         }
       ],
       "modules": [
