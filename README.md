@@ -237,6 +237,19 @@ memoryforge agent '<question>' --workspace <workspace>
 memoryforge feishu-serve --workspace <workspace>
 ```
 
+飞书机器人支持两条轻量上下文命令：
+
+```text
+/project efs-mgr       # 当前聊天固定到某个已注册仓库
+/project clear         # 清除项目范围
+/resume <session-id>   # 恢复本机保存的另一段会话
+/resume clear          # 退出恢复会话
+```
+
+`/project` 只改变当前聊天的 Wiki 检索范围；`/resume` 读取本机保存的最近会话，并把必要上下文
+交给回答流程。原始会话仍留在本地，不会自动同步到飞书或 GitHub。新仓库需要先执行 `git-add`
+和 `code-add`，才能作为项目被选择。
+
 更多命令请运行 `memoryforge --help`。实现细节与数据模型见 [SPEC.md](SPEC.md)，下一阶段的完整实施计划见 [NEXT_PHASE_SPEC.md](NEXT_PHASE_SPEC.md)。
 
 `watch` 会定时刷新所有已经注册的 Git 仓库和飞书文档，并在发现变化后自动生成待审核

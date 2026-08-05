@@ -16,6 +16,7 @@ _MAX_ANSWER_CHARS = 1_200
 _MAX_QUOTE_CHARS = 320
 _MAX_REWRITE_CHARS = 1_600
 _SESSION_ID = re.compile(r"^[A-Za-z0-9_.:@-]{1,128}$")
+_REPOSITORY_ID = re.compile(r"^[a-f0-9]{64}$")
 _DEFINITION_QUESTION = re.compile(
     r"^(?P<subject>.{2,40}?)(?:是什么意思|是什么|是做什么的|做什么|怎么做|如何实现)[？?]?$"
 )
@@ -55,7 +56,7 @@ def is_valid_session_id(session_id: str) -> bool:
 
 
 class SessionStore:
-    """Persist at most three bounded turns under ``.memoryforge``."""
+    """Persist bounded turns and two small context pointers under ``.memoryforge``."""
 
     def __init__(self, workspace_root: Path, session_id: str) -> None:
         if not is_valid_session_id(session_id):
@@ -103,8 +104,31 @@ class SessionStore:
         self.path.chmod(0o600)
 
     def clear(self) -> None:
-        if self.path.is_file():
-            self.path.unlink()
+        for path in (
+            self.path,
+            self.directory / f"{self.session_id}.project",
+            self.directory / f"{self.session_id}.context",
+        ):
+            if path.is_file():
+                path.unlink()
+
+    def project_id(self) -> str | None:
+        value = _read_pointer(self.directory / f"{self.session_id}.project")
+        return value if value is not None and _REPOSITORY_ID.fullmatch(value) else None
+
+    def set_project(self, repository_id: str | None) -> None:
+        if repository_id is not None and _REPOSITORY_ID.fullmatch(repository_id) is None:
+            raise ValueError("repository ID is invalid")
+        _write_pointer(self.directory / f"{self.session_id}.project", repository_id)
+
+    def context_session_id(self) -> str | None:
+        value = _read_pointer(self.directory / f"{self.session_id}.context")
+        return value if value is not None and is_valid_session_id(value) else None
+
+    def set_context_session(self, session_id: str | None) -> None:
+        if session_id is not None and not is_valid_session_id(session_id):
+            raise ValueError("session ID is invalid")
+        _write_pointer(self.directory / f"{self.session_id}.context", session_id)
 
 
 def render_context(turns: list[SessionTurn]) -> str:
@@ -124,6 +148,25 @@ def render_context(turns: list[SessionTurn]) -> str:
         for citation in turn["citations"]:
             lines.append(f"Earlier evidence: {citation['quote']}")
     return "\n".join(lines)[:_MAX_CONTEXT_CHARS]
+
+
+def _read_pointer(path: Path) -> str | None:
+    try:
+        value = path.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        return None
+    return value or None
+
+
+def _write_pointer(path: Path, value: str | None) -> None:
+    if value is None:
+        if path.is_file():
+            path.unlink()
+        return
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    path.parent.chmod(0o700)
+    path.write_text(value + "\n", encoding="utf-8")
+    path.chmod(0o600)
 
 
 def rewrite_query(question: str, turns: list[SessionTurn]) -> str:

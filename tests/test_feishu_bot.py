@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -14,7 +15,9 @@ from memoryforge.feishu_bot import (
     reply_to_feishu_text,
 )
 from memoryforge.feishu_service import _send_reply
+from memoryforge.models import GitRepositoryRecord
 from memoryforge.provider import ProviderUnavailableError
+from memoryforge.sessions import SessionStore
 
 
 def test_feishu_event_returns_a_citable_wiki_reply(tmp_path: Path, monkeypatch) -> None:
@@ -164,6 +167,73 @@ def test_feishu_llm_reply_uses_the_evidence_summarizer(tmp_path: Path, monkeypat
 
     assert reply["content"]["text"].startswith("缓存会在六十秒后过期。")
     assert "来源：Cache policy" in reply["content"]["text"]
+
+
+def test_feishu_project_command_scopes_followup_questions(tmp_path: Path, monkeypatch) -> None:
+    workspace = _applied_workspace(tmp_path, monkeypatch)
+    repository = GitRepositoryRecord(
+        repository_id="a" * 64,
+        name="efs-mgr",
+        checkout_path="/code/efs-mgr",
+        registered_at=datetime.now(),
+    )
+    monkeypatch.setattr("memoryforge.feishu_bot.list_git_checkouts", lambda _: (repository,))
+    captured: list[str | None] = []
+
+    def fake_answer(*_args: object, **kwargs: object) -> dict[str, object]:
+        captured.append(kwargs.get("repository_id"))
+        return {
+            "status": "answered",
+            "answer": "ok",
+            "citations": [],
+            "wiki_pages": [],
+            "source_id": None,
+            "source_version": None,
+            "locator": None,
+            "quote": None,
+        }
+
+    monkeypatch.setattr("memoryforge.feishu_bot.answer_question", fake_answer)
+    selected = reply_to_feishu_text(workspace, "/project efs-mgr", session_id="oc_chat")
+    answer = reply_to_feishu_text(workspace, "这个项目是什么", session_id="oc_chat")
+
+    assert "已切换到项目「efs-mgr」" in selected["content"]["text"]
+    assert answer["content"]["text"] == "ok"
+    assert captured == ["a" * 64]
+    assert SessionStore(workspace, "oc_chat").project_id() == "a" * 64
+
+
+def test_feishu_resume_command_adds_saved_context_to_followup(tmp_path: Path, monkeypatch) -> None:
+    workspace = _applied_workspace(tmp_path, monkeypatch)
+    SessionStore(workspace, "oc_source").append(
+        "缓存策略是什么？",
+        "缓存默认保留六十秒。",
+        [],
+        model_safe=True,
+    )
+    captured: list[str] = []
+
+    def fake_answer(*_args: object, **kwargs: object) -> dict[str, object]:
+        captured.append(str(kwargs.get("conversation_context", "")))
+        return {
+            "status": "answered",
+            "answer": "ok",
+            "citations": [],
+            "wiki_pages": [],
+            "source_id": None,
+            "source_version": None,
+            "locator": None,
+            "quote": None,
+        }
+
+    monkeypatch.setattr("memoryforge.feishu_bot.answer_question", fake_answer)
+    resumed = reply_to_feishu_text(workspace, "/resume oc_source", session_id="oc_chat")
+    reply_to_feishu_text(workspace, "那它多久过期？", session_id="oc_chat")
+
+    assert "已恢复会话「oc_source」" in resumed["content"]["text"]
+    assert "缓存策略是什么？" in captured[0]
+    assert "缓存默认保留六十秒。" in captured[0]
+    assert SessionStore(workspace, "oc_chat").context_session_id() == "oc_source"
 
 
 def test_feishu_service_replies_as_bot_with_message_idempotency(monkeypatch) -> None:

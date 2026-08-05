@@ -115,6 +115,7 @@ def answer_question(
     provider: OpenAICompatibleProvider | None = None,
     allow_local: bool = False,
     repository_id: str | None = None,
+    conversation_context: str = "",
 ) -> AskPayload:
     """Answer from a bounded set of Wiki pages, expanding raw evidence only on request."""
     _validate_max_pages(max_pages)
@@ -225,6 +226,7 @@ def answer_question(
                 matches or model_candidates,
                 provider,
                 allow_local=allow_local,
+                conversation_context=conversation_context,
             )
         except ProviderUnavailableError:
             module_fallbacks = [
@@ -305,6 +307,7 @@ def _model_answer(
     provider: OpenAICompatibleProvider,
     *,
     allow_local: bool,
+    conversation_context: str,
 ) -> tuple[str, list[tuple[str, CitationPayload]]] | None:
     usable_matches = [
         (page_path, citation)
@@ -315,7 +318,9 @@ def _model_answer(
     if not usable_matches:
         raise ValueError("LLM answers require public source evidence")
 
-    answer, indexes = provider.answer_with_evidence(_answer_messages(question, usable_matches))
+    answer, indexes = provider.answer_with_evidence(
+        _answer_messages(question, usable_matches, conversation_context)
+    )
     selected: list[tuple[str, CitationPayload]] = []
     seen: set[tuple[str, int, str]] = set()
     for index in indexes:
@@ -352,6 +357,7 @@ def _usable_matches(
 def _answer_messages(
     question: str,
     matches: list[tuple[str, CitationPayload]],
+    conversation_context: str = "",
 ) -> list[dict[str, str]]:
     facts = [
         {
@@ -361,6 +367,9 @@ def _answer_messages(
         }
         for index, (_, citation) in enumerate(matches)
     ]
+    user_payload: dict[str, object] = {"question": question, "facts": facts}
+    if conversation_context:
+        user_payload["conversation_context"] = conversation_context
     return [
         {
             "role": "system",
@@ -384,7 +393,7 @@ def _answer_messages(
         },
         {
             "role": "user",
-            "content": json.dumps({"question": question, "facts": facts}, ensure_ascii=False),
+            "content": json.dumps(user_payload, ensure_ascii=False),
         },
     ]
 
