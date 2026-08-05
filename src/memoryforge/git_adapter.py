@@ -16,6 +16,9 @@ class GitRepositoryError(ValueError):
     """Raised when a path cannot be scanned as a Git checkout."""
 
 
+CODE_WIKI_VERSION = "symbols-v2"
+
+
 @dataclass(frozen=True)
 class GitSnapshot:
     repository_root: Path
@@ -116,7 +119,7 @@ def scan_git_snapshot_code(
                 title=f"Code: {relative_path}",
                 content=content,
                 sensitivity=sensitivity,
-                tags=("code", suffix.removeprefix(".")),
+                tags=("code", suffix.removeprefix("."), CODE_WIKI_VERSION),
             )
         )
     if documents:

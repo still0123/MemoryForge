@@ -540,6 +540,9 @@ def _exact_code_pages(
     )
     pages: list[Path] = []
     for identifier in identifiers[:3]:
+        symbol_pattern = re.compile(
+            rf"(?<![A-Za-z0-9_]){re.escape(identifier)}(?![A-Za-z0-9_])"
+        )
         for path in find_applied_page_paths(
             workspace_root,
             identifier,
@@ -548,16 +551,38 @@ def _exact_code_pages(
             require_all_terms=False,
         ):
             page = _safe_wiki_page(workspace_root, workspace_root / path)
-            if page is None or not _is_code_page(page):
+            if page is None or not _is_code_file_page(page):
                 continue
-            if page not in pages:
+            if (
+                symbol_pattern.search(_code_fact_text(page.read_text(encoding="utf-8")))
+                and page not in pages
+            ):
                 pages.append(page)
+        for file_path in sorted((workspace_root / "wiki" / "pages").glob("*.md")):
+            page = _safe_wiki_page(workspace_root, file_path)
+            if page is None or not _is_code_file_page(page) or page in pages:
+                continue
+            if symbol_pattern.search(_code_fact_text(page.read_text(encoding="utf-8"))):
+                pages.append(page)
+                if len(pages) >= max_pages:
+                    break
+        if len(pages) >= max_pages:
+            break
     return tuple(pages)
 
 
 def _is_code_page(page: Path) -> bool:
     prefix = page.read_text(encoding="utf-8")[:400]
     return 'title: "Code:' in prefix or 'title: "Code module:' in prefix
+
+
+def _is_code_file_page(page: Path) -> bool:
+    prefix = page.read_text(encoding="utf-8")[:400]
+    return 'title: "Code: ' in prefix and 'title: "Code module:' not in prefix
+
+
+def _code_fact_text(content: str) -> str:
+    return "\n".join(line for line in content.splitlines() if line.startswith("- "))
 
 
 def _validate_max_pages(max_pages: int) -> None:

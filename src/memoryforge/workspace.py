@@ -819,6 +819,7 @@ def _registered_feishu_tags(value: object) -> tuple[str, ...]:
 def sync_git_checkout(workspace: Path, repository_id: str) -> GitRepositorySyncResult:
     """Import committed documentation from one registered local checkout."""
     from memoryforge.git_adapter import (
+        CODE_WIKI_VERSION,
         scan_git_snapshot_code,
         scan_git_snapshot_documentation,
         snapshot_git_repository,
@@ -867,10 +868,16 @@ def sync_git_checkout(workspace: Path, repository_id: str) -> GitRepositorySyncR
     )
     safe_documents = []
     skipped = []
+    def can_reuse(document: LocalDocument) -> bool:
+        return (
+            not document.source_path.startswith(".memoryforge/code-modules/")
+            and ("code" not in document.tags or CODE_WIKI_VERSION in document.tags)
+        )
+
     for document in scanned_documents:
         if (
             document.source_path in reusable_paths
-            and not document.source_path.startswith(".memoryforge/code-modules/")
+            and can_reuse(document)
         ):
             safe_documents.append(document)
             continue
@@ -892,7 +899,7 @@ def sync_git_checkout(workspace: Path, repository_id: str) -> GitRepositorySyncR
         ).hexdigest()
         if (
             document.source_path in reusable_paths
-            and not document.source_path.startswith(".memoryforge/code-modules/")
+            and can_reuse(document)
         ):
             counts["unchanged"] += 1
             documents.append(
@@ -1041,6 +1048,11 @@ def _current_git_paths(
               AND revisions.commit_sha = ?
               AND versions.is_current = 1
               AND versions.sensitivity = ?
+              AND (
+                instr(versions.tags_json, '"code"') = 0
+                OR instr(versions.tags_json, '"symbols-v2"') > 0
+                OR instr(versions.tags_json, '"code-module"') > 0
+              )
             """,
             (repository_id, commit_sha, sensitivity.value),
         ).fetchall()
