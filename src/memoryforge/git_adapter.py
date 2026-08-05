@@ -5,7 +5,7 @@ from __future__ import annotations
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Literal
+from typing import Literal, cast
 from urllib.parse import quote, urlsplit, urlunsplit
 
 from memoryforge.models import LocalDocument, Sensitivity, SourceCategory
@@ -78,7 +78,7 @@ def scan_git_snapshot_code(
     *,
     sensitivity: Sensitivity = Sensitivity.LOCAL_ONLY,
 ) -> tuple[LocalDocument, ...]:
-    """Read selected Go and Python files from one committed Git snapshot."""
+    """Read selected Go, Python, and TypeScript files from one committed Git snapshot."""
     normalized = tuple(_normalise_code_selection(selection) for selection in selections)
     if not normalized:
         return ()
@@ -96,7 +96,10 @@ def scan_git_snapshot_code(
     documents = []
     for relative_path, object_id in _tracked_blobs(tree_result.stdout):
         suffix = PurePosixPath(relative_path).suffix.lower()
-        if suffix not in {".go", ".py"} or not _matches_code_selection(relative_path, normalized):
+        if suffix not in {".go", ".py", ".ts", ".tsx"} or not _matches_code_selection(
+            relative_path,
+            normalized,
+        ):
             continue
         content = _read_text_blob(snapshot.repository_root, object_id)
         if content is None:
@@ -216,10 +219,10 @@ def _matches_code_selection(relative_path: str, selections: tuple[str, ...]) -> 
     )
 
 
-def _code_suffix(suffix: str) -> Literal[".go", ".py"]:
-    if suffix == ".go":
-        return ".go"
-    return ".py"
+def _code_suffix(suffix: str) -> Literal[".go", ".py", ".ts", ".tsx"]:
+    if suffix not in {".go", ".py", ".ts", ".tsx"}:
+        raise GitRepositoryError(f"unsupported code suffix: {suffix}")
+    return cast(Literal[".go", ".py", ".ts", ".tsx"], suffix)
 
 
 def _read_text_blob(repository_root: Path, object_id: str) -> str | None:

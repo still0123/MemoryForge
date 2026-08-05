@@ -12,6 +12,10 @@ license = { text = "MIT" }
 authors = [{ name = "ranmaoxia0123" }]
 dependencies = [
   "pydantic>=2.7,<3",
+  "tree-sitter>=0.23,<0.26",
+  "tree-sitter-go>=0.23,<1",
+  "tree-sitter-python>=0.23,<1",
+  "tree-sitter-typescript>=0.23,<1",
   "typer>=0.12,<1",
 ]
 

@@ -30,6 +30,7 @@
 
 - **多源资料接入**：本地 Markdown/TXT、已克隆的 Git 仓库、飞书 Docx/Wiki、单篇公开网页或保存的 HTML。
 - **WikiCompiler**：将资料编译为“项目/模块介绍、机制说明、方案与复盘”三类 Markdown 页面；每页都保留来源、版本与原文位置。
+- **代码 Wiki**：用 Tree-sitter 为显式选择的 Python、Go、TypeScript/TSX 代码构建确定性符号图、模块计划和带引用 Wiki，仍须人工审核后应用。
 - **增量更新**：新资料优先扩展已有主题；资料更新时只重编译受影响的页面。
 - **渐进式查询**：`INDEX.md → 少量 Wiki 页面 → 按需原文核验`，避免一次把整个知识库塞进上下文。
 - **MiniClaude Agent**：只提供 `search_wiki`、`read_evidence`、`final` 三个工具；必须读取证据后才能给出带引用的答案。
@@ -75,10 +76,11 @@ memoryforge init ./my-wiki
 # 2. 导入一份资料
 memoryforge import ./notes/cache.md --category design --workspace ./my-wiki
 
-# 3. 先生成变更预览，再确认写入 Wiki
+# 3. 先生成变更预览，独立审批后再写入 Wiki
 memoryforge ingest --pending --workspace ./my-wiki
 memoryforge review <changeset-id> --workspace ./my-wiki
-memoryforge apply <changeset-id> --approve --workspace ./my-wiki
+memoryforge approve <changeset-id> --workspace ./my-wiki
+memoryforge apply <changeset-id> --workspace ./my-wiki
 
 # 4. 提问
 memoryforge ask '缓存多久过期？' --workspace ./my-wiki
@@ -164,7 +166,7 @@ Agent 没有 Shell、通用写文件、Subagent 或 MCP 工具；它只负责在
 脚本会真实执行：
 
 ```text
-init -> git-add --public -> git-sync -> ingest -> review -> apply -> lint -> ask -> eval
+init -> git-add --public -> git-sync -> ingest -> review -> approve -> apply -> lint -> ask -> eval
 ```
 
 已提交的公开结果在 [demo/results/agent_skill_eval_public.json](demo/results/agent_skill_eval_public.json)。`eval` 会检查回答是否命中关键事实、引用是否可回溯，以及每题实际展开了多少 Wiki 页面/原文字符。
@@ -195,7 +197,7 @@ Raw FTS 只负责检索，不生成答案，所以不能拿它计算回答、引
 | 选择 | 原因 |
 | --- | --- |
 | Markdown Wiki 而非只存向量 | 即使不问模型，人也能阅读、审核和维护沉淀内容 |
-| `review → apply` 而非直接生成 | 先看 Diff，再确认改变稳定 Wiki；避免自动覆盖已有知识 |
+| `review → approve → apply` 而非直接生成 | 审阅、授权和落盘分别留痕；避免自动覆盖已有知识 |
 | `INDEX + FTS5 + 页面展开` 而非全量拼接 | 控制检索范围和上下文成本，便于解释“这次读了什么” |
 | 证据优先的最小 Agent | 让模型负责组织答案，不让它执行代码或扩展为难控的通用助手 |
 | 飞书作为展示入口 | 将真实 Wiki 问答能力放到日常聊天场景中，而不重复实现另一套知识库 |
@@ -213,13 +215,17 @@ Raw FTS 只负责检索，不生成答案，所以不能拿它计算回答、引
 # 资料导入
 memoryforge import <path> --workspace <workspace>
 memoryforge git-add <local-checkout> --workspace <workspace>
+memoryforge code-add <repository-id> <relative-path> --workspace <workspace>
+memoryforge git-sync <repository-id> --workspace <workspace>
 memoryforge feishu-import <docx-or-wiki-url-or-token> --workspace <workspace>
 memoryforge web-import <public-http-url> --workspace <workspace>
 
 # Wiki 编译与检查
 memoryforge ingest --pending --workspace <workspace>
+memoryforge ingest --code-wiki <repository-id> --workspace <workspace>
 memoryforge review <changeset-id> --workspace <workspace>
-memoryforge apply <changeset-id> --approve --workspace <workspace>
+memoryforge approve <changeset-id> --workspace <workspace>
+memoryforge apply <changeset-id> --workspace <workspace>
 memoryforge lint --workspace <workspace>
 
 # 问答与展示

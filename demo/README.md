@@ -16,7 +16,7 @@
 - `--output`：证据 JSON 写到哪里。
 - `--eval-config`（默认 `demo/evaluation/agent_skill_eval.json`）、`--question`（默认一条固定问题）可覆盖。
 
-脚本依次编排 `init → git-add --public → git-sync → ingest --pending → review → apply --approve → lint → ask --debug --verify → eval`，并从每一步的真实 JSON 输出解析 `repository-id`、`changeset-id` 等值。任一步非零退出即保留 workspace 并清晰失败，不生成“成功”证据文件。
+脚本依次编排 `init → git-add --public → git-sync → ingest --pending → review → approve → apply → lint → ask --debug --verify → eval`，并从每一步的真实 JSON 输出解析 `repository-id`、`changeset-id` 等值。任一步非零退出即保留 workspace 并清晰失败，不生成“成功”证据文件。
 
 ## 证据 JSON 字段
 
@@ -54,6 +54,18 @@
 `local_only` 模型授权和飞书回复桥接由仓库测试覆盖，因为这些功能不应把公司内部资料写进公开 Demo。
 
 完整方法和失败案例见 [`docs/BENCHMARK.md`](../docs/BENCHMARK.md)。
+
+## 代码 Wiki C0
+
+```bash
+.venv/bin/python demo/run_code_wiki_benchmark.py \
+  --workdir /private/tmp/memoryforge-code-wiki-c0 \
+  --output demo/results/code_wiki_public.json
+```
+
+脚本从固定 Python/Go/TypeScript 夹具创建临时 Git 仓库，执行代码 Wiki 的同步、审核、应用、
+lint、确定性评测和单文件增量更新。它保留已知关系缺口，不调用模型。提交结果见
+[`results/code_wiki_public.json`](results/code_wiki_public.json)。
 
 ## 多仓库个人资料演示
 

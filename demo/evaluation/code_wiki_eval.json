@@ -1,0 +1,97 @@
+{
+  "name": "MemoryForge public code Wiki baseline",
+  "expected_source_paths": [
+    "go/meter/model.go",
+    "go/meter/service.go",
+    "py/app.py",
+    "py/helpers.py",
+    "ts/helper.ts",
+    "ts/service.ts"
+  ],
+  "symbols": [
+    {"qualified_name": "py.app.run_local", "kind": "function"},
+    {"qualified_name": "py.helpers.normalize", "kind": "function"},
+    {"qualified_name": "go.meter.Meter", "kind": "struct"},
+    {"qualified_name": "go.meter.Meter.Record", "kind": "method"},
+    {"qualified_name": "ts.service.Service", "kind": "class"},
+    {"qualified_name": "ts.service.Service.greet", "kind": "method"},
+    {"qualified_name": "ts.helper.helper", "kind": "function"}
+  ],
+  "relations": [
+    {
+      "tier": "core",
+      "type": "calls",
+      "source": "py.app.run_local",
+      "target": "py.app.local"
+    },
+    {
+      "tier": "core",
+      "type": "calls",
+      "source": "go.meter.Meter.Record",
+      "target": "go.meter.helper"
+    },
+    {
+      "tier": "core",
+      "type": "calls",
+      "source": "go.meter.Meter.Record",
+      "target": "go.meter.Meter.Reset"
+    },
+    {
+      "tier": "core",
+      "type": "imports",
+      "source": "ts.service",
+      "target": "ts.helper"
+    },
+    {
+      "tier": "core",
+      "type": "calls",
+      "source": "ts.service.Service.greet",
+      "target": "ts.helper.helper"
+    },
+    {
+      "tier": "core",
+      "type": "calls",
+      "source": "ts.service.run",
+      "target": "ts.service.Service"
+    },
+    {
+      "tier": "known_gap",
+      "type": "imports",
+      "source": "py.app",
+      "target": "py.helpers"
+    },
+    {
+      "tier": "known_gap",
+      "type": "calls",
+      "source": "py.app.run_imported",
+      "target": "py.helpers.normalize"
+    },
+    {
+      "tier": "known_gap",
+      "type": "calls",
+      "source": "go.meter.Use",
+      "target": "go.meter.Meter.Reset"
+    },
+    {
+      "tier": "known_gap",
+      "type": "calls",
+      "source": "ts.service.run",
+      "target": "ts.service.Service.greet"
+    }
+  ],
+  "modules": [
+    {"symbol": "py.app.run_local", "module_path": "py/app"},
+    {"symbol": "py.helpers.normalize", "module_path": "py/helpers"},
+    {"symbol": "go.meter.Meter.Record", "module_path": "go/meter"},
+    {"symbol": "ts.helper.helper", "module_path": "ts/helper"},
+    {"symbol": "ts.service.Service.greet", "module_path": "ts/service"}
+  ],
+  "incremental": {
+    "relative_path": "py/app.py",
+    "old_text": "return local(value)",
+    "new_text": "return local(value).upper()",
+    "expected_changed_symbols": ["py.app", "py.app.run_local"],
+    "expected_changed_pages": ["wiki/pages/code/py/app.md"],
+    "max_changed_page_ratio": 0.25
+  }
+}

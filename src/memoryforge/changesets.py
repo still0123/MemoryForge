@@ -15,17 +15,29 @@ from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
+from typing import Literal
 
 from pydantic import ValidationError
 
 from memoryforge.errors import ChangeSetStoreError, WorkspaceError
-from memoryforge.models import ChangeSet, ChangeSetStatus, StagedChangeSet, StagedWikiFile
+from memoryforge.models import (
+    ApprovalReceipt,
+    ChangeSet,
+    ChangeSetStatus,
+    ReviewReceipt,
+    StagedChangeSet,
+    StagedWikiFile,
+)
 from memoryforge.workspace import Workspace, WorkspaceIntegrityError
 
 CHANGESET_ID_PATTERN = re.compile(r"^chg_[A-Za-z0-9_-]+$")
 CHANGESET_FILENAME = "changeset.json"
 CHANGESET_DIGEST_FILENAME = "changeset.sha256"
 PROPOSED_DIRECTORY = "proposed"
+REVIEW_FILENAME = "review.json"
+REVIEW_DIGEST_FILENAME = "review.sha256"
+APPROVAL_FILENAME = "approval.json"
+APPROVAL_DIGEST_FILENAME = "approval.sha256"
 
 
 @dataclass(frozen=True)
@@ -33,6 +45,7 @@ class StoredChangeSet:
     record: StagedChangeSet
     directory: Path
     candidate_files: dict[str, str]
+    proposal_sha256: str
 
     @property
     def changeset(self) -> ChangeSet:
@@ -157,6 +170,7 @@ class ChangeSetStore:
             record,
             self.staging_dir / changeset_id,
             candidate_files,
+            hashlib.sha256(metadata).hexdigest(),
         )
 
     def list_all(self) -> list[StoredChangeSet]:
@@ -169,6 +183,65 @@ class ChangeSetStore:
         finally:
             os.close(staging_fd)
         return [self.get(identifier) for identifier in identifiers]
+
+    def record_review(
+        self,
+        stored: StoredChangeSet,
+        *,
+        mode: Literal["displayed", "inline_legacy"] = "displayed",
+    ) -> ReviewReceipt:
+        """Bind a human-visible review event to the immutable proposal."""
+
+        review = ReviewReceipt(
+            changeset_id=stored.changeset.changeset_id,
+            proposal_sha256=stored.proposal_sha256,
+            review_mode=mode,
+            reviewed_at=datetime.now(UTC),
+        )
+        existing = self._read_review(stored)
+        if existing is not None:
+            return existing
+        self._write_receipt(
+            stored,
+            REVIEW_FILENAME,
+            REVIEW_DIGEST_FILENAME,
+            (review.model_dump_json(indent=2) + "\n").encode(),
+        )
+        return self._require_review(stored)
+
+    def approve(self, stored: StoredChangeSet) -> ApprovalReceipt:
+        """Approve an already reviewed proposal without changing stable Wiki files."""
+
+        review_payload, review = self._require_review_payload(stored)
+        existing = self._read_approval(stored)
+        if existing is not None:
+            return existing
+        approval = ApprovalReceipt(
+            changeset_id=stored.changeset.changeset_id,
+            proposal_sha256=stored.proposal_sha256,
+            review_sha256=hashlib.sha256(review_payload).hexdigest(),
+            approved_at=datetime.now(UTC),
+        )
+        self._write_receipt(
+            stored,
+            APPROVAL_FILENAME,
+            APPROVAL_DIGEST_FILENAME,
+            (approval.model_dump_json(indent=2) + "\n").encode(),
+        )
+        return self.require_approved(stored)
+
+    def require_approved(self, stored: StoredChangeSet) -> ApprovalReceipt:
+        """Return the bound approval receipt or fail closed."""
+
+        review_payload, _ = self._require_review_payload(stored)
+        approval = self._read_approval(stored)
+        if approval is None:
+            raise ChangeSetStoreError(
+                f"ChangeSet requires approval before apply: {stored.changeset.changeset_id}"
+            )
+        if approval.review_sha256 != hashlib.sha256(review_payload).hexdigest():
+            raise ChangeSetStoreError("Approval receipt does not match the recorded review")
+        return approval
 
     def archive_applied(self, stored: StoredChangeSet, *, commit: str) -> Path:
         """Move an applied proposal out of the pending staging namespace."""
@@ -257,6 +330,142 @@ class ChangeSetStore:
                 "Staged ChangeSet base_commit does not match the current workspace revision: "
                 f"expected {current_commit}, received {changeset.base_commit}"
             )
+
+    def _read_review(self, stored: StoredChangeSet) -> ReviewReceipt | None:
+        payload = self._read_receipt(stored, REVIEW_FILENAME, REVIEW_DIGEST_FILENAME)
+        if payload is None:
+            return None
+        try:
+            receipt = ReviewReceipt.model_validate_json(payload)
+        except ValidationError as exc:
+            raise ChangeSetStoreError("Staged ChangeSet review receipt is invalid") from exc
+        self._require_receipt_binding(
+            stored,
+            changeset_id=receipt.changeset_id,
+            proposal_sha256=receipt.proposal_sha256,
+        )
+        return receipt
+
+    def _require_review(self, stored: StoredChangeSet) -> ReviewReceipt:
+        _, review = self._require_review_payload(stored)
+        return review
+
+    def _require_review_payload(
+        self,
+        stored: StoredChangeSet,
+    ) -> tuple[bytes, ReviewReceipt]:
+        payload = self._read_receipt(stored, REVIEW_FILENAME, REVIEW_DIGEST_FILENAME)
+        if payload is None:
+            raise ChangeSetStoreError(
+                f"Review the ChangeSet before approval: {stored.changeset.changeset_id}"
+            )
+        try:
+            review = ReviewReceipt.model_validate_json(payload)
+        except ValidationError as exc:
+            raise ChangeSetStoreError("Staged ChangeSet review receipt is invalid") from exc
+        self._require_receipt_binding(
+            stored,
+            changeset_id=review.changeset_id,
+            proposal_sha256=review.proposal_sha256,
+        )
+        return payload, review
+
+    def _read_approval(self, stored: StoredChangeSet) -> ApprovalReceipt | None:
+        payload = self._read_receipt(stored, APPROVAL_FILENAME, APPROVAL_DIGEST_FILENAME)
+        if payload is None:
+            return None
+        try:
+            receipt = ApprovalReceipt.model_validate_json(payload)
+        except ValidationError as exc:
+            raise ChangeSetStoreError("Staged ChangeSet approval receipt is invalid") from exc
+        self._require_receipt_binding(
+            stored,
+            changeset_id=receipt.changeset_id,
+            proposal_sha256=receipt.proposal_sha256,
+        )
+        return receipt
+
+    @staticmethod
+    def _require_receipt_binding(
+        stored: StoredChangeSet,
+        *,
+        changeset_id: str,
+        proposal_sha256: str,
+    ) -> None:
+        if (
+            changeset_id != stored.changeset.changeset_id
+            or proposal_sha256 != stored.proposal_sha256
+        ):
+            raise ChangeSetStoreError("Lifecycle receipt does not match the staged ChangeSet")
+
+    def _read_receipt(
+        self,
+        stored: StoredChangeSet,
+        filename: str,
+        digest_filename: str,
+    ) -> bytes | None:
+        self.workspace.validate_internal_directory(self.staging_dir)
+        staging_fd = self._open_staging()
+        try:
+            directory_fd = os.open(
+                stored.changeset.changeset_id,
+                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                dir_fd=staging_fd,
+            )
+            try:
+                if not _entry_exists(directory_fd, filename):
+                    if _entry_exists(directory_fd, digest_filename):
+                        raise ChangeSetStoreError("Lifecycle receipt is incomplete")
+                    return None
+                payload = _read_regular_file(directory_fd, filename)
+                digest = _read_regular_file(directory_fd, digest_filename).decode("ascii")
+                if digest != hashlib.sha256(payload).hexdigest() + "\n":
+                    raise ChangeSetStoreError("Lifecycle receipt integrity check failed")
+                return payload
+            finally:
+                os.close(directory_fd)
+        except OSError as exc:
+            raise ChangeSetStoreError("Lifecycle receipt could not be read safely") from exc
+        finally:
+            os.close(staging_fd)
+
+    def _write_receipt(
+        self,
+        stored: StoredChangeSet,
+        filename: str,
+        digest_filename: str,
+        payload: bytes,
+    ) -> None:
+        self.workspace.validate_internal_directory(self.staging_dir)
+        staging_fd = self._open_staging()
+        try:
+            fcntl.flock(staging_fd, fcntl.LOCK_EX)
+            directory_fd = os.open(
+                stored.changeset.changeset_id,
+                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                dir_fd=staging_fd,
+            )
+            try:
+                metadata = _read_regular_file(directory_fd, CHANGESET_FILENAME)
+                if hashlib.sha256(metadata).hexdigest() != stored.proposal_sha256:
+                    raise ChangeSetStoreError(
+                        "Lifecycle receipt cannot bind to modified proposal metadata"
+                    )
+                _write_new_file(directory_fd, filename, payload)
+                _write_new_file(
+                    directory_fd,
+                    digest_filename,
+                    (hashlib.sha256(payload).hexdigest() + "\n").encode("ascii"),
+                )
+                os.fsync(directory_fd)
+            finally:
+                os.close(directory_fd)
+        except FileExistsError:
+            return
+        except OSError as exc:
+            raise ChangeSetStoreError("Lifecycle receipt could not be written safely") from exc
+        finally:
+            os.close(staging_fd)
 
     def _read_candidates(
         self,

@@ -223,6 +223,18 @@ class RegisteredFeishuDocument:
 
 
 @dataclass(frozen=True)
+class CurrentGitSourceVersion:
+    """Current immutable source revision imported from one registered Git checkout."""
+
+    source_id: str
+    source_version: int
+    content_sha256: str
+    relative_path: str
+    commit_sha: str
+    tags: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class Workspace:
     """Validated paths and version-store access for one workspace."""
 
@@ -699,12 +711,27 @@ def list_git_checkouts(workspace: Path) -> tuple[GitRepositoryRecord, ...]:
     return tuple(_git_repository_record(row) for row in rows)
 
 
+def get_git_checkout_readonly(workspace: Path, repository_id: str) -> GitRepositoryRecord:
+    """Read one registered Git checkout without upgrading or writing the workspace."""
+
+    opened = Workspace.open_readonly(workspace)
+    with _connect_readonly(opened.index_path) as connection:
+        _validate_repository_scope(connection, repository_id)
+        row = connection.execute(
+            "SELECT * FROM git_repositories WHERE repository_id = ?",
+            (repository_id,),
+        ).fetchone()
+    if row is None:
+        raise WorkspaceIntegrityError("registered Git checkout disappeared during read")
+    return _git_repository_record(row)
+
+
 def register_git_code_module(
     workspace: Path,
     repository_id: str,
     relative_path: str,
 ) -> str:
-    """Select one committed Go/Python file or directory for future Git syncs."""
+    """Select one committed Go/Python/TypeScript path for future Git syncs."""
     from memoryforge.git_adapter import scan_git_snapshot_code, snapshot_git_repository
 
     opened = Workspace.open(workspace)
@@ -712,7 +739,7 @@ def register_git_code_module(
     snapshot = snapshot_git_repository(Path(repository.checkout_path))
     selected = relative_path.strip().replace("\\", "/").rstrip("/")
     if not scan_git_snapshot_code(snapshot, (selected,), sensitivity=repository.sensitivity):
-        raise ValueError("code path contains no committed .go or .py files")
+        raise ValueError("code path contains no committed .go, .py, .ts, or .tsx files")
     with _connect(opened.index_path) as connection:
         connection.execute(
             """
@@ -735,6 +762,57 @@ def list_git_code_modules(workspace: Workspace, repository_id: str) -> tuple[str
             (repository_id,),
         ).fetchall()
     return tuple(str(row["relative_path"]) for row in rows)
+
+
+def list_current_git_source_versions(
+    workspace: Path,
+    repository_id: str,
+) -> tuple[CurrentGitSourceVersion, ...]:
+    """List current immutable Git sources without reading the live checkout."""
+
+    opened = Workspace.open_readonly(workspace)
+    with _connect_readonly(opened.index_path) as connection:
+        _validate_repository_scope(connection, repository_id)
+        rows = connection.execute(
+            """
+            SELECT
+                sources.source_id,
+                versions.id AS source_version,
+                blobs.content_sha256,
+                revisions.relative_path,
+                revisions.commit_sha,
+                versions.tags_json
+            FROM git_source_revisions AS revisions
+            JOIN source_versions AS versions
+              ON versions.id = revisions.source_version_id
+            JOIN sources ON sources.id = versions.source_id
+            JOIN blobs ON blobs.id = versions.blob_id
+            WHERE revisions.repository_id = ?
+              AND versions.is_current = 1
+            ORDER BY revisions.relative_path
+            """,
+            (repository_id,),
+        ).fetchall()
+
+    sources: list[CurrentGitSourceVersion] = []
+    for row in rows:
+        try:
+            tags_value = json.loads(str(row["tags_json"]))
+        except json.JSONDecodeError as exc:
+            raise WorkspaceIntegrityError("Git source tags metadata is invalid") from exc
+        if not isinstance(tags_value, list) or not all(isinstance(tag, str) for tag in tags_value):
+            raise WorkspaceIntegrityError("Git source tags metadata is invalid")
+        sources.append(
+            CurrentGitSourceVersion(
+                source_id=str(row["source_id"]),
+                source_version=int(row["source_version"]),
+                content_sha256=str(row["content_sha256"]),
+                relative_path=str(row["relative_path"]),
+                commit_sha=str(row["commit_sha"]),
+                tags=tuple(tags_value),
+            )
+        )
+    return tuple(sources)
 
 
 def register_feishu_document(
@@ -1441,18 +1519,13 @@ def repository_page_paths(workspace: Path, repository_id: str) -> tuple[str, ...
     return tuple(str(row[0]) for row in rows)
 
 
-def read_source_excerpt(
+def read_source_version_text(
     workspace: Path,
     *,
     source_id: str,
     source_version: int,
-    locator: str,
 ) -> str:
-    """Read one cited range from immutable evidence on explicit user request."""
-    locator_match = _CHAR_LOCATOR.fullmatch(locator)
-    if locator_match is None:
-        raise WorkspaceIntegrityError("Citation locator is invalid")
-
+    """Read and verify the complete UTF-8 text of one immutable SourceVersion."""
     opened = Workspace.open_readonly(workspace)
     with _connect_readonly(opened.index_path) as connection:
         row = connection.execute(
@@ -1475,9 +1548,28 @@ def read_source_excerpt(
         repair_permissions=False,
     )
     try:
-        text = evidence.decode("utf-8")
+        return evidence.decode("utf-8")
     except UnicodeDecodeError as exc:
         raise WorkspaceIntegrityError("Citation evidence is not valid UTF-8") from exc
+
+
+def read_source_excerpt(
+    workspace: Path,
+    *,
+    source_id: str,
+    source_version: int,
+    locator: str,
+) -> str:
+    """Read one cited range from immutable evidence on explicit user request."""
+    locator_match = _CHAR_LOCATOR.fullmatch(locator)
+    if locator_match is None:
+        raise WorkspaceIntegrityError("Citation locator is invalid")
+
+    text = read_source_version_text(
+        workspace,
+        source_id=source_id,
+        source_version=source_version,
+    )
     start = int(locator_match.group("start"))
     end = int(locator_match.group("end"))
     if end > len(text):
@@ -1555,7 +1647,7 @@ def candidate_page_sources(candidate_files: Mapping[str, str]) -> dict[str, tupl
     page_sources: dict[str, tuple[str, ...]] = {}
     for path, content in candidate_files.items():
         if _is_stable_wiki_page_path(path):
-            if is_generated_repository_overview(content):
+            if is_generated_navigation_page(content):
                 continue
             source_ids = _page_source_ids_from_frontmatter(content)
             if not source_ids:
@@ -1566,25 +1658,44 @@ def candidate_page_sources(candidate_files: Mapping[str, str]) -> dict[str, tupl
 
 def is_generated_repository_overview(content: str) -> bool:
     """Recognize local navigation pages that deliberately have no source ownership."""
+    return _generated_navigation_kind(content) == "repository_overview"
+
+
+def is_generated_navigation_page(content: str) -> bool:
+    """Recognize locally derived navigation pages that own no source evidence."""
+    return _generated_navigation_kind(content) is not None
+
+
+def _generated_navigation_kind(content: str) -> str | None:
     if not content.startswith("---\n"):
-        return False
+        return None
     closing = content.find("\n---\n", len("---\n"))
     if closing < 0:
-        return False
+        return None
     fields = {
         key.strip(): value.strip()
         for line in content[len("---\n") : closing].splitlines()
         for key, separator, value in (line.partition(":"),)
         if separator
     }
-    return (
-        fields.get("generated") == "repository_overview"
-        and fields.get("type") == "entity"
+    generated = fields.get("generated")
+    common = (
+        fields.get("type") == "entity"
         and bool(fields.get("title"))
         and bool(fields.get("summary"))
         and _CONTENT_SHA256.fullmatch(fields.get("repository_id", "")) is not None
         and "sources" not in fields
     )
+    if not common:
+        return None
+    if generated == "repository_overview":
+        return generated
+    if (
+        generated == "code_module_overview"
+        and _CONTENT_SHA256.fullmatch(fields.get("module_id", "")) is not None
+    ):
+        return generated
+    return None
 
 
 def validate_changeset_page_sources(

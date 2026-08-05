@@ -145,7 +145,8 @@ repository_id + relative_path + commit_sha
 - 用户显式配置的代码或配置文件
 
 不把整个仓库所有代码复制进 Wiki。用户可通过 `code-add <repository-id> <relative-path>` 选择
-一个已提交的 Go/Python 文件或目录；编译器只生成包/模块和公开符号的带引用代码页。精确代码搜索
+一个已提交的 Python、Go、TypeScript/TSX 文件或目录；编译器生成确定性符号图和层级模块计划，
+再通过 `ingest --code-wiki <repository-id>` 提出带引用代码页。精确代码搜索
 仍交给 `rg`、LSP 或代码托管平台；Wiki 主要保存模块职责、核心流程、设计原因和跨仓关系。
 
 #### 当前 Phase 3A 实现范围
@@ -291,17 +292,18 @@ class ChangeSet(BaseModel):
 ```
 
 ```text
-ingest -> staging -> review -> applied / rejected
+ingest -> staging -> review -> approve -> applied / rejected
 ```
 
-`apply` 代表用户批准：写入 Wiki、重建 Index，并创建一个 Git commit。Git 已经负责 Diff、历史和回滚，不再实现另一套复杂状态机。
+`approve` 独立记录用户授权，`apply` 只负责写入 Wiki、重建 Index，并创建一个 Git commit。
+审核与审批收据绑定不可变提案并随应用结果归档。Git 继续负责 Diff、历史和回滚。
 
 LLM 编译通过 `memoryforge ingest --pending --llm` 显式开启。CLI 从
 `MEMORYFORGE_API_BASE`、`MEMORYFORGE_API_KEY`、`MEMORYFORGE_MODEL` 读取
 OpenAI-compatible Provider 配置；默认 ingest 不读取这些环境变量，也不发网络请求。
 模型先提议一个简短的 `CompilationPlan`，再生成 `PageChange`：它可以把多个 pending 来源合并到一个
 `wiki/pages/*.md` 页面，但不能写 Frontmatter、`INDEX.md` 或 raw。来源校验、引用、
-Frontmatter、INDEX 和 ChangeSet 由本地代码生成，仍必须经过 review/apply。
+Frontmatter、INDEX 和 ChangeSet 由本地代码生成，仍必须经过 review/approve/apply。
 根目录 `AGENTS.md` 和 `.memoryforge/schema.yaml` 会作为有上限的 Workspace contract
 进入编译 prompt；它们只能补充写作约束，不能替代本地校验。
 LLM prompt 包含待编译来源的正文；对于已存在且相近的公开页面，只提供路径、标题、摘要和来源
@@ -356,10 +358,13 @@ memoryforge init <workspace>
 memoryforge import <path> [--category <category>]
 memoryforge git-add <local-checkout> [--public]
 memoryforge git-list
+memoryforge code-add <repository-id> <relative-path>
 memoryforge git-sync <repository-id>
 memoryforge ingest --pending [--llm] [--allow-local-llm]
+memoryforge ingest --code-wiki <repository-id>
 memoryforge review <changeset-id>
-memoryforge apply <changeset-id> --approve
+memoryforge approve <changeset-id>
+memoryforge apply <changeset-id>
 memoryforge search "<query>"
 memoryforge ask "<question>" [--llm] [--allow-local-llm] [--max-pages <1-10>] [--verify]
 memoryforge agent "<question>" [--allow-local-llm]
@@ -381,12 +386,12 @@ memoryforge html-import <saved-page.html> --url <public-http-url>
 - SQLite FTS5 中英文搜索；
 - 确定性的单来源 Entity、Concept、Synthesis 页面生成；
 - `wiki/pages/` 稳定页面路径、统一 Frontmatter 和增量 `INDEX.md`；
-- staging、review、apply 和 Git commit；
+- staging、review、approve、apply 和 Git commit；
 - Git 多仓库 Adapter 和已应用来源到 Wiki 页的编译路由；
 - 基于标题和摘要候选卡片的增量主题扩展、页面相关链接和关系页；
 - Lint 对相关页失链、来源删除和来源更新未重编译的提示；
 - Git 来源删除后的 `cleanup_required` 检查，以及单来源归档、共享页面重建的审核式 ChangeSet；
-- `ARCHIVE_PAGE` 在 `apply --approve` 时删除稳定页面并清理来源映射，`reject` 不改变稳定 Wiki；
+- `ARCHIVE_PAGE` 在已审批的 `apply` 中删除稳定页面并清理来源映射，`reject` 不改变稳定 Wiki；
 - 一个 OpenAI-compatible LLM Provider，以及多来源页面更新；
 - LLM 编译的两步“CompilationPlan → PageChange”流程；计划会随 ChangeSet operation details
   进入 review，但不成为新的知识层；
@@ -395,11 +400,11 @@ memoryforge html-import <saved-page.html> --url <public-http-url>
 - Index → SQLite FTS5 回退 → 有上限 Wiki 正文 → 按需原文核实的渐进式问答，
   以及来源版本和定位信息；
 - `refresh` 一次性同步已登记的本地 Git checkout 和飞书文档；它不 fetch 远端、
-  不做后台任务，变更仍须经过 `ingest → review → apply`。
+  不做后台任务，变更仍须经过 `ingest → review → approve → apply`。
 - MiniClaude Agent 已要求每个最终引用先经过 `read_evidence`；默认只发送公开资料，
   可信内部模型可用 `--allow-local-llm` 明确放行本地资料。
 - MiniClaude Agent 支持 `--propose-update`：只能基于本次已读取的原始证据生成一个
-  `PROPOSED` ChangeSet，不直接修改稳定 Wiki，仍须经过 `review → apply --approve`。
+  `PROPOSED` ChangeSet，不直接修改稳定 Wiki，仍须经过 `review → approve → apply`。
 - MiniClaude Agent 已支持明确的工具错误观察、Provider 错误终态、稳定 `call_id`、多 Citation
   读取，以及 3 页 / 6 Citation / 2,000 字符证据 / 8,000 字符工具结果预算；Payload 会记录查询成本。
 - `search`、`ask` 和 `agent` 已支持 `--repository <repository-id>`；范围通过 Git 来源映射过滤，

@@ -57,3 +57,31 @@
 - 下一项检索优化应针对“候选页面已有、但没有选出 Citation”的事实选择阶段；
 - 题集来自一个公开技术项目，样本量仍小，后续应增加第二个公开仓库做外部验证；
 - 不使用公司代码、飞书正文、模型 Key 或内部运行日志。
+
+## 代码 Wiki C0 基线
+
+固定三语言公开夹具包含 6 个源码文件、20 个 Symbol、10 条预期关系和 5 条模块归属。
+评测不调用模型，且把当前不支持的关系保留为 `known_gap`。
+
+| 指标 | 结果 |
+| --- | ---: |
+| Source 覆盖率 | 100% |
+| Symbol 召回率 | 100% |
+| Core Relation 召回率 | 100% |
+| Known-gap Relation 召回率 | 0% |
+| 总体 Relation 召回率 | 60% |
+| 模块归属准确率 | 100% |
+| Citation 落地准确率 | 100% |
+| 确定性重放 | 100% |
+| 单文件更新页面比例 | 20% |
+
+保留的失败为 Python 跨文件 import/call、Go 参数接收者方法调用和 TypeScript 局部变量方法调用。
+复现命令：
+
+```bash
+.venv/bin/python demo/run_code_wiki_benchmark.py \
+  --workdir /private/tmp/memoryforge-code-wiki-c0 \
+  --output /private/tmp/code_wiki_public.json
+```
+
+完整结果位于 [`demo/results/code_wiki_public.json`](../demo/results/code_wiki_public.json)。

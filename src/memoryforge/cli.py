@@ -12,6 +12,8 @@ import typer
 from memoryforge import __version__
 from memoryforge.agent import run_agent
 from memoryforge.changesets import ChangeSetStore
+from memoryforge.code_index import build_code_index
+from memoryforge.code_wiki_compiler import compile_code_wiki
 from memoryforge.compiler import (
     compilation_payload,
     compile_pending_sources,
@@ -26,6 +28,7 @@ from memoryforge.git_adapter import GitRepositoryError
 from memoryforge.importer import SourceValidationError, import_local_file
 from memoryforge.linting import lint_workspace
 from memoryforge.models import ChangeOperationType, Sensitivity
+from memoryforge.module_planner import build_module_plan
 from memoryforge.provider import OpenAICompatibleProvider, ProviderConfig
 from memoryforge.query import answer_question
 from memoryforge.refresh import refresh_workspace
@@ -598,23 +601,43 @@ def ingest(
             help="Allow the configured model to receive local_only sources for this run.",
         ),
     ] = False,
+    code_wiki: Annotated[
+        str | None,
+        typer.Option(
+            "--code-wiki",
+            help="Compile one registered Git repository into a reviewable code Wiki.",
+        ),
+    ] = None,
     workspace: WorkspaceOption = Path("."),
 ) -> None:
     if not pending:
         _exit_with_safe_error(ValueError("ingest currently requires --pending"))
+    if code_wiki is not None and (source or llm or allow_local_llm):
+        _exit_with_safe_error(
+            ValueError("--code-wiki cannot be combined with --source or LLM options")
+        )
     try:
         opened = Workspace.open(workspace)
-        provider = OpenAICompatibleProvider(ProviderConfig.from_environment()) if llm else None
-        compilation = compile_pending_sources(
-            opened,
-            source_ids=tuple(source or ()),
-            provider=provider,
-            allow_local=allow_local_llm,
-        )
+        if code_wiki is not None:
+            snapshot = build_code_index(opened, code_wiki)
+            plan = build_module_plan(snapshot)
+            compilation = compile_code_wiki(opened, snapshot, plan)
+        else:
+            provider = OpenAICompatibleProvider(ProviderConfig.from_environment()) if llm else None
+            compilation = compile_pending_sources(
+                opened,
+                source_ids=tuple(source or ()),
+                provider=provider,
+                allow_local=allow_local_llm,
+            )
         if compilation is None:
             typer.echo(
                 json.dumps(
-                    {"status": "no_pending", "pending": []},
+                    (
+                        {"status": "up_to_date", "repository_id": code_wiki}
+                        if code_wiki is not None
+                        else {"status": "no_pending", "pending": []}
+                    ),
                     ensure_ascii=False,
                     indent=2,
                 )
@@ -643,20 +666,23 @@ def review(
     workspace: WorkspaceOption = Path("."),
 ) -> None:
     try:
-        opened = Workspace.open_readonly(workspace)
-        stored = ChangeSetStore(opened).get(changeset_id)
-        diffs: dict[str, str] = {}
-        for path, candidate in sorted(stored.candidate_files.items()):
-            stable_path = opened.root / path
-            stable = stable_path.read_text(encoding="utf-8") if stable_path.is_file() else ""
-            diffs[path] = "".join(
-                difflib.unified_diff(
-                    stable.splitlines(keepends=True),
-                    candidate.splitlines(keepends=True),
-                    fromfile=path,
-                    tofile=f"{path} (proposed)",
+        opened = Workspace.open(workspace)
+        with opened.exclusive_lock():
+            store = ChangeSetStore(opened)
+            stored = store.get(changeset_id)
+            diffs: dict[str, str] = {}
+            for path, candidate in sorted(stored.candidate_files.items()):
+                stable_path = opened.root / path
+                stable = stable_path.read_text(encoding="utf-8") if stable_path.is_file() else ""
+                diffs[path] = "".join(
+                    difflib.unified_diff(
+                        stable.splitlines(keepends=True),
+                        candidate.splitlines(keepends=True),
+                        fromfile=path,
+                        tofile=f"{path} (proposed)",
+                    )
                 )
-            )
+            reviewed = store.record_review(stored)
     except (
         MemoryForgeError,
         WorkspaceIntegrityError,
@@ -671,6 +697,7 @@ def review(
             {
                 "changeset_id": stored.changeset.changeset_id,
                 "status": stored.changeset.status.value,
+                "reviewed_at": reviewed.reviewed_at.isoformat(),
                 "candidate_files": stored.candidate_files,
                 "unified_diff": diffs,
             },
@@ -681,18 +708,61 @@ def review(
 
 
 @app.command()
-def apply(
+def approve(
     changeset_id: Annotated[str, typer.Argument()],
-    approve: Annotated[bool, typer.Option("--approve")] = False,
     workspace: WorkspaceOption = Path("."),
 ) -> None:
-    if not approve:
-        _exit_with_safe_error(ValueError("apply requires explicit --approve"))
     try:
         opened = Workspace.open(workspace)
         with opened.exclusive_lock():
             store = ChangeSetStore(opened)
             stored = store.get(changeset_id)
+            approval = store.approve(stored)
+    except (
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(
+        json.dumps(
+            {
+                "changeset_id": changeset_id,
+                "status": approval.status,
+                "approved_at": approval.approved_at.isoformat(),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
+@app.command()
+def apply(
+    changeset_id: Annotated[str, typer.Argument()],
+    approve: Annotated[
+        bool,
+        typer.Option(
+            "--approve",
+            help="Legacy shortcut that records review and approval before applying.",
+        ),
+    ] = False,
+    workspace: WorkspaceOption = Path("."),
+) -> None:
+    try:
+        opened = Workspace.open(workspace)
+        with opened.exclusive_lock():
+            store = ChangeSetStore(opened)
+            stored = store.get(changeset_id)
+            if approve:
+                store.record_review(stored, mode="inline_legacy")
+                store.approve(stored)
+            else:
+                store.require_approved(stored)
             archive_paths = tuple(
                 sorted(
                     operation.path
