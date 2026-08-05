@@ -225,6 +225,7 @@ memoryforge web-import <public-http-url> --workspace <workspace>
 
 # Wiki 编译与检查
 memoryforge ingest --pending --workspace <workspace>
+memoryforge watch --interval 60 --workspace <workspace>
 memoryforge review <changeset-id> --workspace <workspace>
 memoryforge approve <changeset-id> --workspace <workspace>
 memoryforge apply <changeset-id> --workspace <workspace>
@@ -238,6 +239,13 @@ memoryforge feishu-serve --workspace <workspace>
 
 更多命令请运行 `memoryforge --help`。实现细节与数据模型见 [SPEC.md](SPEC.md)，下一阶段的完整实施计划见 [NEXT_PHASE_SPEC.md](NEXT_PHASE_SPEC.md)。
 
+`watch` 会定时刷新所有已经注册的 Git 仓库和飞书文档，并在发现变化后自动生成待审核
+ChangeSet。它不会自动执行 `approve` 或 `apply`；你仍然可以先查看 Diff，再决定是否更新稳定 Wiki。
+首次接入一个新仓库时，仍需先执行 `git-add` 和 `code-add`。使用 `--once` 可以只运行一轮，
+使用 `--llm --allow-local-llm` 可以让已配置模型参与本地资料编译。
+
 ## 当前边界
 
-当前刻意不做公网部署、群聊、多用户权限、定时同步、向量数据库、知识图谱和通用编码 Agent。这些能力可以后续添加，但现在优先把“个人技术 Wiki 如何持续更新、可靠查询并回到证据”这一件事做深。
+当前刻意不做公网部署、群聊、多用户权限、向量数据库、知识图谱和通用编码 Agent。`watch`
+只负责本机定时轮询和生成待审核改动，不包含分布式调度或无人值守自动发布。现在优先把“个人技术
+Wiki 如何持续更新、可靠查询并回到证据”这一件事做深。

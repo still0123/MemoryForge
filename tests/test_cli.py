@@ -188,5 +188,37 @@ def test_cli_refreshes_all_registered_git_checkouts(tmp_path: Path) -> None:
     assert json.loads(unchanged.stdout)["status"] == "unchanged"
 
 
+def test_cli_watch_once_refreshes_and_stages_wiki_update(tmp_path: Path) -> None:
+    checkout = tmp_path / "repository"
+    checkout.mkdir()
+    _git(checkout, "init")
+    _git(checkout, "config", "user.email", "test@example.com")
+    _git(checkout, "config", "user.name", "Test User")
+    (checkout / "README.md").write_text(
+        "# Service\n\nWatch compiles this committed documentation.",
+        encoding="utf-8",
+    )
+    _git(checkout, "add", ".")
+    _git(checkout, "commit", "-m", "Add documentation")
+    workspace = tmp_path / "workspace"
+    runner = CliRunner()
+
+    assert runner.invoke(app, ["init", str(workspace)]).exit_code == 0
+    registered = runner.invoke(
+        app,
+        ["git-add", str(checkout), "--workspace", str(workspace)],
+    )
+    assert registered.exit_code == 0, registered.output
+
+    watched = runner.invoke(app, ["watch", "--once", "--workspace", str(workspace)])
+
+    assert watched.exit_code == 0, watched.output
+    payload = json.loads(watched.stdout)
+    assert payload["status"] == "proposed"
+    assert payload["git"][0]["created"] == 1
+    assert payload["changeset"]["status"] == "PROPOSED"
+    assert payload["changeset"]["files"]
+
+
 def _git(checkout: Path, *arguments: str) -> None:
     subprocess.run(["git", *arguments], cwd=checkout, check=True, capture_output=True, text=True)
