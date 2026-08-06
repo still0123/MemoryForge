@@ -54,21 +54,26 @@ def run_experiment(
     for case in suite.cases:
         baseline_pages = _current_pages(workspace_root, case, max_pages)
         proxy_pages = _rank_proxy_pages(workspace_root, case.question, max_pages=max_pages)
+        df_pages = _rank_df_pages(workspace_root, case.question, max_pages=max_pages)
         if case.expected_status == "answered":
             expected = _normalise_expected_paths(case)
             baseline_sources = _page_source_paths(baseline_pages, source_paths)
             proxy_sources = _page_source_paths(proxy_pages, source_paths)
+            df_sources = _page_source_paths(df_pages, source_paths)
             baseline_recalled = _recall(expected, baseline_sources, case)
             proxy_recalled = _recall(expected, proxy_sources, case)
+            df_recalled = _recall(expected, df_sources, case)
         else:
             baseline_recalled = None
             proxy_recalled = None
+            df_recalled = None
         result_cases.append(
             {
                 "id": case.id,
                 "category": case.category,
                 "baseline_recalled": baseline_recalled,
                 "proxy_recalled": proxy_recalled,
+                "df_recalled": df_recalled,
                 "baseline_page_count": len(baseline_pages),
                 "proxy_page_count": len(proxy_pages),
             }
@@ -82,12 +87,16 @@ def run_experiment(
     proxy_values = [
         bool(case["proxy_recalled"]) for case in result_cases if case["proxy_recalled"] is not None
     ]
+    df_values = [
+        bool(case["df_recalled"]) for case in result_cases if case["df_recalled"] is not None
+    ]
     baseline_paraphrase = _category_values(result_cases, "paraphrase", "baseline_recalled")
     proxy_paraphrase = _category_values(result_cases, "paraphrase", "proxy_recalled")
     baseline_average_pages = _average_pages(result_cases, "baseline_page_count")
     proxy_average_pages = _average_pages(result_cases, "proxy_page_count")
     baseline_recall = _percentage(baseline_values)
     proxy_recall = _percentage(proxy_values)
+    df_recall = _percentage(df_values)
     gain = round(proxy_recall - baseline_recall, 1)
     eligible_for_integration = gain >= 10.0 and proxy_average_pages <= float(max_pages)
 
@@ -119,6 +128,11 @@ def run_experiment(
             "name": "page-level character n-gram cosine proxy",
             "source_recall_at_3": proxy_recall,
             "paraphrase_source_recall_at_3": _percentage(proxy_paraphrase),
+            "average_pages_ranked": proxy_average_pages,
+        },
+        "df_proxy": {
+            "name": "binary query-term inverse document frequency",
+            "source_recall_at_3": df_recall,
             "average_pages_ranked": proxy_average_pages,
         },
         "decision": {
@@ -165,6 +179,26 @@ def _rank_proxy_pages(workspace_root: Path, question: str, *, max_pages: int) ->
             scored.append((score, page.relative_to(workspace_root).as_posix(), page))
     scored.sort(key=lambda item: (-item[0], item[1]))
     return [page for _, _, page in scored[:max_pages]]
+
+
+def _rank_df_pages(workspace_root: Path, question: str, *, max_pages: int) -> list[Path]:
+    query_terms = _terms(question)
+    pages = _wiki_pages(workspace_root)
+    page_terms = [(page, _terms(page.read_text(encoding="utf-8"))) for page in pages]
+    document_frequency = Counter(term for _, terms in page_terms for term in terms)
+    scored = [
+        (
+            sum(
+                math.log((len(pages) + 1) / (document_frequency[term] + 1)) + 1
+                for term in query_terms & terms
+            ),
+            page.relative_to(workspace_root).as_posix(),
+            page,
+        )
+        for page, terms in page_terms
+    ]
+    scored.sort(key=lambda item: (-item[0], item[1]))
+    return [page for score, _, page in scored[:max_pages] if score > 0]
 
 
 def _wiki_pages(workspace_root: Path) -> list[Path]:

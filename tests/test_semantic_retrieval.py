@@ -37,3 +37,19 @@ def test_proxy_ranks_page_with_more_question_features_first(tmp_path: Path) -> N
     )
 
     assert ranked == [pages / "target.md"]
+
+
+def test_df_proxy_downweights_terms_shared_by_every_page(tmp_path: Path) -> None:
+    pages = tmp_path / "wiki" / "pages"
+    pages.mkdir(parents=True)
+    (pages / "generic.md").write_text("Uvicorn server configuration.", encoding="utf-8")
+    target = pages / "target.md"
+    target.write_text("Uvicorn uvloop event loop selection.", encoding="utf-8")
+
+    ranked = semantic_retrieval._rank_df_pages(
+        tmp_path,
+        "How does Uvicorn choose uvloop?",
+        max_pages=1,
+    )
+
+    assert ranked == [target]

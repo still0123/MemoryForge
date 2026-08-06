@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from collections import Counter
 from pathlib import Path, PurePosixPath
@@ -573,6 +574,15 @@ def _candidate_pages(
     ordered_pages = (*exact_code_pages, *ordered_pages)
     if exact_code_pages and any(marker in question for marker in ("方法", "字段", "属性", "函数")):
         return list(exact_code_pages[:max_pages])
+    if prefer_index_routes and not any(_CJK.fullmatch(term) for term in question_terms):
+        ordered_pages += tuple(
+            _document_frequency_pages(
+                workspace_root,
+                question_terms,
+                max_pages=max_pages,
+                allowed_paths=allowed_paths,
+            )
+        )
     ordered_pages += (
         (*index_pages, *relaxed_pages) if prefer_index_routes else (*relaxed_pages, *index_pages)
     )
@@ -581,6 +591,39 @@ def _candidate_pages(
         if page not in candidates:
             candidates.append(page)
     return candidates[:max_pages]
+
+
+def _document_frequency_pages(
+    workspace_root: Path,
+    question_terms: set[str],
+    *,
+    max_pages: int,
+    allowed_paths: set[str] | None,
+) -> list[Path]:
+    pages_root = workspace_root / "wiki/pages"
+    pages = [
+        page
+        for path in sorted(pages_root.rglob("*.md"))
+        if (page := _safe_wiki_page(workspace_root, path)) is not None
+        and not _is_code_page(page)
+        and (
+            allowed_paths is None
+            or str(page.relative_to(workspace_root)) in allowed_paths
+        )
+    ]
+    page_terms = [(page, _terms(page.read_text(encoding="utf-8"))) for page in pages]
+    frequencies = Counter(term for _, terms in page_terms for term in terms)
+    scores = {
+        page: sum(
+            math.log((len(pages) + 1) / (frequencies[term] + 1)) + 1
+            for term in question_terms & terms
+        )
+        for page, terms in page_terms
+    }
+    return sorted(
+        (page for page in pages if scores[page] > 0),
+        key=lambda page: (-scores[page], str(page)),
+    )[:max_pages]
 
 
 def _exact_code_pages(

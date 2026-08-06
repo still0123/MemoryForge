@@ -1262,6 +1262,40 @@ def test_candidate_pages_prefers_index_routes_before_relaxed_fts_matches(
     assert calls == [True, False]
 
 
+def test_candidate_pages_downweights_terms_shared_by_every_document(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workspace = tmp_path / "workspace"
+    pages = workspace / "wiki/pages"
+    pages.mkdir(parents=True)
+    generic = pages / "generic.md"
+    target = pages / "target.md"
+    generic.write_text(_wiki_page("Uvicorn server configuration."), encoding="utf-8")
+    target.write_text(_wiki_page("Uvicorn uvloop event loop selection."), encoding="utf-8")
+    (workspace / "wiki/INDEX.md").write_text(
+        "# Knowledge Index\n\n"
+        "- [Generic](pages/generic.md) — Uvicorn server configuration\n",
+        encoding="utf-8",
+    )
+    index_path = workspace / ".memoryforge/index.sqlite"
+    index_path.parent.mkdir()
+    index_path.touch()
+    monkeypatch.setattr(query_module, "find_applied_page_paths", lambda *_args, **_kwargs: ())
+
+    selected = query_module._candidate_pages(
+        workspace,
+        "How does Uvicorn choose uvloop?",
+        query_module._terms("How does Uvicorn choose uvloop?"),
+        max_pages=1,
+        trace=[],
+        repository_id=None,
+        prefer_index_routes=True,
+    )
+
+    assert selected == [target]
+
+
 def test_ask_keeps_the_original_question_when_querying_fts(
     tmp_path: Path,
     monkeypatch,
