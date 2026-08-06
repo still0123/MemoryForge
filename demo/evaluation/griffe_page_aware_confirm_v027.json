@@ -1,0 +1,113 @@
+{
+  "name": "MemoryForge v0.2.7 Griffe page-aware fact confirmation",
+  "cases": [
+    {
+      "id": "griffe-load-fallback",
+      "category": "single_hop",
+      "question": "What does Griffe do when it cannot find source code for a module?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/guide/users/loading.md"],
+      "required_terms": ["fall back to introspection"],
+      "repository_id": "8939e52f4f0ddff154f566597b4816688af473abe972e96cba82415e0461871d"
+    },
+    {
+      "id": "griffe-relative-paths",
+      "category": "single_hop",
+      "question": "How can Griffe ignore an existing relative path when loading a package?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/guide/users/loading.md"],
+      "required_terms": ["try_relative_paths=False"],
+      "repository_id": "8939e52f4f0ddff154f566597b4816688af473abe972e96cba82415e0461871d"
+    },
+    {
+      "id": "griffe-loader-cache",
+      "category": "single_hop",
+      "question": "What does reusing a GriffeLoader cache?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/guide/users/loading.md"],
+      "required_terms": ["lists of files and directories", "not the file contents"],
+      "repository_id": "8939e52f4f0ddff154f566597b4816688af473abe972e96cba82415e0461871d"
+    },
+    {
+      "id": "griffe-disallow-inspection",
+      "category": "single_hop",
+      "question": "What happens when Griffe cannot find sources and allow_inspection is false?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/guide/users/loading.md"],
+      "required_terms": ["ModuleNotFoundError"],
+      "repository_id": "8939e52f4f0ddff154f566597b4816688af473abe972e96cba82415e0461871d"
+    },
+    {
+      "id": "griffe-alias-postprocess",
+      "category": "single_hop",
+      "question": "When does Griffe perform alias resolution?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/guide/users/loading.md"],
+      "required_terms": ["post-process", "after loading everything"],
+      "repository_id": "8939e52f4f0ddff154f566597b4816688af473abe972e96cba82415e0461871d"
+    },
+    {
+      "id": "griffe-cross-package-aliases",
+      "category": "single_hop",
+      "question": "How does reusing a GriffeLoader help aliases across packages?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/guide/users/loading.md"],
+      "required_terms": ["Reusing the same loader", "aliases across different packages"],
+      "repository_id": "8939e52f4f0ddff154f566597b4816688af473abe972e96cba82415e0461871d"
+    },
+    {
+      "id": "griffe-extension-member-access",
+      "category": "single_hop",
+      "question": "Which member access method should Griffe extensions use while loading?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/guide/users/navigating.md"],
+      "required_terms": ["get_member", "subscript syntax"],
+      "repository_id": "8939e52f4f0ddff154f566597b4816688af473abe972e96cba82415e0461871d"
+    },
+    {
+      "id": "griffe-inherited-cache",
+      "category": "single_hop",
+      "question": "Who is responsible for caching Griffe inherited_members results?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/guide/users/navigating.md"],
+      "required_terms": ["responsible for the caching"],
+      "repository_id": "8939e52f4f0ddff154f566597b4816688af473abe972e96cba82415e0461871d"
+    },
+    {
+      "id": "griffe-src-layout-search",
+      "category": "single_hop",
+      "question": "Which Griffe check option locates packages in src-layout subfolders?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/guide/users/checking.md"],
+      "required_terms": ["--search", "-s"],
+      "repository_id": "8939e52f4f0ddff154f566597b4816688af473abe972e96cba82415e0461871d"
+    },
+    {
+      "id": "griffe-git-worktree",
+      "category": "single_hop",
+      "question": "How does Griffe check another Git reference?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/guide/users/checking.md"],
+      "required_terms": ["create a worktree", "clean it up"],
+      "repository_id": "8939e52f4f0ddff154f566597b4816688af473abe972e96cba82415e0461871d"
+    },
+    {
+      "id": "griffe-full-json",
+      "category": "single_hop",
+      "question": "Which Griffe JSON option serializes every possible field?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/guide/users/serializing.md"],
+      "required_terms": ["`full` option"],
+      "repository_id": "8939e52f4f0ddff154f566597b4816688af473abe972e96cba82415e0461871d"
+    },
+    {
+      "id": "griffe-docstring-parser",
+      "category": "single_hop",
+      "question": "Can Griffe parse an arbitrary docstring without its loader?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/guide/users/how-to/parse-docstrings.md"],
+      "required_terms": ["don't have to load", "Docstring"],
+      "repository_id": "8939e52f4f0ddff154f566597b4816688af473abe972e96cba82415e0461871d"
+    }
+  ]
+}

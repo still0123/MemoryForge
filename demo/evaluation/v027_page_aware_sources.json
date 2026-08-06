@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "name": "MemoryForge v0.2.7 page-aware fact selection sources",
+  "ineligible_before_query": {
+    "repository": "pydantic/pydantic",
+    "commit": "4792336b09ce56b01f5ddf2fa35f5500d909bfd2",
+    "reason": "source content triggered the high-confidence secret scanner"
+  },
+  "ineligible_after_compile": {
+    "repository": "encode/httpcore",
+    "commit": "10a658221deb38a4c5b16db55ab554b0bf731707",
+    "reason": "multiline Markdown list continuations were not represented in single compiled facts"
+  },
+  "development": {
+    "repository": "Textualize/textual",
+    "remote_url": "https://github.com/Textualize/textual.git",
+    "commit": "06dbeef4bb70fb718236aa418ed658ef4667a126",
+    "license": "MIT",
+    "license_sha256": "94f290a762376dfdb7768e42070618b0abfd2a2799eab1b1c097816c3a39eb57",
+    "repository_id": "a3b74bb0923ff017e6b7db5eaaf5303108d2ec375ca60b5de4fc18eebc5f0736",
+    "importable_document_count": 296,
+    "suite": "demo/evaluation/textual_page_aware_confirm_v027.json"
+  },
+  "confirmation": {
+    "repository": "mkdocstrings/griffe",
+    "remote_url": "https://github.com/mkdocstrings/griffe.git",
+    "commit": "6b3caab7ce4fdcb1c9386937dad17510d35a3321",
+    "license": "ISC",
+    "license_sha256": "2466f8a5d3c433c4d38e386bfae3423bba1792256bc06e4fcf425a99c8cd17fb",
+    "repository_id": "8939e52f4f0ddff154f566597b4816688af473abe972e96cba82415e0461871d",
+    "importable_document_count": 82,
+    "suite": "demo/evaluation/griffe_page_aware_confirm_v027.json",
+    "policy": "run_once_after_candidate_freeze"
+  }
+}
