@@ -1,0 +1,113 @@
+{
+  "name": "MemoryForge v0.2.2 MkDocs document routing confirmation",
+  "cases": [
+    {
+      "id": "mkdocs-install-command",
+      "category": "single_hop",
+      "question": "Which command installs MkDocs with pip?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/getting-started.md"],
+      "required_terms": ["pip install mkdocs"],
+      "repository_id": "7335ce470007fe081bd414b2ad85152583f99aafccc8cfe5f55124771365fc30"
+    },
+    {
+      "id": "mkdocs-required-setting",
+      "category": "single_hop",
+      "question": "Which MkDocs configuration setting is the only required option?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/user-guide/configuration.md"],
+      "required_terms": ["site_name", "required"],
+      "repository_id": "7335ce470007fe081bd414b2ad85152583f99aafccc8cfe5f55124771365fc30"
+    },
+    {
+      "id": "mkdocs-draft-docs",
+      "category": "single_hop",
+      "question": "Which setting keeps draft pages in mkdocs serve but excludes them from mkdocs build?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/user-guide/configuration.md"],
+      "required_terms": ["draft_docs", "serve"],
+      "repository_id": "7335ce470007fe081bd414b2ad85152583f99aafccc8cfe5f55124771365fc30"
+    },
+    {
+      "id": "mkdocs-directory-urls",
+      "category": "single_hop",
+      "question": "What output does use_directory_urls false produce for api-guide.md?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/user-guide/configuration.md"],
+      "required_terms": ["api-guide.html", "false"],
+      "repository_id": "7335ce470007fe081bd414b2ad85152583f99aafccc8cfe5f55124771365fc30"
+    },
+    {
+      "id": "mkdocs-strict-warnings",
+      "category": "single_hop",
+      "question": "How does MkDocs strict mode handle warnings?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/user-guide/configuration.md"],
+      "required_terms": ["halt", "warning"],
+      "repository_id": "7335ce470007fe081bd414b2ad85152583f99aafccc8cfe5f55124771365fc30"
+    },
+    {
+      "id": "mkdocs-default-plugin",
+      "category": "single_hop",
+      "question": "Which plugin is enabled by default, and what happens when plugins is configured explicitly?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/user-guide/configuration.md"],
+      "required_terms": ["search", "ignored"],
+      "repository_id": "7335ce470007fe081bd414b2ad85152583f99aafccc8cfe5f55124771365fc30"
+    },
+    {
+      "id": "mkdocs-env-fallback",
+      "category": "single_hop",
+      "question": "How can an MkDocs YAML setting use an environment variable with a fallback value?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/user-guide/configuration.md"],
+      "required_terms": ["!ENV", "default"],
+      "repository_id": "7335ce470007fe081bd414b2ad85152583f99aafccc8cfe5f55124771365fc30"
+    },
+    {
+      "id": "mkdocs-config-inheritance",
+      "category": "single_hop",
+      "question": "Which key makes an MkDocs configuration inherit a parent configuration file?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/user-guide/configuration.md"],
+      "required_terms": ["INHERIT", "parent"],
+      "repository_id": "7335ce470007fe081bd414b2ad85152583f99aafccc8cfe5f55124771365fc30"
+    },
+    {
+      "id": "mkdocs-index-readme",
+      "category": "single_hop",
+      "question": "If both index.md and README.md exist in one docs directory, which file does MkDocs use?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/user-guide/writing-your-docs.md"],
+      "required_terms": ["index.md", "README.md", "ignored"],
+      "repository_id": "7335ce470007fe081bd414b2ad85152583f99aafccc8cfe5f55124771365fc30"
+    },
+    {
+      "id": "mkdocs-hidden-navigation",
+      "category": "single_hop",
+      "question": "What happens to pages omitted from the explicit MkDocs nav configuration?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/user-guide/writing-your-docs.md"],
+      "required_terms": ["rendered", "hidden"],
+      "repository_id": "7335ce470007fe081bd414b2ad85152583f99aafccc8cfe5f55124771365fc30"
+    },
+    {
+      "id": "mkdocs-gh-deploy-branch",
+      "category": "single_hop",
+      "question": "Which branch receives MkDocs Project Pages when using gh-deploy by default?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/user-guide/deploying-your-docs.md"],
+      "required_terms": ["gh-pages", "default"],
+      "repository_id": "7335ce470007fe081bd414b2ad85152583f99aafccc8cfe5f55124771365fc30"
+    },
+    {
+      "id": "mkdocs-plugin-priority",
+      "category": "single_hop",
+      "question": "How does MkDocs order plugin event handlers with different priority values?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/dev-guide/plugins.md"],
+      "required_terms": ["higher priority", "first"],
+      "repository_id": "7335ce470007fe081bd414b2ad85152583f99aafccc8cfe5f55124771365fc30"
+    }
+  ]
+}

@@ -9,7 +9,7 @@ query framework.
 ## Scope
 
 - Development: frozen Click development split already consumed in v0.2.1.
-- Confirmation: frozen HTTPX 0.28.1 split, 12 answered cases.
+- Confirmation: frozen MkDocs split, 12 answered cases.
 - Primary metric: page-level expected-source recall@3.
 - Secondary checks: average page count, deterministic replay, old 30-question
   regression.
@@ -36,13 +36,13 @@ percentage points and average pages remain at or below 3.
 
 ## Confirmation Gate
 
-After implementation freeze, run HTTPX confirmation once.
+After implementation freeze, run MkDocs confirmation once.
 
 - expected-source recall@3 at least 75%;
 - average pages at or below 3;
 - two clean-workspace runs byte-identical;
 - old AgentSkill-Eval page recall does not regress;
-- no tuning from HTTPX failures.
+- no tuning from MkDocs failures.
 
 If confirmation fails, keep the experiment and negative evidence but do not
 publish the routing change.
@@ -52,4 +52,8 @@ publish the routing change.
 - Source manifest:
   `demo/evaluation/v022_document_routing_source.json`
 - Confirmation suite:
-  `demo/evaluation/httpx_docs_confirm_v022.json`
+  `demo/evaluation/mkdocs_docs_confirm_v022.json`
+
+HTTPX 0.28.1 was rejected before query execution because its authentication
+documentation triggered the existing public-source secret scanner. That source
+did not consume confirmation and the security boundary was not relaxed.

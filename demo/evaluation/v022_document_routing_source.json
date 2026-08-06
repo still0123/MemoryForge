@@ -7,16 +7,22 @@
     "policy": "development_only"
   },
   "confirmation": {
-    "repository": "encode/httpx",
-    "remote_url": "https://github.com/encode/httpx.git",
-    "commit": "26d48e0634e6ee9cdc0533996db289ce4b430177",
-    "version": "0.28.1",
-    "license": "BSD-3-Clause",
-    "license_path": "LICENSE.md",
-    "license_sha256": "4ec59d544f12b5f539a3a716fd321ac58ccd8030b465221f2c880200cdf28d8d",
-    "repository_id": "bf7a3fa2ba465b8907987bdaf220f733639ea74cedadac36f4a76fb13f5704b0",
-    "tracked_text_candidates": 30,
-    "suite": "demo/evaluation/httpx_docs_confirm_v022.json",
+    "repository": "mkdocs/mkdocs",
+    "remote_url": "https://github.com/mkdocs/mkdocs.git",
+    "commit": "2862536793b3c67d9d83c33e0dd6d50a791928f8",
+    "license": "BSD-2-Clause",
+    "license_path": "LICENSE",
+    "license_sha256": "26041bd625fc39411dc4b32748216236931c904adb90c2b3e0ba697090a5d54e",
+    "repository_id": "7335ce470007fe081bd414b2ad85152583f99aafccc8cfe5f55124771365fc30",
+    "importable_document_count": 20,
+    "suite": "demo/evaluation/mkdocs_docs_confirm_v022.json",
     "policy": "run_once_after_implementation_freeze"
+  },
+  "ineligible_sources": {
+    "encode/httpx@26d48e0634e6ee9cdc0533996db289ce4b430177": {
+      "status": "ineligible_before_query",
+      "reason": "docs/advanced/authentication.md triggers the public-source secret scanner",
+      "confirmation_consumed": false
+    }
   }
 }
