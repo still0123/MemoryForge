@@ -47,6 +47,14 @@ After implementation freeze, run MkDocs confirmation once.
 If confirmation fails, keep the experiment and negative evidence but do not
 publish the routing change.
 
+## Result
+
+The INDEX + FTS reciprocal-rank candidate improved Click development page
+recall from 12.5% to 62.5%. MkDocs confirmation reached only 58.3%, below the
+75% gate. The candidate was reverted and no production routing change is
+published. See
+[`V022_DETERMINISTIC_PAGE_ROUTING_REPORT.md`](V022_DETERMINISTIC_PAGE_ROUTING_REPORT.md).
+
 ## Frozen Evidence
 
 - Source manifest:

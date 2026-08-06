@@ -1,0 +1,517 @@
+{
+  "schema_version": 1,
+  "memoryforge_commit": "a9dcddb62d2b6470f8c437648061c96033396d88",
+  "source_repositories": [
+    {
+      "repository_id": "7335ce470007fe081bd414b2ad85152583f99aafccc8cfe5f55124771365fc30",
+      "remote_url": "https://github.com/mkdocs/mkdocs.git",
+      "commit": "2862536793b3c67d9d83c33e0dd6d50a791928f8",
+      "source_count": 20
+    }
+  ],
+  "workflow": {
+    "source_count": 20,
+    "wiki_file_count": 21,
+    "lint": {
+      "status": "clean",
+      "checked_pages": 21,
+      "issues": []
+    }
+  },
+  "sample_query": {
+    "question": "Which MkDocs configuration setting is the only required option?",
+    "answer": "> NOTE: > Generally, when building your own custom theme, the theme.[name] > configuration setting would be set to `null`. However, if the > theme.[custom_dir] configuration value is used in combination with an > existing theme, the theme.[custom_dir] can be used to replace only specific > parts of a built-in theme. For example, with the above layout and if you set > `name: \"mkdocs\"` then the `main.html` file in the theme.[custom_dir] would > replace the file of the same name in the `mkdocs` theme but otherwise the > `mkdocs` theme would remain unchanged. This is useful if you want to make > small adjustments to an existing theme. > > For more specific information, see [Customizing Your Theme]. <!-- --> > WARNING: > A theme's [configuration] defined in a `mkdocs_theme.yml` file is not loaded > from `theme.custom_dir`. When an entire theme exists in `theme.custom_dir` > and `theme.name` is set to `null`, then the entire theme configuration must > be defined in the [theme] configuration option in the `mkdocs.yml` file. > > However, when a theme is [packaged] up for distribution, and loaded using > the `theme.name` configuration option, then a `mkdocs_theme.yml` file > is required for the theme.",
+    "citations": [
+      {
+        "source_id": "8fb9e6ea57240207ad1383107490b17ae6259a52b4ecd8954f28352a73cd3599",
+        "source_version": 8,
+        "locator": "chars:1507-2718",
+        "quote": "> NOTE: > Generally, when building your own custom theme, the theme.[name] > configuration setting would be set to `null`. However, if the > theme.[custom_dir] configuration value is used in combination with an > existing theme, the theme.[custom_dir] can be used to replace only specific > parts of a built-in theme. For example, with the above layout and if you set > `name: \"mkdocs\"` then the `main.html` file in the theme.[custom_dir] would > replace the file of the same name in the `mkdocs` theme but otherwise the > `mkdocs` theme would remain unchanged. This is useful if you want to make > small adjustments to an existing theme. > > For more specific information, see [Customizing Your Theme]. <!-- --> > WARNING: > A theme's [configuration] defined in a `mkdocs_theme.yml` file is not loaded > from `theme.custom_dir`. When an entire theme exists in `theme.custom_dir` > and `theme.name` is set to `null`, then the entire theme configuration must > be defined in the [theme] configuration option in the `mkdocs.yml` file. > > However, when a theme is [packaged] up for distribution, and loaded using > the `theme.name` configuration option, then a `mkdocs_theme.yml` file > is required for the theme.",
+        "section_path": "Developing Themes / Creating a custom theme"
+      }
+    ],
+    "trace": [
+      {
+        "level": "L0",
+        "artifact": "wiki/INDEX.md"
+      },
+      {
+        "level": "L0",
+        "artifact": "SQLite FTS5 applied-source index"
+      },
+      {
+        "level": "L1",
+        "artifact": "wiki/pages/33b547e882acefce016fc910d81feadc07b2b810ce4fe4e6910469b173c3acf6.md"
+      },
+      {
+        "level": "L1",
+        "artifact": "wiki/pages/8fb9e6ea57240207ad1383107490b17ae6259a52b4ecd8954f28352a73cd3599.md"
+      },
+      {
+        "level": "L1",
+        "artifact": "wiki/pages/0a3d7566aa7e1d856bf529f66e0650d3333a3fd20d97903261de92cf62b54cdf.md"
+      },
+      {
+        "level": "L2",
+        "artifact": "wiki/pages/8fb9e6ea57240207ad1383107490b17ae6259a52b4ecd8954f28352a73cd3599.md"
+      },
+      {
+        "level": "L3",
+        "artifact": "source 8fb9e6ea57240207ad1383107490b17ae6259a52b4ecd8954f28352a73cd3599 revision 8"
+      }
+    ]
+  },
+  "evaluation": {
+    "suite": "MemoryForge v0.2.2 MkDocs document routing confirmation",
+    "case_count": 12,
+    "memoryforge": {
+      "answer_accuracy": 16.7,
+      "source_recall_at_3": 16.7,
+      "citation_grounding_accuracy": 100.0,
+      "multi_source_coverage": 0.0,
+      "abstention_accuracy": 0.0,
+      "average_wiki_pages_read": 3.0,
+      "average_raw_sources_read": 0.0,
+      "average_evidence_characters": 297.58
+    },
+    "raw_fts_baseline": {
+      "expected_source_recall_at_3": 83.3,
+      "multi_source_coverage": 0.0,
+      "average_exposed_characters": 727.17
+    },
+    "cases": [
+      {
+        "id": "mkdocs-install-command",
+        "category": "single_hop",
+        "question": "Which command installs MkDocs with pip?",
+        "memoryforge": {
+          "answer_correct": false,
+          "citation_grounded": true,
+          "expected_sources_recalled": false,
+          "all_expected_sources_cited": false,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 132,
+          "wiki_pages": [
+            "wiki/pages/225790f35918c9a9f52908554027bc15d93a82ac99e81f61e9796625b0d8e342.md"
+          ],
+          "cited_source_paths": [
+            "docs/user-guide/cli.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/dev-guide/translations.md",
+            "docs/getting-started.md",
+            "docs/user-guide/installation.md"
+          ],
+          "expected_source_paths": [
+            "docs/getting-started.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      },
+      {
+        "id": "mkdocs-required-setting",
+        "category": "single_hop",
+        "question": "Which MkDocs configuration setting is the only required option?",
+        "memoryforge": {
+          "answer_correct": false,
+          "citation_grounded": true,
+          "expected_sources_recalled": false,
+          "all_expected_sources_cited": false,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 1211,
+          "wiki_pages": [
+            "wiki/pages/8fb9e6ea57240207ad1383107490b17ae6259a52b4ecd8954f28352a73cd3599.md"
+          ],
+          "cited_source_paths": [
+            "docs/dev-guide/themes.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": false,
+          "expected_sources_in_top_3": false,
+          "expected_sources_recalled": false,
+          "raw_source_paths": [
+            "docs/about/release-notes.md",
+            "docs/dev-guide/plugins.md",
+            "docs/dev-guide/themes.md"
+          ],
+          "expected_source_paths": [
+            "docs/user-guide/configuration.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      },
+      {
+        "id": "mkdocs-draft-docs",
+        "category": "single_hop",
+        "question": "Which setting keeps draft pages in mkdocs serve but excludes them from mkdocs build?",
+        "memoryforge": {
+          "answer_correct": false,
+          "citation_grounded": true,
+          "expected_sources_recalled": false,
+          "all_expected_sources_cited": false,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 151,
+          "wiki_pages": [
+            "wiki/pages/0a3d7566aa7e1d856bf529f66e0650d3333a3fd20d97903261de92cf62b54cdf.md"
+          ],
+          "cited_source_paths": [
+            "docs/about/release-notes.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/about/release-notes.md",
+            "docs/user-guide/configuration.md",
+            "docs/user-guide/deploying-your-docs.md"
+          ],
+          "expected_source_paths": [
+            "docs/user-guide/configuration.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      },
+      {
+        "id": "mkdocs-directory-urls",
+        "category": "single_hop",
+        "question": "What output does use_directory_urls false produce for api-guide.md?",
+        "memoryforge": {
+          "answer_correct": false,
+          "citation_grounded": true,
+          "expected_sources_recalled": false,
+          "all_expected_sources_cited": false,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 157,
+          "wiki_pages": [
+            "wiki/pages/262307d69ff51c8bc7e2394095c7e140070fb99dbfeec0072adbc6cbc61f2dde.md"
+          ],
+          "cited_source_paths": [
+            "docs/dev-guide/api.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/about/release-notes.md",
+            "docs/dev-guide/plugins.md",
+            "docs/user-guide/configuration.md"
+          ],
+          "expected_source_paths": [
+            "docs/user-guide/configuration.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 728
+        }
+      },
+      {
+        "id": "mkdocs-strict-warnings",
+        "category": "single_hop",
+        "question": "How does MkDocs strict mode handle warnings?",
+        "memoryforge": {
+          "answer_correct": false,
+          "citation_grounded": true,
+          "expected_sources_recalled": false,
+          "all_expected_sources_cited": false,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 202,
+          "wiki_pages": [
+            "wiki/pages/33b547e882acefce016fc910d81feadc07b2b810ce4fe4e6910469b173c3acf6.md"
+          ],
+          "cited_source_paths": [
+            "docs/dev-guide/plugins.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/about/release-notes.md",
+            "docs/dev-guide/plugins.md",
+            "docs/user-guide/configuration.md"
+          ],
+          "expected_source_paths": [
+            "docs/user-guide/configuration.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 728
+        }
+      },
+      {
+        "id": "mkdocs-default-plugin",
+        "category": "single_hop",
+        "question": "Which plugin is enabled by default, and what happens when plugins is configured explicitly?",
+        "memoryforge": {
+          "answer_correct": false,
+          "citation_grounded": true,
+          "expected_sources_recalled": false,
+          "all_expected_sources_cited": false,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 56,
+          "wiki_pages": [
+            "wiki/pages/33b547e882acefce016fc910d81feadc07b2b810ce4fe4e6910469b173c3acf6.md"
+          ],
+          "cited_source_paths": [
+            "docs/dev-guide/plugins.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/about/release-notes.md",
+            "docs/user-guide/configuration.md",
+            "docs/user-guide/deploying-your-docs.md"
+          ],
+          "expected_source_paths": [
+            "docs/user-guide/configuration.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 732
+        }
+      },
+      {
+        "id": "mkdocs-env-fallback",
+        "category": "single_hop",
+        "question": "How can an MkDocs YAML setting use an environment variable with a fallback value?",
+        "memoryforge": {
+          "answer_correct": false,
+          "citation_grounded": true,
+          "expected_sources_recalled": false,
+          "all_expected_sources_cited": false,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 177,
+          "wiki_pages": [
+            "wiki/pages/0a3d7566aa7e1d856bf529f66e0650d3333a3fd20d97903261de92cf62b54cdf.md"
+          ],
+          "cited_source_paths": [
+            "docs/about/release-notes.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/about/release-notes.md",
+            "docs/dev-guide/themes.md",
+            "docs/user-guide/configuration.md"
+          ],
+          "expected_source_paths": [
+            "docs/user-guide/configuration.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      },
+      {
+        "id": "mkdocs-config-inheritance",
+        "category": "single_hop",
+        "question": "Which key makes an MkDocs configuration inherit a parent configuration file?",
+        "memoryforge": {
+          "answer_correct": false,
+          "citation_grounded": true,
+          "expected_sources_recalled": false,
+          "all_expected_sources_cited": false,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 153,
+          "wiki_pages": [
+            "wiki/pages/0a3d7566aa7e1d856bf529f66e0650d3333a3fd20d97903261de92cf62b54cdf.md"
+          ],
+          "cited_source_paths": [
+            "docs/about/release-notes.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/about/release-notes.md",
+            "docs/dev-guide/themes.md",
+            "docs/user-guide/configuration.md"
+          ],
+          "expected_source_paths": [
+            "docs/user-guide/configuration.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      },
+      {
+        "id": "mkdocs-index-readme",
+        "category": "single_hop",
+        "question": "If both index.md and README.md exist in one docs directory, which file does MkDocs use?",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 152,
+          "wiki_pages": [
+            "wiki/pages/dd7503a51bf2af2f10deca952fef60a0f91cf93e8f033d6b0cdd3a49f917ebfd.md"
+          ],
+          "cited_source_paths": [
+            "docs/user-guide/writing-your-docs.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/about/release-notes.md",
+            "docs/user-guide/configuration.md",
+            "docs/user-guide/writing-your-docs.md"
+          ],
+          "expected_source_paths": [
+            "docs/user-guide/writing-your-docs.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      },
+      {
+        "id": "mkdocs-hidden-navigation",
+        "category": "single_hop",
+        "question": "What happens to pages omitted from the explicit MkDocs nav configuration?",
+        "memoryforge": {
+          "answer_correct": false,
+          "citation_grounded": true,
+          "expected_sources_recalled": false,
+          "all_expected_sources_cited": false,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 613,
+          "wiki_pages": [
+            "wiki/pages/33b547e882acefce016fc910d81feadc07b2b810ce4fe4e6910469b173c3acf6.md"
+          ],
+          "cited_source_paths": [
+            "docs/dev-guide/plugins.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": false,
+          "expected_sources_in_top_3": false,
+          "expected_sources_recalled": false,
+          "raw_source_paths": [
+            "docs/about/release-notes.md",
+            "docs/dev-guide/plugins.md",
+            "docs/user-guide/configuration.md"
+          ],
+          "expected_source_paths": [
+            "docs/user-guide/writing-your-docs.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      },
+      {
+        "id": "mkdocs-gh-deploy-branch",
+        "category": "single_hop",
+        "question": "Which branch receives MkDocs Project Pages when using gh-deploy by default?",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 307,
+          "wiki_pages": [
+            "wiki/pages/861abc0eb4d01185a8e21073d6828954b50e99ff1026159c1279ea20ac401169.md"
+          ],
+          "cited_source_paths": [
+            "docs/user-guide/deploying-your-docs.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/about/release-notes.md",
+            "docs/user-guide/configuration.md",
+            "docs/user-guide/deploying-your-docs.md"
+          ],
+          "expected_source_paths": [
+            "docs/user-guide/deploying-your-docs.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 728
+        }
+      },
+      {
+        "id": "mkdocs-plugin-priority",
+        "category": "single_hop",
+        "question": "How does MkDocs order plugin event handlers with different priority values?",
+        "memoryforge": {
+          "answer_correct": false,
+          "citation_grounded": true,
+          "expected_sources_recalled": false,
+          "all_expected_sources_cited": false,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 260,
+          "wiki_pages": [
+            "wiki/pages/0911cb998aab7c95d482806575d672147fc2a0a1992ba87a6e5b0ae2b8c2a956.md"
+          ],
+          "cited_source_paths": [
+            "docs/getting-started.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/about/release-notes.md",
+            "docs/dev-guide/plugins.md",
+            "docs/user-guide/configuration.md"
+          ],
+          "expected_source_paths": [
+            "docs/dev-guide/plugins.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 728
+        }
+      }
+    ]
+  }
+}

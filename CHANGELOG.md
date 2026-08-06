@@ -11,6 +11,7 @@
   artifact attestation、Release 上传和远端资产回下载。
 - 追加独立 Click 20 题复评；回答准确率 5.0%、来源召回 16.7%，再次确认外部有效性缺口；
 - 修复离线 semantic retrieval 实验调用 `_candidate_pages` 时的陈旧签名；
+- 拒绝未通过 MkDocs confirmation 的英文页面 rank-fusion 候选，生产查询保持不变；
 
 ## v0.2.0 — 2026-08-06
 
