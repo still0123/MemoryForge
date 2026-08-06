@@ -34,6 +34,7 @@ _WORDS = re.compile(r"[a-z0-9]+|[\u4e00-\u9fff]+", re.IGNORECASE)
 _CAMEL_CASE_PARTS = re.compile(r"[A-Z]+(?=[A-Z][a-z]|$)|[A-Z]?[a-z]+")
 _CJK = re.compile(r"^[\u4e00-\u9fff]+$")
 _REPOSITORY_OVERVIEW_LINK = re.compile(r"^pages/repository-[a-f0-9]{12}\.md$")
+_NEGATION_CUES = ("不", "无", "未", "没", "避免", "拒绝")
 _STOP_WORDS = {
     "a",
     "an",
@@ -155,14 +156,16 @@ def answer_question(
     raw_matches: list[tuple[frozenset[str], bool, str, CitationPayload]] = []
     raw_candidate_matches: list[tuple[frozenset[str], bool, str, CitationPayload]] = []
 
-    for page in _candidate_pages(
-        workspace_root,
-        question,
-        question_terms,
-        max_pages=max_pages,
-        trace=trace,
-        repository_id=repository_id,
-        prefer_index_routes=max_citations > 1 or _has_many_index_routes(workspace_root),
+    for page_rank, page in enumerate(
+        _candidate_pages(
+            workspace_root,
+            question,
+            question_terms,
+            max_pages=max_pages,
+            trace=trace,
+            repository_id=repository_id,
+            prefer_index_routes=max_citations > 1 or _has_many_index_routes(workspace_root),
+        )
     ):
         content = page.read_text(encoding="utf-8")
         trace.append({"level": "L1", "artifact": str(page.relative_to(workspace_root))})
@@ -178,6 +181,11 @@ def answer_question(
             required_overlap = 1 if len(question_terms) == 1 else 2
             if has_cjk_terms:
                 required_overlap = min(3, len(question_terms))
+                aligned_negation = any(cue in question for cue in _NEGATION_CUES) and any(
+                    cue in citation["quote"] for cue in _NEGATION_CUES
+                )
+                if page_rank == 0 and index == 0 and aligned_negation:
+                    required_overlap = min(required_overlap, 2)
                 if len(overlap) >= 2 and any(not _CJK.fullmatch(term) for term in overlap):
                     required_overlap = 2
             sufficient_match = len(overlap) >= required_overlap

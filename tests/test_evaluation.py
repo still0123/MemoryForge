@@ -12,6 +12,33 @@ from memoryforge.models import Sensitivity
 from memoryforge.workspace import init_workspace, register_git_checkout, sync_git_checkout
 
 
+def test_click_external_docs_splits_are_frozen() -> None:
+    root = Path(__file__).resolve().parent.parent
+    manifest = json.loads(
+        (root / "demo/evaluation/click_docs_sources_v021.json").read_text(encoding="utf-8")
+    )
+    suites = [
+        evaluation_module.EvaluationSuite.model_validate_json(
+            (root / path).read_text(encoding="utf-8")
+        )
+        for path in manifest["splits"].values()
+    ]
+    cases = [case for suite in suites for case in suite.cases]
+
+    assert [len(suite.cases) for suite in suites] == [10, 10]
+    assert len({case.id for case in cases}) == 20
+    assert {case.category for case in cases} == {
+        "single_hop",
+        "multi_source",
+        "unanswerable",
+        "paraphrase",
+    }
+    assert manifest["repository"]["expected_document_count"] == 38
+    assert manifest["label_scope"] == (
+        "manually_verified_source_expectations_frozen_before_evaluation"
+    )
+
+
 def test_eval_compares_wiki_answers_with_raw_fts(tmp_path: Path, monkeypatch) -> None:
     repository = tmp_path / "repository"
     repository.mkdir()

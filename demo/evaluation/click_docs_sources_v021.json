@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "repository": {
+    "name": "click",
+    "remote_url": "https://github.com/pallets/click.git",
+    "commit": "00e592cea702e0b2caa0dee42489fdb1c22cd845",
+    "license": "BSD-3-Clause",
+    "license_path": "LICENSE.txt",
+    "license_sha256": "9a8ad106a394e853bfe21f42f4e72d592819a22805d991b5f3275029292b658d",
+    "expected_document_count": 38
+  },
+  "splits": {
+    "development": "demo/evaluation/click_docs_dev_v021.json",
+    "holdout": "demo/evaluation/click_docs_holdout_v021.json"
+  },
+  "label_scope": "manually_verified_source_expectations_frozen_before_evaluation"
+}

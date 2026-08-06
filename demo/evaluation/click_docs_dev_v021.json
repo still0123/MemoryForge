@@ -1,0 +1,81 @@
+{
+  "name": "Click public documentation development split v0.2.1",
+  "cases": [
+    {
+      "id": "dev-command-decorator",
+      "category": "single_hop",
+      "question": "How does a Python function become a Click command line tool?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/quickstart.md"],
+      "required_terms": ["command", "Command"]
+    },
+    {
+      "id": "dev-option-multiple-values",
+      "category": "single_hop",
+      "question": "What does Click pass to the function when an option uses nargs for multiple values?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/options.md"],
+      "required_terms": ["nargs", "tuple"]
+    },
+    {
+      "id": "dev-shell-builtins",
+      "category": "single_hop",
+      "question": "Which shells have built-in Click completion support?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/shell-completion.md"],
+      "required_terms": ["Bash", "Zsh", "Fish", "PowerShell"]
+    },
+    {
+      "id": "dev-testing-thread-safety",
+      "category": "single_hop",
+      "question": "Why should CliRunner invocations not run concurrently in threads?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/testing.md"],
+      "required_terms": ["not thread-safe", "process-based isolation"]
+    },
+    {
+      "id": "dev-dash-filename",
+      "category": "paraphrase",
+      "question": "How can a filename beginning with a dash be treated as positional input?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/arguments.md"],
+      "required_terms": ["--", "arguments"]
+    },
+    {
+      "id": "dev-confirm-abort",
+      "category": "paraphrase",
+      "question": "How can a confirmation prompt stop the program automatically after a negative answer?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/prompts.md"],
+      "required_terms": ["confirm", "abort=True"]
+    },
+    {
+      "id": "dev-options-arguments",
+      "category": "multi_source",
+      "question": "How are Click options different from positional arguments, and how does nargs affect both?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/options.md", "docs/arguments.md"],
+      "required_terms": ["Option", "Argument", "nargs"]
+    },
+    {
+      "id": "dev-path-dash-input",
+      "category": "multi_source",
+      "question": "How should Click validate file paths while still accepting a path that starts with a dash?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/handling-files.md", "docs/arguments.md"],
+      "required_terms": ["Path", "--"]
+    },
+    {
+      "id": "dev-database-backend",
+      "category": "unanswerable",
+      "question": "Which database backend does Click use to store user accounts?",
+      "expected_status": "unknown"
+    },
+    {
+      "id": "dev-http-port",
+      "category": "unanswerable",
+      "question": "Which HTTP port does Click's built-in web server listen on by default?",
+      "expected_status": "unknown"
+    }
+  ]
+}
