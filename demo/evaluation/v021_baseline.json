@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "version": "0.2.0",
+  "tag": "v0.2.0",
+  "tag_commit": "e7aef45e63018fdb795223b77384c84dbb06dff6",
+  "release_url": "https://github.com/still0123/MemoryForge/releases/tag/v0.2.0",
+  "ci_run": {
+    "id": 31031536949,
+    "conclusion": "success"
+  },
+  "artifacts": {
+    "wheel_sha256": "2c568e35d2f59bf8cd7332ab2850e8ab17d553fe9aefddfe0dca85c7fb51adad",
+    "release_provenance_repository_sha256": "410205fffd6f70c4def2655457f5f1899ad5294e5af5f3bab674e88a44caf1c3",
+    "release_provenance_asset_sha256": "dcceaa4a96b1c7de5bc926bf84163e19e86a5bff8fc5b0c08cab8e24f371be74",
+    "code_wiki_evidence_sha256": "5fec7b96d4266a0600f2c2dd150836f3296e013bb5d66cd0e4b58f4a38011883",
+    "public_demo_evidence_sha256": "90f4b908a0440d53f923f9070eca61dd7b4a1379e51ef2805c0bc481b0c620d6",
+    "code_wiki_suite_sha256": "e2253d9c66acde8e27e6e13c8f9ac9354a9e84ddc9c5d9266fd9b41040a0c106",
+    "public_demo_suite_sha256": "efa3a69d8564665b605abe2fb2227185e3f45de8c140fde297d3889965a96f18"
+  },
+  "code_wiki": {
+    "required_metric": 100.0,
+    "changed_page_ratio": 0.2,
+    "max_changed_page_ratio": 0.25
+  },
+  "public_demo": {
+    "answer_accuracy": 96.7,
+    "source_recall_at_3": 96.2,
+    "citation_grounding_accuracy": 96.2,
+    "multi_source_coverage": 100.0,
+    "abstention_accuracy": 100.0,
+    "known_failure": "paraphrase-statistics"
+  }
+}
