@@ -523,22 +523,18 @@ def _candidate_pages(
     strict_fts_paths: tuple[str, ...] = ()
     relaxed_fts_paths: tuple[str, ...] = ()
     index_path = workspace_root / ".memoryforge" / "index.sqlite"
-    use_rank_fusion = prefer_index_routes and not any(
-        _CJK.fullmatch(term) for term in question_terms
-    )
-    candidate_limit = max(max_pages, 5) if use_rank_fusion else max_pages
     if safe_index is None or (index_path.is_file() and not index_path.is_symlink()):
         strict_fts_paths = find_applied_page_paths(
             workspace_root,
             question,
-            limit=candidate_limit,
+            limit=max_pages,
             repository_id=repository_id,
         )
-        if len(strict_fts_paths) < candidate_limit:
+        if len(strict_fts_paths) < max_pages:
             relaxed_fts_paths = find_applied_page_paths(
                 workspace_root,
                 question,
-                limit=candidate_limit,
+                limit=max_pages,
                 repository_id=repository_id,
                 require_all_terms=False,
             )
@@ -578,25 +574,13 @@ def _candidate_pages(
     if exact_code_pages and any(marker in question for marker in ("方法", "字段", "属性", "函数")):
         return list(exact_code_pages[:max_pages])
     ordered_pages += (
-        tuple(_reciprocal_rank_fusion(index_pages, relaxed_pages))
-        if use_rank_fusion
-        else (*index_pages, *relaxed_pages)
-        if prefer_index_routes
-        else (*relaxed_pages, *index_pages)
+        (*index_pages, *relaxed_pages) if prefer_index_routes else (*relaxed_pages, *index_pages)
     )
     candidates: list[Path] = []
     for page in ordered_pages:
         if page not in candidates:
             candidates.append(page)
     return candidates[:max_pages]
-
-
-def _reciprocal_rank_fusion(*rankings: list[Path]) -> list[Path]:
-    scores: dict[Path, float] = {}
-    for ranking in rankings:
-        for rank, page in enumerate(ranking, start=1):
-            scores[page] = scores.get(page, 0.0) + 1 / rank
-    return sorted(scores, key=lambda page: (-scores[page], str(page)))
 
 
 def _exact_code_pages(
