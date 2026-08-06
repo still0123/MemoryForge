@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "memoryforge_commit": "293bd8f5fa2d1de9dfba75989205fdc7930b371a",
+  "memoryforge_commit": "e00fb8f766f1d7186f5abe7ea8ed045e702b525b",
   "source_repositories": [
     {
       "repository_id": "db29dfd06f0a2853c9764f1393b680d6a592b1a5771a012b6e1387fc17aac597",
@@ -65,7 +65,7 @@
     "suite": "AgentSkill-Eval public documentation",
     "case_count": 30,
     "memoryforge": {
-      "answer_accuracy": 100.0,
+      "answer_accuracy": 96.7,
       "source_recall_at_3": 96.2,
       "citation_grounding_accuracy": 100.0,
       "multi_source_coverage": 100.0,
@@ -942,7 +942,7 @@
         "category": "single_hop",
         "question": "前端页面使用 React 还是 Vue？",
         "memoryforge": {
-          "answer_correct": true,
+          "answer_correct": false,
           "citation_grounded": true,
           "expected_sources_recalled": false,
           "all_expected_sources_cited": false,
