@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "name": "MemoryForge v0.2.1 Click external document source",
+  "repository": {
+    "name": "click",
+    "remote_url": "https://github.com/pallets/click.git",
+    "commit": "00e592cea702e0b2caa0dee42489fdb1c22cd845",
+    "license": "BSD-3-Clause",
+    "license_path": "LICENSE.txt",
+    "license_sha256": "9a8ad106a394e853bfe21f42f4e72d592819a22805d991b5f3275029292b658d",
+    "repository_id": "df3e9a7cc5cdbfd38722df9b0bd3ac96c0e59c752a1db087dd20644a8933b372",
+    "expected_importable_text_files": 43
+  },
+  "suites": {
+    "development": "demo/evaluation/external_document_click_dev_v021.json",
+    "holdout": "demo/evaluation/external_document_click_holdout_v021.json"
+  },
+  "freeze_policy": {
+    "frozen_before_execution": true,
+    "minimum_shared_failures_before_query_change": 3,
+    "holdout_must_not_guide_changes": true
+  }
+}

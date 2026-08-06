@@ -1,0 +1,93 @@
+{
+  "name": "MemoryForge v0.2.1 Click document holdout split",
+  "cases": [
+    {
+      "id": "holdout-nonboolean-flag-default",
+      "category": "single_hop",
+      "question": "For a non-boolean flag_value, what does default=True mean?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/options.md"],
+      "required_terms": ["flag_value", "not the Python"],
+      "repository_id": "df3e9a7cc5cdbfd38722df9b0bd3ac96c0e59c752a1db087dd20644a8933b372"
+    },
+    {
+      "id": "holdout-choice-normalization",
+      "category": "single_hop",
+      "question": "With Choice(case_sensitive=False), which value does Click return?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/parameter-types.md"],
+      "required_terms": ["originally passed choices", "case_sensitive"],
+      "repository_id": "df3e9a7cc5cdbfd38722df9b0bd3ac96c0e59c752a1db087dd20644a8933b372"
+    },
+    {
+      "id": "holdout-token-normalization",
+      "category": "single_hop",
+      "question": "Which context setting can make Click option tokens case-insensitive?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/advanced.md"],
+      "required_terms": ["token_normalize_func", "lower"],
+      "repository_id": "df3e9a7cc5cdbfd38722df9b0bd3ac96c0e59c752a1db087dd20644a8933b372"
+    },
+    {
+      "id": "holdout-help-line-breaks",
+      "category": "single_hop",
+      "question": "How can one Click help paragraph preserve line breaks instead of being rewrapped?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/documentation.md"],
+      "required_terms": ["\\b", "removed"],
+      "repository_id": "df3e9a7cc5cdbfd38722df9b0bd3ac96c0e59c752a1db087dd20644a8933b372"
+    },
+    {
+      "id": "holdout-parameter-source-priority",
+      "category": "single_hop",
+      "question": "What is Click's parameter source precedence from most to least explicit?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/commands-and-groups.md"],
+      "required_terms": ["PROMPT", "COMMANDLINE", "ENVIRONMENT", "DEFAULT_MAP", "DEFAULT"],
+      "repository_id": "df3e9a7cc5cdbfd38722df9b0bd3ac96c0e59c752a1db087dd20644a8933b372"
+    },
+    {
+      "id": "holdout-dynamic-default-envvar-help",
+      "category": "multi_source",
+      "question": "How can an option keep prompting with an environment-derived default, and how can help display its environment variable?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/prompts.md", "docs/documentation.md"],
+      "required_terms": ["default=lambda", "show_envvar"],
+      "repository_id": "df3e9a7cc5cdbfd38722df9b0bd3ac96c0e59c752a1db087dd20644a8933b372"
+    },
+    {
+      "id": "holdout-test-files-atomic-output",
+      "category": "multi_source",
+      "question": "How should Click tests isolate file paths, and how can a Click file parameter protect an atomic update?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/testing.md", "docs/handling-files.md"],
+      "required_terms": ["tmp_path", "atomic=True"],
+      "repository_id": "df3e9a7cc5cdbfd38722df9b0bd3ac96c0e59c752a1db087dd20644a8933b372"
+    },
+    {
+      "id": "holdout-unknown-web-port",
+      "category": "unanswerable",
+      "question": "What TCP port does Click's built-in web server listen on by default?",
+      "expected_status": "unknown",
+      "repository_id": "df3e9a7cc5cdbfd38722df9b0bd3ac96c0e59c752a1db087dd20644a8933b372"
+    },
+    {
+      "id": "holdout-paraphrase-windows-expansion",
+      "category": "paraphrase",
+      "question": "How can a Click CLI stop Windows from expanding *, ~, and $ENV arguments?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/faqs.md"],
+      "required_terms": ["windows_expand_args=False"],
+      "repository_id": "df3e9a7cc5cdbfd38722df9b0bd3ac96c0e59c752a1db087dd20644a8933b372"
+    },
+    {
+      "id": "holdout-paraphrase-echo",
+      "category": "paraphrase",
+      "question": "Why prefer click.echo over print in a misconfigured terminal?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/quickstart.md"],
+      "required_terms": ["UnicodeError", "error correction"],
+      "repository_id": "df3e9a7cc5cdbfd38722df9b0bd3ac96c0e59c752a1db087dd20644a8933b372"
+    }
+  ]
+}

@@ -1,0 +1,93 @@
+{
+  "name": "MemoryForge v0.2.1 Click document development split",
+  "cases": [
+    {
+      "id": "dev-quickstart-install",
+      "category": "single_hop",
+      "question": "What command installs Click from PyPI?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/quickstart.md"],
+      "required_terms": ["pip install click"],
+      "repository_id": "df3e9a7cc5cdbfd38722df9b0bd3ac96c0e59c752a1db087dd20644a8933b372"
+    },
+    {
+      "id": "dev-variadic-argument",
+      "category": "single_hop",
+      "question": "How does Click represent a variadic argument configured with nargs=-1?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/arguments.md"],
+      "required_terms": ["arbitrary", "tuple"],
+      "repository_id": "df3e9a7cc5cdbfd38722df9b0bd3ac96c0e59c752a1db087dd20644a8933b372"
+    },
+    {
+      "id": "dev-confirm-abort",
+      "category": "single_hop",
+      "question": "How can click.confirm abort automatically when the user declines?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/prompts.md"],
+      "required_terms": ["abort=True"],
+      "repository_id": "df3e9a7cc5cdbfd38722df9b0bd3ac96c0e59c752a1db087dd20644a8933b372"
+    },
+    {
+      "id": "dev-testing-thread-safety",
+      "category": "single_hop",
+      "question": "Why must CliRunner.invoke not run concurrently in multiple threads?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/testing.md"],
+      "required_terms": ["process-global state", "process-based isolation"],
+      "repository_id": "df3e9a7cc5cdbfd38722df9b0bd3ac96c0e59c752a1db087dd20644a8933b372"
+    },
+    {
+      "id": "dev-standalone-mode",
+      "category": "single_hop",
+      "question": "What does standalone_mode=False disable?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/exceptions.md"],
+      "required_terms": ["exception handling", "sys.exit"],
+      "repository_id": "df3e9a7cc5cdbfd38722df9b0bd3ac96c0e59c752a1db087dd20644a8933b372"
+    },
+    {
+      "id": "dev-entry-point-briefcase",
+      "category": "multi_source",
+      "question": "Which pyproject setting creates an installable Click command, and which package file must Briefcase use to launch it?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/entry-points.md", "docs/standalone-apps.md"],
+      "required_terms": ["project.scripts", "__main__.py"],
+      "repository_id": "df3e9a7cc5cdbfd38722df9b0bd3ac96c0e59c752a1db087dd20644a8933b372"
+    },
+    {
+      "id": "dev-custom-type-atomic-file",
+      "category": "multi_source",
+      "question": "How do you implement a custom Click parameter converter and make file output atomic?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/parameter-types.md", "docs/handling-files.md"],
+      "required_terms": ["ParamType", "atomic=True"],
+      "repository_id": "df3e9a7cc5cdbfd38722df9b0bd3ac96c0e59c752a1db087dd20644a8933b372"
+    },
+    {
+      "id": "dev-unknown-session-database",
+      "category": "unanswerable",
+      "question": "Which database backend does Click use to persist user sessions?",
+      "expected_status": "unknown",
+      "repository_id": "df3e9a7cc5cdbfd38722df9b0bd3ac96c0e59c752a1db087dd20644a8933b372"
+    },
+    {
+      "id": "dev-paraphrase-no-autocorrect",
+      "category": "paraphrase",
+      "question": "Why does Click avoid magically fixing abbreviated long option names?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/why.md"],
+      "required_terms": ["backwards compatibility", "new parameter"],
+      "repository_id": "df3e9a7cc5cdbfd38722df9b0bd3ac96c0e59c752a1db087dd20644a8933b372"
+    },
+    {
+      "id": "dev-paraphrase-bash-completion",
+      "category": "paraphrase",
+      "question": "How can foo-bar generate its Bash tab completion script?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/shell-completion.md"],
+      "required_terms": ["_FOO_BAR_COMPLETE", "bash_source"],
+      "repository_id": "df3e9a7cc5cdbfd38722df9b0bd3ac96c0e59c752a1db087dd20644a8933b372"
+    }
+  ]
+}
