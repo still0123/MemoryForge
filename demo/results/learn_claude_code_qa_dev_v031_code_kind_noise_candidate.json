@@ -1,0 +1,677 @@
+{
+  "suite": "MemoryForge v0.3.1 learn-claude-code QA development",
+  "case_count": 10,
+  "memoryforge": {
+    "answer_accuracy": 70.0,
+    "source_recall_at_3": 100.0,
+    "citation_grounding_accuracy": 88.9,
+    "multi_source_coverage": 100.0,
+    "abstention_accuracy": 100.0,
+    "repository_path_isolation_accuracy": 100.0,
+    "average_wiki_pages_read": 3.0,
+    "average_raw_sources_read": 0.0,
+    "average_evidence_characters": 1018.0
+  },
+  "raw_fts_baseline": {
+    "expected_source_recall_at_3": 77.8,
+    "multi_source_coverage": 0.0,
+    "average_exposed_characters": 726.2
+  },
+  "cases": [
+    {
+      "id": "dev-s01-run-bash-signature",
+      "category": "single_hop",
+      "question": "What is the signature of s01_agent_loop.code.run_bash?",
+      "memoryforge": {
+        "answer_correct": true,
+        "citation_grounded": true,
+        "expected_sources_recalled": true,
+        "all_expected_sources_cited": true,
+        "repository_path_isolated": true,
+        "expected_repository_ids": [
+          "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6"
+        ],
+        "abstention_correct": true,
+        "wiki_pages_read": 3,
+        "raw_sources_read": 0,
+        "evidence_characters": 594,
+        "wiki_pages": [
+          "wiki/pages/code/f9618a931031/s01-agent-loop/code.md"
+        ],
+        "cited_source_paths": [
+          "s01_agent_loop/code.py"
+        ],
+        "cited_sources": [
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "s01_agent_loop/code.py"
+          }
+        ]
+      },
+      "raw_fts_baseline": {
+        "expected_source_in_top_3": true,
+        "expected_sources_in_top_3": true,
+        "expected_sources_recalled": true,
+        "raw_source_paths": [
+          ".memoryforge/code-modules/s01_agent_loop.md",
+          "README.md",
+          "s01_agent_loop/code.py"
+        ],
+        "raw_sources": [
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": ".memoryforge/code-modules/s01_agent_loop.md"
+          },
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "README.md"
+          },
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "s01_agent_loop/code.py"
+          }
+        ],
+        "expected_source_paths": [
+          "s01_agent_loop/code.py"
+        ],
+        "expected_sources": [
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "s01_agent_loop/code.py"
+          }
+        ],
+        "result_count": 3,
+        "exposed_characters": 726
+      }
+    },
+    {
+      "id": "dev-s03-check-permission-signature",
+      "category": "single_hop",
+      "question": "What does s03_permission.code.check_permission accept and return?",
+      "memoryforge": {
+        "answer_correct": false,
+        "citation_grounded": true,
+        "expected_sources_recalled": true,
+        "all_expected_sources_cited": true,
+        "repository_path_isolated": true,
+        "expected_repository_ids": [
+          "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6"
+        ],
+        "abstention_correct": true,
+        "wiki_pages_read": 3,
+        "raw_sources_read": 0,
+        "evidence_characters": 188,
+        "wiki_pages": [
+          "wiki/pages/code/f9618a931031/s03-permission/code.md"
+        ],
+        "cited_source_paths": [
+          "s03_permission/code.py"
+        ],
+        "cited_sources": [
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "s03_permission/code.py"
+          }
+        ]
+      },
+      "raw_fts_baseline": {
+        "expected_source_in_top_3": true,
+        "expected_sources_in_top_3": true,
+        "expected_sources_recalled": true,
+        "raw_source_paths": [
+          ".memoryforge/code-modules/s03_permission.md",
+          "README.md",
+          "s03_permission/code.py"
+        ],
+        "raw_sources": [
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": ".memoryforge/code-modules/s03_permission.md"
+          },
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "README.md"
+          },
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "s03_permission/code.py"
+          }
+        ],
+        "expected_source_paths": [
+          "s03_permission/code.py"
+        ],
+        "expected_sources": [
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "s03_permission/code.py"
+          }
+        ],
+        "result_count": 3,
+        "exposed_characters": 726
+      }
+    },
+    {
+      "id": "dev-s03-ask-user-parameters",
+      "category": "single_hop",
+      "question": "Which parameters does s03_permission.code.ask_user accept?",
+      "memoryforge": {
+        "answer_correct": true,
+        "citation_grounded": true,
+        "expected_sources_recalled": true,
+        "all_expected_sources_cited": true,
+        "repository_path_isolated": true,
+        "expected_repository_ids": [
+          "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6"
+        ],
+        "abstention_correct": true,
+        "wiki_pages_read": 3,
+        "raw_sources_read": 0,
+        "evidence_characters": 259,
+        "wiki_pages": [
+          "wiki/pages/code/f9618a931031/s03-permission/code.md"
+        ],
+        "cited_source_paths": [
+          "s03_permission/code.py"
+        ],
+        "cited_sources": [
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "s03_permission/code.py"
+          }
+        ]
+      },
+      "raw_fts_baseline": {
+        "expected_source_in_top_3": true,
+        "expected_sources_in_top_3": true,
+        "expected_sources_recalled": true,
+        "raw_source_paths": [
+          ".memoryforge/code-modules/s03_permission.md",
+          "README.md",
+          "s03_permission/code.py"
+        ],
+        "raw_sources": [
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": ".memoryforge/code-modules/s03_permission.md"
+          },
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "README.md"
+          },
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "s03_permission/code.py"
+          }
+        ],
+        "expected_source_paths": [
+          "s03_permission/code.py"
+        ],
+        "expected_sources": [
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "s03_permission/code.py"
+          }
+        ],
+        "result_count": 3,
+        "exposed_characters": 726
+      }
+    },
+    {
+      "id": "dev-s05-todo-write-signature",
+      "category": "single_hop",
+      "question": "What is the signature of s05_todo_write.code.run_todo_write?",
+      "memoryforge": {
+        "answer_correct": false,
+        "citation_grounded": true,
+        "expected_sources_recalled": true,
+        "all_expected_sources_cited": true,
+        "repository_path_isolated": true,
+        "expected_repository_ids": [
+          "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6"
+        ],
+        "abstention_correct": true,
+        "wiki_pages_read": 3,
+        "raw_sources_read": 0,
+        "evidence_characters": 350,
+        "wiki_pages": [
+          "wiki/pages/code/f9618a931031/s05-todo-write/code.md"
+        ],
+        "cited_source_paths": [
+          "s05_todo_write/code.py"
+        ],
+        "cited_sources": [
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "s05_todo_write/code.py"
+          }
+        ]
+      },
+      "raw_fts_baseline": {
+        "expected_source_in_top_3": true,
+        "expected_sources_in_top_3": true,
+        "expected_sources_recalled": true,
+        "raw_source_paths": [
+          ".memoryforge/code-modules/s05_todo_write.md",
+          "README.md",
+          "s05_todo_write/code.py"
+        ],
+        "raw_sources": [
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": ".memoryforge/code-modules/s05_todo_write.md"
+          },
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "README.md"
+          },
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "s05_todo_write/code.py"
+          }
+        ],
+        "expected_source_paths": [
+          "s05_todo_write/code.py"
+        ],
+        "expected_sources": [
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "s05_todo_write/code.py"
+          }
+        ],
+        "result_count": 3,
+        "exposed_characters": 726
+      }
+    },
+    {
+      "id": "dev-s06-spawn-subagent-signature",
+      "category": "single_hop",
+      "question": "What is the signature of s06_subagent.code.spawn_subagent?",
+      "memoryforge": {
+        "answer_correct": true,
+        "citation_grounded": true,
+        "expected_sources_recalled": true,
+        "all_expected_sources_cited": true,
+        "repository_path_isolated": true,
+        "expected_repository_ids": [
+          "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6"
+        ],
+        "abstention_correct": true,
+        "wiki_pages_read": 3,
+        "raw_sources_read": 0,
+        "evidence_characters": 2108,
+        "wiki_pages": [
+          "wiki/pages/code/f9618a931031/s06-subagent/code.md"
+        ],
+        "cited_source_paths": [
+          "s06_subagent/code.py"
+        ],
+        "cited_sources": [
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "s06_subagent/code.py"
+          }
+        ]
+      },
+      "raw_fts_baseline": {
+        "expected_source_in_top_3": true,
+        "expected_sources_in_top_3": true,
+        "expected_sources_recalled": true,
+        "raw_source_paths": [
+          ".memoryforge/code-modules/s06_subagent.md",
+          "README.md",
+          "s06_subagent/code.py"
+        ],
+        "raw_sources": [
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": ".memoryforge/code-modules/s06_subagent.md"
+          },
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "README.md"
+          },
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "s06_subagent/code.py"
+          }
+        ],
+        "expected_source_paths": [
+          "s06_subagent/code.py"
+        ],
+        "expected_sources": [
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "s06_subagent/code.py"
+          }
+        ],
+        "result_count": 3,
+        "exposed_characters": 726
+      }
+    },
+    {
+      "id": "dev-s12-task-class",
+      "category": "single_hop",
+      "question": "Which class represents a task in s12_task_system.code?",
+      "memoryforge": {
+        "answer_correct": true,
+        "citation_grounded": true,
+        "expected_sources_recalled": true,
+        "all_expected_sources_cited": true,
+        "repository_path_isolated": true,
+        "expected_repository_ids": [
+          "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6"
+        ],
+        "abstention_correct": true,
+        "wiki_pages_read": 3,
+        "raw_sources_read": 0,
+        "evidence_characters": 242,
+        "wiki_pages": [
+          "wiki/pages/code/f9618a931031/s12-task-system/code.md"
+        ],
+        "cited_source_paths": [
+          "s12_task_system/code.py"
+        ],
+        "cited_sources": [
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "s12_task_system/code.py"
+          }
+        ]
+      },
+      "raw_fts_baseline": {
+        "expected_source_in_top_3": true,
+        "expected_sources_in_top_3": true,
+        "expected_sources_recalled": true,
+        "raw_source_paths": [
+          ".memoryforge/code-modules/s12_task_system.md",
+          "docs/en/s05-skill-loading.md",
+          "s12_task_system/code.py"
+        ],
+        "raw_sources": [
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": ".memoryforge/code-modules/s12_task_system.md"
+          },
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "docs/en/s05-skill-loading.md"
+          },
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "s12_task_system/code.py"
+          }
+        ],
+        "expected_source_paths": [
+          "s12_task_system/code.py"
+        ],
+        "expected_sources": [
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "s12_task_system/code.py"
+          }
+        ],
+        "result_count": 3,
+        "exposed_characters": 726
+      }
+    },
+    {
+      "id": "dev-s12-create-task-signature",
+      "category": "single_hop",
+      "question": "What arguments does s12_task_system.code.create_task accept?",
+      "memoryforge": {
+        "answer_correct": true,
+        "citation_grounded": true,
+        "expected_sources_recalled": true,
+        "all_expected_sources_cited": true,
+        "repository_path_isolated": true,
+        "expected_repository_ids": [
+          "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6"
+        ],
+        "abstention_correct": true,
+        "wiki_pages_read": 3,
+        "raw_sources_read": 0,
+        "evidence_characters": 380,
+        "wiki_pages": [
+          "wiki/pages/code/f9618a931031/s12-task-system/code.md"
+        ],
+        "cited_source_paths": [
+          "s12_task_system/code.py"
+        ],
+        "cited_sources": [
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "s12_task_system/code.py"
+          }
+        ]
+      },
+      "raw_fts_baseline": {
+        "expected_source_in_top_3": true,
+        "expected_sources_in_top_3": true,
+        "expected_sources_recalled": true,
+        "raw_source_paths": [
+          ".memoryforge/code-modules/s12_task_system.md",
+          "README.md",
+          "s12_task_system/code.py"
+        ],
+        "raw_sources": [
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": ".memoryforge/code-modules/s12_task_system.md"
+          },
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "README.md"
+          },
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "s12_task_system/code.py"
+          }
+        ],
+        "expected_source_paths": [
+          "s12_task_system/code.py"
+        ],
+        "expected_sources": [
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "s12_task_system/code.py"
+          }
+        ],
+        "result_count": 3,
+        "exposed_characters": 728
+      }
+    },
+    {
+      "id": "dev-s12-can-start-paraphrase",
+      "category": "paraphrase",
+      "question": "Which s12 task helper decides whether a task can start?",
+      "memoryforge": {
+        "answer_correct": true,
+        "citation_grounded": true,
+        "expected_sources_recalled": true,
+        "all_expected_sources_cited": true,
+        "repository_path_isolated": true,
+        "expected_repository_ids": [
+          "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6"
+        ],
+        "abstention_correct": true,
+        "wiki_pages_read": 3,
+        "raw_sources_read": 0,
+        "evidence_characters": 372,
+        "wiki_pages": [
+          "wiki/pages/code/f9618a931031/s12-task-system/code.md"
+        ],
+        "cited_source_paths": [
+          "s12_task_system/code.py"
+        ],
+        "cited_sources": [
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "s12_task_system/code.py"
+          }
+        ]
+      },
+      "raw_fts_baseline": {
+        "expected_source_in_top_3": false,
+        "expected_sources_in_top_3": false,
+        "expected_sources_recalled": false,
+        "raw_source_paths": [
+          ".memoryforge/code-modules/s12_task_system.md",
+          "README.md",
+          "docs/en/s05-skill-loading.md"
+        ],
+        "raw_sources": [
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": ".memoryforge/code-modules/s12_task_system.md"
+          },
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "README.md"
+          },
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "docs/en/s05-skill-loading.md"
+          }
+        ],
+        "expected_source_paths": [
+          "s12_task_system/code.py"
+        ],
+        "expected_sources": [
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "s12_task_system/code.py"
+          }
+        ],
+        "result_count": 3,
+        "exposed_characters": 726
+      }
+    },
+    {
+      "id": "dev-agent-loop-multi-source",
+      "category": "multi_source",
+      "question": "What agent_loop signatures are defined in s01_agent_loop and s12_task_system?",
+      "memoryforge": {
+        "answer_correct": false,
+        "citation_grounded": false,
+        "expected_sources_recalled": true,
+        "all_expected_sources_cited": true,
+        "repository_path_isolated": true,
+        "expected_repository_ids": [
+          "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6"
+        ],
+        "abstention_correct": true,
+        "wiki_pages_read": 3,
+        "raw_sources_read": 0,
+        "evidence_characters": 5687,
+        "wiki_pages": [
+          "wiki/pages/code/f9618a931031/s12-task-system/code.md",
+          "wiki/pages/code/f9618a931031/s01-agent-loop/code.md"
+        ],
+        "cited_source_paths": [
+          "s01_agent_loop/code.py",
+          "s12_task_system/code.py"
+        ],
+        "cited_sources": [
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "s01_agent_loop/code.py"
+          },
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "s12_task_system/code.py"
+          }
+        ]
+      },
+      "raw_fts_baseline": {
+        "expected_source_in_top_3": false,
+        "expected_sources_in_top_3": false,
+        "expected_sources_recalled": false,
+        "raw_source_paths": [
+          ".memoryforge/code-modules/s12_task_system.md",
+          "README-ja.md",
+          "README.md"
+        ],
+        "raw_sources": [
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": ".memoryforge/code-modules/s12_task_system.md"
+          },
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "README-ja.md"
+          },
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "README.md"
+          }
+        ],
+        "expected_source_paths": [
+          "s01_agent_loop/code.py",
+          "s12_task_system/code.py"
+        ],
+        "expected_sources": [
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "s01_agent_loop/code.py"
+          },
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "s12_task_system/code.py"
+          }
+        ],
+        "result_count": 3,
+        "exposed_characters": 726
+      }
+    },
+    {
+      "id": "dev-unknown-vector-database",
+      "category": "unanswerable",
+      "question": "Which function stores agent embeddings in a PostgreSQL vector database?",
+      "memoryforge": {
+        "answer_correct": true,
+        "citation_grounded": true,
+        "expected_sources_recalled": true,
+        "all_expected_sources_cited": true,
+        "repository_path_isolated": true,
+        "expected_repository_ids": [
+          "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6"
+        ],
+        "abstention_correct": true,
+        "wiki_pages_read": 3,
+        "raw_sources_read": 0,
+        "evidence_characters": 0,
+        "wiki_pages": [],
+        "cited_source_paths": [],
+        "cited_sources": []
+      },
+      "raw_fts_baseline": {
+        "expected_source_in_top_3": true,
+        "expected_sources_in_top_3": true,
+        "expected_sources_recalled": true,
+        "raw_source_paths": [
+          "README.md",
+          "docs/en/s03-todo-write.md",
+          "docs/en/s05-skill-loading.md"
+        ],
+        "raw_sources": [
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "README.md"
+          },
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "docs/en/s03-todo-write.md"
+          },
+          {
+            "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+            "source_path": "docs/en/s05-skill-loading.md"
+          }
+        ],
+        "expected_source_paths": [],
+        "expected_sources": [],
+        "result_count": 3,
+        "exposed_characters": 726
+      }
+    }
+  ]
+}
