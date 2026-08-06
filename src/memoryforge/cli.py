@@ -13,6 +13,8 @@ import typer
 from memoryforge import __version__
 from memoryforge.agent import run_agent
 from memoryforge.changesets import ChangeSetStore
+from memoryforge.code_index import build_code_index
+from memoryforge.code_wiki_compiler import compile_code_wiki
 from memoryforge.compiler import (
     compilation_payload,
     compile_pending_sources,
@@ -25,12 +27,12 @@ from memoryforge.feishu_bot import FeishuBotError, reply_to_feishu_text
 from memoryforge.feishu_service import FeishuServiceError, serve_feishu_bot
 from memoryforge.git_adapter import GitRepositoryError
 from memoryforge.importer import SourceValidationError, import_local_file
-from memoryforge.lifecycle import ChangeSetLifecycleStore
 from memoryforge.linting import lint_workspace
 from memoryforge.models import ChangeOperationType, Sensitivity
+from memoryforge.module_planner import build_module_plan
 from memoryforge.provider import OpenAICompatibleProvider, ProviderConfig
 from memoryforge.query import answer_question
-from memoryforge.refresh import RefreshResult, refresh_workspace
+from memoryforge.refresh import refresh_workspace
 from memoryforge.sessions import SessionStore
 from memoryforge.web_adapter import WebPageError, import_html_file, import_web_page
 from memoryforge.workspace import (
@@ -57,31 +59,6 @@ WorkspaceOption = Annotated[
     Path,
     typer.Option("--workspace", "-w", help="Initialized MemoryForge workspace."),
 ]
-
-
-def _refresh_payload(result: RefreshResult) -> dict[str, object]:
-    return {
-        "status": "changed" if result.changed else "unchanged",
-        "git": [
-            {
-                "repository_id": item.repository_id,
-                "head_commit": item.head_commit,
-                "created": item.created,
-                "updated": item.updated,
-                "unchanged": item.unchanged,
-            }
-            for item in result.git
-        ],
-        "feishu": [
-            {
-                "document_id": item.document_id,
-                "created": item.created,
-                "updated": item.updated,
-                "unchanged": item.unchanged,
-            }
-            for item in result.feishu
-        ],
-    }
 
 
 @app.callback()
@@ -228,13 +205,10 @@ def git_sync(
 @app.command("code-add")
 def code_add(
     repository_id: Annotated[str, typer.Argument(help="Registered Git repository ID.")],
-    path: Annotated[
-        str,
-        typer.Argument(help="Committed Go/Python file or directory; use . for the whole repo."),
-    ],
+    path: Annotated[str, typer.Argument(help="Committed Go/Python file or directory.")],
     workspace: WorkspaceOption = Path("."),
 ) -> None:
-    """Select code for future Git syncs; use '.' to import the whole repository."""
+    """Select one code module; the next sync imports its Go/Python files."""
     try:
         selected = register_git_code_module(workspace, repository_id, path)
     except (
@@ -359,7 +333,34 @@ def refresh(workspace: WorkspaceOption = Path(".")) -> None:
         sqlite3.Error,
     ) as exc:
         _exit_with_safe_error(exc)
-    typer.echo(json.dumps(_refresh_payload(result), ensure_ascii=False, indent=2))
+    typer.echo(
+        json.dumps(
+            {
+                "status": "changed" if result.changed else "unchanged",
+                "git": [
+                    {
+                        "repository_id": item.repository_id,
+                        "head_commit": item.head_commit,
+                        "created": item.created,
+                        "updated": item.updated,
+                        "unchanged": item.unchanged,
+                    }
+                    for item in result.git
+                ],
+                "feishu": [
+                    {
+                        "document_id": item.document_id,
+                        "created": item.created,
+                        "updated": item.updated,
+                        "unchanged": item.unchanged,
+                    }
+                    for item in result.feishu
+                ],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
 
 
 @app.command()
@@ -408,12 +409,30 @@ def watch(
                         compilation.changeset,
                         compilation.candidate_files,
                     )
-                    ChangeSetLifecycleStore(opened).ensure_validated(
-                        stored.changeset.changeset_id
-                    )
 
             if first_pass or refreshed.changed or stored is not None:
-                payload = _refresh_payload(refreshed)
+                payload: dict[str, object] = {
+                    "status": "changed" if refreshed.changed else "unchanged",
+                    "git": [
+                        {
+                            "repository_id": item.repository_id,
+                            "head_commit": item.head_commit,
+                            "created": item.created,
+                            "updated": item.updated,
+                            "unchanged": item.unchanged,
+                        }
+                        for item in refreshed.git
+                    ],
+                    "feishu": [
+                        {
+                            "document_id": item.document_id,
+                            "created": item.created,
+                            "updated": item.updated,
+                            "unchanged": item.unchanged,
+                        }
+                        for item in refreshed.feishu
+                    ],
+                }
                 if stored is not None:
                     payload["status"] = "proposed"
                     payload["changeset"] = compilation_payload(stored)
@@ -456,7 +475,6 @@ def topics(
             compilation.changeset,
             compilation.candidate_files,
         )
-        ChangeSetLifecycleStore(opened).ensure_validated(stored.changeset.changeset_id)
     except (
         MemoryForgeError,
         WorkspaceIntegrityError,
@@ -678,23 +696,43 @@ def ingest(
             help="Allow the configured model to receive local_only sources for this run.",
         ),
     ] = False,
+    code_wiki: Annotated[
+        str | None,
+        typer.Option(
+            "--code-wiki",
+            help="Compile one registered Git repository into a reviewable code Wiki.",
+        ),
+    ] = None,
     workspace: WorkspaceOption = Path("."),
 ) -> None:
     if not pending:
         _exit_with_safe_error(ValueError("ingest currently requires --pending"))
+    if code_wiki is not None and (source or llm or allow_local_llm):
+        _exit_with_safe_error(
+            ValueError("--code-wiki cannot be combined with --source or LLM options")
+        )
     try:
         opened = Workspace.open(workspace)
-        provider = OpenAICompatibleProvider(ProviderConfig.from_environment()) if llm else None
-        compilation = compile_pending_sources(
-            opened,
-            source_ids=tuple(source or ()),
-            provider=provider,
-            allow_local=allow_local_llm,
-        )
+        if code_wiki is not None:
+            snapshot = build_code_index(opened, code_wiki)
+            plan = build_module_plan(snapshot)
+            compilation = compile_code_wiki(opened, snapshot, plan)
+        else:
+            provider = OpenAICompatibleProvider(ProviderConfig.from_environment()) if llm else None
+            compilation = compile_pending_sources(
+                opened,
+                source_ids=tuple(source or ()),
+                provider=provider,
+                allow_local=allow_local_llm,
+            )
         if compilation is None:
             typer.echo(
                 json.dumps(
-                    {"status": "no_pending", "pending": []},
+                    (
+                        {"status": "up_to_date", "repository_id": code_wiki}
+                        if code_wiki is not None
+                        else {"status": "no_pending", "pending": []}
+                    ),
                     ensure_ascii=False,
                     indent=2,
                 )
@@ -704,7 +742,6 @@ def ingest(
             compilation.changeset,
             compilation.candidate_files,
         )
-        ChangeSetLifecycleStore(opened).ensure_validated(stored.changeset.changeset_id)
     except (
         MemoryForgeError,
         WorkspaceIntegrityError,
@@ -725,20 +762,22 @@ def review(
 ) -> None:
     try:
         opened = Workspace.open(workspace)
-        stored = ChangeSetStore(opened).get(changeset_id)
-        diffs: dict[str, str] = {}
-        for path, candidate in sorted(stored.candidate_files.items()):
-            stable_path = opened.root / path
-            stable = stable_path.read_text(encoding="utf-8") if stable_path.is_file() else ""
-            diffs[path] = "".join(
-                difflib.unified_diff(
-                    stable.splitlines(keepends=True),
-                    candidate.splitlines(keepends=True),
-                    fromfile=path,
-                    tofile=f"{path} (proposed)",
+        with opened.exclusive_lock():
+            store = ChangeSetStore(opened)
+            stored = store.get(changeset_id)
+            diffs: dict[str, str] = {}
+            for path, candidate in sorted(stored.candidate_files.items()):
+                stable_path = opened.root / path
+                stable = stable_path.read_text(encoding="utf-8") if stable_path.is_file() else ""
+                diffs[path] = "".join(
+                    difflib.unified_diff(
+                        stable.splitlines(keepends=True),
+                        candidate.splitlines(keepends=True),
+                        fromfile=path,
+                        tofile=f"{path} (proposed)",
+                    )
                 )
-            )
-        ChangeSetLifecycleStore(opened).mark_reviewed(changeset_id)
+            reviewed = store.record_review(stored)
     except (
         MemoryForgeError,
         WorkspaceIntegrityError,
@@ -753,6 +792,7 @@ def review(
             {
                 "changeset_id": stored.changeset.changeset_id,
                 "status": stored.changeset.status.value,
+                "reviewed_at": reviewed.reviewed_at.isoformat(),
                 "candidate_files": stored.candidate_files,
                 "unified_diff": diffs,
             },
@@ -767,15 +807,29 @@ def approve(
     changeset_id: Annotated[str, typer.Argument()],
     workspace: WorkspaceOption = Path("."),
 ) -> None:
-    """Approve a ChangeSet after its diff has been reviewed."""
     try:
         opened = Workspace.open(workspace)
-        state = ChangeSetLifecycleStore(opened).approve(changeset_id)
-    except (MemoryForgeError, WorkspaceIntegrityError, WorkspaceSecurityError, OSError) as exc:
+        with opened.exclusive_lock():
+            store = ChangeSetStore(opened)
+            stored = store.get(changeset_id)
+            approval = store.approve(stored)
+    except (
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
         _exit_with_safe_error(exc)
     typer.echo(
         json.dumps(
-            {"changeset_id": changeset_id, "status": state.status.value},
+            {
+                "changeset_id": changeset_id,
+                "status": approval.status,
+                "approved_at": approval.approved_at.isoformat(),
+            },
             ensure_ascii=False,
             indent=2,
         )
@@ -785,16 +839,25 @@ def approve(
 @app.command()
 def apply(
     changeset_id: Annotated[str, typer.Argument()],
-    approve: Annotated[bool, typer.Option("--approve")] = False,
+    approve: Annotated[
+        bool,
+        typer.Option(
+            "--approve",
+            help="Legacy shortcut that records review and approval before applying.",
+        ),
+    ] = False,
     workspace: WorkspaceOption = Path("."),
 ) -> None:
     try:
         opened = Workspace.open(workspace)
-        if not approve and not ChangeSetLifecycleStore(opened).is_approved(changeset_id):
-            raise ValueError("apply requires an approved ChangeSet or explicit --approve")
         with opened.exclusive_lock():
             store = ChangeSetStore(opened)
             stored = store.get(changeset_id)
+            if approve:
+                store.record_review(stored, mode="inline_legacy")
+                store.approve(stored)
+            else:
+                store.require_approved(stored)
             archive_paths = tuple(
                 sorted(
                     operation.path

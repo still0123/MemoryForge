@@ -4,17 +4,18 @@ from __future__ import annotations
 
 import hashlib
 import json
+import posixpath
 import re
 import sqlite3
 import stat
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Literal, TypedDict
 
 from memoryforge.workspace import (
     WorkspaceIntegrityError,
     WorkspaceSecurityError,
     _blob_relative_path,
-    is_generated_repository_overview,
+    is_generated_navigation_page,
 )
 
 _INDEX_ENTRY = re.compile(r"^- \[[^\]]+\]\((?P<path>[^)]+)\) — .+$", re.MULTILINE)
@@ -80,9 +81,9 @@ def lint_workspace(workspace_root: Path) -> LintPayload:
         return {"status": "issues", "checked_pages": 0, "issues": issues}
 
     pages = sorted(
-        path for path in pages_root.glob("*.md") if path.is_file() and not path.is_symlink()
+        path for path in pages_root.rglob("*.md") if path.is_file() and not path.is_symlink()
     )
-    for path in sorted(path for path in pages_root.glob("*.md") if path.is_symlink()):
+    for path in sorted(path for path in pages_root.rglob("*.md") if path.is_symlink()):
         issues.append(
             _issue(
                 "invalid_page_path",
@@ -116,7 +117,8 @@ def lint_workspace(workspace_root: Path) -> LintPayload:
                     )
                 )
                 continue
-            if is_generated_repository_overview(content):
+            if is_generated_navigation_page(content):
+                _lint_related_page_links(relative_path, content, page_paths, issues)
                 if relative_path not in indexed_paths:
                     issues.append(
                         _issue(
@@ -379,33 +381,49 @@ def _lint_related_page_links(
 ) -> None:
     for match in _RELATED_PAGE_LINK.finditer(content):
         target = match.group("path")
-        if "/" in target or target.startswith("."):
+        resolved = _resolve_related_page_path(page_path, target)
+        if resolved is None:
             issues.append(
                 _issue(
                     "invalid_related_link",
                     page_path,
-                    f"related page link must stay in wiki/pages: {target}",
+                    f"related page link must stay below wiki/pages: {target}",
                 )
             )
-        elif f"wiki/pages/{target}" not in page_paths:
+        elif resolved not in page_paths:
             issues.append(
                 _issue(
                     "related_page_missing",
                     page_path,
-                    f"related page does not exist: wiki/pages/{target}",
+                    f"related page does not exist: {resolved}",
                 )
             )
 
 
 def _related_page_paths(page_path: str, content: str) -> tuple[str, ...]:
-    """Return valid same-directory Wiki page targets for orphan detection."""
-    _ = page_path
+    """Return valid relative Wiki page targets for orphan detection."""
     return tuple(
-        f"wiki/pages/{target}"
+        resolved
         for match in _RELATED_PAGE_LINK.finditer(content)
         for target in (match.group("path"),)
-        if "/" not in target and not target.startswith(".")
+        for resolved in (_resolve_related_page_path(page_path, target),)
+        if resolved is not None
     )
+
+
+def _resolve_related_page_path(page_path: str, target: str) -> str | None:
+    if "\\" in target or target.startswith("/"):
+        return None
+    parent = PurePosixPath(page_path).parent
+    normalized = PurePosixPath(posixpath.normpath((parent / target).as_posix()))
+    if (
+        normalized.parts[:2] != ("wiki", "pages")
+        or len(normalized.parts) < 3
+        or normalized.suffix != ".md"
+        or any(part in {"", ".", ".."} for part in normalized.parts)
+    ):
+        return None
+    return normalized.as_posix()
 
 
 def _open_readonly_index(workspace_root: Path) -> sqlite3.Connection:

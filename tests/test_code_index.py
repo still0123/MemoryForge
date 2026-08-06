@@ -1,0 +1,201 @@
+from __future__ import annotations
+
+import hashlib
+import subprocess
+from pathlib import Path
+
+import pytest
+
+from memoryforge.code_index import CodeIndexError, build_code_index
+from memoryforge.code_models import (
+    CodeIndexSnapshot,
+    CodeLanguage,
+    CodeRelationType,
+    CodeSymbol,
+    CodeSymbolKind,
+)
+from memoryforge.workspace import (
+    Workspace,
+    init_workspace,
+    read_source_excerpt,
+    register_git_checkout,
+    register_git_code_module,
+    sync_git_checkout,
+)
+
+PYTHON_SOURCE = '''"""服务模块。"""
+
+def logged(function):
+    return function
+
+
+@logged
+def helper(name: str) -> str:
+    return f"Hello {name}"
+
+
+class Greeter:
+    def greet(self, name: str) -> str:
+        return helper(name)
+
+    def repeat(self, name: str) -> str:
+        return self.greet(name)
+'''
+
+
+def test_python_index_extracts_symbols_relations_and_exact_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    checkout, workspace, repository_id = _synced_python_repository(tmp_path, PYTHON_SOURCE)
+
+    snapshot = build_code_index(workspace, repository_id)
+
+    assert snapshot.languages == (
+        CodeLanguage.PYTHON,
+        CodeLanguage.GO,
+        CodeLanguage.TYPESCRIPT,
+    )
+    symbols = {symbol.qualified_name: symbol for symbol in snapshot.symbols}
+    assert {
+        "src.service",
+        "src.service.logged",
+        "src.service.helper",
+        "src.service.Greeter",
+        "src.service.Greeter.greet",
+        "src.service.Greeter.repeat",
+    } == set(symbols)
+    assert symbols["src.service"].kind is CodeSymbolKind.MODULE
+    assert symbols["src.service.Greeter"].kind is CodeSymbolKind.CLASS
+    assert symbols["src.service.Greeter.greet"].kind is CodeSymbolKind.METHOD
+    helper_excerpt = read_source_excerpt(
+        workspace,
+        source_id=symbols["src.service.helper"].location.source_id,
+        source_version=symbols["src.service.helper"].location.source_version,
+        locator=symbols["src.service.helper"].location.locator,
+    )
+    assert helper_excerpt.startswith("@logged\ndef helper")
+
+    edges = {
+        (
+            relation.type,
+            _symbol_name(snapshot, relation.source_symbol_id),
+            _symbol_name(snapshot, relation.target_symbol_id),
+        )
+        for relation in snapshot.relations
+    }
+    assert (
+        CodeRelationType.CONTAINS,
+        "src.service",
+        "src.service.helper",
+    ) in edges
+    assert (
+        CodeRelationType.CONTAINS,
+        "src.service.Greeter",
+        "src.service.Greeter.greet",
+    ) in edges
+    assert (
+        CodeRelationType.CALLS,
+        "src.service.Greeter.greet",
+        "src.service.helper",
+    ) in edges
+    assert (
+        CodeRelationType.CALLS,
+        "src.service.Greeter.repeat",
+        "src.service.Greeter.greet",
+    ) in edges
+
+    for symbol in snapshot.symbols:
+        excerpt = read_source_excerpt(
+            workspace,
+            source_id=symbol.location.source_id,
+            source_version=symbol.location.source_version,
+            locator=symbol.location.locator,
+        )
+        assert hashlib.sha256(excerpt.encode()).hexdigest() == symbol.body_sha256
+
+    def reject_writable_open(_cls: type[Workspace], _root: Path) -> Workspace:
+        raise AssertionError("code indexing must not open a writable workspace")
+
+    monkeypatch.setattr(Workspace, "open", classmethod(reject_writable_open))
+    (checkout / "src/service.py").write_text("def uncommitted():\n    pass\n", encoding="utf-8")
+    assert build_code_index(workspace, repository_id) == snapshot
+
+
+def test_python_symbol_ids_survive_body_changes_across_commits(tmp_path: Path) -> None:
+    checkout, workspace, repository_id = _synced_python_repository(tmp_path, PYTHON_SOURCE)
+    first = build_code_index(workspace, repository_id)
+    first_helper = _symbol(first, "src.service.helper")
+
+    updated = PYTHON_SOURCE.replace('return f"Hello {name}"', 'return f"Welcome {name}"')
+    (checkout / "src/service.py").write_text(updated, encoding="utf-8")
+    _commit_all(checkout, "Update helper body")
+    sync_git_checkout(workspace, repository_id)
+    second = build_code_index(workspace, repository_id)
+    second_helper = _symbol(second, "src.service.helper")
+
+    assert first.index_id != second.index_id
+    assert first_helper.symbol_id == second_helper.symbol_id
+    assert first_helper.body_sha256 != second_helper.body_sha256
+    assert first_helper.location.source_version != second_helper.location.source_version
+
+
+def test_python_index_rejects_syntax_errors_in_synced_evidence(tmp_path: Path) -> None:
+    checkout, workspace, repository_id = _synced_python_repository(
+        tmp_path,
+        "def broken(:\n    pass\n",
+    )
+
+    with pytest.raises(CodeIndexError, match="syntax errors"):
+        build_code_index(workspace, repository_id)
+
+    assert (checkout / "src/service.py").is_file()
+
+
+def _synced_python_repository(
+    tmp_path: Path,
+    source: str,
+) -> tuple[Path, Path, str]:
+    checkout = tmp_path / "repository"
+    checkout.mkdir()
+    _git(checkout, "init")
+    _git(checkout, "config", "user.email", "test@example.com")
+    _git(checkout, "config", "user.name", "Test User")
+    (checkout / "README.md").write_text("# Service\n", encoding="utf-8")
+    (checkout / "src").mkdir()
+    (checkout / "src/service.py").write_text(source, encoding="utf-8")
+    _commit_all(checkout, "Add Python service")
+
+    workspace = init_workspace(tmp_path / "workspace")
+    repository = register_git_checkout(workspace, checkout)
+    sync_git_checkout(workspace, repository.repository_id)
+    register_git_code_module(workspace, repository.repository_id, "src")
+    sync_git_checkout(workspace, repository.repository_id)
+    return checkout, workspace, repository.repository_id
+
+
+def _symbol(snapshot: CodeIndexSnapshot, qualified_name: str) -> CodeSymbol:
+    return next(symbol for symbol in snapshot.symbols if symbol.qualified_name == qualified_name)
+
+
+def _symbol_name(snapshot: CodeIndexSnapshot, symbol_id: str) -> str:
+    return _symbol_by_id(snapshot, symbol_id).qualified_name
+
+
+def _symbol_by_id(snapshot: CodeIndexSnapshot, symbol_id: str) -> CodeSymbol:
+    return next(symbol for symbol in snapshot.symbols if symbol.symbol_id == symbol_id)
+
+
+def _commit_all(checkout: Path, message: str) -> None:
+    _git(checkout, "add", ".")
+    _git(checkout, "commit", "-m", message)
+
+
+def _git(checkout: Path, *arguments: str) -> None:
+    subprocess.run(
+        ["git", *arguments],
+        cwd=checkout,
+        check=True,
+        capture_output=True,
+        text=True,
+    )

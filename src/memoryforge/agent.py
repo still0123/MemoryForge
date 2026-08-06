@@ -374,12 +374,7 @@ def _search_code(
         )
         if Path(result.source_path).suffix in {".go", ".py"}
     ][:3]
-    return {
-        "matches": [
-            {"path": match.source_path, "snippet": match.snippet}
-            for match in matches
-        ]
-    }
+    return {"matches": [{"path": match.source_path, "snippet": match.snippet} for match in matches]}
 
 
 def _read_evidence(

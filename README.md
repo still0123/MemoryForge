@@ -28,8 +28,9 @@
 
 ## 核心能力
 
-- **多源资料接入**：本地 Markdown/TXT、已克隆的 Git 仓库、飞书 Docx/Wiki、单篇公开网页或保存的 HTML；代码模块页会列出入口/处理器、模块依赖和测试文件。
+- **多源资料接入**：本地 Markdown/TXT、已克隆的 Git 仓库、飞书 Docx/Wiki、单篇公开网页或保存的 HTML。
 - **WikiCompiler**：将资料编译为“项目/模块介绍、机制说明、方案与复盘”三类 Markdown 页面；每页都保留来源、版本与原文位置。
+- **代码 Wiki**：用 Tree-sitter 为显式选择的 Python、Go、TypeScript/TSX 代码构建确定性符号图、模块计划和带引用 Wiki，仍须人工审核后应用。
 - **增量更新**：新资料优先扩展已有主题；资料更新时只重编译受影响的页面。
 - **渐进式查询**：`INDEX.md → 少量 Wiki 页面 → 按需原文核验`，避免一次把整个知识库塞进上下文。
 - **MiniClaude Agent**：只提供 `search_wiki`、`read_evidence`、`final` 三个工具；必须读取证据后才能给出带引用的答案。
@@ -75,7 +76,7 @@ memoryforge init ./my-wiki
 # 2. 导入一份资料
 memoryforge import ./notes/cache.md --category design --workspace ./my-wiki
 
-# 3. 先生成变更预览，再确认写入 Wiki
+# 3. 先生成变更预览，独立审批后再写入 Wiki
 memoryforge ingest --pending --workspace ./my-wiki
 memoryforge review <changeset-id> --workspace ./my-wiki
 memoryforge approve <changeset-id> --workspace ./my-wiki
@@ -83,13 +84,7 @@ memoryforge apply <changeset-id> --workspace ./my-wiki
 
 # 4. 提问
 memoryforge ask '缓存多久过期？' --workspace ./my-wiki
-
-# 5. 查询代码里的具体方法或字段
-memoryforge ask 'CheckFileSystem 方法做什么？' --workspace ./my-wiki
-memoryforge ask 'FileSystem 有哪些字段？' --workspace ./my-wiki
 ```
-
-代码仓库被选中后，Go 代码页会记录包、结构体、方法和结构体字段；Python 代码页会记录类和函数。询问具体符号时，MemoryForge 会优先路由到对应代码页，并保留原始代码行作为引用。
 
 生成后的 Workspace 大致如下：
 
@@ -121,7 +116,7 @@ memoryforge feishu-serve --workspace ./my-wiki
 memoryforge feishu-serve --llm --allow-local-llm --workspace ./my-wiki
 ```
 
-飞书服务只处理私聊文本并回复原消息。资料仍要先走 `feishu-import → ingest → review → approve → apply`，它不会自动抓取飞书空间或后台同步全部文档。完整配置见 [FEISHU_MVP_SPEC.md](FEISHU_MVP_SPEC.md)。
+飞书服务只处理私聊文本并回复原消息。资料仍要先走 `feishu-import → ingest → review → apply`，它不会自动抓取飞书空间或后台同步全部文档。完整配置见 [FEISHU_MVP_SPEC.md](FEISHU_MVP_SPEC.md)。
 
 ## MiniClaude Agent 在哪里？
 
@@ -184,14 +179,34 @@ init -> git-add --public -> git-sync -> ingest -> review -> approve -> apply -> 
 
 | 指标 | MemoryForge | Raw FTS |
 | --- | ---: | ---: |
-| Top-3 来源召回率 | **96.0%** | 56.0% |
+| Top-3 来源召回率 | **96.2%** | 57.7% |
 | 多来源完整覆盖率 | **100.0%** | 20.0% |
 | 回答准确率 | 96.7% | 不适用 |
-| 引用落地准确率 | 96.0% | 不适用 |
+| 引用落地准确率 | 96.2% | 不适用 |
 | 无答案拒答准确率 | 100.0% | 不适用 |
-| 平均证据/候选文本字符数 | 140.17 | 728.0 |
+| 平均证据/候选文本字符数 | 143.17 | 728.0 |
 
 Raw FTS 只负责检索，不生成答案，所以不能拿它计算回答、引用或拒答准确率。完整方法、失败案例和复现说明见 [公开 Benchmark](docs/BENCHMARK.md)。
+
+### 从 Wheel 独立复现
+
+发布检查会创建全新虚拟环境，只安装 Wheel，并运行 CLI、代码 Wiki Benchmark 和可选的完整公开
+Demo。脚本会拒绝从源码 checkout 导入 `memoryforge`：
+
+```bash
+uv build --wheel --out-dir dist
+.venv/bin/python demo/run_release_check.py \
+  --wheel dist/memoryforge-0.2.0-py3-none-any.whl \
+  --workdir /private/tmp/memoryforge-release-check \
+  --output /private/tmp/memoryforge-release-provenance.json \
+  --code-evidence-output demo/results/code_wiki_public.json \
+  --public-evidence-output demo/results/agent_skill_eval_public.json \
+  --public-source-repo /absolute/path/to/AgentSkill-Eval
+```
+
+公开仓库必须 checkout 到 `93f5dc05229da250b041850ad8deeeec886ef304`。提交的
+[`release_provenance.json`](demo/results/release_provenance.json) 记录实际 import 路径、依赖版本、
+Wheel SHA256、两套 Benchmark 结果和产物哈希。
 
 如果要按秋招面试的方式完整演示，直接看 [秋招演示与面试说明](docs/PORTFOLIO_DEMO.md)。里面包含 3 分钟讲解顺序、公开 Demo 命令、飞书展示命令和常见追问。
 
@@ -202,7 +217,7 @@ Raw FTS 只负责检索，不生成答案，所以不能拿它计算回答、引
 | 选择 | 原因 |
 | --- | --- |
 | Markdown Wiki 而非只存向量 | 即使不问模型，人也能阅读、审核和维护沉淀内容 |
-| `review → approve → apply` 而非直接生成 | 先看 Diff，再确认改变稳定 Wiki；避免自动覆盖已有知识 |
+| `review → approve → apply` 而非直接生成 | 审阅、授权和落盘分别留痕；避免自动覆盖已有知识 |
 | `INDEX + FTS5 + 页面展开` 而非全量拼接 | 控制检索范围和上下文成本，便于解释“这次读了什么” |
 | 证据优先的最小 Agent | 让模型负责组织答案，不让它执行代码或扩展为难控的通用助手 |
 | 飞书作为展示入口 | 将真实 Wiki 问答能力放到日常聊天场景中，而不重复实现另一套知识库 |
@@ -220,11 +235,14 @@ Raw FTS 只负责检索，不生成答案，所以不能拿它计算回答、引
 # 资料导入
 memoryforge import <path> --workspace <workspace>
 memoryforge git-add <local-checkout> --workspace <workspace>
+memoryforge code-add <repository-id> <relative-path> --workspace <workspace>
+memoryforge git-sync <repository-id> --workspace <workspace>
 memoryforge feishu-import <docx-or-wiki-url-or-token> --workspace <workspace>
 memoryforge web-import <public-http-url> --workspace <workspace>
 
 # Wiki 编译与检查
 memoryforge ingest --pending --workspace <workspace>
+memoryforge ingest --code-wiki <repository-id> --workspace <workspace>
 memoryforge watch --interval 60 --workspace <workspace>
 memoryforge review <changeset-id> --workspace <workspace>
 memoryforge approve <changeset-id> --workspace <workspace>
@@ -237,28 +255,21 @@ memoryforge agent '<question>' --workspace <workspace>
 memoryforge feishu-serve --workspace <workspace>
 ```
 
-飞书机器人支持两条轻量上下文命令：
+飞书私聊还支持两条轻量上下文命令：
 
 ```text
-/project efs-mgr       # 当前聊天固定到某个已注册仓库
+/project efs-mgr       # 当前聊天固定到某个已登记仓库
 /project clear         # 清除项目范围
 /resume <session-id>   # 恢复本机保存的另一段会话
 /resume clear          # 退出恢复会话
 ```
 
-`/project` 只改变当前聊天的 Wiki 检索范围；`/resume` 读取本机保存的最近会话，并把必要上下文
-交给回答流程。原始会话仍留在本地，不会自动同步到飞书或 GitHub。新仓库需要先执行 `git-add`
-和 `code-add`，才能作为项目被选择。
+`/project` 只改变当前聊天的 Wiki 检索范围，`/resume` 只读取本机保存的有限会话上下文；
+它们不会把公司代码、飞书正文或会话上传到 GitHub。`watch` 只生成待审核 ChangeSet，
+不会自动覆盖正式 Wiki。
 
 更多命令请运行 `memoryforge --help`。实现细节与数据模型见 [SPEC.md](SPEC.md)，下一阶段的完整实施计划见 [NEXT_PHASE_SPEC.md](NEXT_PHASE_SPEC.md)。
 
-`watch` 会定时刷新所有已经注册的 Git 仓库和飞书文档，并在发现变化后自动生成待审核
-ChangeSet。它不会自动执行 `approve` 或 `apply`；你仍然可以先查看 Diff，再决定是否更新稳定 Wiki。
-首次接入一个新仓库时，仍需先执行 `git-add` 和 `code-add`。使用 `--once` 可以只运行一轮，
-使用 `--llm --allow-local-llm` 可以让已配置模型参与本地资料编译。
-
 ## 当前边界
 
-当前刻意不做公网部署、群聊、多用户权限、向量数据库、知识图谱和通用编码 Agent。`watch`
-只负责本机定时轮询和生成待审核改动，不包含分布式调度或无人值守自动发布。现在优先把“个人技术
-Wiki 如何持续更新、可靠查询并回到证据”这一件事做深。
+当前刻意不做公网部署、群聊、多用户权限、定时同步、向量数据库、知识图谱和通用编码 Agent。这些能力可以后续添加，但现在优先把“个人技术 Wiki 如何持续更新、可靠查询并回到证据”这一件事做深。

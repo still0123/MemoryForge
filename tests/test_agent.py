@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
+from typer.main import get_command
 from typer.testing import CliRunner
 
 import memoryforge.agent as agent_module
@@ -727,10 +728,13 @@ def test_agent_does_not_create_update_when_provider_declines(tmp_path: Path, mon
 
 
 def test_cli_agent_help_exposes_update_proposal_flag() -> None:
-    result = CliRunner().invoke(app, ["agent", "--help"])
+    command = get_command(app).commands["agent"]
 
-    assert result.exit_code == 0
-    assert "--propose-update" in result.stdout
+    assert any(
+        "--propose-update" in getattr(parameter, "opts", ())
+        and not getattr(parameter, "hidden", False)
+        for parameter in command.params
+    )
 
 
 def _applied_public_workspace(tmp_path: Path, monkeypatch, *, local_only: bool = False) -> Path:

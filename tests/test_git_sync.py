@@ -378,9 +378,7 @@ func Reset() {}
     refreshed = sync_git_checkout(workspace, repository.repository_id)
     assert refreshed.created == 0
     assert {
-        document.relative_path
-        for document in refreshed.documents
-        if document.status == "updated"
+        document.relative_path for document in refreshed.documents if document.status == "updated"
     } == {
         ".memoryforge/code-modules/internal.md",
         ".memoryforge/code-modules/internal/meter.md",

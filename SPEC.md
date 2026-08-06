@@ -7,7 +7,7 @@
 | 文档状态 | Implemented v1.0 |
 | 当前基线 | 分支 `main` |
 | 产品形态 | 单用户、本地优先、CLI |
-| 当前阶段 | 核心闭环与飞书展示已完成，正在补公开 Benchmark 与发布材料 |
+| 当前阶段 | v0.2.0 Code Wiki 内核已完成，正在整合飞书项目上下文并验证真实仓库 |
 
 ## 1. 项目定义
 
@@ -84,7 +84,7 @@ LocalFileAdapter ─┐
 GitRepoAdapter ───┼─> LocalDocument ─> WikiCompiler ─> PageChange
 Future Adapters ──┘                                  │
                                                     v
-                                      review / approve / apply
+                                             review / apply
                                                     │
                                       Markdown Wiki + Git + FTS5
                                                     │
@@ -145,7 +145,8 @@ repository_id + relative_path + commit_sha
 - 用户显式配置的代码或配置文件
 
 不把整个仓库所有代码复制进 Wiki。用户可通过 `code-add <repository-id> <relative-path>` 选择
-一个已提交的 Go/Python 文件或目录；编译器只生成包/模块和公开符号的带引用代码页。精确代码搜索
+一个已提交的 Python、Go、TypeScript/TSX 文件或目录；编译器生成确定性符号图和层级模块计划，
+再通过 `ingest --code-wiki <repository-id>` 提出带引用代码页。精确代码搜索
 仍交给 `rg`、LSP 或代码托管平台；Wiki 主要保存模块职责、核心流程、设计原因和跨仓关系。
 
 #### 当前 Phase 3A 实现范围
@@ -172,7 +173,7 @@ Frontmatter、来源映射、可展开引用、Index 链接、孤儿页和需要
 
 可公开的 Git 仓库在其来源页已经 `apply` 后，可运行
 `memoryforge topics <repository-id>`。模型只接收这些页面的标题、相对路径和已有摘要，
-并将它们分成若干主题。结果写入同一个项目总览页，仍然由 review/approve/apply 决定是否生效；
+并将它们分成若干主题。结果写入同一个项目总览页，仍然由 review/apply 决定是否生效；
 主题页不承担问答证据，具体问答继续使用带原文引用的来源页。
 
 ### 4.4 后续扩展
@@ -291,10 +292,11 @@ class ChangeSet(BaseModel):
 ```
 
 ```text
-ingest -> staging -> review -> applied / rejected
+ingest -> staging -> review -> approve -> applied / rejected
 ```
 
-`apply` 代表用户批准：写入 Wiki、重建 Index，并创建一个 Git commit。Git 已经负责 Diff、历史和回滚，不再实现另一套复杂状态机。
+`approve` 独立记录用户授权，`apply` 只负责写入 Wiki、重建 Index，并创建一个 Git commit。
+审核与审批收据绑定不可变提案并随应用结果归档。Git 继续负责 Diff、历史和回滚。
 
 LLM 编译通过 `memoryforge ingest --pending --llm` 显式开启。CLI 从
 `MEMORYFORGE_API_BASE`、`MEMORYFORGE_API_KEY`、`MEMORYFORGE_MODEL` 读取
@@ -356,8 +358,10 @@ memoryforge init <workspace>
 memoryforge import <path> [--category <category>]
 memoryforge git-add <local-checkout> [--public]
 memoryforge git-list
+memoryforge code-add <repository-id> <relative-path>
 memoryforge git-sync <repository-id>
 memoryforge ingest --pending [--llm] [--allow-local-llm]
+memoryforge ingest --code-wiki <repository-id>
 memoryforge review <changeset-id>
 memoryforge approve <changeset-id>
 memoryforge apply <changeset-id>
@@ -387,7 +391,7 @@ memoryforge html-import <saved-page.html> --url <public-http-url>
 - 基于标题和摘要候选卡片的增量主题扩展、页面相关链接和关系页；
 - Lint 对相关页失链、来源删除和来源更新未重编译的提示；
 - Git 来源删除后的 `cleanup_required` 检查，以及单来源归档、共享页面重建的审核式 ChangeSet；
-- `ARCHIVE_PAGE` 在 `apply` 时删除稳定页面并清理来源映射，`reject` 不改变稳定 Wiki；
+- `ARCHIVE_PAGE` 在已审批的 `apply` 中删除稳定页面并清理来源映射，`reject` 不改变稳定 Wiki；
 - 一个 OpenAI-compatible LLM Provider，以及多来源页面更新；
 - LLM 编译的两步“CompilationPlan → PageChange”流程；计划会随 ChangeSet operation details
   进入 review，但不成为新的知识层；
@@ -479,6 +483,8 @@ Raw FTS 基线跑通；只有它证明需要更强语义检索时，才加入 Ch
 - 用既有渐进式 Wiki 查询生成标准文本回复 payload；
 - `feishu-serve` 通过 `lark-cli event consume im.message.receive_v1 --as bot` 常驻监听，
   再用 `lark-cli im +messages-reply --as bot` 回复同一条消息；
+- 支持 `/project` 固定当前聊天的仓库范围、`/resume` 恢复本机保存的有限会话上下文；
+- `watch` 可定期刷新已登记来源并生成待审核 ChangeSet，但不会自动覆盖正式 Wiki；
 - 不在项目内保存 App Secret、起 HTTP 服务或代替飞书权限管理。
 
 验收：在飞书私聊机器人发送一条文本问题，机器人从已应用的本地 Wiki 返回答案和 Wiki 页面引用；

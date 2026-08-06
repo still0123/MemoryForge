@@ -72,7 +72,7 @@ class LocalDocument(BaseModel):
     source_path: str = Field(min_length=1)
     media_type: Literal["text/markdown", "text/plain"]
     category: SourceCategory
-    suffix: Literal[".md", ".markdown", ".txt", ".go", ".py"]
+    suffix: Literal[".md", ".markdown", ".txt", ".go", ".py", ".ts", ".tsx"]
     title: str = Field(min_length=1)
     content: str
     sensitivity: Sensitivity = Sensitivity.PUBLIC
@@ -488,16 +488,24 @@ class StagedChangeSet(BaseModel):
         return self
 
 
-class ChangeSetLifecycle(BaseModel):
-    """Mutable review state stored separately from an immutable proposal."""
-
+class ReviewReceipt(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     changeset_id: str = Field(pattern=r"^chg_[a-zA-Z0-9_-]+$")
-    status: ChangeSetStatus
-    updated_at: datetime
-    reviewed_at: datetime | None = None
-    approved_at: datetime | None = None
+    proposal_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    status: Literal["VALIDATED"] = "VALIDATED"
+    review_mode: Literal["displayed", "inline_legacy"] = "displayed"
+    reviewed_at: datetime
+
+
+class ApprovalReceipt(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    changeset_id: str = Field(pattern=r"^chg_[a-zA-Z0-9_-]+$")
+    proposal_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    review_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    status: Literal["APPROVED"] = "APPROVED"
+    approved_at: datetime
 
 
 class LintIssue(BaseModel):

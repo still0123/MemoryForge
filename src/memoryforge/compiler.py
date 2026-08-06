@@ -1858,9 +1858,7 @@ def _code_facts(content: str, language: str) -> list[CodeFact]:
     for match in re.finditer(r"^.+$", content, re.MULTILINE):
         quote = match.group().strip()
         if quote:
-            return [
-                (quote, match.start() + len(match.group()) - len(match.group().lstrip()), None)
-            ]
+            return [(quote, match.start() + len(match.group()) - len(match.group().lstrip()), None)]
     raise ValueError("source contains no meaningful code")
 
 
@@ -1913,9 +1911,7 @@ def _go_code_facts(content: str) -> list[CodeFact]:
     for match in re.finditer(r"^.+$", content, re.MULTILINE):
         quote = match.group().strip()
         if quote:
-            return [
-                (quote, match.start() + len(match.group()) - len(match.group().lstrip()), None)
-            ]
+            return [(quote, match.start() + len(match.group()) - len(match.group().lstrip()), None)]
     raise ValueError("source contains no meaningful code")
 
 
@@ -1923,9 +1919,7 @@ def _go_function_body_facts(content: str) -> list[CodeFact]:
     """Keep a few exact body lines so method questions have implementation evidence."""
     lines = list(re.finditer(r"^.*$", content, re.MULTILINE))
     facts: list[CodeFact] = []
-    declaration = re.compile(
-        r"func\s+(?P<receiver>\([^)]*\)\s*)?(?P<name>[A-Za-z_]\w*)\s*\("
-    )
+    declaration = re.compile(r"func\s+(?P<receiver>\([^)]*\)\s*)?(?P<name>[A-Za-z_]\w*)\s*\(")
     for index, match in enumerate(lines):
         line = match.group().strip()
         function = declaration.match(line)

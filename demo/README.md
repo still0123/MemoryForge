@@ -39,21 +39,49 @@
 | --- | ---: |
 | 题目数 | 30 |
 | 回答准确率 | 96.7% |
-| Top-3 来源召回率 | 96.0% |
-| 引用落地准确率 | 96.0% |
+| Top-3 来源召回率 | 96.2% |
+| 引用落地准确率 | 96.2% |
 | 多来源覆盖率 | 100% |
 | 拒答准确率 | 100% |
 | 平均展开 Wiki 页面 | 3.0 |
 | 平均读取原文 | 0.0 |
-| 平均证据字符数 | 140.17 |
+| 平均证据字符数 | 143.17 |
 
-同一题集上的 Raw FTS 基线使用任意词匹配和 BM25 Top-3，来源召回率为 56.0%，多来源完整覆盖率为
+同一题集上的 Raw FTS 基线使用任意词匹配和 BM25 Top-3，来源召回率为 57.7%，多来源完整覆盖率为
 20.0%，平均暴露 728 个候选文本字符。它不比较不同模型，也不证明所有知识库都比 Raw FTS 更准确；
 公开题集中保留了 1 道同义改写题未命中，避免用更宽松的规则把指标包装得更好；启用模型后，
 模型可以在命中的候选证据上进行受控整理，但不能凭空补充来源。Agent 的证据终止约束、增量主题扩展、
 `local_only` 模型授权和飞书回复桥接由仓库测试覆盖，因为这些功能不应把公司内部资料写进公开 Demo。
 
 完整方法和失败案例见 [`docs/BENCHMARK.md`](../docs/BENCHMARK.md)。
+
+## 代码 Wiki C0-C4
+
+```bash
+.venv/bin/python demo/run_code_wiki_benchmark.py \
+  --workdir /private/tmp/memoryforge-code-wiki-c0 \
+  --output demo/results/code_wiki_public.json
+```
+
+脚本从固定 Python/Go/TypeScript 夹具创建临时 Git 仓库，执行代码 Wiki 的同步、审核、应用、
+lint、可信 Mermaid 架构图、确定性评测和单文件增量更新。它不调用模型。提交结果见
+[`results/code_wiki_public.json`](results/code_wiki_public.json)。
+
+## Wheel clean-room
+
+```bash
+uv build --wheel --out-dir dist
+.venv/bin/python demo/run_release_check.py \
+  --wheel dist/memoryforge-0.2.0-py3-none-any.whl \
+  --workdir /private/tmp/memoryforge-release-check \
+  --output demo/results/release_provenance.json \
+  --code-evidence-output demo/results/code_wiki_public.json \
+  --public-evidence-output demo/results/agent_skill_eval_public.json \
+  --public-source-repo /absolute/path/to/AgentSkill-Eval
+```
+
+脚本创建全新 venv，只安装 Wheel，清除 `PYTHONPATH`，验证实际 import 位于新环境，再复用上述两套
+Demo。`--public-source-repo` 必须位于固定 Commit `93f5dc0`；省略时只运行无网络的代码 Wiki 门禁。
 
 ## 多仓库个人资料演示
 

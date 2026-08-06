@@ -6,7 +6,7 @@ import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Literal
+from typing import Literal, cast
 from urllib.parse import quote, urlsplit, urlunsplit
 
 from memoryforge.models import LocalDocument, Sensitivity, SourceCategory
@@ -56,9 +56,9 @@ def scan_git_snapshot_documentation(
         raise GitRepositoryError(f"could not list HEAD tree in {snapshot.repository_root}")
 
     documents = []
-    blobs = _documentation_blobs(tree_result.stdout)
-    for relative_path, content in _read_text_blobs(snapshot.repository_root, blobs):
-        if content is None:
+    for relative_path, object_id in _documentation_blobs(tree_result.stdout):
+        content = _read_text_blob(snapshot.repository_root, object_id)
+        if content is None or not content.strip():
             continue
         suffix = _document_suffix(relative_path)
         documents.append(
@@ -82,7 +82,7 @@ def scan_git_snapshot_code(
     *,
     sensitivity: Sensitivity = Sensitivity.LOCAL_ONLY,
 ) -> tuple[LocalDocument, ...]:
-    """Read selected Go and Python files from one committed Git snapshot."""
+    """Read selected Go, Python, and TypeScript files from one committed Git snapshot."""
     normalized = tuple(_normalise_code_selection(selection) for selection in selections)
     if not normalized:
         return ()
@@ -97,16 +97,15 @@ def scan_git_snapshot_code(
     if tree_result.returncode != 0:
         raise GitRepositoryError(f"could not list HEAD tree in {snapshot.repository_root}")
 
-    selected_blobs = []
+    documents = []
     for relative_path, object_id in _tracked_blobs(tree_result.stdout):
         suffix = PurePosixPath(relative_path).suffix.lower()
-        if suffix not in {".go", ".py"} or not _matches_code_selection(relative_path, normalized):
+        if suffix not in {".go", ".py", ".ts", ".tsx"} or not _matches_code_selection(
+            relative_path,
+            normalized,
+        ):
             continue
-        selected_blobs.append((relative_path, object_id))
-
-    documents = []
-    for relative_path, content in _read_text_blobs(snapshot.repository_root, tuple(selected_blobs)):
-        suffix = PurePosixPath(relative_path).suffix.lower()
+        content = _read_text_blob(snapshot.repository_root, object_id)
         if content is None or not content.strip():
             continue
         documents.append(
@@ -213,12 +212,9 @@ def _tracked_blobs(output: bytes) -> tuple[tuple[str, str], ...]:
 
 
 def _normalise_code_selection(selection: str) -> str:
-    selected = selection.strip()
-    if selected == ".":
-        return "."
-    path = PurePosixPath(selected)
+    path = PurePosixPath(selection.strip())
     if (
-        not selected
+        not selection.strip()
         or path.is_absolute()
         or any(part in {"", ".", ".."} for part in path.parts)
         or "\\" in selection
@@ -230,9 +226,7 @@ def _normalise_code_selection(selection: str) -> str:
 def _matches_code_selection(relative_path: str, selections: tuple[str, ...]) -> bool:
     path = PurePosixPath(relative_path)
     return any(
-        selection == "."
-        or path == PurePosixPath(selection)
-        or path.is_relative_to(PurePosixPath(selection))
+        path == PurePosixPath(selection) or path.is_relative_to(PurePosixPath(selection))
         for selection in selections
     )
 
@@ -243,7 +237,7 @@ def _code_module_documents(
     *,
     sensitivity: Sensitivity,
 ) -> tuple[LocalDocument, ...]:
-    """Build one small structural source for every code directory."""
+    """Build small structural cards alongside raw code sources for old Wiki queries."""
     grouped: dict[str, list[LocalDocument]] = {}
     direct_files: dict[str, list[LocalDocument]] = {}
     for document in code_documents:
@@ -258,15 +252,12 @@ def _code_module_documents(
             grouped.setdefault(parent.as_posix(), []).append(document)
             parent = parent.parent
 
-    modules = []
+    modules: list[LocalDocument] = []
     module_names = set(grouped)
     for module, documents in sorted(grouped.items()):
         source_path = f".memoryforge/code-modules/{module}.md"
         paths = sorted(document.source_path for document in documents)
-        own_files = sorted(
-            direct_files.get(module, []),
-            key=lambda document: document.source_path,
-        )
+        own_files = sorted(direct_files.get(module, []), key=lambda item: item.source_path)
         children = sorted(
             directory
             for directory in grouped
@@ -291,11 +282,14 @@ def _code_module_documents(
             module,
         )
         tests = tuple(
-            document.source_path
-            for document in documents
-            if _is_test_file(document.source_path)
+            document.source_path for document in documents if _is_test_file(document.source_path)
         )
         aliases = tuple(dict.fromkeys((PurePosixPath(module).name, module)))
+        tracked_label = (
+            "Go/Python files"
+            if {document.suffix for document in documents} <= {".go", ".py"}
+            else "source files"
+        )
         content = "\n".join(
             [
                 f"# Code module: {module}",
@@ -304,7 +298,8 @@ def _code_module_documents(
                 "",
                 f"- Canonical module path: `{module}`",
                 "- Search aliases: " + ", ".join(f"`{alias}`" for alias in aliases),
-                f"- Contains {len(paths)} tracked Go/Python files; "
+                f"- Contains {len(paths)} tracked "
+                f"{tracked_label}; "
                 f"{len(own_files)} are directly inside this directory.",
                 "",
                 "## Responsibilities",
@@ -329,8 +324,10 @@ def _code_module_documents(
                 "## Entry points and handlers",
                 "",
                 *(
-                    [f"- `{path}`: " + ", ".join(f"`{symbol}`" for symbol in names)
-                     for path, names in entry_points]
+                    [
+                        f"- `{path}`: " + ", ".join(f"`{symbol}`" for symbol in names)
+                        for path, names in entry_points
+                    ]
                     if entry_points
                     else ["- No explicit entry point or handler was detected."]
                 ),
@@ -379,16 +376,16 @@ def _code_module_documents(
 
 
 def _exported_code_symbols(document: LocalDocument) -> tuple[str, ...]:
-    pattern = (
-        r"^(?:type\s+|func\s+(?:\([^)]*\)\s*)?)([A-Z]\w*)"
-        if document.suffix == ".go"
-        else r"^(?:class|def)\s+([A-Za-z]\w*)"
-    )
+    if document.suffix == ".go":
+        pattern = r"^(?:type\s+|func\s+(?:\([^)]*\)\s*)?)([A-Z]\w*)"
+    elif document.suffix == ".py":
+        pattern = r"^(?:class|def)\s+([A-Za-z]\w*)"
+    else:
+        pattern = r"^(?:class|interface|type|function|const)\s+([A-Za-z]\w*)"
     return tuple(dict.fromkeys(re.findall(pattern, document.content, re.MULTILINE)))
 
 
 def _representative_operations(symbols: tuple[str, ...]) -> tuple[str, ...]:
-    selected = []
     prefixes = (
         "Create",
         "Describe",
@@ -411,30 +408,22 @@ def _representative_operations(symbols: tuple[str, ...]) -> tuple[str, ...]:
         "Handle",
         "Register",
     )
-    for symbol in symbols:
-        if symbol.startswith(prefixes):
-            selected.append(symbol)
-        if len(selected) == 16:
-            break
-    if not selected:
-        selected.extend(symbols[:8])
-    return tuple(selected[:16])
+    selected = [symbol for symbol in symbols if symbol.startswith(prefixes)]
+    return tuple((selected or list(symbols))[:16])
 
 
 def _code_entry_points(
     documents: tuple[LocalDocument, ...],
 ) -> tuple[tuple[str, tuple[str, ...]], ...]:
-    prefixes = ("main", "New", "Run", "Serve", "Handle", "Register", "Execute")
-    entries = []
+    prefixes = ("New", "Run", "Serve", "Handle", "Register", "Execute")
+    entries: list[tuple[str, tuple[str, ...]]] = []
     for document in documents:
         names = tuple(
-            symbol
-            for symbol in _exported_code_symbols(document)
-            if symbol == "main" or symbol.startswith(prefixes[1:])
+            symbol for symbol in _exported_code_symbols(document) if symbol.startswith(prefixes)
         )
         if document.suffix == ".go" and re.search(r"^func\s+main\s*\(", document.content, re.M):
             names = tuple(dict.fromkeys(("main", *names)))
-        if document.suffix == ".py" and "if __name__ == \"__main__\":" in document.content:
+        if document.suffix == ".py" and 'if __name__ == "__main__":' in document.content:
             names = tuple(dict.fromkeys(("main", *names)))
         if names:
             entries.append((document.source_path, names[:12]))
@@ -446,7 +435,7 @@ def _internal_dependencies(
     modules: set[str],
     current_module: str,
 ) -> tuple[str, ...]:
-    imported = []
+    imported: list[str] = []
     for document in documents:
         if document.suffix == ".go":
             candidates = re.findall(r'"([^"\n]+)"', document.content)
@@ -454,7 +443,7 @@ def _internal_dependencies(
             candidates = re.findall(
                 r"^(?:from|import)\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)",
                 document.content,
-                re.M,
+                re.MULTILINE,
             )
         for candidate in candidates:
             normalized = candidate.replace(".", "/")
@@ -474,47 +463,29 @@ def _internal_dependencies(
 
 def _is_test_file(path: str) -> bool:
     name = PurePosixPath(path).name
-    return name.endswith("_test.go") or name.startswith("test_") or name.endswith("_test.py")
-
-
-def _code_suffix(suffix: str) -> Literal[".go", ".py"]:
-    if suffix == ".go":
-        return ".go"
-    return ".py"
-
-
-def _read_text_blobs(
-    repository_root: Path,
-    blobs: tuple[tuple[str, str], ...],
-) -> tuple[tuple[str, str | None], ...]:
-    if not blobs:
-        return ()
-    result = subprocess.run(
-        ["git", "cat-file", "--batch"],
-        cwd=repository_root,
-        input=("\n".join(object_id for _, object_id in blobs) + "\n").encode(),
-        check=False,
-        capture_output=True,
+    return (
+        name.endswith(("_test.go", "_test.py", "_test.ts", "_test.tsx"))
+        or name.startswith("test_")
+        or name.endswith((".spec.ts", ".spec.tsx"))
     )
+
+
+def _code_suffix(suffix: str) -> Literal[".go", ".py", ".ts", ".tsx"]:
+    if suffix not in {".go", ".py", ".ts", ".tsx"}:
+        raise GitRepositoryError(f"unsupported code suffix: {suffix}")
+    return cast(Literal[".go", ".py", ".ts", ".tsx"], suffix)
+
+
+def _read_text_blob(repository_root: Path, object_id: str) -> str | None:
+    result = _run_git_bytes(repository_root, "cat-file", "-p", object_id)
     if result.returncode != 0:
-        raise GitRepositoryError("could not read selected Git blobs")
-    offset = 0
-    documents: list[tuple[str, str | None]] = []
-    for relative_path, _ in blobs:
-        header_end = result.stdout.index(b"\n", offset)
-        size = int(result.stdout[offset:header_end].rsplit(b" ", 1)[1])
-        start = header_end + 1
-        raw = result.stdout[start : start + size]
-        offset = start + size + 1
-        if b"\0" in raw:
-            documents.append((relative_path, None))
-            continue
-        try:
-            content = raw.decode("utf-8")
-        except UnicodeDecodeError:
-            content = None
-        documents.append((relative_path, content))
-    return tuple(documents)
+        raise GitRepositoryError(f"could not read Git blob {object_id}")
+    if b"\0" in result.stdout:
+        return None
+    try:
+        return result.stdout.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
 
 
 def _is_documentation_path(relative_path: str) -> bool:

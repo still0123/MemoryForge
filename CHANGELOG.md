@@ -1,5 +1,38 @@
 # Changelog
 
+## v0.2.0 — 2026-08-06
+
+以可信 Code Wiki、稳定发布和独立复现为重点的第二个公开版本。
+
+### 新增
+
+- Python、Go、TypeScript/TSX Tree-sitter CodeMap，以及稳定 Symbol、Relation 和 Module 身份；
+- 确定性 ModulePlan 与带代码 Citation 的审核式 Code Wiki；
+- 基于真实 `CodeRelation` evidence 的 Mermaid 架构图，不允许模型补边；
+- Python 跨文件 import/call、Go 参数接收者方法和 TypeScript 局部变量方法解析；
+- Wheel clean-room 检查：全新 venv 安装、import 路径、依赖、CLI、双 Benchmark 和 SHA256
+  provenance。
+
+### 正确性修复
+
+- 修复 Rich help 在 GitHub 窄终端中换行导致的跨平台测试误报；
+- 强 INDEX 路由优先于宽松 FTS，弱 INDEX 仍让位于精确 FTS；
+- 事实排序优先长标识符、明确 yes/no 条件和页面摘要，多来源选择优先覆盖尚未命中的英文标识符；
+- 重新审计固定公开题集，将源文档中已有明确 Vue 证据的题目从“无答案”纠正为单来源题。
+
+### 公开验证
+
+- 30 题文档 Wiki：回答准确率 96.7%，Top-3 来源召回率 96.2%，Citation 96.2%，多来源覆盖和
+  拒答准确率 100%；
+- Raw FTS Top-3 来源召回率 57.7%，多来源完整覆盖 20.0%；
+- 固定代码 Wiki：C0/C4 全指标 100%，单文件更新页面比例 20%；
+- 375 个 pytest 用例、Ruff、Mypy、依赖检查和 Wheel clean-room 通过，总代码覆盖率 88%。
+
+### 版本边界
+
+仍不包含公网 SaaS、多租户、定时同步、向量数据库或通用编码 Agent。固定夹具和单个公开仓库的
+结果不能外推为任意代码库或知识库上的普遍性能。
+
 ## v0.1.0 — 2026-08-04
 
 首个可公开演示的版本，聚焦“个人技术 Wiki 如何持续更新、可靠查询并回到证据”。

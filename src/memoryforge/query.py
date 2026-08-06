@@ -166,9 +166,13 @@ def answer_question(
                 sufficient_match = True
             if "方法" in base_question_terms and overlap & identifier_terms:
                 sufficient_match = True
-            if identifier_terms and not overlap & identifier_terms and not (
-                ("字段" in base_question_terms and overlap & focus_terms)
-                or ("方法" in base_question_terms and overlap & identifier_terms)
+            if (
+                identifier_terms
+                and not overlap & identifier_terms
+                and not (
+                    ("字段" in base_question_terms and overlap & focus_terms)
+                    or ("方法" in base_question_terms and overlap & identifier_terms)
+                )
             ):
                 sufficient_match = False
             if sufficient_match:
@@ -176,15 +180,9 @@ def answer_question(
 
     if "方法" in base_question_terms and identifier_terms:
         method_symbol = max(identifier_terms, key=len)
-        raw_matches = [
-            match
-            for match in raw_matches
-            if method_symbol in _citation_terms(match[2])
-        ]
+        raw_matches = [match for match in raw_matches if method_symbol in _citation_terms(match[2])]
         raw_candidate_matches = [
-            match
-            for match in raw_candidate_matches
-            if method_symbol in _citation_terms(match[2])
+            match for match in raw_candidate_matches if method_symbol in _citation_terms(match[2])
         ]
 
     matches = _rank_matches(
@@ -202,9 +200,7 @@ def answer_question(
         prefer_code_modules=prefer_code_modules,
     )
     model_candidates = [
-        match
-        for match in candidate_matches
-        if _has_direct_evidence(question_terms, match[2])
+        match for match in candidate_matches if _has_direct_evidence(question_terms, match[2])
     ]
 
     if not matches and (provider is None or not model_candidates):
@@ -477,13 +473,9 @@ def _candidate_pages(
             overlap = question_terms & _terms(f"{title} {entry.group('summary')}")
             if overlap:
                 module_path = _title_module_path(title)
-                question_identifiers = {
-                    term for term in question_terms if not _CJK.fullmatch(term)
-                }
+                question_identifiers = {term for term in question_terms if not _CJK.fullmatch(term)}
                 extra_module_parts = (
-                    len(set(module_path.split("/")) - question_identifiers)
-                    if module_path
-                    else 0
+                    len(set(module_path.split("/")) - question_identifiers) if module_path else 0
                 )
                 scored.append(
                     (
@@ -548,14 +540,10 @@ def _candidate_pages(
         repository_id=repository_id,
     )
     ordered_pages = (*exact_code_pages, *ordered_pages)
-    if exact_code_pages and any(
-        marker in question for marker in ("方法", "字段", "属性", "函数")
-    ):
+    if exact_code_pages and any(marker in question for marker in ("方法", "字段", "属性", "函数")):
         return list(exact_code_pages[:max_pages])
     ordered_pages += (
-        (*index_pages, *relaxed_pages)
-        if prefer_index_routes
-        else (*relaxed_pages, *index_pages)
+        (*index_pages, *relaxed_pages) if prefer_index_routes else (*relaxed_pages, *index_pages)
     )
     candidates: list[Path] = []
     for page in ordered_pages:
@@ -589,9 +577,7 @@ def _exact_code_pages(
     )
     pages: list[Path] = []
     for identifier in identifiers[:3]:
-        symbol_pattern = re.compile(
-            rf"(?<![A-Za-z0-9_]){re.escape(identifier)}(?![A-Za-z0-9_])"
-        )
+        symbol_pattern = re.compile(rf"(?<![A-Za-z0-9_]){re.escape(identifier)}(?![A-Za-z0-9_])")
         for path in find_applied_page_paths(
             workspace_root,
             identifier,
@@ -607,7 +593,7 @@ def _exact_code_pages(
                 and page not in pages
             ):
                 pages.append(page)
-        for file_path in sorted((workspace_root / "wiki" / "pages").glob("*.md")):
+        for file_path in sorted((workspace_root / "wiki" / "pages").rglob("*.md")):
             page = _safe_wiki_page(workspace_root, file_path)
             if page is None or not _is_code_file_page(page) or page in pages:
                 continue
@@ -622,12 +608,19 @@ def _exact_code_pages(
 
 def _is_code_page(page: Path) -> bool:
     prefix = page.read_text(encoding="utf-8")[:400]
-    return 'title: "Code:' in prefix or 'title: "Code module:' in prefix
+    return (
+        'title: "Code:' in prefix
+        or 'title: "Code module:' in prefix
+        or "generated: code_wiki" in prefix
+        or "generated: code_module_overview" in prefix
+    )
 
 
 def _is_code_file_page(page: Path) -> bool:
     prefix = page.read_text(encoding="utf-8")[:400]
-    return 'title: "Code: ' in prefix and 'title: "Code module:' not in prefix
+    return (
+        'title: "Code: ' in prefix and 'title: "Code module:' not in prefix
+    ) or "generated: code_wiki" in prefix
 
 
 def _code_fact_text(content: str) -> str:
@@ -711,16 +704,13 @@ def _rank_matches(
         ranking_overlap = overlap - _RANKING_STOP_WORDS
         non_cjk_terms = [term for term in ranking_overlap if not _CJK.fullmatch(term)]
         distinctive_non_cjk_terms = [
-            term
-            for term in non_cjk_terms
-            if frequencies[term] <= max(1, len(matches) // 2)
+            term for term in non_cjk_terms if frequencies[term] <= max(1, len(matches) // 2)
         ]
         direct_overlap = _direct_matching_terms(question_terms, citation)
         module_path = _citation_module_path(citation)
         module_section_score = (
             3
-            if "child" in focus_terms
-            and " / Child modules" in citation.get("section_path", "")
+            if "child" in focus_terms and " / Child modules" in citation.get("section_path", "")
             else (
                 2
                 if " / Responsibilities" in citation.get("section_path", "")
@@ -851,7 +841,7 @@ def _page_citations(content: str) -> list[CitationPayload]:
     if not _page_matches_frontmatter(content):
         return []
     section_match = re.search(
-        r"^## Verified facts\s*$\n(?P<section>.*?)(?=^## |\Z)",
+        r"^## (?:Verified facts|Verified symbols)\s*$\n(?P<section>.*?)(?=^## |\Z)",
         content,
         re.MULTILINE | re.DOTALL,
     )
@@ -907,13 +897,17 @@ def _has_direct_evidence(question_terms: set[str], citation: CitationPayload) ->
     """
     direct_overlap = _direct_matching_terms(question_terms, citation)
     if any(_CJK.fullmatch(term) for term in question_terms):
-        return any(_CJK.fullmatch(term) for term in direct_overlap) or (
-            bool(_CODE_FACT.match(citation["quote"]))
-            and any(not _CJK.fullmatch(term) for term in direct_overlap)
-        ) or (
-            citation.get("section_path", "").startswith("Code module:")
-            and any(
-                not _CJK.fullmatch(term) for term in _matching_terms(question_terms, citation)
+        return (
+            any(_CJK.fullmatch(term) for term in direct_overlap)
+            or (
+                bool(_CODE_FACT.match(citation["quote"]))
+                and any(not _CJK.fullmatch(term) for term in direct_overlap)
+            )
+            or (
+                citation.get("section_path", "").startswith("Code module:")
+                and any(
+                    not _CJK.fullmatch(term) for term in _matching_terms(question_terms, citation)
+                )
             )
         )
     return bool(direct_overlap)

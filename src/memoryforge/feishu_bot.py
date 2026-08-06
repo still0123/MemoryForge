@@ -116,7 +116,8 @@ def _control_reply(
         matches = tuple(
             repository
             for repository in repositories
-            if argument in {
+            if argument
+            in {
                 repository.name,
                 repository.repository_id,
                 repository.checkout_path,

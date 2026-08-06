@@ -203,10 +203,7 @@ def test_ask_understands_chinese_child_module_question(tmp_path: Path, monkeypat
     runner, workspace, _ = _workspace_with_imported_source(
         tmp_path,
         monkeypatch,
-        "# Code module: storage\n\n"
-        "## Child modules\n\n"
-        "- `storage/ops`\n"
-        "- `storage/accounts`\n",
+        "# Code module: storage\n\n## Child modules\n\n- `storage/ops`\n- `storage/accounts`\n",
     )
     _apply_pending_source(runner, workspace)
 
@@ -294,8 +291,7 @@ def test_ask_uses_two_facts_for_a_two_part_question(tmp_path: Path) -> None:
     pages = workspace / "wiki" / "pages"
     pages.mkdir(parents=True)
     (workspace / "wiki/INDEX.md").write_text(
-        "# Knowledge Index\n\n"
-        "- [Boundary](pages/boundary.md) — 本地资料与模型权限\n",
+        "# Knowledge Index\n\n- [Boundary](pages/boundary.md) — 本地资料与模型权限\n",
         encoding="utf-8",
     )
     source_id = "b" * 64
@@ -329,8 +325,7 @@ def test_ask_expands_unavailable_to_a_citable_failure_fact(tmp_path: Path) -> No
     pages = workspace / "wiki" / "pages"
     pages.mkdir(parents=True)
     (workspace / "wiki/INDEX.md").write_text(
-        "# Knowledge Index\n\n"
-        "- [Model](pages/model.md) — 在线模型配置与回退\n",
+        "# Knowledge Index\n\n- [Model](pages/model.md) — 在线模型配置与回退\n",
         encoding="utf-8",
     )
     source_id = "c" * 64
@@ -364,8 +359,7 @@ def test_ask_prefers_environment_assignment_for_environment_variable_question(
     pages = workspace / "wiki" / "pages"
     pages.mkdir(parents=True)
     (workspace / "wiki/INDEX.md").write_text(
-        "# Knowledge Index\n\n"
-        "- [Model](pages/model.md) — 在线模型配置\n",
+        "# Knowledge Index\n\n- [Model](pages/model.md) — 在线模型配置\n",
         encoding="utf-8",
     )
     source_id = "d" * 64
@@ -397,8 +391,7 @@ def test_ask_uses_cjk_question_focus_to_choose_the_right_environment_assignment(
     pages = workspace / "wiki" / "pages"
     pages.mkdir(parents=True)
     (workspace / "wiki/INDEX.md").write_text(
-        "# Knowledge Index\n\n"
-        "- [Settings](pages/settings.md) — 广告视频系统模型配置\n",
+        "# Knowledge Index\n\n- [Settings](pages/settings.md) — 广告视频系统模型配置\n",
         encoding="utf-8",
     )
     source_id = "e" * 64
@@ -1322,8 +1315,7 @@ def test_ask_uses_verified_fact_section_path_for_cjk_routing(tmp_path: Path) -> 
     pages = workspace / "wiki" / "pages"
     pages.mkdir(parents=True)
     (workspace / "wiki/INDEX.md").write_text(
-        "# Knowledge Index\n\n"
-        "- [Settings](pages/settings.md) — 在线模型回退策略\n",
+        "# Knowledge Index\n\n- [Settings](pages/settings.md) — 在线模型回退策略\n",
         encoding="utf-8",
     )
     source_id = "a" * 64
