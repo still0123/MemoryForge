@@ -143,6 +143,11 @@ Tag workflow 必须：
 
 provenance 的 Commit 必须等于 annotated tag 解引用 Commit。
 
+当前状态：已新增 `.github/workflows/release.yml`，覆盖 annotated tag/version 校验、冻结
+Hatchling 的无隔离构建、Wheel/sdist 双 clean-room、SHA256、artifact attestation、Release 上传和
+远端资产回下载校验。本地已通过约束重放、双构建产物安装和 release check；真实 attestation、
+Release 上传与回下载将在创建 `v0.2.1` annotated tag 后执行。
+
 ## 9. Phase 6：面试材料
 
 更新：

@@ -7,6 +7,8 @@
 - 固定 Click 20 题外部评测：Citation grounding 100%，但 Answer accuracy 仅 10%/0%，
   Source recall@3 为 0%，保留为外部有效性负结果；
 - 原 AgentSkill-Eval 30 题 Answer/Citation 为 100%，Source recall@3 保持 96.2%。
+- 新增 annotated tag 发布工作流，冻结 Hatchling 构建环境并校验 Wheel/sdist、SHA256、
+  artifact attestation、Release 上传和远端资产回下载。
 
 ## v0.2.0 — 2026-08-06
 
