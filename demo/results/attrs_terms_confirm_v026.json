@@ -1,0 +1,517 @@
+{
+  "schema_version": 1,
+  "memoryforge_commit": "e6172faf178f97f5f0d5b8b986279052e56e7af5",
+  "source_repositories": [
+    {
+      "repository_id": "4dd5c563558a4d42e9d722dc4afad778416cbc2be04cceb98c4eaac9a087b8e2",
+      "remote_url": "https://github.com/python-attrs/attrs.git",
+      "commit": "51e8a602f3a5d9e1e0c3f8ccf014a3567a1f7c78",
+      "source_count": 16
+    }
+  ],
+  "workflow": {
+    "source_count": 16,
+    "wiki_file_count": 17,
+    "lint": {
+      "status": "clean",
+      "checked_pages": 17,
+      "issues": []
+    }
+  },
+  "sample_query": {
+    "question": "Which attrs option caches expensive hash codes?",
+    "answer": "The addition of static types is one of the most exciting features in the Python ecosystem and helps you write *correct* and *verified self-documenting* code. *attrs* comes with first-class support for type annotations for both {pep}`526` and legacy syntax.",
+    "citations": [
+      {
+        "source_id": "aeec4f833d952c8af8b80ab387dfb82000f16a1ec3ed391ad095e69d5cc2ed7e",
+        "source_version": 15,
+        "locator": "chars:20-276",
+        "quote": "The addition of static types is one of the most exciting features in the Python ecosystem and helps you write *correct* and *verified self-documenting* code. *attrs* comes with first-class support for type annotations for both {pep}`526` and legacy syntax.",
+        "section_path": "Type Annotations"
+      }
+    ],
+    "trace": [
+      {
+        "level": "L0",
+        "artifact": "wiki/INDEX.md"
+      },
+      {
+        "level": "L0",
+        "artifact": "SQLite FTS5 applied-source index"
+      },
+      {
+        "level": "L1",
+        "artifact": "wiki/pages/326f5f1348763f77140cb23269db18d9dcbd35642fb8c1cf32095b9f40336438.md"
+      },
+      {
+        "level": "L1",
+        "artifact": "wiki/pages/5cc0a6838f41cfbe99a4cab66f71effdcf5f3c7f024e0ffddf29dda7c94c5800.md"
+      },
+      {
+        "level": "L1",
+        "artifact": "wiki/pages/aeec4f833d952c8af8b80ab387dfb82000f16a1ec3ed391ad095e69d5cc2ed7e.md"
+      },
+      {
+        "level": "L2",
+        "artifact": "wiki/pages/aeec4f833d952c8af8b80ab387dfb82000f16a1ec3ed391ad095e69d5cc2ed7e.md"
+      },
+      {
+        "level": "L3",
+        "artifact": "source aeec4f833d952c8af8b80ab387dfb82000f16a1ec3ed391ad095e69d5cc2ed7e revision 15"
+      }
+    ]
+  },
+  "evaluation": {
+    "suite": "MemoryForge v0.2.6 attrs English-term confirmation",
+    "case_count": 12,
+    "memoryforge": {
+      "answer_accuracy": 16.7,
+      "source_recall_at_3": 50.0,
+      "citation_grounding_accuracy": 100.0,
+      "multi_source_coverage": 0.0,
+      "abstention_accuracy": 0.0,
+      "average_wiki_pages_read": 3.0,
+      "average_raw_sources_read": 0.0,
+      "average_evidence_characters": 189.5
+    },
+    "raw_fts_baseline": {
+      "expected_source_recall_at_3": 91.7,
+      "multi_source_coverage": 0.0,
+      "average_exposed_characters": 727.5
+    },
+    "cases": [
+      {
+        "id": "attrs-private-alias",
+        "category": "single_hop",
+        "question": "How are private attribute names transformed in generated attrs initializers?",
+        "memoryforge": {
+          "answer_correct": false,
+          "citation_grounded": true,
+          "expected_sources_recalled": false,
+          "all_expected_sources_cited": false,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 150,
+          "wiki_pages": [
+            "wiki/pages/8bf0588fb0c2591cfebe1f2059aac754044f9f131ce2567e9dc098905ad0aff2.md"
+          ],
+          "cited_source_paths": [
+            "docs/extending.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/examples.md",
+            "docs/extending.md",
+            "docs/init.md"
+          ],
+          "expected_source_paths": [
+            "docs/init.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      },
+      {
+        "id": "attrs-mutable-default",
+        "category": "single_hop",
+        "question": "How should attrs create mutable default lists?",
+        "memoryforge": {
+          "answer_correct": false,
+          "citation_grounded": true,
+          "expected_sources_recalled": false,
+          "all_expected_sources_cited": false,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 232,
+          "wiki_pages": [
+            "wiki/pages/644277d47fe150a56fe76a35e611140919a8d5d0d35caa615318d5fa2433a995.md"
+          ],
+          "cited_source_paths": [
+            "CHANGELOG.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "CHANGELOG.md",
+            "docs/hashing.md",
+            "docs/init.md"
+          ],
+          "expected_source_paths": [
+            "docs/init.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 730
+        }
+      },
+      {
+        "id": "attrs-validator-timing",
+        "category": "single_hop",
+        "question": "When are attrs validators run during initialization?",
+        "memoryforge": {
+          "answer_correct": false,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 225,
+          "wiki_pages": [
+            "wiki/pages/ba4a8b2f94c9d4af5681c839f5f1ae60af6f616430b6cd22840e55d928cb2fd1.md"
+          ],
+          "cited_source_paths": [
+            "docs/init.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "CHANGELOG.md",
+            "docs/examples.md",
+            "docs/init.md"
+          ],
+          "expected_source_paths": [
+            "docs/init.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      },
+      {
+        "id": "attrs-converter-order",
+        "category": "single_hop",
+        "question": "Do attrs converters execute before or after validators?",
+        "memoryforge": {
+          "answer_correct": false,
+          "citation_grounded": true,
+          "expected_sources_recalled": false,
+          "all_expected_sources_cited": false,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 232,
+          "wiki_pages": [
+            "wiki/pages/644277d47fe150a56fe76a35e611140919a8d5d0d35caa615318d5fa2433a995.md"
+          ],
+          "cited_source_paths": [
+            "CHANGELOG.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "CHANGELOG.md",
+            "docs/examples.md",
+            "docs/init.md"
+          ],
+          "expected_source_paths": [
+            "docs/init.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 728
+        }
+      },
+      {
+        "id": "attrs-hash-by-value",
+        "category": "single_hop",
+        "question": "How should attrs classes become hashable by value?",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 74,
+          "wiki_pages": [
+            "wiki/pages/326f5f1348763f77140cb23269db18d9dcbd35642fb8c1cf32095b9f40336438.md"
+          ],
+          "cited_source_paths": [
+            "docs/hashing.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/glossary.md",
+            "docs/hashing.md",
+            "docs/names.md"
+          ],
+          "expected_source_paths": [
+            "docs/hashing.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 730
+        }
+      },
+      {
+        "id": "attrs-cache-hash",
+        "category": "single_hop",
+        "question": "Which attrs option caches expensive hash codes?",
+        "memoryforge": {
+          "answer_correct": false,
+          "citation_grounded": true,
+          "expected_sources_recalled": false,
+          "all_expected_sources_cited": false,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 256,
+          "wiki_pages": [
+            "wiki/pages/aeec4f833d952c8af8b80ab387dfb82000f16a1ec3ed391ad095e69d5cc2ed7e.md"
+          ],
+          "cited_source_paths": [
+            "docs/types.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "CHANGELOG.md",
+            "docs/hashing.md",
+            "docs/how-does-it-work.md"
+          ],
+          "expected_source_paths": [
+            "docs/hashing.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      },
+      {
+        "id": "attrs-class-variable",
+        "category": "single_hop",
+        "question": "Which annotation prevents class variables from becoming attrs fields?",
+        "memoryforge": {
+          "answer_correct": false,
+          "citation_grounded": true,
+          "expected_sources_recalled": false,
+          "all_expected_sources_cited": false,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 165,
+          "wiki_pages": [
+            "wiki/pages/be51779fad551102bee97e274d71cf8193ca6e827d55f8460809f5d78dda7cd7.md"
+          ],
+          "cited_source_paths": [
+            "docs/names.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/extending.md",
+            "docs/init.md",
+            "docs/types.md"
+          ],
+          "expected_source_paths": [
+            "docs/types.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 728
+        }
+      },
+      {
+        "id": "attrs-slotted-cached-property",
+        "category": "single_hop",
+        "question": "How does attrs support cached properties on slotted classes?",
+        "memoryforge": {
+          "answer_correct": false,
+          "citation_grounded": true,
+          "expected_sources_recalled": false,
+          "all_expected_sources_cited": false,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 303,
+          "wiki_pages": [
+            "wiki/pages/994c0e5c702e1abb572c193a58c5eb335904ae556a5d4ffd7cd257dcaf8c5251.md"
+          ],
+          "cited_source_paths": [
+            "docs/why.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "CHANGELOG.md",
+            "docs/how-does-it-work.md",
+            "docs/why.md"
+          ],
+          "expected_source_paths": [
+            "docs/how-does-it-work.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      },
+      {
+        "id": "attrs-frozen-exception",
+        "category": "single_hop",
+        "question": "Which exception is raised when frozen attrs instances are modified?",
+        "memoryforge": {
+          "answer_correct": false,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 203,
+          "wiki_pages": [
+            "wiki/pages/5cc0a6838f41cfbe99a4cab66f71effdcf5f3c7f024e0ffddf29dda7c94c5800.md"
+          ],
+          "cited_source_paths": [
+            "docs/how-does-it-work.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "CHANGELOG.md",
+            "docs/how-does-it-work.md",
+            "docs/init.md"
+          ],
+          "expected_source_paths": [
+            "docs/how-does-it-work.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 728
+        }
+      },
+      {
+        "id": "attrs-default-equality",
+        "category": "single_hop",
+        "question": "When are two attrs class instances equal by default?",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 177,
+          "wiki_pages": [
+            "wiki/pages/584ae7eb5cc7c084618147bb23a90a9eb7f58adc5c6e8c38818c95d9f1568e84.md"
+          ],
+          "cited_source_paths": [
+            "docs/comparison.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/comparison.md",
+            "docs/hashing.md",
+            "docs/init.md"
+          ],
+          "expected_source_paths": [
+            "docs/comparison.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 730
+        }
+      },
+      {
+        "id": "attrs-exclude-comparison",
+        "category": "single_hop",
+        "question": "How is an attrs field excluded from equality comparisons?",
+        "memoryforge": {
+          "answer_correct": false,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 92,
+          "wiki_pages": [
+            "wiki/pages/584ae7eb5cc7c084618147bb23a90a9eb7f58adc5c6e8c38818c95d9f1568e84.md"
+          ],
+          "cited_source_paths": [
+            "docs/comparison.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": false,
+          "expected_sources_in_top_3": false,
+          "expected_sources_recalled": false,
+          "raw_source_paths": [
+            "CHANGELOG.md",
+            "README.md",
+            "docs/hashing.md"
+          ],
+          "expected_source_paths": [
+            "docs/comparison.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      },
+      {
+        "id": "attrs-modern-slots",
+        "category": "single_hop",
+        "question": "Are slots enabled by default in attrs' modern APIs?",
+        "memoryforge": {
+          "answer_correct": false,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 165,
+          "wiki_pages": [
+            "wiki/pages/be51779fad551102bee97e274d71cf8193ca6e827d55f8460809f5d78dda7cd7.md"
+          ],
+          "cited_source_paths": [
+            "docs/names.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "README.md",
+            "docs/names.md",
+            "docs/types.md"
+          ],
+          "expected_source_paths": [
+            "docs/names.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      }
+    ]
+  }
+}

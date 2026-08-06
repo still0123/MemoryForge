@@ -1,0 +1,128 @@
+{
+  "schema_version": 1,
+  "experiment": "page-level-character-ngram-proxy",
+  "suite": "MemoryForge v0.2.6 Ruff English-term development",
+  "case_count": 10,
+  "answered_case_count": 10,
+  "max_pages": 3,
+  "runtime": {
+    "qmd_command": false,
+    "sentence_transformers_module": false,
+    "true_embedding_backend_used": false
+  },
+  "metric_definition": "For answered cases, recall is true when the expected source path is represented by the top page candidates; multi_source cases require every expected source. Unanswerable cases are excluded from recall.",
+  "baseline": {
+    "name": "current INDEX + FTS5 candidate path",
+    "source_recall_at_3": 60.0,
+    "paraphrase_source_recall_at_3": 0.0,
+    "average_pages_ranked": 3.0
+  },
+  "proxy": {
+    "name": "page-level character n-gram cosine proxy",
+    "source_recall_at_3": 60.0,
+    "paraphrase_source_recall_at_3": 0.0,
+    "average_pages_ranked": 3.0
+  },
+  "df_proxy": {
+    "name": "binary query-term inverse document frequency",
+    "source_recall_at_3": 50.0,
+    "average_pages_ranked": 3.0
+  },
+  "decision": {
+    "status": "keep_fts5",
+    "recall_gain_points": 0.0,
+    "reason": "proxy does not meet the 10-point recall-gain gate; keep the current FTS5 path"
+  },
+  "cases": [
+    {
+      "id": "ruff-install-uv",
+      "category": "single_hop",
+      "baseline_recalled": true,
+      "proxy_recalled": true,
+      "df_recalled": true,
+      "baseline_page_count": 3,
+      "proxy_page_count": 3
+    },
+    {
+      "id": "ruff-default-line-length",
+      "category": "single_hop",
+      "baseline_recalled": false,
+      "proxy_recalled": false,
+      "df_recalled": false,
+      "baseline_page_count": 3,
+      "proxy_page_count": 3
+    },
+    {
+      "id": "ruff-enable-unsafe-fixes",
+      "category": "single_hop",
+      "baseline_recalled": true,
+      "proxy_recalled": true,
+      "df_recalled": true,
+      "baseline_page_count": 3,
+      "proxy_page_count": 3
+    },
+    {
+      "id": "ruff-format-check",
+      "category": "single_hop",
+      "baseline_recalled": false,
+      "proxy_recalled": true,
+      "df_recalled": false,
+      "baseline_page_count": 3,
+      "proxy_page_count": 3
+    },
+    {
+      "id": "ruff-disable-markdown-formatting",
+      "category": "single_hop",
+      "baseline_recalled": false,
+      "proxy_recalled": true,
+      "df_recalled": false,
+      "baseline_page_count": 3,
+      "proxy_page_count": 3
+    },
+    {
+      "id": "ruff-python-versions",
+      "category": "single_hop",
+      "baseline_recalled": true,
+      "proxy_recalled": false,
+      "df_recalled": false,
+      "baseline_page_count": 3,
+      "proxy_page_count": 3
+    },
+    {
+      "id": "ruff-neovim-enable",
+      "category": "single_hop",
+      "baseline_recalled": true,
+      "proxy_recalled": true,
+      "df_recalled": true,
+      "baseline_page_count": 3,
+      "proxy_page_count": 3
+    },
+    {
+      "id": "ruff-editor-preference-default",
+      "category": "single_hop",
+      "baseline_recalled": true,
+      "proxy_recalled": false,
+      "df_recalled": true,
+      "baseline_page_count": 3,
+      "proxy_page_count": 3
+    },
+    {
+      "id": "ruff-breaking-version",
+      "category": "single_hop",
+      "baseline_recalled": true,
+      "proxy_recalled": true,
+      "df_recalled": true,
+      "baseline_page_count": 3,
+      "proxy_page_count": 3
+    },
+    {
+      "id": "ruff-preview-purpose",
+      "category": "single_hop",
+      "baseline_recalled": false,
+      "proxy_recalled": false,
+      "df_recalled": false,
+      "baseline_page_count": 3,
+      "proxy_page_count": 3
+    }
+  ]
+}
