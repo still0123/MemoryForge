@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "memoryforge_commit": "ba04bb4e7b91ad8ab0ae8c3f486d33148e3e3960",
+  "memoryforge_commit": "c78589ba23e25aa5ed458073accb0acf7ed4540d",
   "source_repositories": [
     {
       "repository_id": "db29dfd06f0a2853c9764f1393b680d6a592b1a5771a012b6e1387fc17aac597",
@@ -65,14 +65,14 @@
     "suite": "AgentSkill-Eval public documentation",
     "case_count": 30,
     "memoryforge": {
-      "answer_accuracy": 96.7,
-      "source_recall_at_3": 92.3,
-      "citation_grounding_accuracy": 96.2,
+      "answer_accuracy": 100.0,
+      "source_recall_at_3": 96.2,
+      "citation_grounding_accuracy": 100.0,
       "multi_source_coverage": 100.0,
       "abstention_accuracy": 100.0,
       "average_wiki_pages_read": 3.0,
       "average_raw_sources_read": 0.0,
-      "average_evidence_characters": 152.9
+      "average_evidence_characters": 159.2
     },
     "raw_fts_baseline": {
       "expected_source_recall_at_3": 57.7,
