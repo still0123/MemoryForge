@@ -1,0 +1,680 @@
+{
+  "schema_version": 1,
+  "package_release_target": "0.3.0",
+  "qa_case_count": 121,
+  "qa_case_types_present": [
+    "single_hop",
+    "multi_source",
+    "paraphrase",
+    "unanswerable"
+  ],
+  "qa_case_types_required": [
+    "single_hop",
+    "multi_source",
+    "paraphrase",
+    "unanswerable",
+    "exact_symbol",
+    "code_behavior",
+    "temporal_update",
+    "cross_repository"
+  ],
+  "suites": [
+    {
+      "suite_id": "doc-wiki-qa.agent-skill-eval",
+      "suite_revision": 1,
+      "suite_type": "document_wiki_qa",
+      "evaluator": "memoryforge.evaluation.run_evaluation",
+      "model_judge": false,
+      "max_wiki_pages": 3,
+      "repositories": [
+        {
+          "repository": "ranmaoxia0123/AgentSkill-Eval",
+          "remote_url": "https://github.com/ranmaoxia0123/AgentSkill-Eval.git",
+          "commit": "93f5dc05229da250b041850ad8deeeec886ef304",
+          "license": "Apache-2.0",
+          "license_sha256": "9b6c0946788fd4953b833e074395023e80163169c90ea2a3d5f677c49c8cbbe0",
+          "source_paths": [
+            "docs/evidence-and-replay.md",
+            "docs/evolution-timeline-dashboard.md",
+            "docs/local-experiment-engine.md",
+            "docs/memory-rag-evaluation.md",
+            "docs/observed-failure-evidence-bridge.md",
+            "docs/promotion-workflow-integration.md",
+            "docs/real-agent-evidence.md",
+            "docs/statistics-and-reports.md",
+            "docs/trace-intelligence.md"
+          ]
+        }
+      ],
+      "splits": {
+        "development": {
+          "path": "demo/evaluation/agent_skill_eval.json",
+          "sha256": "efa3a69d8564665b605abe2fb2227185e3f45de8c140fde297d3889965a96f18",
+          "case_count": 30
+        },
+        "confirmation": null,
+        "holdout": null
+      },
+      "expected_metrics": {
+        "development": {
+          "answer_accuracy": 96.7,
+          "source_recall_at_3": 96.2,
+          "citation_grounding_accuracy": 100.0
+        }
+      },
+      "evidence": [
+        {
+          "split": "development",
+          "evidence_revision": 1,
+          "path": "demo/results/agent_skill_eval_public.json",
+          "sha256": "d777b5b7547b3e53d66742b03cd5a376d523d17ab7caa108bfa5684ec24f95cf",
+          "memoryforge_commit": "42de67d385ad94f5500d7911845b391e8b9c3577"
+        }
+      ]
+    },
+    {
+      "suite_id": "doc-wiki-qa.click",
+      "suite_revision": 1,
+      "suite_type": "document_wiki_qa",
+      "evaluator": "memoryforge.evaluation.run_evaluation",
+      "model_judge": false,
+      "max_wiki_pages": 3,
+      "source_manifest": {
+        "path": "demo/evaluation/click_docs_sources_v021.json",
+        "sha256": "7e14c8003f536b7e4ffd0d91d0d147c08007075eeca3e229c2de75b3f336c6c1"
+      },
+      "repositories": [
+        {
+          "repository": "pallets/click",
+          "remote_url": "https://github.com/pallets/click.git",
+          "commit": "00e592cea702e0b2caa0dee42489fdb1c22cd845",
+          "license": "BSD-3-Clause",
+          "license_sha256": "9a8ad106a394e853bfe21f42f4e72d592819a22805d991b5f3275029292b658d",
+          "source_paths": [
+            "docs/arguments.md",
+            "docs/commands-and-groups.md",
+            "docs/design-opinions.md",
+            "docs/exceptions.md",
+            "docs/handling-files.md",
+            "docs/options.md",
+            "docs/parameter-types.md",
+            "docs/prompts.md",
+            "docs/quickstart.md",
+            "docs/shell-completion.md",
+            "docs/testing.md"
+          ]
+        }
+      ],
+      "splits": {
+        "development": {
+          "path": "demo/evaluation/click_docs_dev_v021.json",
+          "sha256": "744bd889a92ade8a4e93bb8a2273a0e2d812e8494b188045e64f98a3077ec39c",
+          "case_count": 10
+        },
+        "confirmation": null,
+        "holdout": {
+          "path": "demo/evaluation/click_docs_holdout_v021.json",
+          "sha256": "9dd2673f64c74b3fbad50a966885224f57fc9ccec2a81c3ce6f9cfa33ee46165",
+          "case_count": 10
+        }
+      },
+      "expected_metrics": {
+        "development": {
+          "answer_accuracy": 10.0,
+          "source_recall_at_3": 0.0,
+          "citation_grounding_accuracy": 100.0
+        },
+        "holdout": {
+          "answer_accuracy": 0.0,
+          "source_recall_at_3": 0.0,
+          "citation_grounding_accuracy": 100.0
+        }
+      },
+      "evidence": [
+        {
+          "split": "development",
+          "evidence_revision": 1,
+          "path": "demo/results/click_docs_dev_v021.json",
+          "sha256": "8c7c18ccb9049a83f95f9c6a36a02979577ff95e43c687d77461fccdd113e06d",
+          "memoryforge_commit": "293bd8f5fa2d1de9dfba75989205fdc7930b371a"
+        },
+        {
+          "split": "holdout",
+          "evidence_revision": 1,
+          "path": "demo/results/click_docs_holdout_v021.json",
+          "sha256": "a9b9f47bc805987384ae5d006498e8780e69c8b1ae15d00fdba49abad792efe1",
+          "memoryforge_commit": "293bd8f5fa2d1de9dfba75989205fdc7930b371a"
+        }
+      ]
+    },
+    {
+      "suite_id": "doc-wiki-qa.document-frequency",
+      "suite_revision": 1,
+      "suite_type": "document_wiki_qa",
+      "evaluator": "memoryforge.evaluation.run_evaluation",
+      "model_judge": false,
+      "max_wiki_pages": 3,
+      "source_manifest": {
+        "path": "demo/evaluation/v023_df_routing_sources.json",
+        "sha256": "16e38aea44c87395fc2356cc8d86d647dfd0d9535c5d10254c2f478b651dd53e"
+      },
+      "repositories": [
+        {
+          "repository": "encode/uvicorn",
+          "remote_url": "https://github.com/encode/uvicorn.git",
+          "commit": "ee8e45ca472db17b4aef1d539f209539062d002e",
+          "license": "BSD-3-Clause",
+          "license_sha256": "efe1acf3e62fb99c288b0ec73e5a773b7268ef4320fe757ea994214e4b63c371",
+          "source_paths": [
+            "docs/concepts/event-loop.md",
+            "docs/concepts/http-protocols.md",
+            "docs/concepts/lifespan.md",
+            "docs/concepts/logging.md",
+            "docs/concepts/websockets.md",
+            "docs/installation.md",
+            "docs/server-behavior.md"
+          ]
+        },
+        {
+          "repository": "fastapi/typer",
+          "remote_url": "https://github.com/fastapi/typer.git",
+          "commit": "b4bd8b74fe5339444d7a3b71580649d59f6c085f",
+          "license": "MIT",
+          "license_sha256": "58992cebcf8dfb6e40c4e2112ed12126c243666dca3912a3d78b7ecac4859d49",
+          "source_paths": [
+            "docs/tutorial/arguments/envvar.md",
+            "docs/tutorial/arguments/optional.md",
+            "docs/tutorial/commands/name.md",
+            "docs/tutorial/install.md",
+            "docs/tutorial/multiple-values/multiple-options.md",
+            "docs/tutorial/options-autocompletion.md",
+            "docs/tutorial/options/password.md",
+            "docs/tutorial/parameter-types/path.md",
+            "docs/tutorial/progressbar.md",
+            "docs/tutorial/subcommands/add-typer.md",
+            "docs/tutorial/terminating.md",
+            "docs/tutorial/testing.md"
+          ]
+        }
+      ],
+      "splits": {
+        "development": {
+          "path": "demo/evaluation/uvicorn_docs_dev_v023.json",
+          "sha256": "3cdb4e1efe7aa88c9d4561acecfda45900ccd3c7113b7024fc6567e717e12f05",
+          "case_count": 10
+        },
+        "confirmation": {
+          "path": "demo/evaluation/typer_docs_confirm_v023.json",
+          "sha256": "d6104cbb32c64678612ff376bdfa34d2813b17036dff4cdedaf3a340df5aade4",
+          "case_count": 12
+        },
+        "holdout": null
+      },
+      "expected_metrics": {
+        "development": {
+          "answer_accuracy": 10.0,
+          "source_recall_at_3": 90.0,
+          "citation_grounding_accuracy": 100.0
+        },
+        "confirmation": {
+          "answer_accuracy": 0.0,
+          "source_recall_at_3": 58.3,
+          "citation_grounding_accuracy": 100.0
+        }
+      },
+      "evidence": [
+        {
+          "split": "development",
+          "evidence_revision": 1,
+          "path": "demo/results/uvicorn_df_development_v023.json",
+          "sha256": "97560f0322c3861139b876ccc2144048eb46b286d6abd08bbbf8c4051fc078f3",
+          "memoryforge_commit": "868fa7d5b54ecf11fc36c27d23339eebb289984f"
+        },
+        {
+          "split": "confirmation",
+          "evidence_revision": 2,
+          "path": "demo/results/typer_grounded_accuracy_audit_v025.json",
+          "sha256": "7b26b5af5613ea2a998b220d2b5cfe17fce22f9333caf68210ba9bd484b85653",
+          "memoryforge_commit": "42de67d385ad94f5500d7911845b391e8b9c3577"
+        }
+      ]
+    },
+    {
+      "suite_id": "doc-wiki-qa.local-fact-morphology",
+      "suite_revision": 1,
+      "suite_type": "document_wiki_qa",
+      "evaluator": "memoryforge.evaluation.run_evaluation",
+      "model_judge": false,
+      "max_wiki_pages": 3,
+      "source_manifest": {
+        "path": "demo/evaluation/v028_local_fact_morphology_sources.json",
+        "sha256": "4902a67bf956eef13f9e3cc781d0b8207778e599f6309c51d8b00d832950b2e0"
+      },
+      "repositories": [
+        {
+          "repository": "samuelcolvin/watchfiles",
+          "remote_url": "https://github.com/samuelcolvin/watchfiles.git",
+          "commit": "42257e82089c3ef880aba8a2f2fc1662a663d61e",
+          "license": "MIT",
+          "license_sha256": "4fd78355b67ce2677ede9fb6f63a250f377bb7e22088136a5f4699adb4bc069f",
+          "source_paths": [
+            "docs/api/filters.md",
+            "docs/cli.md",
+            "docs/index.md",
+            "docs/migrating.md"
+          ]
+        },
+        {
+          "repository": "hynek/structlog",
+          "remote_url": "https://github.com/hynek/structlog.git",
+          "commit": "0da7e10462206554def250147980db207231be38",
+          "license": "MIT OR Apache-2.0",
+          "license_sha256": {
+            "MIT": "2bc12bb94eec2ccea211daebb763235bec3169276197a7be1f858963db31c5dd",
+            "Apache-2.0": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
+          },
+          "source_paths": [
+            "docs/bound-loggers.md",
+            "docs/configuration.md",
+            "docs/contextvars.md",
+            "docs/performance.md",
+            "docs/processors.md",
+            "docs/testing.md"
+          ]
+        }
+      ],
+      "splits": {
+        "development": {
+          "path": "demo/evaluation/watchfiles_local_morphology_dev_v028.json",
+          "sha256": "a007b80c962e681d23e7ed720e11751918d2d9017b35df7d9da74f8be62ed6d4",
+          "case_count": 10
+        },
+        "confirmation": {
+          "path": "demo/evaluation/structlog_local_morphology_confirm_v028.json",
+          "sha256": "012f363e6d020fd23bdee314d0f2b082bd6f4d1f18e1d8c5ea4be2e87e36db42",
+          "case_count": 12
+        },
+        "holdout": null
+      },
+      "expected_metrics": {
+        "development": {
+          "answer_accuracy": 80.0,
+          "source_recall_at_3": 100.0,
+          "citation_grounding_accuracy": 100.0
+        },
+        "confirmation": {
+          "answer_accuracy": 66.7,
+          "source_recall_at_3": 100.0,
+          "citation_grounding_accuracy": 100.0
+        }
+      },
+      "evidence": [
+        {
+          "split": "development",
+          "evidence_revision": 1,
+          "path": "demo/results/watchfiles_local_morphology_development_v028.json",
+          "sha256": "40bf9664f6bf25513a8b39affe04a125d93a7bdfa79dddde554afa657c68aa4f",
+          "memoryforge_commit": "e72b41454b9ca620437b3a687ae9552930e1aa7d"
+        },
+        {
+          "split": "confirmation",
+          "evidence_revision": 1,
+          "path": "demo/results/structlog_local_morphology_confirm_v028.json",
+          "sha256": "bf758227f42952c55f39a4fdec33b94f205dcb72a2f51c3b1bb4044081f0e1fb",
+          "memoryforge_commit": "e72b41454b9ca620437b3a687ae9552930e1aa7d"
+        }
+      ]
+    },
+    {
+      "suite_id": "doc-wiki-qa.page-aware-griffe",
+      "suite_revision": 1,
+      "suite_type": "document_wiki_qa",
+      "evaluator": "memoryforge.evaluation.run_evaluation",
+      "model_judge": false,
+      "max_wiki_pages": 3,
+      "source_manifest": {
+        "path": "demo/evaluation/v027_page_aware_sources.json",
+        "sha256": "ace43a3ba7ab8249ccff603dd97d9644a22354ea13f830dabfd3491e1205a170"
+      },
+      "repositories": [
+        {
+          "repository": "mkdocstrings/griffe",
+          "remote_url": "https://github.com/mkdocstrings/griffe.git",
+          "commit": "6b3caab7ce4fdcb1c9386937dad17510d35a3321",
+          "license": "ISC",
+          "license_sha256": "2466f8a5d3c433c4d38e386bfae3423bba1792256bc06e4fcf425a99c8cd17fb",
+          "source_paths": [
+            "docs/guide/users/checking.md",
+            "docs/guide/users/how-to/parse-docstrings.md",
+            "docs/guide/users/loading.md",
+            "docs/guide/users/navigating.md",
+            "docs/guide/users/serializing.md"
+          ]
+        }
+      ],
+      "splits": {
+        "development": null,
+        "confirmation": {
+          "path": "demo/evaluation/griffe_page_aware_confirm_v027.json",
+          "sha256": "5cc6b553be1f35caadff716e7cfbc9a9021095e9ee78b8a47c66ae50a5fb1e24",
+          "case_count": 12
+        },
+        "holdout": null
+      },
+      "expected_metrics": {
+        "confirmation": {
+          "answer_accuracy": 66.7,
+          "source_recall_at_3": 83.3,
+          "citation_grounding_accuracy": 100.0
+        }
+      },
+      "evidence": [
+        {
+          "split": "confirmation",
+          "evidence_revision": 2,
+          "path": "demo/results/griffe_local_morphology_regression_v028.json",
+          "sha256": "42989bac55894cb5bbe7b98e62f209aef01498cffaef1cf8e8e97550194fbfa7",
+          "memoryforge_commit": "e72b41454b9ca620437b3a687ae9552930e1aa7d",
+          "commit_source": "docs/V028_LOCAL_FACT_MORPHOLOGY_REPORT.md"
+        }
+      ]
+    },
+    {
+      "suite_id": "code-wiki-qa.learn-claude-code",
+      "suite_revision": 1,
+      "suite_type": "code_wiki_qa",
+      "evaluator": "memoryforge.evaluation.run_evaluation",
+      "model_judge": false,
+      "max_wiki_pages": 3,
+      "source_manifest": {
+        "path": "demo/evaluation/external_code_wiki_learn_claude_code_sources_v031.json",
+        "sha256": "e7a7fd3c046c8c3ed6159e6f790df540726de87c8a92fffaadcf6503e1ffdcd3"
+      },
+      "repositories": [
+        {
+          "repository": "shareAI-lab/learn-claude-code",
+          "remote_url": "https://github.com/shareAI-lab/learn-claude-code.git",
+          "commit": "7b564c3ee6996039cb4e13a53024dfe2d4388d35",
+          "license": "MIT",
+          "license_sha256": "204ff5ee216c8f895268a23b66d959f82aa4d868e871e0690fbf2844eff8a26b",
+          "source_paths": [
+            "s01_agent_loop/code.py",
+            "s03_permission/code.py",
+            "s05_todo_write/code.py",
+            "s06_subagent/code.py",
+            "s12_task_system/code.py"
+          ]
+        }
+      ],
+      "splits": {
+        "development": {
+          "path": "demo/evaluation/learn_claude_code_qa_dev_v031.json",
+          "sha256": "3085859283115b351ce1c38a6bf1c111b1ac7e669f96ed1e3aa4f9fc31610b7d",
+          "case_count": 10
+        },
+        "confirmation": {
+          "path": "demo/evaluation/learn_claude_code_qa_confirm_v031.json",
+          "sha256": "b86fe1f7999c09af9bf7c6bed4951c1c4c565318c39192bea1831d942466c117",
+          "case_count": 5,
+          "status": "frozen_not_run"
+        },
+        "holdout": null
+      },
+      "expected_metrics": {
+        "development": {
+          "answer_accuracy": 60.0,
+          "source_recall_at_3": 100.0,
+          "citation_grounding_accuracy": 88.9,
+          "multi_source_coverage": 100.0,
+          "abstention_accuracy": 0.0,
+          "repository_path_isolation_accuracy": 100.0
+        },
+        "confirmation": {
+          "status": "frozen_not_run"
+        }
+      },
+      "evidence": [
+        {
+          "split": "development",
+          "evidence_revision": 1,
+          "path": "demo/results/learn_claude_code_qa_dev_v031.json",
+          "sha256": "65ae9959e64b67e45bdc2a4572548af4bffe98026fbb511687f108d32a2b099e",
+          "memoryforge_commit": "e5c5ce8710c27a89b55c6e9c7a4c5122db54ae7f",
+          "commit_source": "exact PR #24 replay"
+        }
+      ]
+    },
+    {
+      "suite_id": "code-wiki-structure.click",
+      "suite_revision": 1,
+      "suite_type": "code_wiki_structure",
+      "evaluator": "memoryforge.code_evaluation.run_code_evaluation",
+      "model_judge": false,
+      "repositories": [
+        {
+          "repository": "pallets/click",
+          "remote_url": "https://github.com/pallets/click.git",
+          "commit": "00e592cea702e0b2caa0dee42489fdb1c22cd845",
+          "license": "BSD-3-Clause",
+          "license_sha256": "9a8ad106a394e853bfe21f42f4e72d592819a22805d991b5f3275029292b658d",
+          "source_paths": [
+            "src/click"
+          ]
+        }
+      ],
+      "splits": {
+        "development": {
+          "path": "demo/evaluation/external_code_wiki_click_v021.json",
+          "sha256": "4e987766c80be0e0b09ac20dbb5ed9331abc5918784fa5ef5a7b031e28a56f12",
+          "case_count": 57
+        },
+        "confirmation": null,
+        "holdout": null
+      },
+      "expected_metrics": {
+        "development": {
+          "expected_source_coverage": 100.0,
+          "symbol_recall": 100.0,
+          "core_relation_recall": 100.0,
+          "module_assignment_accuracy": 100.0,
+          "citation_grounding_accuracy": 100.0
+        }
+      },
+      "evidence": [
+        {
+          "split": "development",
+          "evidence_revision": 1,
+          "path": "demo/results/external_code_wiki_v021.json",
+          "sha256": "9073b96cad920df5bddcd46eadbbe507b0b673e8d714a0619ad0913fb6f6c496",
+          "memoryforge_commit": "345f585efcf0c72ad51bbd972c46456a839d4891"
+        }
+      ]
+    },
+    {
+      "suite_id": "code-wiki-structure.cobra",
+      "suite_revision": 1,
+      "suite_type": "code_wiki_structure",
+      "evaluator": "memoryforge.code_evaluation.run_code_evaluation",
+      "model_judge": false,
+      "repositories": [
+        {
+          "repository": "spf13/cobra",
+          "remote_url": "https://github.com/spf13/cobra.git",
+          "commit": "adbc8813901bba65827259daa8e22ff94ec1f30e",
+          "license": "Apache-2.0",
+          "license_sha256": "5e3400b93bbb099e83e52bab885e7441750673c21f97988ca3f1240639b63283",
+          "source_paths": [
+            "."
+          ]
+        }
+      ],
+      "splits": {
+        "development": {
+          "path": "demo/evaluation/external_code_wiki_cobra_v021.json",
+          "sha256": "223a31ced074ed3993a8e6641bf4a5c729c9999d5acc39be56ba02b7a0837b05",
+          "case_count": 76
+        },
+        "confirmation": null,
+        "holdout": null
+      },
+      "expected_metrics": {
+        "development": {
+          "expected_source_coverage": 100.0,
+          "symbol_recall": 100.0,
+          "core_relation_recall": 100.0,
+          "module_assignment_accuracy": 100.0,
+          "citation_grounding_accuracy": 100.0
+        }
+      },
+      "evidence": [
+        {
+          "split": "development",
+          "evidence_revision": 1,
+          "path": "demo/results/external_code_wiki_v021.json",
+          "sha256": "9073b96cad920df5bddcd46eadbbe507b0b673e8d714a0619ad0913fb6f6c496",
+          "memoryforge_commit": "345f585efcf0c72ad51bbd972c46456a839d4891"
+        }
+      ]
+    },
+    {
+      "suite_id": "code-wiki-structure.zod",
+      "suite_revision": 1,
+      "suite_type": "code_wiki_structure",
+      "evaluator": "memoryforge.code_evaluation.run_code_evaluation",
+      "model_judge": false,
+      "repositories": [
+        {
+          "repository": "colinhacks/zod",
+          "remote_url": "https://github.com/colinhacks/zod.git",
+          "commit": "912f0f51b0ced654d0069741e7160834dca742ee",
+          "license": "MIT",
+          "license_sha256": "3f1189b28e3866e0d979968d466b78f813f76827cfdca1fbb124cc0a5c8841f8",
+          "source_paths": [
+            "packages/zod/src/v4/core"
+          ]
+        }
+      ],
+      "splits": {
+        "development": {
+          "path": "demo/evaluation/external_code_wiki_zod_v021.json",
+          "sha256": "58fdfb80fffde1682f34e20adc37afb66bd924d17354da50bac6b573df3d29e5",
+          "case_count": 74
+        },
+        "confirmation": null,
+        "holdout": null
+      },
+      "expected_metrics": {
+        "development": {
+          "expected_source_coverage": 100.0,
+          "symbol_recall": 100.0,
+          "core_relation_recall": 100.0,
+          "module_assignment_accuracy": 100.0,
+          "citation_grounding_accuracy": 100.0
+        }
+      },
+      "evidence": [
+        {
+          "split": "development",
+          "evidence_revision": 1,
+          "path": "demo/results/external_code_wiki_v021.json",
+          "sha256": "9073b96cad920df5bddcd46eadbbe507b0b673e8d714a0619ad0913fb6f6c496",
+          "memoryforge_commit": "345f585efcf0c72ad51bbd972c46456a839d4891"
+        }
+      ]
+    },
+    {
+      "suite_id": "code-wiki-structure.learn-claude-code",
+      "suite_revision": 1,
+      "suite_type": "code_wiki_structure",
+      "evaluator": "memoryforge.code_evaluation.run_code_evaluation",
+      "model_judge": false,
+      "repositories": [
+        {
+          "repository": "shareAI-lab/learn-claude-code",
+          "remote_url": "https://github.com/shareAI-lab/learn-claude-code.git",
+          "commit": "7b564c3ee6996039cb4e13a53024dfe2d4388d35",
+          "license": "MIT",
+          "license_sha256": "204ff5ee216c8f895268a23b66d959f82aa4d868e871e0690fbf2844eff8a26b",
+          "source_paths": [
+            "s01_agent_loop/code.py",
+            "s03_permission/code.py",
+            "s05_todo_write/code.py",
+            "s06_subagent/code.py",
+            "s12_task_system/code.py"
+          ]
+        }
+      ],
+      "splits": {
+        "development": {
+          "path": "demo/evaluation/external_code_wiki_learn_claude_code_v031.json",
+          "sha256": "ad72345d4f19c70aa6a2f050abc945ebe0ca3e51a135f0571cb599098ba75d2f",
+          "case_count": 45
+        },
+        "confirmation": null,
+        "holdout": null
+      },
+      "expected_metrics": {
+        "development": {
+          "expected_source_coverage": 100.0,
+          "symbol_recall": 100.0,
+          "core_relation_recall": 100.0,
+          "module_assignment_accuracy": 100.0,
+          "citation_grounding_accuracy": 100.0
+        }
+      },
+      "evidence": [
+        {
+          "split": "development",
+          "evidence_revision": 1,
+          "path": "demo/results/external_code_wiki_learn_claude_code_v031.json",
+          "sha256": "b200c0e8150f815ee5446fc81a59f0d2ede6ef7ffb03706d37a547344232b82b",
+          "memoryforge_commit": "5a28c862289bfe938786ac026b8b4a5ee6247911"
+        }
+      ]
+    },
+    {
+      "suite_id": "source-lifecycle.local-git",
+      "suite_revision": 1,
+      "suite_type": "source_lifecycle",
+      "evaluator": "demo.run_source_lifecycle_benchmark",
+      "model_judge": false,
+      "repositories": [
+        {
+          "repository": "still0123/MemoryForge",
+          "remote_url": "https://github.com/still0123/MemoryForge.git",
+          "commit": "349398c971bfd26917a8000601cd582f40fe54da",
+          "license": "NOASSERTION",
+          "license_sha256": null,
+          "source_paths": [
+            "tests/test_compiler_workflow.py",
+            "tests/test_git_sync.py"
+          ]
+        }
+      ],
+      "splits": {
+        "development": {
+          "path": "demo/evaluation/source_lifecycle_suite.json",
+          "sha256": "077a0d1a6a97167e7f67046750a08d6a97becde27c5bc63a9f3912ad4c45b26b",
+          "case_count": 7
+        },
+        "confirmation": null,
+        "holdout": null
+      },
+      "expected_metrics": {
+        "development": {
+          "passed_cases": 7,
+          "pass_rate": 100.0
+        }
+      },
+      "evidence": [
+        {
+          "split": "development",
+          "evidence_revision": 1,
+          "path": "demo/results/source_lifecycle_baseline.json",
+          "sha256": "c5de8028e398f3c92d17afac18826e2e63b477020e24de60e2024498e832dd52",
+          "memoryforge_commit": "349398c971bfd26917a8000601cd582f40fe54da"
+        }
+      ]
+    }
+  ]
+}

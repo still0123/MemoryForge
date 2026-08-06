@@ -30,6 +30,7 @@ def test_local_check_keeps_the_quality_and_artifact_contract() -> None:
         "ruff check .",
         "ruff format --check .",
         "mypy",
+        "demo/validate_benchmark_registry.py",
         "pytest -W error::ResourceWarning",
         "error::pytest.PytestUnraisableExceptionWarning",
         '"$workdir/build/bin/python" -m build',

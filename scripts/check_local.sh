@@ -25,6 +25,7 @@ mkdir -p "$output/dist"
 "$python" -m ruff check .
 "$python" -m ruff format --check .
 "$python" -m mypy
+"$python" demo/validate_benchmark_registry.py
 if "$python" -m pip --version >/dev/null 2>&1; then
   "$python" -m pip check
 elif command -v uv >/dev/null 2>&1; then
