@@ -107,7 +107,7 @@ run fixed benchmarks twice and compare bytes
 git diff --check
 ```
 
-CLI help 测试必须固定终端宽度，不能依赖开发机 TTY。
+CLI help 测试必须检查 Typer command option contract，不能依赖终端宽度、ANSI 或开发机 TTY。
 
 ## 7. 文档与面试验收
 

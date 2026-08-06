@@ -141,6 +141,33 @@ def test_go_symbol_ids_survive_body_changes_across_commits(tmp_path: Path) -> No
     assert first_helper.location.source_version != second_helper.location.source_version
 
 
+def test_go_index_ignores_function_local_types(tmp_path: Path) -> None:
+    model_source = """package meter
+
+type Meter struct{}
+
+func first() {
+    type key struct{}
+}
+
+func second() {
+    type key struct{}
+}
+"""
+    _checkout, workspace, repository_id = _synced_go_repository(
+        tmp_path,
+        model_source=model_source,
+        service_source="package meter\n",
+    )
+
+    snapshot = build_code_index(workspace, repository_id)
+    qualified_names = {symbol.qualified_name for symbol in snapshot.symbols}
+
+    assert "internal.meter.first" in qualified_names
+    assert "internal.meter.second" in qualified_names
+    assert "internal.meter.key" not in qualified_names
+
+
 def test_go_index_rejects_syntax_errors_in_synced_evidence(tmp_path: Path) -> None:
     _checkout, workspace, repository_id = _synced_go_repository(
         tmp_path,
