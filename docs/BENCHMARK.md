@@ -10,7 +10,9 @@
 - Raw FTS：直接在原始 SourceVersion 上使用 SQLite FTS5，任意查询词命中后按 BM25 取 Top-3；
 - 两条路径使用同一份资料和同一份题集，不调用模型，也不使用 LLM Judge。
 
-单来源和改写题只要 Top-3 中出现预期来源就算召回；多来源题必须同时找到全部预期来源。Raw FTS 只是一条检索基线，不生成答案，因此没有回答准确率、引用准确率和拒答准确率。
+单来源和改写题只要 Top-3 中出现预期来源就算召回；多来源题必须同时找到全部预期来源。回答准确
+要求状态、关键事实和冻结来源同时命中。Raw FTS 只是一条检索基线，不生成答案，因此没有回答
+准确率、引用准确率和拒答准确率。
 
 ## 结果
 
@@ -18,7 +20,7 @@
 | --- | ---: | ---: |
 | Top-3 来源召回率 | **96.2%** | 57.7% |
 | 多来源完整覆盖率 | **100.0%** | 20.0% |
-| 回答准确率 | 100.0% | 不适用 |
+| 回答准确率 | 96.7% | 不适用 |
 | 引用落地准确率 | 100.0% | 不适用 |
 | 无答案拒答准确率 | 100.0% | 不适用 |
 | 平均展开 Wiki 页面 | 3.0 | 不适用 |
@@ -35,15 +37,16 @@ Commit 均未改变，只修正 expected status、source path 和 required term�
 
 ## 没有隐藏的来源偏差
 
-30 道题的回答、Citation、多来源覆盖和拒答均命中。来源召回仍保留 1 道失败：
+30 道题中有 29 道严格回答命中；Citation grounding、多来源覆盖和拒答均为 100%。严格回答与
+来源召回保留同 1 道失败：
 
 ```text
 前端页面使用 React 还是 Vue？
 ```
 
 系统正确回答 Vue，Citation 也可回读，但命中 `docs/dashboard-mvp.md`，不是题集冻结的
-`docs/evolution-timeline-dashboard.md`。两篇文档都包含有效 Vue 证据，因此回答与 Citation
-计为正确，Source recall 按严格 Source expectation 计为失败。
+`docs/evolution-timeline-dashboard.md`。两篇文档都包含有效 Vue 证据，因此 Citation grounding
+计为正确；严格回答准确率和 Source recall 均按冻结 Source expectation 计为失败。
 
 ## 如何复现
 
