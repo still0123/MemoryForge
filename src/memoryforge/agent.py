@@ -11,11 +11,11 @@ from memoryforge.compiler import propose_agent_update
 from memoryforge.provider import OpenAICompatibleProvider
 from memoryforge.query import (
     AskPayload,
-    CitationPayload,
     EvidencePayload,
     answer_question,
 )
 from memoryforge.sessions import SessionStore, render_context, rewrite_query, save_turn
+from memoryforge.wiki_facts import CitationPayload
 from memoryforge.workspace import (
     Workspace,
     is_public_source_version,
