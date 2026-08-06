@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "memoryforge_commit": "479f54904513beaec9dfd247014f9086162e9ef0",
+  "memoryforge_commit": "ba04bb4e7b91ad8ab0ae8c3f486d33148e3e3960",
   "memoryforge_worktree_dirty": false,
   "fixture": {
     "path": "demo/fixtures/code_wiki_project",
@@ -222,10 +222,10 @@
       "py.app.run_local"
     ],
     "changed_pages": [
-      "wiki/pages/code/py/app.md"
+      "wiki/pages/code/<repository-id-prefix>/py/app.md"
     ],
     "expected_changed_pages": [
-      "wiki/pages/code/py/app.md"
+      "wiki/pages/code/<repository-id-prefix>/py/app.md"
     ],
     "changed_page_ratio": 0.2,
     "max_changed_page_ratio": 0.25,
