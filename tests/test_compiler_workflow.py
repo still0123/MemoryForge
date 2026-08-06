@@ -365,6 +365,45 @@ def test_deterministic_compiler_splits_markdown_list_items_into_facts(
     assert page.count("[^source-") == 4
 
 
+def test_deterministic_compiler_keeps_markdown_list_continuations(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    continued_fact = (
+        "`max_connections`: The maximum number of concurrent connections that the pool\n"
+        "                     should allow. Requests above this limit block until a\n"
+        "                     connection is available."
+    )
+    source_text = (
+        "# Pool options\n\n"
+        f"* {continued_fact}\n"
+        "* `max_keepalive_connections`: The maximum number of idle connections.\n"
+    )
+    runner, workspace, _ = _initialized_workspace(tmp_path, monkeypatch, source_text=source_text)
+
+    ingested = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
+    assert ingested.exit_code == 0, ingested.output
+    reviewed = runner.invoke(
+        app,
+        ["review", json.loads(ingested.stdout)["changeset_id"], "--workspace", str(workspace)],
+    )
+
+    assert reviewed.exit_code == 0, reviewed.output
+    page = next(
+        content
+        for path, content in json.loads(reviewed.stdout)["candidate_files"].items()
+        if path.startswith("wiki/pages/")
+    )
+    assert (
+        "`max_connections`: The maximum number of concurrent connections that the pool "
+        "should allow. Requests above this limit block until a connection is available."
+    ) in page
+    assert "`max_keepalive_connections`: The maximum number of idle connections." in page
+    fact_start = source_text.index(continued_fact)
+    assert f"`chars:{fact_start}-{fact_start + len(continued_fact)}`" in page
+    assert page.count("[^source-") == 4
+
+
 def test_ingest_rejects_unknown_source_id(tmp_path: Path, monkeypatch) -> None:
     runner, workspace, _ = _initialized_workspace(tmp_path, monkeypatch)
     unknown_source_id = "0" * 64
