@@ -1,0 +1,146 @@
+{
+  "schema_version": 1,
+  "experiment": "page-level-character-ngram-proxy",
+  "suite": "MemoryForge v0.2.7 Griffe page-aware fact confirmation",
+  "case_count": 12,
+  "answered_case_count": 12,
+  "max_pages": 3,
+  "runtime": {
+    "qmd_command": false,
+    "sentence_transformers_module": false,
+    "true_embedding_backend_used": false
+  },
+  "metric_definition": "For answered cases, recall is true when the expected source path is represented by the top page candidates; multi_source cases require every expected source. Unanswerable cases are excluded from recall.",
+  "baseline": {
+    "name": "current INDEX + FTS5 candidate path",
+    "source_recall_at_3": 91.7,
+    "paraphrase_source_recall_at_3": 0.0,
+    "average_pages_ranked": 3.0
+  },
+  "proxy": {
+    "name": "page-level character n-gram cosine proxy",
+    "source_recall_at_3": 75.0,
+    "paraphrase_source_recall_at_3": 0.0,
+    "average_pages_ranked": 3.0
+  },
+  "df_proxy": {
+    "name": "binary query-term inverse document frequency",
+    "source_recall_at_3": 100.0,
+    "average_pages_ranked": 3.0
+  },
+  "decision": {
+    "status": "keep_fts5",
+    "recall_gain_points": -16.7,
+    "reason": "proxy does not meet the 10-point recall-gain gate; keep the current FTS5 path"
+  },
+  "cases": [
+    {
+      "id": "griffe-load-fallback",
+      "category": "single_hop",
+      "baseline_recalled": false,
+      "proxy_recalled": false,
+      "df_recalled": true,
+      "baseline_page_count": 3,
+      "proxy_page_count": 3
+    },
+    {
+      "id": "griffe-relative-paths",
+      "category": "single_hop",
+      "baseline_recalled": true,
+      "proxy_recalled": true,
+      "df_recalled": true,
+      "baseline_page_count": 3,
+      "proxy_page_count": 3
+    },
+    {
+      "id": "griffe-loader-cache",
+      "category": "single_hop",
+      "baseline_recalled": true,
+      "proxy_recalled": true,
+      "df_recalled": true,
+      "baseline_page_count": 3,
+      "proxy_page_count": 3
+    },
+    {
+      "id": "griffe-disallow-inspection",
+      "category": "single_hop",
+      "baseline_recalled": true,
+      "proxy_recalled": true,
+      "df_recalled": true,
+      "baseline_page_count": 3,
+      "proxy_page_count": 3
+    },
+    {
+      "id": "griffe-alias-postprocess",
+      "category": "single_hop",
+      "baseline_recalled": true,
+      "proxy_recalled": false,
+      "df_recalled": true,
+      "baseline_page_count": 3,
+      "proxy_page_count": 3
+    },
+    {
+      "id": "griffe-cross-package-aliases",
+      "category": "single_hop",
+      "baseline_recalled": true,
+      "proxy_recalled": true,
+      "df_recalled": true,
+      "baseline_page_count": 3,
+      "proxy_page_count": 3
+    },
+    {
+      "id": "griffe-extension-member-access",
+      "category": "single_hop",
+      "baseline_recalled": true,
+      "proxy_recalled": true,
+      "df_recalled": true,
+      "baseline_page_count": 3,
+      "proxy_page_count": 3
+    },
+    {
+      "id": "griffe-inherited-cache",
+      "category": "single_hop",
+      "baseline_recalled": true,
+      "proxy_recalled": true,
+      "df_recalled": true,
+      "baseline_page_count": 3,
+      "proxy_page_count": 3
+    },
+    {
+      "id": "griffe-src-layout-search",
+      "category": "single_hop",
+      "baseline_recalled": true,
+      "proxy_recalled": true,
+      "df_recalled": true,
+      "baseline_page_count": 3,
+      "proxy_page_count": 3
+    },
+    {
+      "id": "griffe-git-worktree",
+      "category": "single_hop",
+      "baseline_recalled": true,
+      "proxy_recalled": false,
+      "df_recalled": true,
+      "baseline_page_count": 3,
+      "proxy_page_count": 3
+    },
+    {
+      "id": "griffe-full-json",
+      "category": "single_hop",
+      "baseline_recalled": true,
+      "proxy_recalled": true,
+      "df_recalled": true,
+      "baseline_page_count": 3,
+      "proxy_page_count": 3
+    },
+    {
+      "id": "griffe-docstring-parser",
+      "category": "single_hop",
+      "baseline_recalled": true,
+      "proxy_recalled": true,
+      "df_recalled": true,
+      "baseline_page_count": 3,
+      "proxy_page_count": 3
+    }
+  ]
+}

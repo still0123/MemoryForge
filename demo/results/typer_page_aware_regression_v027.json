@@ -1,0 +1,453 @@
+{
+  "suite": "MemoryForge v0.2.3 Typer document-frequency confirmation",
+  "case_count": 12,
+  "memoryforge": {
+    "answer_accuracy": 8.3,
+    "source_recall_at_3": 75.0,
+    "citation_grounding_accuracy": 100.0,
+    "multi_source_coverage": 0.0,
+    "abstention_accuracy": 0.0,
+    "average_wiki_pages_read": 3.0,
+    "average_raw_sources_read": 0.0,
+    "average_evidence_characters": 140.42
+  },
+  "raw_fts_baseline": {
+    "expected_source_recall_at_3": 100.0,
+    "multi_source_coverage": 0.0,
+    "average_exposed_characters": 726.17
+  },
+  "cases": [
+    {
+      "id": "typer-install-uv",
+      "category": "single_hop",
+      "question": "Which uv command adds Typer to a project?",
+      "memoryforge": {
+        "answer_correct": false,
+        "citation_grounded": true,
+        "expected_sources_recalled": false,
+        "all_expected_sources_cited": false,
+        "abstention_correct": true,
+        "wiki_pages_read": 3,
+        "raw_sources_read": 0,
+        "evidence_characters": 119,
+        "wiki_pages": [
+          "wiki/pages/4f94bbf0d53a8082bdab661d39f9af12b43a640a69892905a58379320455b460.md"
+        ],
+        "cited_source_paths": [
+          "README.md"
+        ]
+      },
+      "raw_fts_baseline": {
+        "expected_source_in_top_3": true,
+        "expected_sources_in_top_3": true,
+        "expected_sources_recalled": true,
+        "raw_source_paths": [
+          "README.md",
+          "docs/index.md",
+          "docs/tutorial/install.md"
+        ],
+        "expected_source_paths": [
+          "docs/tutorial/install.md"
+        ],
+        "result_count": 3,
+        "exposed_characters": 726
+      }
+    },
+    {
+      "id": "typer-optional-argument",
+      "category": "single_hop",
+      "question": "How is a Typer CLI argument made optional with a default value?",
+      "memoryforge": {
+        "answer_correct": true,
+        "citation_grounded": true,
+        "expected_sources_recalled": true,
+        "all_expected_sources_cited": true,
+        "abstention_correct": true,
+        "wiki_pages_read": 3,
+        "raw_sources_read": 0,
+        "evidence_characters": 124,
+        "wiki_pages": [
+          "wiki/pages/29851598cf538ca2b42b6c8f9a5200339a8078522e1624d04970e2302d28e63f.md"
+        ],
+        "cited_source_paths": [
+          "docs/tutorial/arguments/optional.md"
+        ]
+      },
+      "raw_fts_baseline": {
+        "expected_source_in_top_3": true,
+        "expected_sources_in_top_3": true,
+        "expected_sources_recalled": true,
+        "raw_source_paths": [
+          "docs/tutorial/arguments/default.md",
+          "docs/tutorial/arguments/optional.md",
+          "docs/tutorial/first-steps.md"
+        ],
+        "expected_source_paths": [
+          "docs/tutorial/arguments/optional.md"
+        ],
+        "result_count": 3,
+        "exposed_characters": 726
+      }
+    },
+    {
+      "id": "typer-argument-envvar",
+      "category": "single_hop",
+      "question": "How can a Typer argument read from an environment variable?",
+      "memoryforge": {
+        "answer_correct": false,
+        "citation_grounded": true,
+        "expected_sources_recalled": true,
+        "all_expected_sources_cited": true,
+        "abstention_correct": true,
+        "wiki_pages_read": 3,
+        "raw_sources_read": 0,
+        "evidence_characters": 147,
+        "wiki_pages": [
+          "wiki/pages/9a0f82cc09d01606246264c7cd6aac562703264f393433334b954587c0267630.md"
+        ],
+        "cited_source_paths": [
+          "docs/tutorial/arguments/envvar.md"
+        ]
+      },
+      "raw_fts_baseline": {
+        "expected_source_in_top_3": true,
+        "expected_sources_in_top_3": true,
+        "expected_sources_recalled": true,
+        "raw_source_paths": [
+          "docs/environment-variables.md",
+          "docs/tutorial/arguments/envvar.md",
+          "docs/virtual-environments.md"
+        ],
+        "expected_source_paths": [
+          "docs/tutorial/arguments/envvar.md"
+        ],
+        "result_count": 3,
+        "exposed_characters": 726
+      }
+    },
+    {
+      "id": "typer-command-dashes",
+      "category": "single_hop",
+      "question": "How does Typer convert underscores in function names into command names?",
+      "memoryforge": {
+        "answer_correct": false,
+        "citation_grounded": true,
+        "expected_sources_recalled": false,
+        "all_expected_sources_cited": false,
+        "abstention_correct": true,
+        "wiki_pages_read": 3,
+        "raw_sources_read": 0,
+        "evidence_characters": 148,
+        "wiki_pages": [
+          "wiki/pages/c3cd6dda82613195b848244ac1acdb7edf7b07288c6c8985ded73b258a576d4f.md"
+        ],
+        "cited_source_paths": [
+          "docs/tutorial/commands/index.md"
+        ]
+      },
+      "raw_fts_baseline": {
+        "expected_source_in_top_3": true,
+        "expected_sources_in_top_3": true,
+        "expected_sources_recalled": true,
+        "raw_source_paths": [
+          "docs/tutorial/commands/index.md",
+          "docs/tutorial/commands/name.md",
+          "docs/tutorial/parameter-types/custom-types.md"
+        ],
+        "expected_source_paths": [
+          "docs/tutorial/commands/name.md"
+        ],
+        "result_count": 3,
+        "exposed_characters": 726
+      }
+    },
+    {
+      "id": "typer-multiple-options",
+      "category": "single_hop",
+      "question": "Which Python type annotation accepts a CLI option multiple times in Typer?",
+      "memoryforge": {
+        "answer_correct": false,
+        "citation_grounded": true,
+        "expected_sources_recalled": true,
+        "all_expected_sources_cited": true,
+        "abstention_correct": true,
+        "wiki_pages_read": 3,
+        "raw_sources_read": 0,
+        "evidence_characters": 92,
+        "wiki_pages": [
+          "wiki/pages/b222cb6ef75a0b6906c4160e7510e73e2ba5442961f22c2ca5fe20cbed0f74ee.md"
+        ],
+        "cited_source_paths": [
+          "docs/tutorial/multiple-values/multiple-options.md"
+        ]
+      },
+      "raw_fts_baseline": {
+        "expected_source_in_top_3": true,
+        "expected_sources_in_top_3": true,
+        "expected_sources_recalled": true,
+        "raw_source_paths": [
+          "docs/tutorial/multiple-values/multiple-options.md",
+          "docs/tutorial/options/callback-and-context.md",
+          "docs/tutorial/parameter-types/path.md"
+        ],
+        "expected_source_paths": [
+          "docs/tutorial/multiple-values/multiple-options.md"
+        ],
+        "result_count": 3,
+        "exposed_characters": 726
+      }
+    },
+    {
+      "id": "typer-path-exists",
+      "category": "single_hop",
+      "question": "Which Typer Path option validates that an input path exists?",
+      "memoryforge": {
+        "answer_correct": false,
+        "citation_grounded": true,
+        "expected_sources_recalled": true,
+        "all_expected_sources_cited": true,
+        "abstention_correct": true,
+        "wiki_pages_read": 3,
+        "raw_sources_read": 0,
+        "evidence_characters": 220,
+        "wiki_pages": [
+          "wiki/pages/a178128372cd36d611e35970ac4c41df5a988ea5f789a93a01b3071f70a1237c.md"
+        ],
+        "cited_source_paths": [
+          "docs/tutorial/parameter-types/path.md"
+        ]
+      },
+      "raw_fts_baseline": {
+        "expected_source_in_top_3": true,
+        "expected_sources_in_top_3": true,
+        "expected_sources_recalled": true,
+        "raw_source_paths": [
+          "docs/tutorial/app-dir.md",
+          "docs/tutorial/parameter-types/file.md",
+          "docs/tutorial/parameter-types/path.md"
+        ],
+        "expected_source_paths": [
+          "docs/tutorial/parameter-types/path.md"
+        ],
+        "result_count": 3,
+        "exposed_characters": 726
+      }
+    },
+    {
+      "id": "typer-password-confirm",
+      "category": "single_hop",
+      "question": "How can a Typer password option hide input and require confirmation?",
+      "memoryforge": {
+        "answer_correct": false,
+        "citation_grounded": true,
+        "expected_sources_recalled": true,
+        "all_expected_sources_cited": true,
+        "abstention_correct": true,
+        "wiki_pages_read": 3,
+        "raw_sources_read": 0,
+        "evidence_characters": 113,
+        "wiki_pages": [
+          "wiki/pages/a26a3c02616bb4b4ae8a194a95d6d98b8ffb3f303f7b4dd5283f85c4e985428a.md"
+        ],
+        "cited_source_paths": [
+          "docs/tutorial/options/password.md"
+        ]
+      },
+      "raw_fts_baseline": {
+        "expected_source_in_top_3": true,
+        "expected_sources_in_top_3": true,
+        "expected_sources_recalled": true,
+        "raw_source_paths": [
+          "docs/tutorial/options/password.md",
+          "docs/tutorial/options/prompt.md",
+          "docs/tutorial/prompt.md"
+        ],
+        "expected_source_paths": [
+          "docs/tutorial/options/password.md"
+        ],
+        "result_count": 3,
+        "exposed_characters": 726
+      }
+    },
+    {
+      "id": "typer-autocompletion",
+      "category": "single_hop",
+      "question": "Which Typer option parameter supplies a custom shell completion function?",
+      "memoryforge": {
+        "answer_correct": false,
+        "citation_grounded": true,
+        "expected_sources_recalled": true,
+        "all_expected_sources_cited": true,
+        "abstention_correct": true,
+        "wiki_pages_read": 3,
+        "raw_sources_read": 0,
+        "evidence_characters": 278,
+        "wiki_pages": [
+          "wiki/pages/a187b3298b09e517ca71a1ca1b778321a8865e653e528e7a2d1488ed263890aa.md"
+        ],
+        "cited_source_paths": [
+          "docs/tutorial/options-autocompletion.md"
+        ]
+      },
+      "raw_fts_baseline": {
+        "expected_source_in_top_3": true,
+        "expected_sources_in_top_3": true,
+        "expected_sources_recalled": true,
+        "raw_source_paths": [
+          "docs/tutorial/options-autocompletion.md",
+          "docs/tutorial/options/callback-and-context.md",
+          "docs/tutorial/typer-command.md"
+        ],
+        "expected_source_paths": [
+          "docs/tutorial/options-autocompletion.md"
+        ],
+        "result_count": 3,
+        "exposed_characters": 726
+      }
+    },
+    {
+      "id": "typer-testing-runner",
+      "category": "single_hop",
+      "question": "Which testing helper invokes a Typer application in pytest?",
+      "memoryforge": {
+        "answer_correct": false,
+        "citation_grounded": true,
+        "expected_sources_recalled": true,
+        "all_expected_sources_cited": true,
+        "abstention_correct": true,
+        "wiki_pages_read": 3,
+        "raw_sources_read": 0,
+        "evidence_characters": 94,
+        "wiki_pages": [
+          "wiki/pages/e8c28a81e50c00da36b4f6b877ff4a475c15cda4e944de3cd8e898f04ccf3ad2.md"
+        ],
+        "cited_source_paths": [
+          "docs/tutorial/testing.md"
+        ]
+      },
+      "raw_fts_baseline": {
+        "expected_source_in_top_3": true,
+        "expected_sources_in_top_3": true,
+        "expected_sources_recalled": true,
+        "raw_source_paths": [
+          "docs/release-notes.md",
+          "docs/tutorial/printing.md",
+          "docs/tutorial/testing.md"
+        ],
+        "expected_source_paths": [
+          "docs/tutorial/testing.md"
+        ],
+        "result_count": 3,
+        "exposed_characters": 726
+      }
+    },
+    {
+      "id": "typer-add-subapp",
+      "category": "single_hop",
+      "question": "Which method attaches a Typer sub-application to a parent app?",
+      "memoryforge": {
+        "answer_correct": false,
+        "citation_grounded": true,
+        "expected_sources_recalled": false,
+        "all_expected_sources_cited": false,
+        "abstention_correct": true,
+        "wiki_pages_read": 3,
+        "raw_sources_read": 0,
+        "evidence_characters": 182,
+        "wiki_pages": [
+          "wiki/pages/c91b43c4a4558196992bcebef5905c3df3a3d7849a58a213c5626717cf95cf1c.md"
+        ],
+        "cited_source_paths": [
+          "docs/tutorial/one-file-per-command.md"
+        ]
+      },
+      "raw_fts_baseline": {
+        "expected_source_in_top_3": true,
+        "expected_sources_in_top_3": true,
+        "expected_sources_recalled": true,
+        "raw_source_paths": [
+          "docs/tutorial/one-file-per-command.md",
+          "docs/tutorial/subcommands/add-typer.md",
+          "docs/tutorial/subcommands/callback-override.md"
+        ],
+        "expected_source_paths": [
+          "docs/tutorial/subcommands/add-typer.md"
+        ],
+        "result_count": 3,
+        "exposed_characters": 726
+      }
+    },
+    {
+      "id": "typer-progressbar",
+      "category": "single_hop",
+      "question": "Which Typer utility displays progress while iterating items?",
+      "memoryforge": {
+        "answer_correct": false,
+        "citation_grounded": true,
+        "expected_sources_recalled": true,
+        "all_expected_sources_cited": true,
+        "abstention_correct": true,
+        "wiki_pages_read": 3,
+        "raw_sources_read": 0,
+        "evidence_characters": 81,
+        "wiki_pages": [
+          "wiki/pages/a9e3b8685120106bfe39a391147a9b0994f07d53ae0b790b5930ec39dccb30f3.md"
+        ],
+        "cited_source_paths": [
+          "docs/tutorial/progressbar.md"
+        ]
+      },
+      "raw_fts_baseline": {
+        "expected_source_in_top_3": true,
+        "expected_sources_in_top_3": true,
+        "expected_sources_recalled": true,
+        "raw_source_paths": [
+          "docs/tutorial/options-autocompletion.md",
+          "docs/tutorial/printing.md",
+          "docs/tutorial/progressbar.md"
+        ],
+        "expected_source_paths": [
+          "docs/tutorial/progressbar.md"
+        ],
+        "result_count": 3,
+        "exposed_characters": 728
+      }
+    },
+    {
+      "id": "typer-exit-code",
+      "category": "single_hop",
+      "question": "How can a Typer command terminate with a specific exit code?",
+      "memoryforge": {
+        "answer_correct": false,
+        "citation_grounded": true,
+        "expected_sources_recalled": true,
+        "all_expected_sources_cited": true,
+        "abstention_correct": true,
+        "wiki_pages_read": 3,
+        "raw_sources_read": 0,
+        "evidence_characters": 87,
+        "wiki_pages": [
+          "wiki/pages/ab04bb3bb98ce4f929c0ae69c8c45121684c13b24a3ef91070eb8489fe5d606f.md"
+        ],
+        "cited_source_paths": [
+          "docs/tutorial/terminating.md"
+        ]
+      },
+      "raw_fts_baseline": {
+        "expected_source_in_top_3": true,
+        "expected_sources_in_top_3": true,
+        "expected_sources_recalled": true,
+        "raw_source_paths": [
+          "docs/tutorial/index.md",
+          "docs/tutorial/options/version.md",
+          "docs/tutorial/terminating.md"
+        ],
+        "expected_source_paths": [
+          "docs/tutorial/terminating.md"
+        ],
+        "result_count": 3,
+        "exposed_characters": 726
+      }
+    }
+  ]
+}
