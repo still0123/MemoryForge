@@ -1056,9 +1056,31 @@ def _terms(text: str) -> set[str]:
 
 def _expanded_question_terms(question_terms: set[str]) -> set[str]:
     expanded = set(question_terms)
+    for term in question_terms:
+        expanded.update(_english_term_variants(term))
     for term, expansions in _CODE_QUERY_EXPANSIONS.items():
         if term in question_terms:
             expanded.update(expansions)
     if {"不可", "可用"} & question_terms:
         expanded.update(_FAILURE_TERM_EXPANSIONS)
     return expanded
+
+
+def _english_term_variants(term: str) -> set[str]:
+    if not term.isascii() or not term.isalpha():
+        return set()
+    variants: set[str] = set()
+    if len(term) > 4 and term.endswith("ies"):
+        variants.add(f"{term[:-3]}y")
+    elif len(term) > 4 and term.endswith("es"):
+        variants.update((term[:-1], term[:-2]))
+    elif len(term) > 3 and term.endswith("s") and not term.endswith("ss"):
+        variants.add(term[:-1])
+    if len(term) > 4 and term.endswith("ed"):
+        variants.update((term[:-2], term[:-1]))
+    if len(term) > 5 and term.endswith("ing"):
+        stem = term[:-3]
+        variants.update((stem, f"{stem}e"))
+        if len(stem) > 2 and stem[-1] == stem[-2]:
+            variants.add(stem[:-1])
+    return variants

@@ -3,6 +3,8 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
+from memoryforge.evaluation import EvaluationCase
+
 _SCRIPT = Path(__file__).resolve().parent.parent / "experiments" / "semantic_retrieval.py"
 _spec = importlib.util.spec_from_file_location("semantic_retrieval", _SCRIPT)
 assert _spec and _spec.loader
@@ -53,3 +55,30 @@ def test_df_proxy_downweights_terms_shared_by_every_page(tmp_path: Path) -> None
     )
 
     assert ranked == [target]
+
+
+def test_current_pages_uses_expanded_question_terms(tmp_path: Path, monkeypatch) -> None:
+    captured: set[str] = set()
+
+    def fake_candidate_pages(
+        _workspace_root: Path,
+        _question: str,
+        question_terms: set[str],
+        **_kwargs: object,
+    ) -> list[Path]:
+        captured.update(question_terms)
+        return []
+
+    monkeypatch.setattr(semantic_retrieval, "_candidate_pages", fake_candidate_pages)
+    case = EvaluationCase(
+        id="install",
+        category="single_hop",
+        question="Which command installs Ruff?",
+        expected_status="answered",
+        expected_source_paths=("docs/installation.md",),
+        required_terms=("uv tool install",),
+    )
+
+    semantic_retrieval._current_pages(tmp_path, case, 3)
+
+    assert "install" in captured
