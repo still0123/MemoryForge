@@ -18,8 +18,9 @@ three-page candidate budget, without changing page routing.
 
 ## Allowed Change
 
-Pass the existing candidate page rank into the deterministic fact ranker and
-add one page-rank component to the existing score.
+Pass the existing candidate page rank into the deterministic fact ranker.
+Compare direct fact overlap first, then page rank, before using the existing
+summary fallback.
 
 No page route, page-budget increase, fact parser, model call, vector database,
 dependency, cache, schema, source filter, or configuration.
@@ -29,7 +30,7 @@ dependency, cache, schema, source filter, or configuration.
 Development:
 
 - Textual page source recall@3 is at least 75%;
-- selected-Citation source recall improves by at least 30 points;
+- selected-Citation source recall remains at least 90%;
 - grounded answer accuracy improves by at least 30 points;
 - Citation grounding remains 100%;
 - average pages read remains at most 3;
