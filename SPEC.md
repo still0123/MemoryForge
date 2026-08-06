@@ -35,7 +35,7 @@ MemoryForge 面向拥有多个代码仓库、设计文档和个人笔记的开�
 
 第一版只服务一个可信的本地用户，主要处理：
 
-- 多个 Git 仓库的 README、docs、ADR、Changelog 和用户选定的 Go/Python 核心模块；
+- 多个 Git 仓库的 README、docs、ADR、Changelog 和用户选定的 Python、Go、TypeScript/TSX 核心模块；
 - 技术方案、PRD、项目总结和事故复盘；
 - Markdown/TXT 个人笔记；
 - 飞书文档和用户明确指定的公开网页文章。
@@ -61,7 +61,7 @@ MemoryForge 面向拥有多个代码仓库、设计文档和个人笔记的开�
 - 一个只使用 Wiki 公开证据的最小 Agent Loop；
 - 一组可复现的公开资料评测。
 - 手动刷新已登记 Git 仓库和飞书文档的 `refresh` 命令。
-- 选择性导入 Git 仓库中已提交的 Go/Python 代码模块，并生成带代码位置引用的模块页。
+- 选择性导入 Git 仓库中已提交的 Python、Go、TypeScript/TSX 代码模块，并生成带代码位置引用的模块页。
 - 通过 `web-import <url>` 导入单篇可静态读取的公开网页文章。
 - 通过 `html-import <file> --url <url>` 将用户保存的 HTML 网页转为 Markdown 来源。
 

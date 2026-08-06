@@ -1064,6 +1064,39 @@ def test_top_matches_prefers_a_citation_that_covers_new_terms() -> None:
     ]
 
 
+def test_rank_matches_prefers_summary_but_only_when_fact_terms_match() -> None:
+    summary = {
+        "source_id": "a" * 64,
+        "source_version": 1,
+        "locator": "chars:0-20",
+        "quote": "The service stores Wiki facts.",
+        "section_path": "Unrelated module overview",
+    }
+    detail = {
+        "source_id": "b" * 64,
+        "source_version": 1,
+        "locator": "chars:0-20",
+        "quote": "The service stores Wiki facts.",
+        "section_path": "Wiki details",
+    }
+
+    ranked = query_module._rank_matches(
+        [
+            (frozenset({"service"}), True, "wiki/pages/summary.md", summary),
+            (frozenset({"service"}), False, "wiki/pages/detail.md", detail),
+        ],
+        question_terms={"service", "module"},
+        prefer_code_modules=False,
+    )
+
+    assert [page_path for _, page_path, _ in ranked] == [
+        "wiki/pages/summary.md",
+        "wiki/pages/detail.md",
+    ]
+    assert query_module._matching_terms({"service", "module"}, summary) == {"service"}
+    assert query_module._direct_matching_terms({"service", "module"}, summary) == {"service"}
+
+
 def test_candidate_pages_prioritize_explicit_terms_over_generic_cjk_terms(
     tmp_path: Path,
 ) -> None:

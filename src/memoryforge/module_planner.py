@@ -22,6 +22,7 @@ from memoryforge.code_models import (
     ModulePlan,
     make_architecture_edge_id,
     make_architecture_graph_id,
+    make_code_wiki_path,
     make_module_id,
     make_module_plan_id,
 )
@@ -277,7 +278,7 @@ def _render_module(
         path=path,
         title=_module_title(draft.raw_name),
         summary=f"Code symbols from `{draft.raw_path}`.",
-        wiki_path=f"wiki/pages/code/{path}.md",
+        wiki_path=make_code_wiki_path(repository_id, path),
         symbol_ids=tuple(sorted(draft.symbol_ids, key=symbol_order.__getitem__)),
         children=children,
     )

@@ -205,10 +205,13 @@ def git_sync(
 @app.command("code-add")
 def code_add(
     repository_id: Annotated[str, typer.Argument(help="Registered Git repository ID.")],
-    path: Annotated[str, typer.Argument(help="Committed Go/Python file or directory.")],
+    path: Annotated[
+        str,
+        typer.Argument(help="Committed Go, Python, TypeScript, or TSX file/directory."),
+    ],
     workspace: WorkspaceOption = Path("."),
 ) -> None:
-    """Select one code module; the next sync imports its Go/Python files."""
+    """Select one code module; the next sync imports supported source files."""
     try:
         selected = register_git_code_module(workspace, repository_id, path)
     except (

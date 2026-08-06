@@ -16,7 +16,7 @@ class GitRepositoryError(ValueError):
     """Raised when a path cannot be scanned as a Git checkout."""
 
 
-CODE_WIKI_VERSION = "symbols-v3"
+CODE_WIKI_VERSION = "symbols-v4"
 
 
 @dataclass(frozen=True)
@@ -285,10 +285,13 @@ def _code_module_documents(
             document.source_path for document in documents if _is_test_file(document.source_path)
         )
         aliases = tuple(dict.fromkeys((PurePosixPath(module).name, module)))
+        suffixes = {document.suffix for document in documents}
         tracked_label = (
             "Go/Python files"
-            if {document.suffix for document in documents} <= {".go", ".py"}
-            else "source files"
+            if suffixes <= {".go", ".py"}
+            else "TypeScript files"
+            if suffixes <= {".ts", ".tsx"}
+            else "supported source files"
         )
         content = "\n".join(
             [

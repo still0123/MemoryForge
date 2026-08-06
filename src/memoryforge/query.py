@@ -123,7 +123,8 @@ def answer_question(
     base_question_terms = _terms(question)
     question_terms = _expanded_question_terms(base_question_terms)
     identifier_terms = {term for term in base_question_terms if not _CJK.fullmatch(term)}
-    focus_terms = _question_focus_terms(question) | _yes_no_focus_terms(question)
+    yes_no_focus_terms = _yes_no_focus_terms(question)
+    focus_terms = _question_focus_terms(question) | yes_no_focus_terms
     if "子模" in base_question_terms:
         focus_terms.update({"child", "children", "modules"})
     if "方法" in base_question_terms:
@@ -132,13 +133,27 @@ def answer_question(
         focus_terms.update({"field", "fields", "struct", "attribute", "attributes"})
     answer_citation_limit = _answer_citation_limit(question, max_citations)
     prefer_environment_assignments = "环境变量" in question
-    prefer_code_modules = any(marker in question.lower() for marker in ("模块", "文件夹", "module"))
+    prefer_failure_facts = bool({"不可", "可用", "失败", "超时"} & base_question_terms)
+    use_section_routes = (
+        prefer_environment_assignments
+        or prefer_failure_facts
+        or any(marker in question for marker in ("子模块", "字段", "属性", "方法"))
+    )
+    prefer_code_modules = (
+        "文件夹" in question
+        or "子模块" in question
+        or "module" in question.lower()
+        or any(
+            marker in question
+            for marker in ("模块主要", "模块负责", "模块作用", "模块包含", "模块有哪些")
+        )
+    )
     trace: list[TraceStep] = []
     if not question_terms:
         return _unknown_payload(debug, trace)
 
-    raw_matches: list[tuple[frozenset[str], str, CitationPayload]] = []
-    raw_candidate_matches: list[tuple[frozenset[str], str, CitationPayload]] = []
+    raw_matches: list[tuple[frozenset[str], bool, str, CitationPayload]] = []
+    raw_candidate_matches: list[tuple[frozenset[str], bool, str, CitationPayload]] = []
 
     for page in _candidate_pages(
         workspace_root,
@@ -147,14 +162,18 @@ def answer_question(
         max_pages=max_pages,
         trace=trace,
         repository_id=repository_id,
-        prefer_index_routes=max_citations > 1,
+        prefer_index_routes=max_citations > 1 or _has_many_index_routes(workspace_root),
     ):
         content = page.read_text(encoding="utf-8")
         trace.append({"level": "L1", "artifact": str(page.relative_to(workspace_root))})
-        for citation in _page_citations(content):
-            overlap = _matching_terms(question_terms, citation)
+        for index, citation in enumerate(_page_citations(content)):
+            overlap = (
+                _section_matching_terms(question_terms, citation)
+                if use_section_routes
+                else _matching_terms(question_terms, citation)
+            )
             page_path = str(page.relative_to(workspace_root))
-            raw_candidate_matches.append((frozenset(overlap), page_path, citation))
+            raw_candidate_matches.append((frozenset(overlap), index == 0, page_path, citation))
             has_cjk_terms = any(_CJK.fullmatch(term) for term in question_terms)
             required_overlap = 1 if len(question_terms) == 1 else 2
             if has_cjk_terms:
@@ -176,27 +195,31 @@ def answer_question(
             ):
                 sufficient_match = False
             if sufficient_match:
-                raw_matches.append((frozenset(overlap), page_path, citation))
+                raw_matches.append((frozenset(overlap), index == 0, page_path, citation))
 
     if "方法" in base_question_terms and identifier_terms:
         method_symbol = max(identifier_terms, key=len)
-        raw_matches = [match for match in raw_matches if method_symbol in _citation_terms(match[2])]
+        raw_matches = [match for match in raw_matches if method_symbol in _citation_terms(match[3])]
         raw_candidate_matches = [
-            match for match in raw_candidate_matches if method_symbol in _citation_terms(match[2])
+            match for match in raw_candidate_matches if method_symbol in _citation_terms(match[3])
         ]
 
     matches = _rank_matches(
         raw_matches,
         question_terms=question_terms,
         focus_terms=focus_terms,
+        prioritize_focus=bool(yes_no_focus_terms and {"依赖", "外部"} <= base_question_terms),
         prefer_environment_assignments=prefer_environment_assignments,
+        prefer_failure_facts=prefer_failure_facts,
         prefer_code_modules=prefer_code_modules,
     )
     candidate_matches = _rank_matches(
         raw_candidate_matches,
         question_terms=question_terms,
         focus_terms=focus_terms,
+        prioritize_focus=bool(yes_no_focus_terms and {"依赖", "外部"} <= base_question_terms),
         prefer_environment_assignments=prefer_environment_assignments,
+        prefer_failure_facts=prefer_failure_facts,
         prefer_code_modules=prefer_code_modules,
     )
     model_candidates = [
@@ -688,20 +711,25 @@ def _top_matches(
 
 
 def _rank_matches(
-    matches: list[tuple[frozenset[str], str, CitationPayload]],
+    matches: list[tuple[frozenset[str], bool, str, CitationPayload]],
     *,
     question_terms: set[str],
     focus_terms: set[str] | None = None,
+    prioritize_focus: bool = False,
     prefer_environment_assignments: bool = False,
+    prefer_failure_facts: bool = False,
     prefer_code_modules: bool = False,
 ) -> list[tuple[tuple[int, ...], str, CitationPayload]]:
     focus_terms = focus_terms or set()
     frequencies = Counter(
-        term for overlap, _page_path, _citation in matches for term in overlap - _RANKING_STOP_WORDS
+        term
+        for overlap, _summary, _page_path, _citation in matches
+        for term in overlap - _RANKING_STOP_WORDS
     )
     ranked = []
-    for overlap, page_path, citation in matches:
+    for overlap, summary, page_path, citation in matches:
         ranking_overlap = overlap - _RANKING_STOP_WORDS
+        focus_overlap = ranking_overlap & focus_terms
         non_cjk_terms = [term for term in ranking_overlap if not _CJK.fullmatch(term)]
         distinctive_non_cjk_terms = [
             term for term in non_cjk_terms if frequencies[term] <= max(1, len(matches) // 2)
@@ -729,13 +757,26 @@ def _rank_matches(
                 prefer_environment_assignments
                 and bool(_ENVIRONMENT_ASSIGNMENT.search(citation["quote"]))
             ),
+            int(
+                prioritize_focus
+                and bool(focus_overlap)
+                and not citation["quote"].lstrip().startswith("|")
+            ),
+            len(focus_overlap) if prioritize_focus else 0,
+            int(
+                summary
+                and not (
+                    prefer_environment_assignments or prefer_code_modules or prefer_failure_facts
+                )
+            ),
             max((len(term) for term in distinctive_non_cjk_terms), default=0),
             len(distinctive_non_cjk_terms),
             int(
-                bool(ranking_overlap & focus_terms)
+                not prioritize_focus
+                and bool(focus_overlap)
                 and not citation["quote"].lstrip().startswith("|")
             ),
-            len(ranking_overlap & focus_terms),
+            len(focus_overlap) if not prioritize_focus else 0,
             sum(1000 // frequencies[term] for term in ranking_overlap),
             int(bool(direct_overlap)),
             len(direct_overlap),
@@ -801,6 +842,14 @@ def _safe_wiki_index(workspace_root: Path, index: Path) -> Path | None:
     except OSError:
         return None
     return index
+
+
+def _has_many_index_routes(workspace_root: Path) -> bool:
+    """Use index-first routing for a compiled Wiki rather than tiny fixtures."""
+    index = workspace_root / "wiki" / "INDEX.md"
+    if not index.is_file() or index.is_symlink():
+        return False
+    return len(_INDEX_ENTRY.findall(index.read_text(encoding="utf-8"))) > 3
 
 
 def _safe_wiki_page(workspace_root: Path, page: Path) -> Path | None:
@@ -881,6 +930,13 @@ def _citation_terms(citation: CitationPayload) -> set[str]:
 
 
 def _matching_terms(question_terms: set[str], citation: CitationPayload) -> set[str]:
+    # Keep ranking grounded in fact text instead of treating a section heading
+    # as if it were an answer.
+    return (question_terms & _terms(citation["quote"])) - _QUESTION_NOISE_TERMS
+
+
+def _section_matching_terms(question_terms: set[str], citation: CitationPayload) -> set[str]:
+    """Use headings for the few queries whose answer is defined by a section route."""
     return (question_terms & _citation_terms(citation)) - _QUESTION_NOISE_TERMS
 
 

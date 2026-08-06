@@ -88,10 +88,11 @@ Commit 不进入 Symbol ID，因此同一个函数只修改实现时仍保持身
 
 ### ModulePlan
 
-表示层级模块树。模块路径使用小写 kebab-case，Wiki 路径固定为：
+表示层级模块树。模块路径使用小写 kebab-case。为避免多个 Git 仓库拥有同名模块时互相覆盖，
+Wiki 路径包含仓库 ID 前缀：
 
 ```text
-wiki/pages/code/<module-path>.md
+wiki/pages/code/<repository-id-prefix>/<module-path>.md
 ```
 
 计划必须完整且无重叠地分配所有声明 Symbol。

@@ -101,6 +101,11 @@ def make_module_id(repository_id: str, path: str) -> str:
     return _digest("code-module", repository_id, path)
 
 
+def make_code_wiki_path(repository_id: str, path: str) -> str:
+    """Build a repository-scoped Wiki path for one code module."""
+    return f"wiki/pages/code/{repository_id[:12]}/{path}.md"
+
+
 def make_module_plan_id(code_index_id: str) -> str:
     return _digest("module-plan", code_index_id)
 
@@ -304,7 +309,9 @@ class ModuleNode(BaseModel):
         _validate_single_line(self.summary, "module summary")
         if self.module_id != make_module_id(self.repository_id, self.path):
             raise ValueError("module_id does not match repository_id and module path")
-        if self.wiki_path != f"wiki/pages/code/{self.path}.md":
+        expected_path = make_code_wiki_path(self.repository_id, self.path)
+        legacy_path = f"wiki/pages/code/{self.path}.md"
+        if self.wiki_path not in {expected_path, legacy_path}:
             raise ValueError("module wiki_path must be derived from its module path")
         if not self.symbol_ids and not self.children:
             raise ValueError("module must own symbols or contain child modules")
@@ -384,7 +391,9 @@ class ArchitectureNode(BaseModel):
         _validate_single_line(self.label, "architecture node label")
         if self.module_id != make_module_id(self.repository_id, self.path):
             raise ValueError("architecture node module_id does not match its module path")
-        if self.wiki_path != f"wiki/pages/code/{self.path}.md":
+        expected_path = make_code_wiki_path(self.repository_id, self.path)
+        legacy_path = f"wiki/pages/code/{self.path}.md"
+        if self.wiki_path not in {expected_path, legacy_path}:
             raise ValueError("architecture node wiki_path must match its module path")
         return self
 

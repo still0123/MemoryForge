@@ -10,6 +10,7 @@ from typer.testing import CliRunner
 from memoryforge.changesets import ChangeSetStore
 from memoryforge.cli import app
 from memoryforge.code_index import build_code_index
+from memoryforge.code_models import make_code_wiki_path
 from memoryforge.code_wiki_compiler import (
     CodeWikiCompilationError,
     compile_code_wiki,
@@ -49,13 +50,15 @@ def test_code_wiki_compiles_reviews_applies_and_lints_nested_pages(
 
     assert compilation is not None
     assert compilation.changeset.status.value == "PROPOSED"
+    src_page = make_code_wiki_path(repository_id, "src")
+    service_page = make_code_wiki_path(repository_id, "src/service")
     assert set(compilation.candidate_files) == {
         "wiki/INDEX.md",
-        "wiki/pages/code/src.md",
-        "wiki/pages/code/src/service.md",
+        src_page,
+        service_page,
     }
-    parent = compilation.candidate_files["wiki/pages/code/src.md"]
-    leaf = compilation.candidate_files["wiki/pages/code/src/service.md"]
+    parent = compilation.candidate_files[src_page]
+    leaf = compilation.candidate_files[service_page]
     assert "generated: code_module_overview" in parent
     assert "sources:" not in parent
     assert "[Service](src/service.md)" in parent
@@ -86,7 +89,7 @@ def test_code_wiki_compiles_reviews_applies_and_lints_nested_pages(
         json.loads(ingested.stdout)["changeset_id"]
     )
     assert stored.changeset == compilation.changeset
-    assert not (workspace / "wiki/pages/code/src/service.md").exists()
+    assert not (workspace / service_page).exists()
     reviewed = runner.invoke(
         app,
         ["review", stored.changeset.changeset_id, "--workspace", str(workspace)],
@@ -110,9 +113,7 @@ def test_code_wiki_compiles_reviews_applies_and_lints_nested_pages(
         "issues": [],
     }
     source_id = next(iter(snapshot.source_versions))
-    assert Workspace.open(workspace).page_paths_for_source(source_id) == (
-        "wiki/pages/code/src/service.md",
-    )
+    assert Workspace.open(workspace).page_paths_for_source(source_id) == (service_page,)
     assert compile_code_wiki(workspace, snapshot, plan, graph) is None
 
 
@@ -141,7 +142,7 @@ def test_code_wiki_archives_modules_removed_from_the_current_snapshot(
         },
     )
     _compile_and_apply(workspace, repository_id)
-    legacy_page = workspace / "wiki/pages/code/src/legacy.md"
+    legacy_page = workspace / make_code_wiki_path(repository_id, "src/legacy")
     assert legacy_page.is_file()
 
     (checkout / "src/legacy.py").unlink()
@@ -157,7 +158,7 @@ def test_code_wiki_archives_modules_removed_from_the_current_snapshot(
         for operation in compilation.changeset.operations
         if operation.type.value == "ARCHIVE_PAGE"
     }
-    assert archived == {"wiki/pages/code/src/legacy.md"}
+    assert archived == {make_code_wiki_path(repository_id, "src/legacy")}
     stored = ChangeSetStore(Workspace.open(workspace)).create(
         compilation.changeset,
         compilation.candidate_files,
