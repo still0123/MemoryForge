@@ -129,7 +129,7 @@ def _fact_evidence(workspace: Path) -> dict[str, Any]:
         repository_id = str(
             connection.execute("SELECT repository_id FROM git_repositories").fetchone()[0]
         )
-    canonical = [{key: row[key] for key in row} for row in rows]
+    canonical = [dict(row) for row in rows]
     invalid_metadata_count = sum(
         not row["fact_id"]
         or not row["page_path"]
