@@ -54,7 +54,7 @@ git-add -> code-add -> git-sync -> CodeIndex -> ModulePlan
 连续两次从空 Workspace 运行结果字节一致，Evidence SHA256：
 
 ```text
-fcff5bbed23a5d3ecf78e43e15fd0b0115f1c28188fa5527332d7f1ad01c9823
+9073b96cad920df5bddcd46eadbbe507b0b673e8d714a0619ad0913fb6f6c496
 ```
 
 完整 Evidence：

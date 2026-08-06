@@ -7,7 +7,7 @@
 | 文档状态 | Implemented v1.0 |
 | 当前基线 | 分支 `main` |
 | 产品形态 | 单用户、本地优先、CLI |
-| 当前阶段 | 核心闭环与飞书展示已完成，正在补公开 Benchmark 与发布材料 |
+| 当前阶段 | v0.2.0 Code Wiki 内核已完成，正在整合飞书项目上下文并验证真实仓库 |
 
 ## 1. 项目定义
 
@@ -35,7 +35,7 @@ MemoryForge 面向拥有多个代码仓库、设计文档和个人笔记的开�
 
 第一版只服务一个可信的本地用户，主要处理：
 
-- 多个 Git 仓库的 README、docs、ADR、Changelog 和用户选定的 Go/Python 核心模块；
+- 多个 Git 仓库的 README、docs、ADR、Changelog 和用户选定的 Python、Go、TypeScript/TSX 核心模块；
 - 技术方案、PRD、项目总结和事故复盘；
 - Markdown/TXT 个人笔记；
 - 飞书文档和用户明确指定的公开网页文章。
@@ -61,7 +61,7 @@ MemoryForge 面向拥有多个代码仓库、设计文档和个人笔记的开�
 - 一个只使用 Wiki 公开证据的最小 Agent Loop；
 - 一组可复现的公开资料评测。
 - 手动刷新已登记 Git 仓库和飞书文档的 `refresh` 命令。
-- 选择性导入 Git 仓库中已提交的 Go/Python 代码模块，并生成带代码位置引用的模块页。
+- 选择性导入 Git 仓库中已提交的 Python、Go、TypeScript/TSX 代码模块，并生成带代码位置引用的模块页。
 - 通过 `web-import <url>` 导入单篇可静态读取的公开网页文章。
 - 通过 `html-import <file> --url <url>` 将用户保存的 HTML 网页转为 Markdown 来源。
 
@@ -483,6 +483,8 @@ Raw FTS 基线跑通；只有它证明需要更强语义检索时，才加入 Ch
 - 用既有渐进式 Wiki 查询生成标准文本回复 payload；
 - `feishu-serve` 通过 `lark-cli event consume im.message.receive_v1 --as bot` 常驻监听，
   再用 `lark-cli im +messages-reply --as bot` 回复同一条消息；
+- 支持 `/project` 固定当前聊天的仓库范围、`/resume` 恢复本机保存的有限会话上下文；
+- `watch` 可定期刷新已登记来源并生成待审核 ChangeSet，但不会自动覆盖正式 Wiki；
 - 不在项目内保存 App Secret、起 HTTP 服务或代替飞书权限管理。
 
 验收：在飞书私聊机器人发送一条文本问题，机器人从已应用的本地 Wiki 返回答案和 Wiki 页面引用；

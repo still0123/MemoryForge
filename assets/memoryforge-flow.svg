@@ -53,7 +53,7 @@
   <rect x="390" y="300" width="245" height="50" rx="12" fill="#ede9fe"/>
   <text x="410" y="331" class="label">生成 Wiki 页面草稿</text>
   <rect x="390" y="365" width="245" height="50" rx="12" fill="#ede9fe"/>
-  <text x="410" y="396" class="label">review → apply</text>
+  <text x="410" y="396" class="label">review → approve → apply</text>
   <text x="390" y="462" class="detail">只更新受影响的已有主题</text>
 
   <text x="725" y="207" class="section">3. 渐进式 Wiki 记忆</text>

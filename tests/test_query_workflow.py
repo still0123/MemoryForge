@@ -89,6 +89,337 @@ def test_ask_does_not_answer_cjk_question_from_generic_overlap(
     assert result["answer"] == "不知道"
 
 
+def test_ask_llm_rejects_heading_only_candidate_evidence(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    runner, workspace, _ = _workspace_with_imported_source(
+        tmp_path,
+        monkeypatch,
+        "# MemoryForge\n\n这是一个把工程资料编译成可追溯 Wiki 的项目。\n",
+    )
+    _apply_pending_source(runner, workspace)
+    provider = OpenAICompatibleProvider(
+        ProviderConfig("https://example.test", "test-key", "test-model"),
+        transport=lambda _request: (_ for _ in ()).throw(
+            AssertionError("heading-only candidates must not reach the model")
+        ),
+    )
+
+    result = query_module.answer_question(
+        workspace,
+        "MemoryForge 的作者出生在哪一天？",
+        provider=provider,
+    )
+
+    assert result["status"] == "unknown"
+    assert result["answer"] == "不知道"
+
+
+def test_mixed_language_code_symbol_is_direct_model_evidence() -> None:
+    citation: query_module.CitationPayload = {
+        "source_id": "a" * 64,
+        "source_version": 1,
+        "locator": "chars:0-21",
+        "quote": "func CreateFileSystem",
+        "section_path": "storage/accounts/create_bucket.go",
+    }
+
+    assert query_module._has_direct_evidence(
+        query_module._terms("CreateFileSystem 的创建流程是什么？"),
+        citation,
+    )
+
+    module_citation: query_module.CitationPayload = {
+        **citation,
+        "quote": "`storage/accounts`: 80 files",
+        "section_path": "Code module: storage / Directories",
+    }
+    assert query_module._has_direct_evidence(
+        query_module._terms("storage 文件夹主要作用是什么？"),
+        module_citation,
+    )
+
+
+def test_ask_routes_module_question_to_module_structure_page(tmp_path: Path, monkeypatch) -> None:
+    runner, workspace, _ = _workspace_with_imported_source(
+        tmp_path,
+        monkeypatch,
+        "# Code module: storage\n\n"
+        "This module contains 198 tracked Go files.\n\n"
+        "## Exported capabilities\n\n"
+        "- Main exported operations in `storage`: `CreateBucket`, `DescribeBuckets`\n"
+        "- `storage/ops` exports code symbols: `CreateJob`, `DeleteJob`, `UpdateQuota`\n"
+        "- `storage/accounts` exports code symbols: `CreateBucket`, `DescribeBuckets`\n\n"
+        "## Directories\n\n"
+        "- `storage/ops`: 61 files\n"
+        "- `storage/accounts`: 136 files\n",
+    )
+    _apply_pending_source(runner, workspace)
+    captured: list[dict[str, object]] = []
+
+    def transport(request) -> bytes:
+        payload = json.loads(request.data or b"")
+        captured.append(payload)
+        facts = json.loads(payload["messages"][1]["content"])["facts"]
+        indexes = [fact["index"] for fact in facts if fact["quote"].startswith("`storage/")]
+        return json.dumps(
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "answer": "storage 按运维操作和账户接口组织代码。",
+                                    "citation_indexes": indexes,
+                                }
+                            )
+                        }
+                    }
+                ]
+            }
+        ).encode()
+
+    result = query_module.answer_question(
+        workspace,
+        "storage 文件夹主要作用是什么？",
+        provider=OpenAICompatibleProvider(
+            ProviderConfig("https://example.test", "test-key", "test-model"),
+            transport=transport,
+        ),
+    )
+
+    assert result["answer"] == "storage 按运维操作和账户接口组织代码。"
+    facts = json.loads(captured[0]["messages"][1]["content"])["facts"]
+    assert {fact["quote"] for fact in facts} >= {
+        "`storage/ops`: 61 files",
+        "`storage/accounts`: 136 files",
+    }
+    assert any("CreateBucket" in fact["quote"] for fact in facts)
+    assert "translate and summarize" in captured[0]["messages"][0]["content"]
+
+
+def test_ask_understands_chinese_child_module_question(tmp_path: Path, monkeypatch) -> None:
+    runner, workspace, _ = _workspace_with_imported_source(
+        tmp_path,
+        monkeypatch,
+        "# Code module: storage\n\n## Child modules\n\n- `storage/ops`\n- `storage/accounts`\n",
+    )
+    _apply_pending_source(runner, workspace)
+
+    result = query_module.answer_question(workspace, "storage 有哪些子模块？")
+
+    assert result["status"] == "answered"
+    assert "storage/ops" in result["answer"]
+    assert "storage/accounts" in result["answer"]
+
+
+def test_module_question_falls_back_to_exported_operations_when_provider_times_out(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    runner, workspace, _ = _workspace_with_imported_source(
+        tmp_path,
+        monkeypatch,
+        "# Code module: storage\n\n"
+        "## Exported capabilities\n\n"
+        "- Main exported operations in `storage`: `CreateBucket`, `DescribeBuckets`\n",
+    )
+    _apply_pending_source(runner, workspace)
+    provider = OpenAICompatibleProvider(
+        ProviderConfig("https://example.test", "test-key", "test-model"),
+        transport=lambda _request: (_ for _ in ()).throw(
+            ProviderUnavailableError("provider timed out")
+        ),
+    )
+
+    result = query_module.answer_question(
+        workspace,
+        "storage 文件夹主要作用是什么？",
+        provider=provider,
+    )
+
+    assert result["status"] == "answered"
+    assert result["model_status"] == "fallback"
+    assert result["answer"].startswith("storage 模块主要导出这些操作：")
+    assert result["citations"][0]["quote"].startswith("Main exported operations")
+
+
+def test_module_question_prefers_the_exact_parent_card(tmp_path: Path, monkeypatch) -> None:
+    runner, workspace, _ = _workspace_with_imported_source(
+        tmp_path,
+        monkeypatch,
+        "# Code module: services/accounts\n\n"
+        "## Responsibilities\n\n"
+        "- Main exported operations in `services/accounts`: `CreateAccount`, `DescribeAccount`\n",
+    )
+    _apply_pending_source(runner, workspace)
+    child = workspace.parent / "child.md"
+    child.write_text(
+        "# Code module: services/accounts/storage\n\n"
+        "## Responsibilities\n\n"
+        "- Main exported operations in `services/accounts/storage`: `CreateBucket`\n",
+        encoding="utf-8",
+    )
+    imported = runner.invoke(
+        cli_module.app,
+        ["import", str(child), "--workspace", str(workspace)],
+    )
+    assert imported.exit_code == 0, imported.output
+    _apply_pending_source(runner, workspace)
+    provider = OpenAICompatibleProvider(
+        ProviderConfig("https://example.test", "test-key", "test-model"),
+        transport=lambda _request: (_ for _ in ()).throw(
+            ProviderUnavailableError("provider timed out")
+        ),
+    )
+
+    result = query_module.answer_question(
+        workspace,
+        "services/accounts 模块主要负责什么？",
+        provider=provider,
+        max_pages=5,
+    )
+
+    assert result["answer"].startswith("services/accounts 模块主要导出这些操作：")
+    assert "CreateAccount" in result["answer"]
+    assert "CreateBucket" not in result["answer"]
+
+
+def test_ask_uses_two_facts_for_a_two_part_question(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    pages = workspace / "wiki" / "pages"
+    pages.mkdir(parents=True)
+    (workspace / "wiki/INDEX.md").write_text(
+        "# Knowledge Index\n\n- [Boundary](pages/boundary.md) — 本地资料与模型权限\n",
+        encoding="utf-8",
+    )
+    source_id = "b" * 64
+    (pages / "boundary.md").write_text(
+        "---\n"
+        "type: concept\n"
+        "---\n"
+        "# Boundary\n\n"
+        "## Verified facts\n\n"
+        "### 本地资料 / 模型权限\n\n"
+        "- 本地资料默认标记为 `local_only`，模型不能读取。 [^source-1]\n"
+        "- 只有传入 `--allow-local-llm` 后，模型才可以读取命中的本地资料。 [^source-2]\n\n"
+        f"[^source-1]: source `{source_id}` · revision `1` · `chars:0-30`\n"
+        f"[^source-2]: source `{source_id}` · revision `1` · `chars:31-70`\n",
+        encoding="utf-8",
+    )
+
+    result = query_module.answer_question(
+        workspace,
+        "本地资料默认如何保护，什么时候才允许模型读取？",
+    )
+
+    assert result["status"] == "answered"
+    assert len(result["citations"]) == 2
+    assert "local_only" in result["answer"]
+    assert "--allow-local-llm" in result["answer"]
+
+
+def test_ask_expands_unavailable_to_a_citable_failure_fact(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    pages = workspace / "wiki" / "pages"
+    pages.mkdir(parents=True)
+    (workspace / "wiki/INDEX.md").write_text(
+        "# Knowledge Index\n\n- [Model](pages/model.md) — 在线模型配置与回退\n",
+        encoding="utf-8",
+    )
+    source_id = "c" * 64
+    (pages / "model.md").write_text(
+        "---\n"
+        "type: concept\n"
+        "---\n"
+        "# Model\n\n"
+        "## Verified facts\n\n"
+        "### 在线模型\n\n"
+        "- 在线模型只是可选增强能力。 [^source-1]\n"
+        "- 在线接口超时或响应异常时，系统自动回退到本地分析。 [^source-2]\n\n"
+        "### 远程模型不可用\n\n"
+        "- 本地模式不受影响。 [^source-3]\n\n"
+        f"[^source-1]: source `{source_id}` · revision `1` · `chars:0-18`\n"
+        f"[^source-2]: source `{source_id}` · revision `1` · `chars:19-50`\n"
+        f"[^source-3]: source `{source_id}` · revision `1` · `chars:51-62`\n",
+        encoding="utf-8",
+    )
+
+    result = query_module.answer_question(workspace, "在线模型不可用时会怎样？")
+
+    assert result["status"] == "answered"
+    assert "回退到本地分析" in result["answer"]
+
+
+def test_ask_prefers_environment_assignment_for_environment_variable_question(
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "workspace"
+    pages = workspace / "wiki" / "pages"
+    pages.mkdir(parents=True)
+    (workspace / "wiki/INDEX.md").write_text(
+        "# Knowledge Index\n\n- [Model](pages/model.md) — 在线模型配置\n",
+        encoding="utf-8",
+    )
+    source_id = "d" * 64
+    (pages / "model.md").write_text(
+        "---\n"
+        "type: concept\n"
+        "---\n"
+        "# Model\n\n"
+        "## Verified facts\n\n"
+        "### 在线模型\n\n"
+        "- 在线模型为可选增强能力。 [^source-1]\n"
+        "- export AD_VIDEO_LLM_ENABLED=1 export AD_VIDEO_LLM_API_KEY=example [^source-2]\n\n"
+        f"[^source-1]: source `{source_id}` · revision `1` · `chars:0-16`\n"
+        f"[^source-2]: source `{source_id}` · revision `1` · `chars:17-80`\n",
+        encoding="utf-8",
+    )
+
+    result = query_module.answer_question(workspace, "启用在线模型要设置哪些环境变量？")
+
+    assert result["status"] == "answered"
+    assert "AD_VIDEO_LLM_ENABLED" in result["answer"]
+    assert "AD_VIDEO_LLM_API_KEY" in result["answer"]
+
+
+def test_ask_uses_cjk_question_focus_to_choose_the_right_environment_assignment(
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "workspace"
+    pages = workspace / "wiki" / "pages"
+    pages.mkdir(parents=True)
+    (workspace / "wiki/INDEX.md").write_text(
+        "# Knowledge Index\n\n- [Settings](pages/settings.md) — 广告视频系统模型配置\n",
+        encoding="utf-8",
+    )
+    source_id = "e" * 64
+    (pages / "settings.md").write_text(
+        "---\n"
+        "type: concept\n"
+        "---\n"
+        "# Settings\n\n"
+        "## Verified facts\n\n"
+        "### 广告视频分析系统 / 准备环境\n\n"
+        "- export JAVA_HOME=/jdk17 [^source-1]\n\n"
+        "### 在线模型\n\n"
+        "- export AD_VIDEO_LLM_ENABLED=1 export AD_VIDEO_LLM_API_KEY=example [^source-2]\n\n"
+        f"[^source-1]: source `{source_id}` · revision `1` · `chars:0-24`\n"
+        f"[^source-2]: source `{source_id}` · revision `1` · `chars:25-90`\n",
+        encoding="utf-8",
+    )
+
+    result = query_module.answer_question(
+        workspace,
+        "广告视频分析系统的在线模型要设置哪些环境变量？",
+    )
+
+    assert result["status"] == "answered"
+    assert "AD_VIDEO_LLM_ENABLED" in result["answer"]
+    assert "JAVA_HOME" not in result["answer"]
+
+
 def test_ask_llm_summarizes_public_evidence_and_keeps_its_citation(
     tmp_path: Path,
     monkeypatch,
@@ -132,7 +463,11 @@ def test_ask_llm_summarizes_public_evidence_and_keeps_its_citation(
     assert result["answer"] == "缓存会在六十秒后过期。"
     assert result["citations"][0]["source_id"] == imported["source_id"]
     assert json.loads(captured[0]["messages"][1]["content"])["facts"] == [
-        {"index": 0, "quote": "Cache entries expire after sixty seconds."}
+        {
+            "index": 0,
+            "quote": "Cache entries expire after sixty seconds.",
+            "section": "Cache policy",
+        }
     ]
 
 
@@ -729,6 +1064,39 @@ def test_top_matches_prefers_a_citation_that_covers_new_terms() -> None:
     ]
 
 
+def test_rank_matches_prefers_summary_but_only_when_fact_terms_match() -> None:
+    summary = {
+        "source_id": "a" * 64,
+        "source_version": 1,
+        "locator": "chars:0-20",
+        "quote": "The service stores Wiki facts.",
+        "section_path": "Unrelated module overview",
+    }
+    detail = {
+        "source_id": "b" * 64,
+        "source_version": 1,
+        "locator": "chars:0-20",
+        "quote": "The service stores Wiki facts.",
+        "section_path": "Wiki details",
+    }
+
+    ranked = query_module._rank_matches(
+        [
+            (frozenset({"service"}), True, "wiki/pages/summary.md", summary),
+            (frozenset({"service"}), False, "wiki/pages/detail.md", detail),
+        ],
+        question_terms={"service", "module"},
+        prefer_code_modules=False,
+    )
+
+    assert [page_path for _, page_path, _ in ranked] == [
+        "wiki/pages/summary.md",
+        "wiki/pages/detail.md",
+    ]
+    assert query_module._matching_terms({"service", "module"}, summary) == {"service"}
+    assert query_module._direct_matching_terms({"service", "module"}, summary) == {"service"}
+
+
 def test_candidate_pages_prioritize_explicit_terms_over_generic_cjk_terms(
     tmp_path: Path,
 ) -> None:
@@ -973,6 +1341,37 @@ def test_ask_prefers_a_specific_cjk_fact_over_repeated_generic_terms(
 
     assert result["status"] == "answered"
     assert "不配置外部大模型" in result["answer"]
+
+
+def test_ask_uses_verified_fact_section_path_for_cjk_routing(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    pages = workspace / "wiki" / "pages"
+    pages.mkdir(parents=True)
+    (workspace / "wiki/INDEX.md").write_text(
+        "# Knowledge Index\n\n- [Settings](pages/settings.md) — 在线模型回退策略\n",
+        encoding="utf-8",
+    )
+    source_id = "a" * 64
+    (pages / "settings.md").write_text(
+        "---\n"
+        "type: concept\n"
+        "---\n"
+        "# Settings\n\n"
+        "## Verified facts\n\n"
+        "### 在线模型 / 回退\n\n"
+        "- 在线接口超时后，系统自动回退到本地分析。 [^source-1]\n\n"
+        "### 远程 Embeddings\n\n"
+        "- 检索服务不可用时，系统继续使用本地短语和规则。 [^source-2]\n\n"
+        f"[^source-1]: source `{source_id}` · revision `1` · `chars:0-20`\n"
+        f"[^source-2]: source `{source_id}` · revision `1` · `chars:21-40`\n",
+        encoding="utf-8",
+    )
+
+    result = query_module.answer_question(workspace, "在线模型不可用时如何回退？")
+
+    assert result["status"] == "answered"
+    assert result["answer"] == "在线接口超时后，系统自动回退到本地分析。"
+    assert result["citations"][0]["section_path"] == "在线模型 / 回退"
 
 
 def test_ask_uses_multiline_fact_rendered_in_the_wiki_page(

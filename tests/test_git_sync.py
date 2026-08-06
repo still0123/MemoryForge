@@ -35,6 +35,7 @@ from memoryforge.workspace import (
     list_git_checkouts,
     list_git_code_modules,
     register_git_checkout,
+    register_git_code_module,
     search_sources,
     sync_git_checkout,
 )
@@ -297,6 +298,7 @@ func NewMeter() *Meter {
 func (m *Meter) RecordUsage() {}
 """,
     )
+    _write(checkout / "internal" / "meter" / "__init__.py", "")
     _write(checkout / "cmd" / "main.py", "def main():\n    pass\n")
     _commit_all(checkout, "Add meter module")
     workspace = init_workspace(tmp_path / "workspace")
@@ -325,6 +327,8 @@ func (m *Meter) RecordUsage() {}
         document for document in synced.documents if document.relative_path.endswith("meter.go")
     )
     assert {document.relative_path for document in synced.documents} == {
+        ".memoryforge/code-modules/internal.md",
+        ".memoryforge/code-modules/internal/meter.md",
         "README.md",
         "internal/meter/meter.go",
     }
@@ -339,6 +343,7 @@ func (m *Meter) RecordUsage() {}
         .candidate_files[f"wiki/pages/{code_document.source_id}.md"]
     )
     assert "# Code: internal/meter/meter.go" in code_page
+    assert "### internal/meter/meter.go" in code_page
     assert "- package meter [^source-1]" in code_page
     assert "- type Meter [^source-2]" in code_page
     assert "- func NewMeter [^source-3]" in code_page
@@ -352,7 +357,7 @@ func (m *Meter) RecordUsage() {}
     assert lint_workspace(workspace)["status"] == "clean"
     answer = runner.invoke(app, ["ask", "NewMeter", "--workspace", str(workspace)])
     assert answer.exit_code == 0, answer.output
-    assert json.loads(answer.stdout)["quote"] == "func NewMeter"
+    assert "NewMeter" in json.loads(answer.stdout)["quote"]
 
     _write(
         checkout / "internal" / "meter" / "meter.go",
@@ -372,9 +377,184 @@ func Reset() {}
     _commit_all(checkout, "Add meter reset")
     refreshed = sync_git_checkout(workspace, repository.repository_id)
     assert refreshed.created == 0
-    assert refreshed.updated == 1
+    assert {
+        document.relative_path for document in refreshed.documents if document.status == "updated"
+    } == {
+        ".memoryforge/code-modules/internal.md",
+        ".memoryforge/code-modules/internal/meter.md",
+        "internal/meter/meter.go",
+    }
     assert refreshed.unchanged == 1
     assert _current_git_revision(workspace, code_document.source_id) == refreshed.head_commit
+
+
+def test_code_symbol_queries_answer_methods_and_struct_fields(tmp_path: Path) -> None:
+    checkout = _create_repository(tmp_path)
+    _write(
+        checkout / "internal" / "meter" / "meter.go",
+        """package meter
+
+type FileSystem struct {
+	ID string
+	RootPath string
+}
+
+type Manager struct{}
+
+func (m *Manager) CheckFileSystem(fs FileSystem) error {
+	if fs.ID == "" {
+		return nil
+	}
+	return nil
+}
+""",
+    )
+    _commit_all(checkout, "Add file system manager")
+    workspace = init_workspace(tmp_path / "workspace")
+    repository = register_git_checkout(workspace, checkout)
+    sync_git_checkout(workspace, repository.repository_id)
+
+    runner = CliRunner()
+    selected = runner.invoke(
+        app,
+        [
+            "code-add",
+            repository.repository_id,
+            "internal/meter/",
+            "--workspace",
+            str(workspace),
+        ],
+    )
+    assert selected.exit_code == 0, selected.output
+    synced = sync_git_checkout(workspace, repository.repository_id)
+    assert any(document.relative_path.endswith("meter.go") for document in synced.documents)
+
+    staged = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
+    assert staged.exit_code == 0, staged.output
+    changeset_id = json.loads(staged.stdout)["changeset_id"]
+    applied = runner.invoke(
+        app,
+        ["apply", changeset_id, "--approve", "--workspace", str(workspace)],
+    )
+    assert applied.exit_code == 0, applied.output
+
+    method = answer_question(workspace, "CheckFileSystem 方法做什么？")
+    assert method["status"] == "answered"
+    assert "CheckFileSystem" in method["answer"]
+    assert 'if fs.ID == ""' in method["answer"]
+    assert 'title: "Code: internal/meter/meter.go"' in (
+        workspace / method["wiki_pages"][0]
+    ).read_text(encoding="utf-8")
+
+    fields = answer_question(workspace, "FileSystem 有哪些字段？")
+    assert fields["status"] == "answered"
+    assert "Field ID string" in fields["answer"]
+    assert "Field RootPath string" in fields["answer"]
+
+
+def test_whole_repository_code_selection_skips_secrets_and_adds_module_sources(
+    tmp_path: Path,
+) -> None:
+    checkout = _create_repository(tmp_path)
+    _write(checkout / "README.md", "# Service\n\nRepository overview.\n")
+    _write(checkout / "cmd" / "main.go", "package main\n\nfunc main() {}\n")
+    _write(checkout / "internal" / "meter.go", "package internal\n\ntype Meter struct{}\n")
+    _write(
+        checkout / "internal" / "private.go",
+        'package internal\n\nconst API_KEY = "' + "sk-" + "a" * 26 + '"\n',
+    )
+    _commit_all(checkout, "Add repository code")
+    workspace = init_workspace(tmp_path / "workspace")
+    repository = register_git_checkout(workspace, checkout)
+
+    selected = CliRunner().invoke(
+        app,
+        ["code-add", repository.repository_id, ".", "--workspace", str(workspace)],
+    )
+    assert selected.exit_code == 0, selected.output
+    assert json.loads(selected.stdout)["path"] == "."
+
+    synced = sync_git_checkout(workspace, repository.repository_id)
+    paths = {document.relative_path for document in synced.documents}
+    assert synced.skipped == ("internal/private.go",)
+    assert "cmd/main.go" in paths
+    assert "internal/meter.go" in paths
+    assert "internal/private.go" not in paths
+    assert ".memoryforge/code-modules/cmd.md" in paths
+    assert ".memoryforge/code-modules/internal.md" in paths
+    module = search_sources(workspace, "Code module internal")[0]
+    module_content = (workspace / module.snapshot_path).read_text(encoding="utf-8")
+    assert "Canonical module path: `internal`" in module_content
+    assert "Search aliases: `internal`" in module_content
+    assert "Contains 2 tracked Go/Python files" in module_content
+    assert "Main exported operations in `internal`: `Meter`" in module_content
+
+
+def test_whole_repository_adds_a_card_for_each_nested_code_module(tmp_path: Path) -> None:
+    checkout = _create_repository(tmp_path)
+    _write(
+        checkout / "services" / "accounts" / "service.go",
+        'package accounts\n\nimport "example/services/jobs"\n\n'
+        "func CreateAccount() {}\n"
+        "func DescribeAccount() {}\n"
+        "func RegisterRoutes() {}\n"
+        "func HandleCreate() { jobs.StartTask() }\n",
+    )
+    _write(
+        checkout / "services" / "accounts" / "service_test.go",
+        "package accounts\n\nfunc TestCreateAccount() {}\n",
+    )
+    _write(checkout / "services" / "jobs" / "task.go", "package jobs\n\nfunc StartTask() {}\n")
+    _commit_all(checkout, "Add nested modules")
+    workspace = init_workspace(tmp_path / "workspace")
+    repository = register_git_checkout(workspace, checkout)
+    register_git_code_module(workspace, repository.repository_id, ".")
+
+    synced = sync_git_checkout(workspace, repository.repository_id)
+    paths = {document.relative_path for document in synced.documents}
+
+    assert ".memoryforge/code-modules/services.md" in paths
+    assert ".memoryforge/code-modules/services/accounts.md" in paths
+    accounts = search_sources(workspace, '"Code module" "services/accounts"')[0]
+    content = (workspace / accounts.snapshot_path).read_text(encoding="utf-8")
+    assert "# Code module: services/accounts" in content
+    assert "Search aliases: `accounts`, `services/accounts`" in content
+    assert "`CreateAccount`" in content
+    assert "`services/accounts/service.go`" in content
+    assert "## Entry points and handlers" in content
+    assert "`RegisterRoutes`" in content
+    assert "`HandleCreate`" in content
+    assert "Imports module `services/jobs`" in content
+    assert "`services/accounts/service_test.go`" in content
+
+
+def test_same_commit_reuses_code_files_but_rebuilds_module_cards(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    from memoryforge import importer as importer_module
+
+    checkout = _create_repository(tmp_path)
+    _write(checkout / "cmd" / "main.go", "package main\n\nfunc main() {}\n")
+    _commit_all(checkout, "Add command")
+    workspace = init_workspace(tmp_path / "workspace")
+    repository = register_git_checkout(workspace, checkout)
+    register_git_code_module(workspace, repository.repository_id, ".")
+    sync_git_checkout(workspace, repository.repository_id)
+
+    validated = []
+    original_validate = importer_module.validate_local_document
+
+    def track_validation(document) -> None:
+        validated.append(document.source_path)
+        original_validate(document)
+
+    monkeypatch.setattr(importer_module, "validate_local_document", track_validation)
+    refreshed = sync_git_checkout(workspace, repository.repository_id)
+
+    assert "cmd/main.go" not in validated
+    assert ".memoryforge/code-modules/cmd.md" in validated
+    assert refreshed.updated == 0
 
 
 def test_git_sync_rejects_checkout_with_changed_repository_identity(tmp_path: Path) -> None:

@@ -35,6 +35,7 @@ from memoryforge.workspace import (
 )
 
 PageType = Literal["entity", "concept", "synthesis"]
+CodeFact = tuple[str, int, str | None]
 _PAGE_TYPES: tuple[PageType, ...] = ("entity", "concept", "synthesis")
 _CATEGORY_PAGE_TYPES: dict[str, PageType] = {
     "summary": "entity",
@@ -74,7 +75,17 @@ _INDEX_ENTRY = re.compile(
 _WORDS = re.compile(r"[a-z0-9]+|[\u4e00-\u9fff]+", re.IGNORECASE)
 _CJK = re.compile(r"^[\u4e00-\u9fff]+$")
 _RELATED_PAGE_LINK = re.compile(r"^- \[[^\]]+\]\((?P<path>[^)]+\.md)\)$", re.MULTILINE)
-_LOCAL_FACT_LIMIT = 24
+_MARKDOWN_HEADING = re.compile(
+    r"^(?P<marks>#{1,6})[ \t]+(?P<title>.+?)(?:[ \t]+#+)?[ \t]*$",
+    re.MULTILINE,
+)
+_MARKDOWN_LIST_ITEM = re.compile(
+    r"^[ \t]*(?:[-*+]|\d+[.)])[ \t]+(?P<fact>.+?)[ \t]*$",
+    re.MULTILINE,
+)
+# Markdown lists are compiled as separate facts. Keep enough facts to retain
+# later sections of a normal README instead of truncating after the quick-start.
+_LOCAL_FACT_LIMIT = 48
 
 
 @dataclass(frozen=True)
@@ -90,6 +101,15 @@ class CurrentSource:
     repository_id: str | None
     repository_name: str | None
     relative_path: str | None
+
+
+@dataclass(frozen=True)
+class SourceFact:
+    """One exact source excerpt plus the Markdown section that owns it."""
+
+    quote: str
+    start: int
+    section_path: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -1600,7 +1620,7 @@ def _read_source_text(workspace: Workspace, source: CurrentSource) -> str:
     return (workspace.root / source.snapshot_path).read_text(encoding="utf-8")
 
 
-def _meaningful_paragraphs(content: str) -> list[tuple[str, int]]:
+def _meaningful_paragraphs(content: str) -> list[SourceFact]:
     facts: list[tuple[str, int]] = []
     structured_ranges: list[tuple[int, int]] = []
     for match in re.finditer(
@@ -1617,6 +1637,14 @@ def _meaningful_paragraphs(content: str) -> list[tuple[str, int]]:
         quote = match.group().strip()
         if quote:
             facts.append((quote, match.start()))
+        structured_ranges.append(match.span())
+    for match in _MARKDOWN_LIST_ITEM.finditer(content):
+        if any(start < match.end() and match.start() < end for start, end in structured_ranges):
+            continue
+        quote = match.group("fact").strip()
+        if quote:
+            leading = len(match.group("fact")) - len(match.group("fact").lstrip())
+            facts.append((quote, match.start("fact") + leading))
         structured_ranges.append(match.span())
     for match in re.finditer(
         r"(?:\A|\n[ \t]*\n)(?P<paragraph>.*?)(?=\n[ \t]*\n|\Z)",
@@ -1635,12 +1663,47 @@ def _meaningful_paragraphs(content: str) -> list[tuple[str, int]]:
         if quote and not quote.startswith(("#", "```", "|")):
             facts.append((quote, match.start("paragraph") + leading))
     if facts:
-        return sorted(facts, key=lambda fact: fact[1])[:_LOCAL_FACT_LIMIT]
+        headings = _markdown_headings(content)
+        return [
+            SourceFact(
+                quote=quote,
+                start=start,
+                section_path=_section_path_at(headings, start),
+            )
+            for quote, start in sorted(facts, key=lambda fact: fact[1])[:_LOCAL_FACT_LIMIT]
+        ]
     for line in content.splitlines():
         candidate = line.lstrip("#").strip()
         if candidate:
-            return [(candidate, content.index(candidate))]
+            start = content.index(candidate)
+            return [
+                SourceFact(
+                    quote=candidate,
+                    start=start,
+                    section_path=_section_path_at(_markdown_headings(content), start),
+                )
+            ]
     raise ValueError("source contains no meaningful text")
+
+
+def _markdown_headings(content: str) -> list[tuple[int, tuple[str, ...]]]:
+    stack: list[str] = []
+    headings: list[tuple[int, tuple[str, ...]]] = []
+    for match in _MARKDOWN_HEADING.finditer(content):
+        level = len(match["marks"])
+        title = match["title"].strip()
+        if not title:
+            continue
+        stack[level - 1 :] = [title]
+        headings.append((match.start(), tuple(stack)))
+    return headings
+
+
+def _section_path_at(
+    headings: list[tuple[int, tuple[str, ...]]],
+    position: int,
+) -> tuple[str, ...]:
+    return next((path for start, path in reversed(headings) if start <= position), ())
 
 
 def _page_type(source: CurrentSource) -> PageType:
@@ -1684,9 +1747,18 @@ def _target_page_path(
     return _canonical_page_path(change.source_ids)
 
 
-def _render_page(source: CurrentSource, facts: list[tuple[str, int]]) -> str:
-    displayed_facts = [(" ".join(quote.splitlines()), start) for quote, start in facts]
-    summary = displayed_facts[0][0]
+def _render_page(source: CurrentSource, facts: list[SourceFact]) -> str:
+    displayed_facts = [
+        SourceFact(
+            quote=" ".join(fact.quote.splitlines()),
+            start=fact.start,
+            section_path=fact.section_path,
+        )
+        for fact in facts
+    ]
+    first_fact = displayed_facts[0]
+    summary_prefix = " / ".join(first_fact.section_path)
+    summary = f"{summary_prefix}: {first_fact.quote}" if summary_prefix else first_fact.quote
     tags = tuple(dict.fromkeys((source.category, *source.tags)))
     lines = [
         "---",
@@ -1704,13 +1776,19 @@ def _render_page(source: CurrentSource, facts: list[tuple[str, int]]) -> str:
         "## Verified facts",
         "",
     ]
-    for index, (quote, _start) in enumerate(displayed_facts, start=1):
-        lines.append(f"- {quote} [^source-{source.source_id[:8]}-{index}]")
+    section_path: tuple[str, ...] = ()
+    for index, fact in enumerate(displayed_facts, start=1):
+        if fact.section_path != section_path:
+            section_path = fact.section_path
+            if section_path:
+                lines.extend(["", f"### {' / '.join(section_path)}", ""])
+        lines.append(f"- {fact.quote} [^source-{source.source_id[:8]}-{index}]")
     lines.append("")
-    for index, (_quote, start) in enumerate(displayed_facts, start=1):
+    for index, fact in enumerate(displayed_facts, start=1):
+        end = fact.start + len(facts[index - 1].quote)
         lines.append(
             f"[^source-{source.source_id[:8]}-{index}]: source `{source.source_id}` · revision "
-            f"`{source.source_version}` · `chars:{start}-{start + len(facts[index - 1][0])}`"
+            f"`{source.source_version}` · `chars:{fact.start}-{end}`"
         )
     return "\n".join(lines) + "\n"
 
@@ -1719,7 +1797,7 @@ def _render_code_page(source: CurrentSource, content: str) -> str:
     """Render a small, citable outline without pretending to fully understand code."""
     language = "Go" if "go" in source.tags else "Python"
     facts = _code_facts(content, language)
-    symbols = [quote for quote, _ in facts[1:]]
+    symbols = [quote for quote, _, _ in facts[1:]]
     summary = f"{language} code"
     if facts:
         summary += f": {facts[0][0]}"
@@ -1746,11 +1824,17 @@ def _render_code_page(source: CurrentSource, content: str) -> str:
         "",
         "## Verified facts",
         "",
+        f"### {source.relative_path or source.title}",
+        "",
     ]
-    for index, (quote, _) in enumerate(facts, start=1):
+    current_section: str | None = None
+    for index, (quote, _, section) in enumerate(facts, start=1):
+        if section and section != current_section:
+            lines.extend([f"#### {section}", ""])
+            current_section = section
         lines.append(f"- {quote} [^source-{index}]")
     lines.append("")
-    for index, (quote, start) in enumerate(facts, start=1):
+    for index, (quote, start, _) in enumerate(facts, start=1):
         lines.append(
             f"[^source-{index}]: source `{source.source_id}` · revision "
             f"`{source.source_version}` · `chars:{start}-{start + len(quote)}`"
@@ -1758,26 +1842,110 @@ def _render_code_page(source: CurrentSource, content: str) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _code_facts(content: str, language: str) -> list[tuple[str, int]]:
-    patterns = (
-        (r"^package\s+[A-Za-z_]\w*\s*$", r"^(?:type\s+[A-Z]\w*|func\s+(?:\([^)]*\)\s*)?[A-Z]\w*)")
-        if language == "Go"
-        else (r"^(?:class|def)\s+[A-Za-z]\w*",)
-    )
-    facts: list[tuple[str, int]] = []
+def _code_facts(content: str, language: str) -> list[CodeFact]:
+    if language == "Go":
+        return _go_code_facts(content)
+    patterns = (r"^(?:class|def)\s+[A-Za-z]\w*",)
+    facts: list[CodeFact] = []
     for pattern in patterns:
         for match in re.finditer(pattern, content, re.MULTILINE):
             quote = match.group().strip()
             if quote:
                 leading = len(match.group()) - len(match.group().lstrip())
-                facts.append((quote, match.start() + leading))
+                facts.append((quote, match.start() + leading, None))
     if facts:
         return facts[:8]
     for match in re.finditer(r"^.+$", content, re.MULTILINE):
         quote = match.group().strip()
         if quote:
-            return [(quote, match.start() + len(match.group()) - len(match.group().lstrip()))]
+            return [(quote, match.start() + len(match.group()) - len(match.group().lstrip()), None)]
     raise ValueError("source contains no meaningful code")
+
+
+def _go_code_facts(content: str) -> list[CodeFact]:
+    """Extract declarations and struct fields without pretending to parse Go."""
+    facts: list[CodeFact] = []
+    in_struct = False
+    brace_depth = 0
+    for line_match in re.finditer(r"^.*$", content, re.MULTILINE):
+        raw_line = line_match.group()
+        line = raw_line.strip()
+        if not line:
+            continue
+        start = line_match.start() + len(raw_line) - len(raw_line.lstrip())
+        package = re.match(r"package\s+[A-Za-z_]\w*\s*$", line)
+        type_decl = re.match(r"type\s+[A-Za-z_]\w*(?:\s+struct\s*\{)?", line)
+        func_decl = re.match(
+            r"func\s+(?P<receiver>\([^)]*\)\s*)?(?P<name>[A-Za-z_]\w*)\s*\(",
+            line,
+        )
+        if package or type_decl or func_decl:
+            if type_decl:
+                quote = f"type {type_decl.group(0).split()[1]}"
+            elif func_decl:
+                receiver = (func_decl.group("receiver") or "").strip()
+                function_name = func_decl.group("name")
+                quote = f"func {receiver + ' ' if receiver else ''}{function_name}"
+            else:
+                quote = line.split("{")[0].rstrip()
+                function_name = None
+            facts.append((quote, start, function_name if func_decl else None))
+        if type_decl and "struct" in line and "{" in line:
+            in_struct = True
+            brace_depth = line.count("{") - line.count("}")
+            if brace_depth <= 0:
+                in_struct = False
+            continue
+        if in_struct:
+            field = re.match(
+                r"([A-Za-z_]\w*)\s+([^{}]+?)(?:\s+`[^`]+`)?$",
+                line,
+            )
+            if field and not line.startswith(("//", "func ")):
+                facts.append((f"Field {field.group(1)} {field.group(2).strip()}", start, None))
+        brace_depth += line.count("{") - line.count("}")
+        if in_struct and brace_depth <= 0:
+            in_struct = False
+    if facts:
+        return [*facts, *_go_function_body_facts(content)]
+    for match in re.finditer(r"^.+$", content, re.MULTILINE):
+        quote = match.group().strip()
+        if quote:
+            return [(quote, match.start() + len(match.group()) - len(match.group().lstrip()), None)]
+    raise ValueError("source contains no meaningful code")
+
+
+def _go_function_body_facts(content: str) -> list[CodeFact]:
+    """Keep a few exact body lines so method questions have implementation evidence."""
+    lines = list(re.finditer(r"^.*$", content, re.MULTILINE))
+    facts: list[CodeFact] = []
+    declaration = re.compile(r"func\s+(?P<receiver>\([^)]*\)\s*)?(?P<name>[A-Za-z_]\w*)\s*\(")
+    for index, match in enumerate(lines):
+        line = match.group().strip()
+        function = declaration.match(line)
+        if function is None or "{" not in line:
+            continue
+        function_name = function.group("name")
+        depth = line.count("{") - line.count("}")
+        if depth <= 0:
+            continue
+        included = 0
+        for body_match in lines[index + 1 :]:
+            body_raw = body_match.group()
+            body_line = body_raw.strip()
+            body_start = body_match.start() + len(body_raw) - len(body_raw.lstrip())
+            if (
+                body_line not in {"{", "}"}
+                and bool(body_line)
+                and not body_line.startswith("//")
+                and included < 6
+            ):
+                facts.append((body_line, body_start, function_name))
+                included += 1
+            depth += body_line.count("{") - body_line.count("}")
+            if depth <= 0:
+                break
+    return facts
 
 
 def _render_deterministic_group_page(
@@ -1787,12 +1955,12 @@ def _render_deterministic_group_page(
     """Use source excerpts as the local fallback for a previously merged Wiki page."""
     excerpts: list[tuple[CurrentSource, str, str]] = []
     for source in sources:
-        quote, start = _meaningful_paragraphs(_read_source_text(workspace, source))[0]
+        fact = _meaningful_paragraphs(_read_source_text(workspace, source))[0]
         excerpts.append(
             (
                 source,
-                " ".join(quote.splitlines()),
-                f"chars:{start}-{start + len(quote)}",
+                " ".join(fact.quote.splitlines()),
+                f"chars:{fact.start}-{fact.start + len(fact.quote)}",
             )
         )
 

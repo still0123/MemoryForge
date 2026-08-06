@@ -20,6 +20,7 @@ from memoryforge.workspace import (
     Workspace,
     is_public_source_version,
     read_source_excerpt,
+    search_sources,
 )
 
 
@@ -204,6 +205,17 @@ def run_agent(
             if selected is not None:
                 evidence.append(selected)
                 evidence_characters += len(selected["text"])
+        elif decision.action == "search_code":
+            if not allow_local:
+                tool_result = {"error": "search_code requires allow_local"}
+            elif not decision.query or not decision.query.strip():
+                tool_result = {"error": "query is required"}
+            else:
+                tool_result = _search_code(
+                    workspace_root,
+                    decision.query,
+                    repository_id=repository_id,
+                )
         else:
             tool_result = {"error": f"unknown action: {decision.action}"}
 
@@ -257,13 +269,17 @@ def _agent_messages(
                 "You are MiniClaude, a small evidence-first knowledge agent. "
                 "Use one action per turn and return JSON only. Actions are: "
                 "search_wiki with query; read_evidence with citation_index; "
+                "search_code with query when Wiki facts lack code detail; "
                 "final with answer and citation_indexes. Start with search_wiki. "
                 "If a tool or parameter is invalid, return the error observation and continue. "
                 "Only use facts returned by tools. Read every citation you plan to use before "
                 "final. A final answer must cite at least one citation index returned by "
                 "read_evidence. If evidence is insufficient, "
                 'return {"action":"final","answer":"不知道","citation_indexes":[]}. '
-                "Do not invent tools or file paths." + workspace_rules + conversation_rules
+                "After search_code, search_wiki again using a returned path or symbol so the "
+                "final answer remains citable. Do not invent tools or file paths."
+                + workspace_rules
+                + conversation_rules
             ),
         },
         {"role": "user", "content": question},
@@ -339,6 +355,26 @@ def _unknown_search(found: AskPayload) -> AskPayload:
         "quote": None,
         "trace": found.get("trace", []),
     }
+
+
+def _search_code(
+    workspace_root: Path,
+    query: str,
+    *,
+    repository_id: str | None,
+) -> dict[str, object]:
+    matches = [
+        result
+        for result in search_sources(
+            workspace_root,
+            query,
+            limit=10,
+            repository_id=repository_id,
+            require_all_terms=False,
+        )
+        if Path(result.source_path).suffix in {".go", ".py"}
+    ][:3]
+    return {"matches": [{"path": match.source_path, "snippet": match.snippet} for match in matches]}
 
 
 def _read_evidence(

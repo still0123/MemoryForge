@@ -30,7 +30,7 @@
 
 - **多源资料接入**：本地 Markdown/TXT、已克隆的 Git 仓库、飞书 Docx/Wiki、单篇公开网页或保存的 HTML。
 - **WikiCompiler**：将资料编译为“项目/模块介绍、机制说明、方案与复盘”三类 Markdown 页面；每页都保留来源、版本与原文位置。
-- **代码 Wiki**：用 Tree-sitter 为显式选择的 Python、Go、TypeScript/TSX 代码构建确定性符号图、模块计划和带引用 Wiki，仍须人工审核后应用。
+- **代码 Wiki**：用 Tree-sitter 为显式选择的 Python、Go、TypeScript/TSX 代码构建确定性符号图、模块计划和带引用 Wiki，仍须人工审核后应用；页面按仓库短 ID 分目录，多个仓库的同名模块不会互相覆盖。
 - **增量更新**：新资料优先扩展已有主题；资料更新时只重编译受影响的页面。
 - **渐进式查询**：`INDEX.md → 少量 Wiki 页面 → 按需原文核验`，避免一次把整个知识库塞进上下文。
 - **MiniClaude Agent**：只提供 `search_wiki`、`read_evidence`、`final` 三个工具；必须读取证据后才能给出带引用的答案。
@@ -243,6 +243,7 @@ memoryforge web-import <public-http-url> --workspace <workspace>
 # Wiki 编译与检查
 memoryforge ingest --pending --workspace <workspace>
 memoryforge ingest --code-wiki <repository-id> --workspace <workspace>
+memoryforge watch --interval 60 --workspace <workspace>
 memoryforge review <changeset-id> --workspace <workspace>
 memoryforge approve <changeset-id> --workspace <workspace>
 memoryforge apply <changeset-id> --workspace <workspace>
@@ -253,6 +254,19 @@ memoryforge ask '<question>' --workspace <workspace>
 memoryforge agent '<question>' --workspace <workspace>
 memoryforge feishu-serve --workspace <workspace>
 ```
+
+飞书私聊还支持两条轻量上下文命令：
+
+```text
+/project efs-mgr       # 当前聊天固定到某个已登记仓库
+/project clear         # 清除项目范围
+/resume <session-id>   # 恢复本机保存的另一段会话
+/resume clear          # 退出恢复会话
+```
+
+`/project` 只改变当前聊天的 Wiki 检索范围，`/resume` 只读取本机保存的有限会话上下文；
+它们不会把公司代码、飞书正文或会话上传到 GitHub。`watch` 只生成待审核 ChangeSet，
+不会自动覆盖正式 Wiki。
 
 更多命令请运行 `memoryforge --help`。实现细节与数据模型见 [SPEC.md](SPEC.md)，下一阶段的完整实施计划见 [NEXT_PHASE_SPEC.md](NEXT_PHASE_SPEC.md)。
 

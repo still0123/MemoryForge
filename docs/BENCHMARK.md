@@ -16,15 +16,15 @@
 
 | 指标 | MemoryForge | Raw FTS |
 | --- | ---: | ---: |
-| Top-3 来源召回率 | **96.2%** | 57.7% |
+| Top-3 来源召回率 | **92.3%** | 57.7% |
 | 多来源完整覆盖率 | **100.0%** | 20.0% |
 | 回答准确率 | 96.7% | 不适用 |
 | 引用落地准确率 | 96.2% | 不适用 |
 | 无答案拒答准确率 | 100.0% | 不适用 |
 | 平均展开 Wiki 页面 | 3.0 | 不适用 |
-| 平均证据/候选文本字符数 | 143.17 | 728.0 |
+| 平均证据/候选文本字符数 | 152.9 | 728.0 |
 
-在这套公开题集上，Wiki 路由的 Top-3 来源召回比直接 Raw FTS 高 38.5 个百分点，多来源完整覆盖高
+在这套公开题集上，Wiki 路由的 Top-3 来源召回比直接 Raw FTS 高 34.6 个百分点，多来源完整覆盖高
 80 个百分点。这个结果说明“先形成主题页面，再逐层展开”对跨文档问题有帮助；它不证明
 MemoryForge 在所有知识库上都优于向量 RAG。
 
@@ -57,7 +57,7 @@ Citation 误算为“引用正确”，所以引用落地准确率如实记录�
   --output /private/tmp/memoryforge-public-result.json
 ```
 
-脚本会真实执行 `init → git-add → git-sync → ingest → review → apply → lint → ask → eval`。完整逐题结果保存在 [`demo/results/agent_skill_eval_public.json`](../demo/results/agent_skill_eval_public.json)。
+脚本会真实执行 `init → git-add → git-sync → ingest → review → approve → apply → lint → ask → eval`。完整逐题结果保存在 [`demo/results/agent_skill_eval_public.json`](../demo/results/agent_skill_eval_public.json)。
 
 ## 结论与边界
 

@@ -24,7 +24,7 @@
          WikiCompiler
               │
               ▼
-   PROPOSED ChangeSet → review → apply
+   PROPOSED ChangeSet → review → approve → apply
               │
               ▼
    INDEX.md + Wiki 页面 + 来源引用
@@ -38,7 +38,7 @@
 | 能力 | 现有入口 |
 | --- | --- |
 | Wiki 编译 | `compile_pending_sources(...)`、`compile_repository_topics(...)` |
-| 变更审核 | `ChangeSetStore`、`review`、`apply --approve`、`reject` |
+| 变更审核 | `ChangeSetStore`、`review`、`approve`、`apply`、`reject` |
 | 渐进式查询 | `answer_question(...)` |
 | 最小 Agent | `run_agent(...)`，工具为 `search_wiki`、`read_evidence`、`final` |
 | 结构检查 | `lint_workspace(...)` |
@@ -70,7 +70,8 @@
 memoryforge git-sync <repository-id> --workspace <workspace>
 memoryforge ingest --pending --llm --allow-local-llm --workspace <workspace>
 memoryforge review <changeset-id> --workspace <workspace>
-memoryforge apply <changeset-id> --approve --workspace <workspace>
+memoryforge approve <changeset-id> --workspace <workspace>
+memoryforge apply <changeset-id> --workspace <workspace>
 
 # 2. 用 Agent 查询多个页面和原始证据
 memoryforge agent '为什么这个模块这样设计？' \
@@ -84,7 +85,8 @@ memoryforge agent '为什么这个模块这样设计？' \
 
 # 4. 用户看 Diff 后决定是否沉淀
 memoryforge review <changeset-id> --workspace <workspace>
-memoryforge apply <changeset-id> --approve --workspace <workspace>
+memoryforge approve <changeset-id> --workspace <workspace>
+memoryforge apply <changeset-id> --workspace <workspace>
 
 # 5. 检查知识库，并运行可复现评测
 memoryforge lint --workspace <workspace>
@@ -123,7 +125,7 @@ memoryforge eval demo/evaluation/agent_skill_eval.json --workspace <workspace>
 ### 必须保留的约束
 
 - Raw SourceVersion 不可被 Wiki 编译或 Agent 修改；
-- 稳定 Wiki 只能通过 `review → apply --approve` 修改；
+- 稳定 Wiki 只能通过 `review → approve → apply` 修改；
 - `local_only` 内容只有显式 `--allow-local-llm` 才能发给已配置模型；
 - 日常 `ask` 默认只读 Wiki，原文只用于核验；
 - Citation 必须能回读到具体 SourceVersion 和 `chars:start-end`；
@@ -338,7 +340,7 @@ memoryforge agent '<question>' \
 5. Provider 可阅读问题、最终答案、已读原文片段和候选页面，但页面中的事实必须引用原始 SourceVersion；
 6. Agent 的自然语言答案不是 Source、不是 Citation，也不能单独成为 VERIFIED 事实；
 7. 结果必须存为现有 `PROPOSED` ChangeSet；不能直接写 `wiki/`；
-8. 用户继续使用现有 `review`、`apply --approve` 或 `reject`；
+8. 用户继续使用现有 `review`、`approve`、`apply` 或 `reject`；
 9. `local_only` 引用仍要求显式 `--allow-local-llm`；
 10. 飞书聊天默认不自动触发知识回写。
 
@@ -364,7 +366,7 @@ memoryforge agent '<question>' \
 
 - 跨两份资料提问后能得到带原始引用的答案和一个 `changeset_id`；
 - `review` 显示最多一个页面的真实 Diff；
-- `apply --approve` 后再次查询能命中新沉淀的综合页面；
+- `approve`、`apply` 后再次查询能命中新沉淀的综合页面；
 - `unknown`、没有已读证据或 Provider 返回 `None` 时不创建 ChangeSet；
 - 伪造 Source ID、过期 SourceVersion、未读 Citation 或越界页面路径会被现有本地校验拒绝；
 - 命令不传 `--propose-update` 时行为与现在完全一致。
@@ -432,7 +434,7 @@ memoryforge agent '<question>' \
 - 已实现 `cleanup_required` 和 `orphan_page` 两类确定性 Lint 问题；
 - 已实现单来源页面归档、共享页面按剩余 current 来源重建；
 - `INDEX.md`、仓库总览页和关系页会随归档/重建候选一起更新；
-- `apply --approve` 支持 `ARCHIVE_PAGE`，`reject` 会归档提案且不触碰稳定 Wiki；
+- `apply` 支持 `ARCHIVE_PAGE`，`reject` 会归档提案且不触碰稳定 Wiki；
 - Raw Blob、SourceVersion、Manifest 和 Git 历史均保留。
 
 ## 10. Phase 5（P2）：把 MiniClaude 做成小而完整的 Agent（已完成）
@@ -594,7 +596,7 @@ sentence-transformers，因此只测试了标准库字符 n-gram 代理：
 - 严格词法未命中但已有候选 Wiki 页时，只有显式启用模型才允许模型在这组有限事实内改写；
   不启用模型时仍返回“不知道”；
 - 不自动把每条飞书聊天写回 Wiki；
-- `--propose-update` 首版只在 CLI 显式触发，演示时再展示 review/apply。
+- `--propose-update` 首版只在 CLI 显式触发，演示时再展示 review/approve/apply。
 
 不要在这个阶段做群聊权限、多轮上下文、交互卡片、Web 管理后台或定时同步。
 
@@ -629,11 +631,11 @@ git diff --check
 
 ```text
 导入两个资料源
-  → 编译并 review/apply
+  → 编译并 review/approve/apply
   → 问一个需要跨资料的问题
   → Agent 读取两份原始证据后回答
   → --propose-update 生成一份综合 Wiki Diff
-  → review/apply
+  → review/approve/apply
   → 再次查询命中新页面
   → lint
   → 30 题 eval
@@ -655,7 +657,7 @@ git diff --check
 - [x] Workspace 规则真实进入 LLM 编译和 Agent prompt；
 - [x] LLM ingest 先产生可审核的简短页面计划，再生成页面；
 - [x] Agent 能基于已读原始证据提出最多一个 Wiki ChangeSet；
-- [x] 所有稳定 Wiki 修改仍经过 `review → apply --approve`；
+- [x] 所有稳定 Wiki 修改仍经过 `review → approve → apply`；
 - [x] Git 来源删除后可以生成可审核的页面清理方案；
 - [x] MiniClaude 的工具调用、终止状态和上下文预算可测试；
 - [x] 多仓查询可以按 repository 范围过滤；

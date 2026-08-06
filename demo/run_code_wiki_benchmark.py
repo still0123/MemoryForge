@@ -97,7 +97,13 @@ def build_evidence(workdir: Path) -> dict[str, Any]:
         and symbol.body_sha256 != first_symbols[symbol.symbol_id].body_sha256
     )
     changed_pages = sorted(
-        path for path in update.candidate_files if path.startswith("wiki/pages/code/")
+        _display_code_page(path, repository_id)
+        for path in update.candidate_files
+        if path.startswith("wiki/pages/code/")
+    )
+    expected_changed_pages = sorted(
+        _display_code_page(_repository_scoped_code_page(repository_id, path), repository_id)
+        for path in incremental.expected_changed_pages
     )
     source_module_count = sum(
         bool(module.symbol_ids) for module in _flatten_modules(first_plan.modules)
@@ -107,7 +113,7 @@ def build_evidence(workdir: Path) -> dict[str, Any]:
         "changed_symbols": changed_symbols,
         "expected_changed_symbols": list(incremental.expected_changed_symbols),
         "changed_pages": changed_pages,
-        "expected_changed_pages": list(incremental.expected_changed_pages),
+        "expected_changed_pages": expected_changed_pages,
         "changed_page_ratio": changed_page_ratio,
         "max_changed_page_ratio": incremental.max_changed_page_ratio,
         "stable_symbol_ids": set(first_symbols)
@@ -115,7 +121,7 @@ def build_evidence(workdir: Path) -> dict[str, Any]:
     }
     incremental_result["passed"] = (
         changed_symbols == sorted(incremental.expected_changed_symbols)
-        and changed_pages == sorted(incremental.expected_changed_pages)
+        and changed_pages == expected_changed_pages
         and changed_page_ratio <= incremental.max_changed_page_ratio
         and incremental_result["stable_symbol_ids"]
     )
@@ -142,6 +148,20 @@ def build_evidence(workdir: Path) -> dict[str, Any]:
 
 def _flatten_modules(modules: tuple[ModuleNode, ...]) -> tuple[ModuleNode, ...]:
     return tuple(module for root in modules for module in (root, *_flatten_modules(root.children)))
+
+
+def _repository_scoped_code_page(repository_id: str, path: str) -> str:
+    prefix = "wiki/pages/code/"
+    if not path.startswith(prefix):
+        raise ValueError(f"expected a code Wiki page path: {path}")
+    return f"{prefix}{repository_id[:12]}/{path.removeprefix(prefix)}"
+
+
+def _display_code_page(path: str, repository_id: str) -> str:
+    prefix = f"wiki/pages/code/{repository_id[:12]}/"
+    if not path.startswith(prefix):
+        raise ValueError(f"code Wiki page is not scoped to the repository: {path}")
+    return "wiki/pages/code/<repository-id-prefix>/" + path.removeprefix(prefix)
 
 
 def _ws(workspace: Path) -> tuple[str, str]:

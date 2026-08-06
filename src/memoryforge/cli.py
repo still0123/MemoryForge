@@ -3,6 +3,7 @@ from __future__ import annotations
 import difflib
 import json
 import sqlite3
+import time
 from contextlib import suppress
 from pathlib import Path
 from typing import Annotated
@@ -204,10 +205,13 @@ def git_sync(
 @app.command("code-add")
 def code_add(
     repository_id: Annotated[str, typer.Argument(help="Registered Git repository ID.")],
-    path: Annotated[str, typer.Argument(help="Committed Go/Python file or directory.")],
+    path: Annotated[
+        str,
+        typer.Argument(help="Committed Go, Python, TypeScript, or TSX file/directory."),
+    ],
     workspace: WorkspaceOption = Path("."),
 ) -> None:
-    """Select one code module; the next sync imports its Go/Python files."""
+    """Select one code module; the next sync imports supported source files."""
     try:
         selected = register_git_code_module(workspace, repository_id, path)
     except (
@@ -360,6 +364,100 @@ def refresh(workspace: WorkspaceOption = Path(".")) -> None:
             indent=2,
         )
     )
+
+
+@app.command()
+def watch(
+    interval: Annotated[
+        float,
+        typer.Option("--interval", min=1, help="Seconds between refresh passes."),
+    ] = 60,
+    once: Annotated[
+        bool,
+        typer.Option("--once", help="Run one refresh-and-compile pass, then exit."),
+    ] = False,
+    llm: Annotated[
+        bool,
+        typer.Option("--llm", help="Use the configured model when compiling changes."),
+    ] = False,
+    allow_local_llm: Annotated[
+        bool,
+        typer.Option(
+            "--allow-local-llm",
+            help="Allow the configured model to receive local_only sources.",
+        ),
+    ] = False,
+    workspace: WorkspaceOption = Path("."),
+) -> None:
+    """Watch registered sources and stage reviewable Wiki updates."""
+    try:
+        opened = Workspace.open(workspace)
+        provider = OpenAICompatibleProvider(ProviderConfig.from_environment()) if llm else None
+        first_pass = True
+        typer.echo(
+            f"Watching registered sources every {interval:g}s. Press Ctrl+C to stop.",
+            err=True,
+        )
+        while True:
+            refreshed = refresh_workspace(opened.root)
+            stored = None
+            if first_pass or refreshed.changed:
+                compilation = compile_pending_sources(
+                    opened,
+                    provider=provider,
+                    allow_local=allow_local_llm,
+                )
+                if compilation is not None:
+                    stored = ChangeSetStore(opened).create(
+                        compilation.changeset,
+                        compilation.candidate_files,
+                    )
+
+            if first_pass or refreshed.changed or stored is not None:
+                payload: dict[str, object] = {
+                    "status": "changed" if refreshed.changed else "unchanged",
+                    "git": [
+                        {
+                            "repository_id": item.repository_id,
+                            "head_commit": item.head_commit,
+                            "created": item.created,
+                            "updated": item.updated,
+                            "unchanged": item.unchanged,
+                        }
+                        for item in refreshed.git
+                    ],
+                    "feishu": [
+                        {
+                            "document_id": item.document_id,
+                            "created": item.created,
+                            "updated": item.updated,
+                            "unchanged": item.unchanged,
+                        }
+                        for item in refreshed.feishu
+                    ],
+                }
+                if stored is not None:
+                    payload["status"] = "proposed"
+                    payload["changeset"] = compilation_payload(stored)
+                typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
+            if once:
+                return
+            first_pass = False
+            time.sleep(interval)
+    except KeyboardInterrupt:
+        typer.echo("Watcher stopped.", err=True)
+    except (
+        FeishuDocumentError,
+        GitRepositoryError,
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
 
 
 @app.command("topics")

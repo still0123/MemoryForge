@@ -58,7 +58,7 @@ def test_ingest_pending_compiles_imported_source_to_proposed_changeset(
     assert "claims" not in payload
 
 
-def test_review_is_read_only_and_hides_legacy_claims(
+def test_review_does_not_write_stable_wiki_and_hides_legacy_claims(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -82,7 +82,7 @@ def test_review_is_read_only_and_hides_legacy_claims(
     assert not stable_wiki.exists()
 
 
-def test_apply_requires_approval_then_writes_wiki_and_commits(
+def test_reviewed_changeset_can_be_approved_then_applied(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -100,9 +100,21 @@ def test_apply_requires_approval_then_writes_wiki_and_commits(
     assert not stable_wiki.exists()
     assert _git_head(workspace_path) == base_commit
 
+    reviewed = runner.invoke(
+        app,
+        ["review", changeset_id, "--workspace", str(workspace_path)],
+    )
     approved = runner.invoke(
         app,
-        ["apply", changeset_id, "--approve", "--workspace", str(workspace_path)],
+        ["approve", changeset_id, "--workspace", str(workspace_path)],
+    )
+    assert reviewed.exit_code == 0
+    assert approved.exit_code == 0
+    assert json.loads(approved.stdout)["status"] == "APPROVED"
+
+    approved = runner.invoke(
+        app,
+        ["apply", changeset_id, "--workspace", str(workspace_path)],
     )
 
     assert approved.exit_code == 0
@@ -116,6 +128,19 @@ def test_apply_requires_approval_then_writes_wiki_and_commits(
     assert receipt["status"] == "APPLIED"
     assert receipt["commit"] == payload["commit"]
     assert receipt["changeset_id"] == changeset_id
+
+
+def test_approve_requires_review(tmp_path: Path, monkeypatch) -> None:
+    runner, workspace_path, imported = _initialized_workspace(tmp_path, monkeypatch)
+    changeset_id = _stage_changeset(workspace_path, imported)
+
+    result = runner.invoke(
+        app,
+        ["approve", changeset_id, "--workspace", str(workspace_path)],
+    )
+
+    assert result.exit_code != 0
+    assert "Review the ChangeSet before approval" in result.output
 
 
 def test_reject_archives_proposal_without_changing_stable_wiki(
@@ -270,8 +295,74 @@ def test_deterministic_compiler_keeps_markdown_table_and_config_block_facts(
     )
     assert "http://127.0.0.1:8766" in page
     assert "http://127.0.0.1:8765" in page
+    assert "| Java Web | http://127.0.0.1:8766 |" in page
+    assert "| Python AI | http://127.0.0.1:8765 |" in page
     assert "AD_VIDEO_LLM_ENABLED=1" in page
     assert "AD_VIDEO_LLM_API_KEY=example-key" in page
+
+
+def test_deterministic_compiler_keeps_markdown_section_paths(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    source_text = (
+        "# Service configuration\n\n"
+        "## Online model\n\n"
+        "| Variable | Purpose |\n"
+        "| --- | --- |\n"
+        "| AD_VIDEO_LLM_ENABLED | Enable remote model |\n\n"
+        "### Fallback\n\n"
+        "When the remote model is unavailable, the service falls back to local analysis.\n"
+    )
+    runner, workspace, _ = _initialized_workspace(tmp_path, monkeypatch, source_text=source_text)
+
+    ingested = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
+    assert ingested.exit_code == 0, ingested.output
+    reviewed = runner.invoke(
+        app,
+        ["review", json.loads(ingested.stdout)["changeset_id"], "--workspace", str(workspace)],
+    )
+
+    assert reviewed.exit_code == 0, reviewed.output
+    page = next(
+        content
+        for path, content in json.loads(reviewed.stdout)["candidate_files"].items()
+        if path.startswith("wiki/pages/")
+    )
+    assert "### Service configuration / Online model" in page
+    assert "### Service configuration / Online model / Fallback" in page
+    assert "AD_VIDEO_LLM_ENABLED" in page
+    assert "service falls back to local analysis." in page
+
+
+def test_deterministic_compiler_splits_markdown_list_items_into_facts(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    source_text = (
+        "# Model boundary\n\n"
+        "## Default policy\n\n"
+        "- `local_only` sources never leave the workspace by default.\n"
+        "- `--allow-local-llm` explicitly permits a model to read local sources.\n"
+    )
+    runner, workspace, _ = _initialized_workspace(tmp_path, monkeypatch, source_text=source_text)
+
+    ingested = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
+    assert ingested.exit_code == 0, ingested.output
+    reviewed = runner.invoke(
+        app,
+        ["review", json.loads(ingested.stdout)["changeset_id"], "--workspace", str(workspace)],
+    )
+
+    assert reviewed.exit_code == 0, reviewed.output
+    page = next(
+        content
+        for path, content in json.loads(reviewed.stdout)["candidate_files"].items()
+        if path.startswith("wiki/pages/")
+    )
+    assert "- `local_only` sources never leave the workspace by default." in page
+    assert "- `--allow-local-llm` explicitly permits a model to read local sources." in page
+    assert page.count("[^source-") == 4
 
 
 def test_ingest_rejects_unknown_source_id(tmp_path: Path, monkeypatch) -> None:

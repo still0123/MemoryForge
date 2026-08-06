@@ -35,7 +35,7 @@ Demo 内容。模型可按用户明确授权使用（包括外部模型）；`lo
 - `lark-cli event consume im.message.receive_v1 --as bot` 收消息；
 - 现有渐进式 Wiki 问答生成答案和页面引用；
 - `lark-cli im +messages-reply --as bot` 回复原消息；
-- 飞书资料仍通过显式 `feishu-import -> ingest -> review -> apply` 进入本地 Wiki。
+- 飞书资料仍通过显式 `feishu-import -> ingest -> review -> approve -> apply` 进入本地 Wiki。
 
 ## 3. MVP 边界
 

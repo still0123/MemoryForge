@@ -9,7 +9,7 @@
 **MemoryForge｜个人技术知识 Wiki 与 MiniClaude Agent**
 Python · SQLite FTS5 · Pydantic · Typer · OpenAI-compatible API · 飞书
 
-- 设计 Raw Source、Markdown Wiki、Workspace Schema 三层知识模型；实现 `ingest → review → apply` 审核式编译与增量更新，使资料变更只影响相关页面，并保留来源版本和字符级 Citation。
+- 设计 Raw Source、Markdown Wiki、Workspace Schema 三层知识模型；实现 `ingest → review → approve → apply` 审核式编译与增量更新，使资料变更只影响相关页面，并保留来源版本和字符级 Citation。
 - 实现 `INDEX → Wiki 页面 → 原文证据` 的渐进式查询和受限 MiniClaude Agent；Agent 仅能检索、读取证据、回答，支持 3 轮本地追问，避免 Shell、任意写文件等通用工具带来的失控边界。
 - 使用 Tree-sitter 构建 Python、Go、TypeScript/TSX 的确定性 Code Wiki；架构图边绑定真实
   `CodeRelation` Citation，固定夹具上的 Symbol、Relation、Module 和 Mermaid 指标均为 100%，

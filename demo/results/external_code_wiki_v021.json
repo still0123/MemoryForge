@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "memoryforge_commit": "79054ae562d745552b3471af9d26d728bbc510ea",
+  "memoryforge_commit": "345f585efcf0c72ad51bbd972c46456a839d4891",
   "memoryforge_worktree_dirty": false,
   "source_manifest": {
     "path": "demo/evaluation/external_code_wiki_sources_v021.json",
@@ -26,7 +26,7 @@
         "manual_module_labels": 5
       },
       "workflow": {
-        "synced_document_count": 55,
+        "synced_document_count": 57,
         "indexed_source_count": 17,
         "code_wiki_file_count": 18,
         "lint": {
@@ -401,7 +401,7 @@
         "manual_module_labels": 5
       },
       "workflow": {
-        "synced_document_count": 37,
+        "synced_document_count": 39,
         "indexed_source_count": 36,
         "code_wiki_file_count": 2,
         "lint": {
@@ -852,7 +852,7 @@
         "manual_module_labels": 5
       },
       "workflow": {
-        "synced_document_count": 34,
+        "synced_document_count": 41,
         "indexed_source_count": 34,
         "code_wiki_file_count": 40,
         "lint": {

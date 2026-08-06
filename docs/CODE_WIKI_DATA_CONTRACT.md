@@ -1,7 +1,8 @@
 # Code Wiki 数据契约
 
-本文档定义 MemoryForge 在 CodeWiki C0-C3 阶段使用的事实层契约。当前已完成
-Python、Go 和 TypeScript Tree-sitter Adapter，但尚未接入 CLI、`ingest` 或稳定 Wiki 写入。
+本文档定义 MemoryForge 在 CodeWiki C0-C3 阶段使用的事实层契约。Python、Go 和
+TypeScript/TSX Tree-sitter Adapter 已接入 `git-sync`、`ingest --code-wiki` 和稳定 Wiki
+写入；本文档描述的是这些入口共享的事实层边界，而不是未来接口草案。
 
 ## 1. 基本原则
 
@@ -87,10 +88,11 @@ Commit 不进入 Symbol ID，因此同一个函数只修改实现时仍保持身
 
 ### ModulePlan
 
-表示层级模块树。模块路径使用小写 kebab-case，Wiki 路径固定为：
+表示层级模块树。模块路径使用小写 kebab-case。为避免多个 Git 仓库拥有同名模块时互相覆盖，
+Wiki 路径包含仓库 ID 前缀：
 
 ```text
-wiki/pages/code/<module-path>.md
+wiki/pages/code/<repository-id-prefix>/<module-path>.md
 ```
 
 计划必须完整且无重叠地分配所有声明 Symbol。
@@ -100,10 +102,18 @@ wiki/pages/code/<module-path>.md
 表示可交给确定性 Mermaid 编译器的模块图。每条边必须携带一个或多个
 `CodeRelation.relation_id`，图模型会拒绝未知模块端点。
 
-## 5. 后续阶段接口
+## 5. 代码 Wiki 入口
 
 C1 Tree-sitter 输出 `CodeIndexSnapshot`；C2 模块规划器消费 Snapshot 并输出
-`ModulePlan`；C3 Wiki 编译器消费二者生成普通 `PROPOSED` ChangeSet。
+`ModulePlan`；C3 Wiki 编译器消费二者生成普通 `PROPOSED` ChangeSet。当前 CLI 入口是：
+
+```text
+git-add -> code-add -> git-sync -> ingest --code-wiki
+  -> review -> approve -> apply -> lint
+```
+
+代码 Wiki 仍然只处理已注册且已同步的代码模块，不会扫描未显式选择的目录，也不会绕过审批
+直接写入稳定 Wiki。
 
 在 C3 完成前，这些模型不得写入活动 Wiki，也不得成为查询结果的事实来源。
 

@@ -897,11 +897,16 @@ def _registered_feishu_tags(value: object) -> tuple[str, ...]:
 def sync_git_checkout(workspace: Path, repository_id: str) -> GitRepositorySyncResult:
     """Import committed documentation from one registered local checkout."""
     from memoryforge.git_adapter import (
+        CODE_WIKI_VERSION,
         scan_git_snapshot_code,
         scan_git_snapshot_documentation,
         snapshot_git_repository,
     )
-    from memoryforge.importer import import_local_document, validate_local_document
+    from memoryforge.importer import (
+        SourceValidationError,
+        import_local_document,
+        validate_local_document,
+    )
 
     opened = Workspace.open(workspace)
     repository = _get_git_repository(opened, repository_id)
@@ -929,8 +934,38 @@ def sync_git_checkout(workspace: Path, repository_id: str) -> GitRepositorySyncR
         {document.source_path: document for document in scanned_documents}.values(),
         key=lambda document: document.source_path,
     )
+    reusable_paths = (
+        _current_git_paths(
+            opened,
+            repository.repository_id,
+            snapshot.revision,
+            repository.sensitivity,
+            code_wiki_version=CODE_WIKI_VERSION,
+        )
+        if repository.last_synced_commit == snapshot.revision
+        else set()
+    )
+    safe_documents = []
+    skipped = []
+
+    def can_reuse(document: LocalDocument) -> bool:
+        return not document.source_path.startswith(".memoryforge/code-modules/") and (
+            "code" not in document.tags or CODE_WIKI_VERSION in document.tags
+        )
+
     for document in scanned_documents:
-        validate_local_document(document)
+        if document.source_path in reusable_paths and can_reuse(document):
+            safe_documents.append(document)
+            continue
+        try:
+            validate_local_document(document)
+        except SourceValidationError:
+            if "code" not in document.tags:
+                raise
+            skipped.append(document.source_path)
+            continue
+        safe_documents.append(document)
+    scanned_documents = safe_documents
 
     documents: list[GitDocumentSyncResult] = []
     counts = {"created": 0, "updated": 0, "unchanged": 0}
@@ -938,6 +973,17 @@ def sync_git_checkout(workspace: Path, repository_id: str) -> GitRepositorySyncR
         source_id = hashlib.sha256(
             f"{repository.repository_id}\0{document.source_path}".encode()
         ).hexdigest()
+        if document.source_path in reusable_paths and can_reuse(document):
+            counts["unchanged"] += 1
+            documents.append(
+                GitDocumentSyncResult(
+                    source_id=source_id,
+                    relative_path=document.source_path,
+                    revision=snapshot.revision,
+                    status="unchanged",
+                )
+            )
+            continue
         imported = import_local_document(opened.root, document, source_id=source_id)
         _record_git_source_revision(
             opened,
@@ -976,6 +1022,7 @@ def sync_git_checkout(workspace: Path, repository_id: str) -> GitRepositorySyncR
         created=counts["created"],
         updated=counts["updated"],
         unchanged=counts["unchanged"],
+        skipped=tuple(skipped),
         documents=tuple(documents),
     )
 
@@ -1055,6 +1102,41 @@ def _record_git_source_revision(
             """,
             (current_version_id, repository_id, relative_path, commit_sha),
         )
+
+
+def _current_git_paths(
+    workspace: Workspace,
+    repository_id: str,
+    commit_sha: str,
+    sensitivity: Sensitivity,
+    *,
+    code_wiki_version: str,
+) -> set[str]:
+    with _connect(workspace.index_path) as connection:
+        rows = connection.execute(
+            """
+            SELECT revisions.relative_path
+            FROM git_source_revisions AS revisions
+            JOIN source_versions AS versions
+              ON versions.id = revisions.source_version_id
+            WHERE revisions.repository_id = ?
+              AND revisions.commit_sha = ?
+              AND versions.is_current = 1
+              AND versions.sensitivity = ?
+              AND (
+                instr(versions.tags_json, '"code"') = 0
+                OR instr(versions.tags_json, ?) > 0
+                OR instr(versions.tags_json, '"code-module"') > 0
+              )
+            """,
+            (
+                repository_id,
+                commit_sha,
+                sensitivity.value,
+                json.dumps(code_wiki_version),
+            ),
+        ).fetchall()
+    return {str(row["relative_path"]) for row in rows}
 
 
 def _git_repository_record(row: sqlite3.Row) -> GitRepositoryRecord:

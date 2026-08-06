@@ -18,7 +18,7 @@ MemoryForge 是一个本地优先的技术知识 Wiki 编译器：它把 Git、M
 Source Manifest + 原文快照
    ↓
 WikiCompiler：生成 ChangeSet
-   ↓ review / apply
+   ↓ review / approve / apply
 Markdown Wiki：INDEX.md + pages/
    ↓
 渐进式查询：索引 → 页面 → 必要时原文
@@ -44,7 +44,7 @@ CLI / MiniClaude Agent / 飞书机器人
 它会依次执行：
 
 ```text
-init → git-add → git-sync → ingest → review → apply → lint → ask → eval
+init → git-add → git-sync → ingest → review → approve → apply → lint → ask → eval
 ```
 
 本次公开基线使用 `AgentSkill-Eval@93f5dc0`，会导入 56 个来源文件，生成 57 个 Wiki 文件，运行
@@ -140,7 +140,7 @@ memoryforge feishu-serve \
 
 ### Wiki 更新怎么做？
 
-新资料先生成 ChangeSet，不直接覆盖正式 Wiki。用户先 `review` 看变更，再 `apply --approve` 写入；更新失败可以查看历史并回滚。这样 Wiki 是可维护的项目资产，而不是一次性摘要。
+新资料先生成 ChangeSet，不直接覆盖正式 Wiki。用户先 `review` 看变更，再用 `approve` 明确批准，最后由 `apply` 写入；更新失败可以查看历史并回滚。这样 Wiki 是可维护的项目资产，而不是一次性摘要。
 
 ### Mermaid 架构图为什么可信？
 
@@ -159,5 +159,5 @@ Relation Citation，可回读到固定 Git Blob 的字符范围。系统不让�
 - [ ] 发布 Wheel 能在全新 venv 通过 `run_release_check.py`，并核对 SHA256。
 - [ ] `memoryforge lint --workspace <workspace>` 返回 `clean`。
 - [ ] 至少演示一个正常回答和一个拒答。
-- [ ] 至少展示一次 `review → apply` 的 Wiki 变更流程。
+- [ ] 至少展示一次 `review → approve → apply` 的 Wiki 变更流程。
 - [ ] 如果展示模型，单独记录模型耗时，不把私有调用日志提交到 GitHub。

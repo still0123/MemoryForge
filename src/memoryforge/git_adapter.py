@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -13,6 +14,9 @@ from memoryforge.models import LocalDocument, Sensitivity, SourceCategory
 
 class GitRepositoryError(ValueError):
     """Raised when a path cannot be scanned as a Git checkout."""
+
+
+CODE_WIKI_VERSION = "symbols-v4"
 
 
 @dataclass(frozen=True)
@@ -54,7 +58,7 @@ def scan_git_snapshot_documentation(
     documents = []
     for relative_path, object_id in _documentation_blobs(tree_result.stdout):
         content = _read_text_blob(snapshot.repository_root, object_id)
-        if content is None:
+        if content is None or not content.strip():
             continue
         suffix = _document_suffix(relative_path)
         documents.append(
@@ -102,7 +106,7 @@ def scan_git_snapshot_code(
         ):
             continue
         content = _read_text_blob(snapshot.repository_root, object_id)
-        if content is None:
+        if content is None or not content.strip():
             continue
         documents.append(
             LocalDocument(
@@ -114,7 +118,15 @@ def scan_git_snapshot_code(
                 title=f"Code: {relative_path}",
                 content=content,
                 sensitivity=sensitivity,
-                tags=("code", suffix.removeprefix(".")),
+                tags=("code", suffix.removeprefix("."), CODE_WIKI_VERSION),
+            )
+        )
+    if documents:
+        documents.extend(
+            _code_module_documents(
+                snapshot,
+                tuple(documents),
+                sensitivity=sensitivity,
             )
         )
     return tuple(documents)
@@ -216,6 +228,248 @@ def _matches_code_selection(relative_path: str, selections: tuple[str, ...]) -> 
     return any(
         path == PurePosixPath(selection) or path.is_relative_to(PurePosixPath(selection))
         for selection in selections
+    )
+
+
+def _code_module_documents(
+    snapshot: GitSnapshot,
+    code_documents: tuple[LocalDocument, ...],
+    *,
+    sensitivity: Sensitivity,
+) -> tuple[LocalDocument, ...]:
+    """Build small structural cards alongside raw code sources for old Wiki queries."""
+    grouped: dict[str, list[LocalDocument]] = {}
+    direct_files: dict[str, list[LocalDocument]] = {}
+    for document in code_documents:
+        path = PurePosixPath(document.source_path)
+        parent = path.parent
+        if parent == PurePosixPath("."):
+            grouped.setdefault("root", []).append(document)
+            direct_files.setdefault("root", []).append(document)
+            continue
+        direct_files.setdefault(parent.as_posix(), []).append(document)
+        while parent != PurePosixPath("."):
+            grouped.setdefault(parent.as_posix(), []).append(document)
+            parent = parent.parent
+
+    modules: list[LocalDocument] = []
+    module_names = set(grouped)
+    for module, documents in sorted(grouped.items()):
+        source_path = f".memoryforge/code-modules/{module}.md"
+        paths = sorted(document.source_path for document in documents)
+        own_files = sorted(direct_files.get(module, []), key=lambda item: item.source_path)
+        children = sorted(
+            directory
+            for directory in grouped
+            if PurePosixPath(directory).parent.as_posix() == module
+        )
+        implementation_documents = tuple(
+            document for document in documents if not _is_test_file(document.source_path)
+        )
+        symbols = tuple(
+            dict.fromkeys(
+                symbol
+                for document in (*own_files, *implementation_documents)
+                if not _is_test_file(document.source_path)
+                for symbol in _exported_code_symbols(document)
+            )
+        )
+        operations = _representative_operations(symbols)
+        entry_points = _code_entry_points(implementation_documents)
+        dependencies = _internal_dependencies(
+            tuple(document for document in own_files if not _is_test_file(document.source_path)),
+            module_names,
+            module,
+        )
+        tests = tuple(
+            document.source_path for document in documents if _is_test_file(document.source_path)
+        )
+        aliases = tuple(dict.fromkeys((PurePosixPath(module).name, module)))
+        suffixes = {document.suffix for document in documents}
+        tracked_label = (
+            "Go/Python files"
+            if suffixes <= {".go", ".py"}
+            else "TypeScript files"
+            if suffixes <= {".ts", ".tsx"}
+            else "supported source files"
+        )
+        content = "\n".join(
+            [
+                f"# Code module: {module}",
+                "",
+                "## Identity",
+                "",
+                f"- Canonical module path: `{module}`",
+                "- Search aliases: " + ", ".join(f"`{alias}`" for alias in aliases),
+                f"- Contains {len(paths)} tracked "
+                f"{tracked_label}; "
+                f"{len(own_files)} are directly inside this directory.",
+                "",
+                "## Responsibilities",
+                "",
+                *(
+                    [
+                        f"- Main exported operations in `{module}`: "
+                        + ", ".join(f"`{symbol}`" for symbol in operations)
+                    ]
+                    if operations
+                    else []
+                ),
+                *(
+                    [
+                        "- Other exported code symbols: "
+                        + ", ".join(f"`{symbol}`" for symbol in symbols[:20])
+                    ]
+                    if symbols
+                    else []
+                ),
+                "",
+                "## Entry points and handlers",
+                "",
+                *(
+                    [
+                        f"- `{path}`: " + ", ".join(f"`{symbol}`" for symbol in names)
+                        for path, names in entry_points
+                    ]
+                    if entry_points
+                    else ["- No explicit entry point or handler was detected."]
+                ),
+                "",
+                "## Module dependencies",
+                "",
+                *(
+                    [f"- Imports module `{dependency}`" for dependency in dependencies]
+                    if dependencies
+                    else ["- No direct module import was detected."]
+                ),
+                "",
+                "## Tests",
+                "",
+                *([f"- `{path}`" for path in tests[:12]] if tests else ["- No test file found."]),
+                "",
+                "## Child modules",
+                "",
+                *(
+                    [f"- `{child}`" for child in children]
+                    if children
+                    else ["- No child code directories."]
+                ),
+                "",
+                "## Representative files",
+                "",
+                *(f"- `{document.source_path}`" for document in own_files[:12]),
+                *([f"- `{path}`" for path in paths[:12]] if not own_files else []),
+                "",
+            ]
+        )
+        modules.append(
+            LocalDocument(
+                source_uri=_source_uri(snapshot.repository_identity, source_path),
+                source_path=source_path,
+                media_type="text/markdown",
+                category=SourceCategory.REFS,
+                suffix=".md",
+                title=f"Code module: {module}",
+                content=content,
+                sensitivity=sensitivity,
+                tags=("code-module",),
+            )
+        )
+    return tuple(modules)
+
+
+def _exported_code_symbols(document: LocalDocument) -> tuple[str, ...]:
+    if document.suffix == ".go":
+        pattern = r"^(?:type\s+|func\s+(?:\([^)]*\)\s*)?)([A-Z]\w*)"
+    elif document.suffix == ".py":
+        pattern = r"^(?:class|def)\s+([A-Za-z]\w*)"
+    else:
+        pattern = r"^(?:class|interface|type|function|const)\s+([A-Za-z]\w*)"
+    return tuple(dict.fromkeys(re.findall(pattern, document.content, re.MULTILINE)))
+
+
+def _representative_operations(symbols: tuple[str, ...]) -> tuple[str, ...]:
+    prefixes = (
+        "Create",
+        "Describe",
+        "Update",
+        "Delete",
+        "Enable",
+        "Disable",
+        "Start",
+        "Stop",
+        "Cancel",
+        "Add",
+        "Remove",
+        "List",
+        "Check",
+        "Set",
+        "Get",
+        "New",
+        "Run",
+        "Serve",
+        "Handle",
+        "Register",
+    )
+    selected = [symbol for symbol in symbols if symbol.startswith(prefixes)]
+    return tuple((selected or list(symbols))[:16])
+
+
+def _code_entry_points(
+    documents: tuple[LocalDocument, ...],
+) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    prefixes = ("New", "Run", "Serve", "Handle", "Register", "Execute")
+    entries: list[tuple[str, tuple[str, ...]]] = []
+    for document in documents:
+        names = tuple(
+            symbol for symbol in _exported_code_symbols(document) if symbol.startswith(prefixes)
+        )
+        if document.suffix == ".go" and re.search(r"^func\s+main\s*\(", document.content, re.M):
+            names = tuple(dict.fromkeys(("main", *names)))
+        if document.suffix == ".py" and 'if __name__ == "__main__":' in document.content:
+            names = tuple(dict.fromkeys(("main", *names)))
+        if names:
+            entries.append((document.source_path, names[:12]))
+    return tuple(entries[:12])
+
+
+def _internal_dependencies(
+    documents: tuple[LocalDocument, ...],
+    modules: set[str],
+    current_module: str,
+) -> tuple[str, ...]:
+    imported: list[str] = []
+    for document in documents:
+        if document.suffix == ".go":
+            candidates = re.findall(r'"([^"\n]+)"', document.content)
+        else:
+            candidates = re.findall(
+                r"^(?:from|import)\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)",
+                document.content,
+                re.MULTILINE,
+            )
+        for candidate in candidates:
+            normalized = candidate.replace(".", "/")
+            match = next(
+                (
+                    module
+                    for module in sorted(modules, key=len, reverse=True)
+                    if module != current_module
+                    and (normalized == module or normalized.endswith("/" + module))
+                ),
+                None,
+            )
+            if match:
+                imported.append(match)
+    return tuple(dict.fromkeys(imported))
+
+
+def _is_test_file(path: str) -> bool:
+    name = PurePosixPath(path).name
+    return (
+        name.endswith(("_test.go", "_test.py", "_test.ts", "_test.tsx"))
+        or name.startswith("test_")
+        or name.endswith((".spec.ts", ".spec.tsx"))
     )
 
 

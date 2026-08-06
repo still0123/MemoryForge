@@ -16,6 +16,7 @@ from memoryforge.code_models import (
     make_code_index_id,
     make_code_relation_id,
     make_code_symbol_id,
+    make_code_wiki_path,
 )
 from memoryforge.module_planner import (
     ModulePlanningError,
@@ -150,7 +151,13 @@ def test_module_plan_disambiguates_colliding_slug_segments() -> None:
     assert len(children) == 2
     assert len({child.path for child in children}) == 2
     assert all(child.path.startswith("pkg/foo-bar-") for child in children)
-    assert all(child.wiki_path == f"wiki/pages/code/{child.path}.md" for child in children)
+    assert all(
+        child.wiki_path == make_code_wiki_path(REPOSITORY_ID, child.path) for child in children
+    )
+
+
+def test_code_wiki_paths_are_scoped_to_the_repository() -> None:
+    assert make_code_wiki_path("a" * 64, "common") != make_code_wiki_path("b" * 64, "common")
 
 
 def test_module_plan_rejects_an_empty_code_index() -> None:
