@@ -1274,8 +1274,7 @@ def test_candidate_pages_downweights_terms_shared_by_every_document(
     generic.write_text(_wiki_page("Uvicorn server configuration."), encoding="utf-8")
     target.write_text(_wiki_page("Uvicorn uvloop event loop selection."), encoding="utf-8")
     (workspace / "wiki/INDEX.md").write_text(
-        "# Knowledge Index\n\n"
-        "- [Generic](pages/generic.md) — Uvicorn server configuration\n",
+        "# Knowledge Index\n\n- [Generic](pages/generic.md) — Uvicorn server configuration\n",
         encoding="utf-8",
     )
     index_path = workspace / ".memoryforge/index.sqlite"

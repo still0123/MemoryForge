@@ -10,6 +10,11 @@
 - 新增 annotated tag 发布工作流，冻结 Hatchling 构建环境并校验 Wheel/sdist、SHA256、
   公开仓库 artifact attestation、Release 上传和远端资产回下载；个人私有仓库在 provenance
   明确标记 attestation 不适用。
+- 追加独立 Click 20 题复评；回答准确率 5.0%、来源召回 16.7%，再次确认外部有效性缺口；
+- 修复离线 semantic retrieval 实验调用 `_candidate_pages` 时的陈旧签名；
+- 拒绝未通过 MkDocs confirmation 的英文页面 rank-fusion 候选，生产查询保持不变；
+- 增加纯标准库 document-frequency 页面路由；Uvicorn development 100%，Typer confirmation
+  83.3%，旧 30 题无回退；
 
 ## v0.2.0 — 2026-08-06
 

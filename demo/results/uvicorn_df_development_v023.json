@@ -1,0 +1,445 @@
+{
+  "schema_version": 1,
+  "memoryforge_commit": "868fa7d5b54ecf11fc36c27d23339eebb289984f",
+  "source_repositories": [
+    {
+      "repository_id": "f42a5aa63ce93c62f5327b32b7a8cfe018628a76d863fbb89cc78b11149bdc41",
+      "remote_url": "https://github.com/encode/uvicorn.git",
+      "commit": "ee8e45ca472db17b4aef1d539f209539062d002e",
+      "source_count": 15
+    }
+  ],
+  "workflow": {
+    "source_count": 15,
+    "wiki_file_count": 16,
+    "lint": {
+      "status": "clean",
+      "checked_pages": 16,
+      "issues": []
+    }
+  },
+  "sample_query": {
+    "question": "How does Uvicorn loop auto choose between uvloop and asyncio?",
+    "answer": "Uvicorn provides two event loop implementations that you can choose from using the [`--loop`](../settings.md#implementation) option:",
+    "citations": [
+      {
+        "source_id": "22e27bb6105d5ca06a88b6b5262757de68b5ec538d33da932e2ad063e270845b",
+        "source_version": 3,
+        "locator": "chars:14-146",
+        "quote": "Uvicorn provides two event loop implementations that you can choose from using the [`--loop`](../settings.md#implementation) option:",
+        "section_path": "Event Loop"
+      }
+    ],
+    "trace": [
+      {
+        "level": "L0",
+        "artifact": "wiki/INDEX.md"
+      },
+      {
+        "level": "L0",
+        "artifact": "SQLite FTS5 applied-source index"
+      },
+      {
+        "level": "L1",
+        "artifact": "wiki/pages/95124f58dfcca59a1f5bd9ef8191149219b42f3f9e42dac0bc464b8543fd24bd.md"
+      },
+      {
+        "level": "L1",
+        "artifact": "wiki/pages/22e27bb6105d5ca06a88b6b5262757de68b5ec538d33da932e2ad063e270845b.md"
+      },
+      {
+        "level": "L1",
+        "artifact": "wiki/pages/45aa13c0ca35483f6fd20c668f4bfdaf8d25a659844639c8b6e8a85c6a4b1252.md"
+      },
+      {
+        "level": "L2",
+        "artifact": "wiki/pages/22e27bb6105d5ca06a88b6b5262757de68b5ec538d33da932e2ad063e270845b.md"
+      },
+      {
+        "level": "L3",
+        "artifact": "source 22e27bb6105d5ca06a88b6b5262757de68b5ec538d33da932e2ad063e270845b revision 3"
+      }
+    ]
+  },
+  "evaluation": {
+    "suite": "MemoryForge v0.2.3 Uvicorn document-frequency development",
+    "case_count": 10,
+    "memoryforge": {
+      "answer_accuracy": 10.0,
+      "source_recall_at_3": 90.0,
+      "citation_grounding_accuracy": 100.0,
+      "multi_source_coverage": 0.0,
+      "abstention_accuracy": 0.0,
+      "average_wiki_pages_read": 3.0,
+      "average_raw_sources_read": 0.0,
+      "average_evidence_characters": 292.7
+    },
+    "raw_fts_baseline": {
+      "expected_source_recall_at_3": 100.0,
+      "multi_source_coverage": 0.0,
+      "average_exposed_characters": 727.0
+    },
+    "cases": [
+      {
+        "id": "uvicorn-standard-extra",
+        "category": "single_hop",
+        "question": "Which Uvicorn installation extra installs all optional dependencies?",
+        "memoryforge": {
+          "answer_correct": false,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 102,
+          "wiki_pages": [
+            "wiki/pages/6ac151a6f13cc873cf3fafd8dde9bc9e36307b3731fe55ccecd6bf68769d37c7.md"
+          ],
+          "cited_source_paths": [
+            "docs/installation.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/deployment/docker.md",
+            "docs/installation.md",
+            "docs/release-notes.md"
+          ],
+          "expected_source_paths": [
+            "docs/installation.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 730
+        }
+      },
+      {
+        "id": "uvicorn-loop-auto",
+        "category": "single_hop",
+        "question": "How does Uvicorn loop auto choose between uvloop and asyncio?",
+        "memoryforge": {
+          "answer_correct": false,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 132,
+          "wiki_pages": [
+            "wiki/pages/22e27bb6105d5ca06a88b6b5262757de68b5ec538d33da932e2ad063e270845b.md"
+          ],
+          "cited_source_paths": [
+            "docs/concepts/event-loop.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/concepts/event-loop.md",
+            "docs/deployment/index.md",
+            "docs/server-behavior.md"
+          ],
+          "expected_source_paths": [
+            "docs/concepts/event-loop.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 728
+        }
+      },
+      {
+        "id": "uvicorn-http-auto",
+        "category": "single_hop",
+        "question": "How does Uvicorn HTTP auto choose between httptools and h11?",
+        "memoryforge": {
+          "answer_correct": false,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 141,
+          "wiki_pages": [
+            "wiki/pages/010bf023c5922a26b62a11991f7cb09b34ff4b0ef9073a0c5b760549b7960ab4.md"
+          ],
+          "cited_source_paths": [
+            "docs/concepts/http-protocols.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/concepts/http-protocols.md",
+            "docs/deployment/index.md",
+            "docs/settings.md"
+          ],
+          "expected_source_paths": [
+            "docs/concepts/http-protocols.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 728
+        }
+      },
+      {
+        "id": "uvicorn-lifespan-sibling",
+        "category": "single_hop",
+        "question": "Why are ContextVar values from Uvicorn lifespan unavailable to the application task?",
+        "memoryforge": {
+          "answer_correct": false,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 214,
+          "wiki_pages": [
+            "wiki/pages/ebd4da42ed98d72cbbbe9e5625f693295bc76a4c4b68f5c0f53efdda15f28761.md"
+          ],
+          "cited_source_paths": [
+            "docs/concepts/lifespan.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/concepts/lifespan.md",
+            "docs/release-notes.md",
+            "docs/server-behavior.md"
+          ],
+          "expected_source_paths": [
+            "docs/concepts/lifespan.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      },
+      {
+        "id": "uvicorn-concurrency-limit",
+        "category": "single_hop",
+        "question": "What response does Uvicorn send after limit-concurrency is reached?",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 993,
+          "wiki_pages": [
+            "wiki/pages/baa3b693fb9cb20c41408e2183ac9e2a5d55543e1aa8755d6e653c518bdb5073.md"
+          ],
+          "cited_source_paths": [
+            "docs/server-behavior.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/deployment/index.md",
+            "docs/server-behavior.md",
+            "docs/settings.md"
+          ],
+          "expected_source_paths": [
+            "docs/server-behavior.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      },
+      {
+        "id": "uvicorn-backlog-default",
+        "category": "single_hop",
+        "question": "What is Uvicorn's default socket accept backlog?",
+        "memoryforge": {
+          "answer_correct": false,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 798,
+          "wiki_pages": [
+            "wiki/pages/baa3b693fb9cb20c41408e2183ac9e2a5d55543e1aa8755d6e653c518bdb5073.md"
+          ],
+          "cited_source_paths": [
+            "docs/server-behavior.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/deployment/index.md",
+            "docs/server-behavior.md",
+            "docs/settings.md"
+          ],
+          "expected_source_paths": [
+            "docs/server-behavior.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      },
+      {
+        "id": "uvicorn-websocket-protocols",
+        "category": "single_hop",
+        "question": "Which WebSocket protocol implementations can Uvicorn select?",
+        "memoryforge": {
+          "answer_correct": false,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 116,
+          "wiki_pages": [
+            "wiki/pages/ffc9174c8e113109163951c31788b498e0728415b16947efc982f4ceba9f708b.md"
+          ],
+          "cited_source_paths": [
+            "docs/concepts/websockets.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/concepts/event-loop.md",
+            "docs/concepts/websockets.md",
+            "docs/settings.md"
+          ],
+          "expected_source_paths": [
+            "docs/concepts/websockets.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      },
+      {
+        "id": "uvicorn-access-logs",
+        "category": "single_hop",
+        "question": "Which Uvicorn option disables access logs?",
+        "memoryforge": {
+          "answer_correct": false,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 129,
+          "wiki_pages": [
+            "wiki/pages/a656de3827921372decc90a20dd40d727e082a62625f078e8d5bb6db3d8ebfd4.md"
+          ],
+          "cited_source_paths": [
+            "docs/concepts/logging.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/concepts/logging.md",
+            "docs/release-notes.md",
+            "docs/settings.md"
+          ],
+          "expected_source_paths": [
+            "docs/concepts/logging.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 728
+        }
+      },
+      {
+        "id": "uvicorn-head-requests",
+        "category": "single_hop",
+        "question": "How should an ASGI application treat HEAD requests under Uvicorn?",
+        "memoryforge": {
+          "answer_correct": false,
+          "citation_grounded": true,
+          "expected_sources_recalled": false,
+          "all_expected_sources_cited": false,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 88,
+          "wiki_pages": [
+            "wiki/pages/95124f58dfcca59a1f5bd9ef8191149219b42f3f9e42dac0bc464b8543fd24bd.md"
+          ],
+          "cited_source_paths": [
+            "docs/settings.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/contributing.md",
+            "docs/server-behavior.md",
+            "docs/settings.md"
+          ],
+          "expected_source_paths": [
+            "docs/server-behavior.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      },
+      {
+        "id": "uvicorn-lifespan-disable",
+        "category": "single_hop",
+        "question": "How can the Uvicorn lifespan protocol be disabled?",
+        "memoryforge": {
+          "answer_correct": false,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 214,
+          "wiki_pages": [
+            "wiki/pages/ebd4da42ed98d72cbbbe9e5625f693295bc76a4c4b68f5c0f53efdda15f28761.md"
+          ],
+          "cited_source_paths": [
+            "docs/concepts/lifespan.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/concepts/lifespan.md",
+            "docs/release-notes.md",
+            "docs/settings.md"
+          ],
+          "expected_source_paths": [
+            "docs/concepts/lifespan.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      }
+    ]
+  }
+}
