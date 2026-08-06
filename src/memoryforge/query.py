@@ -156,7 +156,6 @@ def answer_question(
 
     raw_matches: list[tuple[frozenset[str], bool, str, CitationPayload]] = []
     raw_candidate_matches: list[tuple[frozenset[str], bool, str, CitationPayload]] = []
-    page_ranks: dict[str, int] = {}
 
     for page_rank, page in enumerate(
         _candidate_pages(
@@ -170,15 +169,14 @@ def answer_question(
         )
     ):
         content = page.read_text(encoding="utf-8")
-        page_path = str(page.relative_to(workspace_root))
-        page_ranks[page_path] = page_rank
-        trace.append({"level": "L1", "artifact": page_path})
+        trace.append({"level": "L1", "artifact": str(page.relative_to(workspace_root))})
         for index, citation in enumerate(_page_citations(content)):
             overlap = (
                 _section_matching_terms(question_terms, citation)
                 if use_section_routes
                 else _matching_terms(question_terms, citation)
             )
+            page_path = str(page.relative_to(workspace_root))
             raw_candidate_matches.append((frozenset(overlap), index == 0, page_path, citation))
             has_cjk_terms = any(_CJK.fullmatch(term) for term in question_terms)
             required_overlap = 1 if len(question_terms) == 1 else 2
@@ -218,7 +216,6 @@ def answer_question(
     matches = _rank_matches(
         raw_matches,
         question_terms=question_terms,
-        page_ranks=page_ranks,
         focus_terms=focus_terms,
         prioritize_focus=bool(yes_no_focus_terms and {"依赖", "外部"} <= base_question_terms),
         prefer_environment_assignments=prefer_environment_assignments,
@@ -228,7 +225,6 @@ def answer_question(
     candidate_matches = _rank_matches(
         raw_candidate_matches,
         question_terms=question_terms,
-        page_ranks=page_ranks,
         focus_terms=focus_terms,
         prioritize_focus=bool(yes_no_focus_terms and {"依赖", "外部"} <= base_question_terms),
         prefer_environment_assignments=prefer_environment_assignments,
@@ -766,16 +762,13 @@ def _rank_matches(
     matches: list[tuple[frozenset[str], bool, str, CitationPayload]],
     *,
     question_terms: set[str],
-    page_ranks: dict[str, int] | None = None,
     focus_terms: set[str] | None = None,
     prioritize_focus: bool = False,
     prefer_environment_assignments: bool = False,
     prefer_failure_facts: bool = False,
     prefer_code_modules: bool = False,
 ) -> list[tuple[tuple[int, ...], str, CitationPayload]]:
-    page_ranks = page_ranks or {}
     focus_terms = focus_terms or set()
-    page_aware = bool(page_ranks) and not any(_CJK.fullmatch(term) for term in question_terms)
     frequencies = Counter(
         term
         for overlap, _summary, _page_path, _citation in matches
@@ -818,8 +811,6 @@ def _rank_matches(
                 and not citation["quote"].lstrip().startswith("|")
             ),
             len(focus_overlap) if prioritize_focus else 0,
-            len(direct_overlap) if page_aware else 0,
-            -page_ranks.get(page_path, len(page_ranks)) if page_aware else 0,
             int(
                 summary
                 and not (
