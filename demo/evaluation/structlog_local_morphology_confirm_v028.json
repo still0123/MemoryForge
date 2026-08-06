@@ -1,0 +1,113 @@
+{
+  "name": "MemoryForge v0.2.8 Structlog local fact morphology confirmation",
+  "cases": [
+    {
+      "id": "structlog-partial-configure",
+      "category": "single_hop",
+      "question": "What happens when structlog is configured repeatedly with only some settings?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/configuration.md"],
+      "required_terms": ["rest will not be affected"],
+      "repository_id": "302626134c4be2ae962bf880533777b2860a9a16ad61aa52274d1a699a1c4aaf"
+    },
+    {
+      "id": "structlog-reset-defaults",
+      "category": "single_hop",
+      "question": "How can structlog configuration be reset to its default values?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/configuration.md"],
+      "required_terms": ["structlog.reset_defaults"],
+      "repository_id": "302626134c4be2ae962bf880533777b2860a9a16ad61aa52274d1a699a1c4aaf"
+    },
+    {
+      "id": "structlog-lazy-proxy",
+      "category": "single_hop",
+      "question": "When does structlog's lazy proxy create a correctly configured bound logger?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/configuration.md"],
+      "required_terms": ["first call", "bind()"],
+      "repository_id": "302626134c4be2ae962bf880533777b2860a9a16ad61aa52274d1a699a1c4aaf"
+    },
+    {
+      "id": "structlog-temporary-logger",
+      "category": "single_hop",
+      "question": "How often is a temporary bound logger created for a module-global logger?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/configuration.md"],
+      "required_terms": ["on each call"],
+      "repository_id": "302626134c4be2ae962bf880533777b2860a9a16ad61aa52274d1a699a1c4aaf"
+    },
+    {
+      "id": "structlog-last-processor",
+      "category": "single_hop",
+      "question": "Which processor return value does structlog inspect?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/processors.md"],
+      "required_terms": ["last", "processor"],
+      "repository_id": "302626134c4be2ae962bf880533777b2860a9a16ad61aa52274d1a699a1c4aaf"
+    },
+    {
+      "id": "structlog-dropped-event",
+      "category": "single_hop",
+      "question": "What happens when a structlog processor raises DropEvent?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/processors.md"],
+      "required_terms": ["silently dropped"],
+      "repository_id": "302626134c4be2ae962bf880533777b2860a9a16ad61aa52274d1a699a1c4aaf"
+    },
+    {
+      "id": "structlog-context-safety",
+      "category": "single_hop",
+      "question": "Are structlog context variables safe in threaded and asynchronous code?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/contextvars.md"],
+      "required_terms": ["safe", "threaded", "asynchronous"],
+      "repository_id": "302626134c4be2ae962bf880533777b2860a9a16ad61aa52274d1a699a1c4aaf"
+    },
+    {
+      "id": "structlog-context-isolation",
+      "category": "single_hop",
+      "question": "Why can structlog context variables disappear between synchronous and async contexts?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/contextvars.md"],
+      "required_terms": ["isolated", "each concurrency method"],
+      "repository_id": "302626134c4be2ae962bf880533777b2860a9a16ad61aa52274d1a699a1c4aaf"
+    },
+    {
+      "id": "structlog-capture-processors",
+      "category": "single_hop",
+      "question": "What happens to configured processors inside structlog capture_logs?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/testing.md"],
+      "required_terms": ["disabled"],
+      "repository_id": "302626134c4be2ae962bf880533777b2860a9a16ad61aa52274d1a699a1c4aaf"
+    },
+    {
+      "id": "structlog-cached-test-loggers",
+      "category": "single_hop",
+      "question": "Why should cached structlog loggers be disabled during tests?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/testing.md"],
+      "required_terms": ["cached loggers", "not be affected"],
+      "repository_id": "302626134c4be2ae962bf880533777b2860a9a16ad61aa52274d1a699a1c4aaf"
+    },
+    {
+      "id": "structlog-bound-no-io",
+      "category": "single_hop",
+      "question": "Do structlog bound loggers perform input or output themselves?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/bound-loggers.md"],
+      "required_terms": ["I/O themselves"],
+      "repository_id": "302626134c4be2ae962bf880533777b2860a9a16ad61aa52274d1a699a1c4aaf"
+    },
+    {
+      "id": "structlog-cache-option",
+      "category": "single_hop",
+      "question": "Which structlog option assembles on-demand loggers once and caches them?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/performance.md"],
+      "required_terms": ["cache_logger_on_first_use", "True"],
+      "repository_id": "302626134c4be2ae962bf880533777b2860a9a16ad61aa52274d1a699a1c4aaf"
+    }
+  ]
+}

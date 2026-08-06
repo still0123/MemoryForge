@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "name": "MemoryForge v0.2.8 local fact morphology sources",
+  "development": {
+    "repository": "samuelcolvin/watchfiles",
+    "remote_url": "https://github.com/samuelcolvin/watchfiles.git",
+    "commit": "42257e82089c3ef880aba8a2f2fc1662a663d61e",
+    "license": "MIT",
+    "license_sha256": "4fd78355b67ce2677ede9fb6f63a250f377bb7e22088136a5f4699adb4bc069f",
+    "repository_id": "dcd8ddeb4bb60e333e9983134478a3499ca51087075841c5f4c4527d2ee13611",
+    "importable_document_count": 9,
+    "suite": "demo/evaluation/watchfiles_local_morphology_dev_v028.json"
+  },
+  "confirmation": {
+    "repository": "hynek/structlog",
+    "remote_url": "https://github.com/hynek/structlog.git",
+    "commit": "0da7e10462206554def250147980db207231be38",
+    "license": "MIT OR Apache-2.0",
+    "license_sha256": {
+      "MIT": "2bc12bb94eec2ccea211daebb763235bec3169276197a7be1f858963db31c5dd",
+      "Apache-2.0": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
+    },
+    "repository_id": "302626134c4be2ae962bf880533777b2860a9a16ad61aa52274d1a699a1c4aaf",
+    "importable_document_count": 22,
+    "suite": "demo/evaluation/structlog_local_morphology_confirm_v028.json",
+    "policy": "run_once_after_candidate_freeze"
+  }
+}
