@@ -52,10 +52,15 @@ init → git-add → git-sync → ingest → review → approve → apply → li
 拒答准确率 100%。同一题集上的 Raw FTS Top-3 来源召回率为 57.7%，完整方法见
 [公开 Benchmark](BENCHMARK.md)。
 
+随后展示 [Click 外部评测](CLICK_DOCS_BENCHMARK.md)：20 道冻结题中 development/holdout 的
+Answer accuracy 只有 10%/0%，尽管 Citation grounding 都是 100%。这说明工程链路可信不等于
+问答能力已经通用化；引用可回读也不等于答案正确。
+
 再打开 [`code_wiki_public.json`](../demo/results/code_wiki_public.json) 和
 [`release_provenance.json`](../demo/results/release_provenance.json)：前者证明三语言 Symbol、
 Relation、Module、Mermaid edge 和 Citation 指标均为 100%，单文件更新只影响 20% 的源码模块页；
-后者证明发布 Wheel 在全新 venv 中安装，实际 import 不依赖源码 checkout。
+后者是 v0.2.0 的历史发布证据。v0.2.1 的 Wheel/sdist、SHA256 和 attestation 以 GitHub Release
+资产为准。
 
 ### 3. 展示带引用的回答
 
@@ -151,6 +156,8 @@ Relation Citation，可回读到固定 Git Blob 的字符范围。系统不让�
 ## 项目边界
 
 当前版本刻意不做公网部署、群聊、多用户权限、定时同步、向量数据库、知识图谱和通用编码 Agent。这些不是遗漏，而是为了把“个人技术 Wiki 的编译、增量更新、可信查询和证据回溯”做深。
+
+完整主张、Evidence 和不能外推的边界见 [Evidence Claims](EVIDENCE_CLAIMS.md)。
 
 ## 演示前检查清单
 

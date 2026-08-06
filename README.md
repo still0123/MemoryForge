@@ -196,7 +196,7 @@ Demo。脚本会拒绝从源码 checkout 导入 `memoryforge`：
 ```bash
 uv build --wheel --out-dir dist
 .venv/bin/python demo/run_release_check.py \
-  --wheel dist/memoryforge-0.2.0-py3-none-any.whl \
+  --wheel dist/memoryforge-0.2.1-py3-none-any.whl \
   --workdir /private/tmp/memoryforge-release-check \
   --output /private/tmp/memoryforge-release-provenance.json \
   --code-evidence-output demo/results/code_wiki_public.json \
@@ -205,8 +205,9 @@ uv build --wheel --out-dir dist
 ```
 
 公开仓库必须 checkout 到 `93f5dc05229da250b041850ad8deeeec886ef304`。提交的
-[`release_provenance.json`](demo/results/release_provenance.json) 记录实际 import 路径、依赖版本、
-Wheel SHA256、两套 Benchmark 结果和产物哈希。
+[`release_provenance.json`](demo/results/release_provenance.json) 是 v0.2.0 的历史发布证据。
+v0.2.1 的实际 import 路径、依赖版本、Wheel/sdist SHA256 和 tag Commit 以 GitHub Release 中的
+`release-provenance.json` 与 `SHA256SUMS` 为准。
 
 如果要按秋招面试的方式完整演示，直接看 [秋招演示与面试说明](docs/PORTFOLIO_DEMO.md)。里面包含 3 分钟讲解顺序、公开 Demo 命令、飞书展示命令和常见追问。
 

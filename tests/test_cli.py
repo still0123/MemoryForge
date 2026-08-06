@@ -11,6 +11,13 @@ from memoryforge.cli import app
 from memoryforge.sessions import SessionStore
 
 
+def test_cli_version_exits_without_a_subcommand() -> None:
+    result = CliRunner().invoke(app, ["--version"])
+
+    assert result.exit_code == 0
+    assert result.stdout == "0.2.1\n"
+
+
 def test_cli_init_import_and_search_local_file(
     tmp_path: Path,
     monkeypatch,

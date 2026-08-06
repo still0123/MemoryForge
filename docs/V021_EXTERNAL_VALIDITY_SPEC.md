@@ -2,7 +2,7 @@
 
 ## 1. 状态与目标
 
-- 状态：实施中
+- 状态：发布准备完成，等待 annotated tag workflow
 - 基线：`v0.2.0@e7aef45e63018fdb795223b77384c84dbb06dff6`
 - 集成分支：`release/v0.2.1`
 - 目标版本：`v0.2.1`
@@ -160,6 +160,10 @@ Release 上传与回下载将在创建 `v0.2.1` annotated tag 后执行。
 
 每条项目主张必须标明 Evidence、指标口径和不能外推的边界。演示继续使用终端与 committed
 Evidence，不新增 Web UI。
+
+当前状态：`docs/EVIDENCE_CLAIMS.md` 已建立；`PORTFOLIO_DEMO.md`、`RESUME.md`、`BENCHMARK.md`
+和 `CHANGELOG.md` 已同时记录固定领域强结果、Click 外部负结果与发布边界。版本号已对齐为
+`0.2.1`，等待合并后的 `main` 创建 annotated tag。
 
 ## 10. 条件功能
 
