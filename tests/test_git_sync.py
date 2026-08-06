@@ -388,6 +388,77 @@ func Reset() {}
     assert _current_git_revision(workspace, code_document.source_id) == refreshed.head_commit
 
 
+def test_regular_ingest_defers_to_an_applied_deterministic_code_wiki(tmp_path: Path) -> None:
+    checkout = _create_repository(tmp_path)
+    _write(checkout / "README.md", "# Meter service\n\nRecords service usage.\n")
+    code_path = checkout / "internal" / "meter" / "meter.go"
+    _write(code_path, "package meter\n\nfunc RecordUsage() {}\n")
+    _commit_all(checkout, "Add meter service")
+    workspace = init_workspace(tmp_path / "workspace")
+    repository = register_git_checkout(workspace, checkout)
+    sync_git_checkout(workspace, repository.repository_id)
+    runner = CliRunner()
+
+    docs = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
+    assert docs.exit_code == 0, docs.output
+    applied_docs = runner.invoke(
+        app,
+        [
+            "apply",
+            json.loads(docs.stdout)["changeset_id"],
+            "--approve",
+            "--workspace",
+            str(workspace),
+        ],
+    )
+    assert applied_docs.exit_code == 0, applied_docs.output
+
+    register_git_code_module(workspace, repository.repository_id, "internal/meter")
+    sync_git_checkout(workspace, repository.repository_id)
+    code_wiki = runner.invoke(
+        app,
+        [
+            "ingest",
+            "--code-wiki",
+            repository.repository_id,
+            "--workspace",
+            str(workspace),
+        ],
+    )
+    assert code_wiki.exit_code == 0, code_wiki.output
+    applied_code = runner.invoke(
+        app,
+        [
+            "apply",
+            json.loads(code_wiki.stdout)["changeset_id"],
+            "--approve",
+            "--workspace",
+            str(workspace),
+        ],
+    )
+    assert applied_code.exit_code == 0, applied_code.output
+
+    _write(code_path, "package meter\n\nfunc RecordUsage() {}\nfunc Reset() {}\n")
+    _commit_all(checkout, "Add meter reset")
+    sync_git_checkout(workspace, repository.repository_id)
+
+    regular = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
+    assert regular.exit_code == 0, regular.output
+    assert json.loads(regular.stdout) == {"status": "no_pending", "pending": []}
+    refreshed_code = runner.invoke(
+        app,
+        [
+            "ingest",
+            "--code-wiki",
+            repository.repository_id,
+            "--workspace",
+            str(workspace),
+        ],
+    )
+    assert refreshed_code.exit_code == 0, refreshed_code.output
+    assert json.loads(refreshed_code.stdout)["status"] == "PROPOSED"
+
+
 def test_code_symbol_queries_answer_methods_and_struct_fields(tmp_path: Path) -> None:
     checkout = _create_repository(tmp_path)
     _write(

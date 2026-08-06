@@ -431,6 +431,7 @@ def _stale_pages(workspace: Workspace, selected: set[str]) -> tuple[StalePage, .
             JOIN sources AS source ON source.source_id = ps.source_id
             LEFT JOIN source_versions AS current_version
               ON current_version.source_id = source.id AND current_version.is_current = 1
+            WHERE ps.page_path NOT LIKE 'wiki/pages/code/%'
             ORDER BY ps.page_path, ps.source_id
             """
         ).fetchall()
@@ -1356,7 +1357,36 @@ def _require_known_sources(workspace: Workspace, source_ids: set[str]) -> None:
 
 
 def _load_pending_sources(workspace: Workspace, source_ids: set[str]) -> list[CurrentSource]:
-    return _load_current_sources(workspace, source_ids, pending_only=True)
+    pending = _load_current_sources(workspace, source_ids, pending_only=True)
+    code_wiki_repositories = _deterministic_code_wiki_repositories(workspace)
+    return [
+        source
+        for source in pending
+        if not (
+            source.repository_id in code_wiki_repositories
+            and any(tag in {"code", "code-module"} for tag in source.tags)
+        )
+    ]
+
+
+def _deterministic_code_wiki_repositories(workspace: Workspace) -> set[str]:
+    connection = sqlite3.connect(workspace.index_path)
+    try:
+        rows = connection.execute(
+            """
+            SELECT DISTINCT revisions.repository_id
+            FROM page_sources AS pages
+            JOIN sources AS sources ON sources.source_id = pages.source_id
+            JOIN source_versions AS versions ON versions.source_id = sources.id
+            JOIN git_source_revisions AS revisions
+              ON revisions.source_version_id = versions.id
+            WHERE pages.page_path LIKE 'wiki/pages/code/%'
+              AND versions.is_current = 1
+            """
+        ).fetchall()
+    finally:
+        connection.close()
+    return {str(row[0]) for row in rows}
 
 
 def _load_current_sources(
