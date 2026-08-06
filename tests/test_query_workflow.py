@@ -72,6 +72,51 @@ def test_ask_prefers_cjk_phrases_over_single_character_overlap(
     assert result["citations"][0]["source_id"] == imported["source_id"]
 
 
+def test_ask_uses_top_page_summary_for_cjk_paraphrase(tmp_path: Path) -> None:
+    pages = tmp_path / "wiki" / "pages"
+    pages.mkdir(parents=True)
+    target_quote = (
+        "统计器只读取 Manifest 真值和选中 Attempt 的 RunMeasurement，"
+        "避免把进行中的实验包装成最终结论。"
+    )
+    competing_quote = "真实 Agent 实验不会把模拟结果包装成真实证据。"
+    (tmp_path / "wiki/INDEX.md").write_text(
+        "# Knowledge Index\n\n"
+        f"- [Statistics](pages/a-statistics.md) — {target_quote}\n"
+        f"- [Agent](pages/b-agent.md) — {competing_quote}\n",
+        encoding="utf-8",
+    )
+    (pages / "a-statistics.md").write_text(_wiki_page(target_quote), encoding="utf-8")
+    (pages / "b-agent.md").write_text(_wiki_page(competing_quote), encoding="utf-8")
+
+    result = query_module.answer_question(
+        tmp_path,
+        "怎样核验实验统计不是模拟出来的？",
+    )
+
+    assert result["status"] == "answered"
+    assert result["answer"] == target_quote
+    assert result["wiki_pages"] == ["wiki/pages/a-statistics.md"]
+
+
+def test_ask_does_not_relax_top_summary_without_matching_negation(tmp_path: Path) -> None:
+    pages = tmp_path / "wiki" / "pages"
+    pages.mkdir(parents=True)
+    quote = "系统不调用付费模型，所有本地实验结果均为模拟数据。"
+    (tmp_path / "wiki/INDEX.md").write_text(
+        f"# Knowledge Index\n\n- [System](pages/system.md) — {quote}\n",
+        encoding="utf-8",
+    )
+    (pages / "system.md").write_text(_wiki_page(quote), encoding="utf-8")
+
+    result = query_module.answer_question(
+        tmp_path,
+        "系统使用什么 GPU 型号训练模型？",
+    )
+
+    assert result["status"] == "unknown"
+
+
 def test_ask_does_not_answer_cjk_question_from_generic_overlap(
     tmp_path: Path,
     monkeypatch,
@@ -511,7 +556,7 @@ def test_ask_llm_uses_candidate_facts_after_strict_match_misses(
     _apply_pending_source(runner, workspace)
     strict_result = query_module.answer_question(
         workspace,
-        "怎样核验实验统计不是模拟出来的？",
+        "怎样核验统计结论可信？",
     )
     assert strict_result["status"] == "unknown"
     captured: list[dict[str, object]] = []
@@ -537,7 +582,7 @@ def test_ask_llm_uses_candidate_facts_after_strict_match_misses(
 
     result = query_module.answer_question(
         workspace,
-        "怎样核验实验统计不是模拟出来的？",
+        "怎样核验统计结论可信？",
         provider=OpenAICompatibleProvider(
             ProviderConfig("https://example.test", "test-key", "test-model"),
             transport=transport,
