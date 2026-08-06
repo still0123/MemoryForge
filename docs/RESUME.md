@@ -15,7 +15,7 @@ Python · SQLite FTS5 · Pydantic · Typer · OpenAI-compatible API · 飞书
   `CodeRelation` Citation，固定夹具上的 Symbol、Relation、Module 和 Mermaid 指标均为 100%，
   单文件更新页面比例为 20%。
 - 构建公开可复现评测：在 `AgentSkill-Eval` 56 个公开资料上生成 57 个 Wiki 页面，30 题中回答
-  准确率 100%、Top-3 来源召回率 96.2%、多来源完整覆盖率 100%；相对 Raw FTS 基线的 57.7%
+  准确率 96.7%、Top-3 来源召回率 96.2%、多来源完整覆盖率 100%；相对 Raw FTS 基线的 57.7%
   来源召回；同时提交两套 Click 20 题负结果，独立复评回答准确率为 5.0%，明确外部有效性缺口。
 
 ## 面试时的 30 秒介绍
@@ -25,7 +25,8 @@ Python · SQLite FTS5 · Pydantic · Typer · OpenAI-compatible API · 飞书
 ## 容易被追问的指标解释
 
 - **96.2% 来源召回**：26 道可回答题中，预期来源是否进入最终 Citation；多来源题要求全部来源。
-- **100% 引用落地准确率**：有且仅有带证据的回答才计入正确；一题回答正确但命中另一篇同样包含有效证据的文档，因此只影响严格来源召回。
+- **96.7% 回答准确率**：回答必须同时命中关键事实和冻结来源；一题虽然引用了含有效 Vue 证据的
+  另一篇文档，仍按严格 Source expectation 计为错误。Citation grounding 单独保持 100%。
 - **Raw FTS 57.7%**：对原始资料直接做任意词匹配和 BM25 Top-3；它只衡量检索，不生成答案，因此不与回答准确率混比。
 
 完整演示顺序见 [秋招演示与面试说明](PORTFOLIO_DEMO.md)，指标方法见 [公开 Benchmark](BENCHMARK.md)。

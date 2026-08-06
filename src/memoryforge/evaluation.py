@@ -157,6 +157,7 @@ def _evaluate_case(
         citation_grounded = not citations and answer["status"] == "unknown"
     answer_correct = (
         answer["status"] == case.expected_status
+        and expected_sources_recalled
         and all(term.casefold() in answer_text.casefold() for term in case.required_terms)
         and all(term.casefold() not in answer_text.casefold() for term in case.forbidden_terms)
     )
