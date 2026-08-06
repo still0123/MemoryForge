@@ -2,6 +2,9 @@
 
 This repository contains MemoryForge and its own Feishu demonstration agent.
 
+- Every session must use Caveman full for terse communication and Ponytail full
+  for implementation decisions. Apply both before any repository work unless
+  the user explicitly disables or changes either mode.
 - Handle normal coding questions with the repository and its tests.
 - This GitHub repository is public-code-only. Never commit, push, upload, or
   copy company repositories, Feishu documents, real Wiki pages, credentials,
