@@ -1,0 +1,95 @@
+{
+  "name": "MemoryForge v0.2.7 HTTP Core page-aware fact development",
+  "cases": [
+    {
+      "id": "httpcore-max-connections",
+      "category": "single_hop",
+      "question": "What happens when a request exceeds an HTTP Core pool's max_connections?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/connection-pools.md"],
+      "required_terms": ["block", "connection is available"],
+      "repository_id": "3f06cc70824c92be67a6a0d10287755c4bbcc71b6bdee903ba6f9a5469f6dcae"
+    },
+    {
+      "id": "httpcore-keepalive-expiry",
+      "category": "single_hop",
+      "question": "What does keepalive_expiry control in an HTTP Core connection pool?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/connection-pools.md"],
+      "required_terms": ["duration in seconds", "idle"],
+      "repository_id": "3f06cc70824c92be67a6a0d10287755c4bbcc71b6bdee903ba6f9a5469f6dcae"
+    },
+    {
+      "id": "httpcore-http2-default",
+      "category": "single_hop",
+      "question": "Is HTTP/2 enabled by default in HTTP Core connection pools?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/connection-pools.md"],
+      "required_terms": ["http2", "False"],
+      "repository_id": "3f06cc70824c92be67a6a0d10287755c4bbcc71b6bdee903ba6f9a5469f6dcae"
+    },
+    {
+      "id": "httpcore-retries",
+      "category": "single_hop",
+      "question": "Which HTTP Core pool option limits retries while establishing a connection?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/connection-pools.md"],
+      "required_terms": ["retries", "establish a connection"],
+      "repository_id": "3f06cc70824c92be67a6a0d10287755c4bbcc71b6bdee903ba6f9a5469f6dcae"
+    },
+    {
+      "id": "httpcore-pool-safety",
+      "category": "single_hop",
+      "question": "Are HTTP Core connection pools safe to share across threads and async tasks?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/connection-pools.md"],
+      "required_terms": ["thread-safe", "task-safe"],
+      "repository_id": "3f06cc70824c92be67a6a0d10287755c4bbcc71b6bdee903ba6f9a5469f6dcae"
+    },
+    {
+      "id": "httpcore-timeout-fields",
+      "category": "single_hop",
+      "question": "Which timeout fields can HTTP Core request extensions include?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/extensions.md"],
+      "required_terms": ["connect", "read", "write", "pool"],
+      "repository_id": "3f06cc70824c92be67a6a0d10287755c4bbcc71b6bdee903ba6f9a5469f6dcae"
+    },
+    {
+      "id": "httpcore-async-trace",
+      "category": "single_hop",
+      "question": "What kind of trace handler must async HTTP Core use?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/extensions.md"],
+      "required_terms": ["async def"],
+      "repository_id": "3f06cc70824c92be67a6a0d10287755c4bbcc71b6bdee903ba6f9a5469f6dcae"
+    },
+    {
+      "id": "httpcore-http2-multiplexing",
+      "category": "single_hop",
+      "question": "How can HTTP/2 carry multiple concurrent HTTP Core requests?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/http2.md"],
+      "required_terms": ["single TCP stream", "multiple concurrent requests"],
+      "repository_id": "3f06cc70824c92be67a6a0d10287755c4bbcc71b6bdee903ba6f9a5469f6dcae"
+    },
+    {
+      "id": "httpcore-h2c",
+      "category": "single_hop",
+      "question": "Why does HTTP Core not support the HTTP/2 h2c upgrade mechanism?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/http2.md"],
+      "required_terms": ["additional round-trip", "request body", "twice"],
+      "repository_id": "3f06cc70824c92be67a6a0d10287755c4bbcc71b6bdee903ba6f9a5469f6dcae"
+    },
+    {
+      "id": "httpcore-async-close",
+      "category": "single_hop",
+      "question": "How is an HTTP Core response closed in the async API?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/async.md"],
+      "required_terms": ["await response.aclose()"],
+      "repository_id": "3f06cc70824c92be67a6a0d10287755c4bbcc71b6bdee903ba6f9a5469f6dcae"
+    }
+  ]
+}

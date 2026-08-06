@@ -1,0 +1,113 @@
+{
+  "name": "MemoryForge v0.2.7 Textual page-aware fact confirmation",
+  "cases": [
+    {
+      "id": "textual-watch-change",
+      "category": "single_hop",
+      "question": "When does Textual call a watch method for a reactive attribute?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/guide/reactivity.md"],
+      "required_terms": ["only", "changes"],
+      "repository_id": "a3b74bb0923ff017e6b7db5eaaf5303108d2ec375ca60b5de4fc18eebc5f0736"
+    },
+    {
+      "id": "textual-compute-cache",
+      "category": "single_hop",
+      "question": "How are Textual reactive compute method values cached and updated?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/guide/reactivity.md"],
+      "required_terms": ["cache", "reactive attribute changes"],
+      "repository_id": "a3b74bb0923ff017e6b7db5eaaf5303108d2ec375ca60b5de4fc18eebc5f0736"
+    },
+    {
+      "id": "textual-set-reactive",
+      "category": "single_hop",
+      "question": "How can a Textual reactive value be set without invoking its watcher?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/guide/reactivity.md"],
+      "required_terms": ["set_reactive", "doesn't immediately invoke"],
+      "repository_id": "a3b74bb0923ff017e6b7db5eaaf5303108d2ec375ca60b5de4fc18eebc5f0736"
+    },
+    {
+      "id": "textual-exclusive-worker",
+      "category": "single_hop",
+      "question": "What does exclusive=True do when Textual starts a worker?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/guide/workers.md"],
+      "required_terms": ["cancel all previous workers"],
+      "repository_id": "a3b74bb0923ff017e6b7db5eaaf5303108d2ec375ca60b5de4fc18eebc5f0736"
+    },
+    {
+      "id": "textual-worker-error",
+      "category": "single_hop",
+      "question": "How can a Textual worker avoid exiting the app after an exception?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/guide/workers.md"],
+      "required_terms": ["exit_on_error=False"],
+      "repository_id": "a3b74bb0923ff017e6b7db5eaaf5303108d2ec375ca60b5de4fc18eebc5f0736"
+    },
+    {
+      "id": "textual-thread-ui",
+      "category": "single_hop",
+      "question": "How should a Textual thread worker update the UI from the main thread?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/guide/workers.md"],
+      "required_terms": ["call_from_thread"],
+      "repository_id": "a3b74bb0923ff017e6b7db5eaaf5303108d2ec375ca60b5de4fc18eebc5f0736"
+    },
+    {
+      "id": "textual-run-test",
+      "category": "single_hop",
+      "question": "What does Textual App.run_test return while running headlessly?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/guide/testing.md"],
+      "required_terms": ["Pilot", "headless"],
+      "repository_id": "a3b74bb0923ff017e6b7db5eaaf5303108d2ec375ca60b5de4fc18eebc5f0736"
+    },
+    {
+      "id": "textual-pilot-pause",
+      "category": "single_hop",
+      "question": "Why should Textual tests call Pilot.pause after posting a message?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/guide/testing.md"],
+      "required_terms": ["pending messages", "processed"],
+      "repository_id": "a3b74bb0923ff017e6b7db5eaaf5303108d2ec375ca60b5de4fc18eebc5f0736"
+    },
+    {
+      "id": "textual-last-screen",
+      "category": "single_hop",
+      "question": "Which exception does Textual raise when the last screen is popped?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/guide/screens.md"],
+      "required_terms": ["ScreenStackError"],
+      "repository_id": "a3b74bb0923ff017e6b7db5eaaf5303108d2ec375ca60b5de4fc18eebc5f0736"
+    },
+    {
+      "id": "textual-wait-screen",
+      "category": "single_hop",
+      "question": "Where may Textual push_screen_wait be called without blocking app updates?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/guide/screens.md"],
+      "required_terms": ["only", "worker"],
+      "repository_id": "a3b74bb0923ff017e6b7db5eaaf5303108d2ec375ca60b5de4fc18eebc5f0736"
+    },
+    {
+      "id": "textual-query-one",
+      "category": "single_hop",
+      "question": "What does Textual query_one raise when no widget matches?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/guide/queries.md"],
+      "required_terms": ["NoMatches"],
+      "repository_id": "a3b74bb0923ff017e6b7db5eaaf5303108d2ec375ca60b5de4fc18eebc5f0736"
+    },
+    {
+      "id": "textual-stop-bubbling",
+      "category": "single_hop",
+      "question": "Which Textual message method stops event bubbling?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/guide/events.md"],
+      "required_terms": ["stop()"],
+      "repository_id": "a3b74bb0923ff017e6b7db5eaaf5303108d2ec375ca60b5de4fc18eebc5f0736"
+    }
+  ]
+}
