@@ -99,8 +99,8 @@ empty workspaces produced byte-identical evidence for each split.
 ## Evidence
 
 - [`external_document_click_dev_v021.json`](../demo/results/external_document_click_dev_v021.json)
-  SHA256 `95d31ac8445e497165f49f018da84e6fef32a7ac215b78ce33ee08b8c30030fb`
+  SHA256 `faedb61ec545331d769a12a6fc43f9ac900b5cd849c7ab284c856940c4de82d3`
 - [`external_document_click_holdout_v021.json`](../demo/results/external_document_click_holdout_v021.json)
-  SHA256 `dee599644307b2bcae087a7fad0279bd7ac8cb34d3b24882fabb934d1c98c871`
+  SHA256 `4c476e8381c736f42f7a542749b92f022a839e6c46b15128563677e4f284b36b`
 - [`external_document_click_semantic_dev_v021.json`](../demo/results/external_document_click_semantic_dev_v021.json)
   SHA256 `b632e2bf36cdf0f6783ea251cbf016433a6c1f58ebe31bf0f2923a6ddaa96181`
