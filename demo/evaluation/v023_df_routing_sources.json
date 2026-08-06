@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "name": "MemoryForge v0.2.3 document-frequency routing sources",
+  "development": {
+    "repository": "encode/uvicorn",
+    "remote_url": "https://github.com/encode/uvicorn.git",
+    "commit": "ee8e45ca472db17b4aef1d539f209539062d002e",
+    "license": "BSD-3-Clause",
+    "license_sha256": "efe1acf3e62fb99c288b0ec73e5a773b7268ef4320fe757ea994214e4b63c371",
+    "repository_id": "f42a5aa63ce93c62f5327b32b7a8cfe018628a76d863fbb89cc78b11149bdc41",
+    "importable_document_count": 15,
+    "suite": "demo/evaluation/uvicorn_docs_dev_v023.json"
+  },
+  "confirmation": {
+    "repository": "fastapi/typer",
+    "remote_url": "https://github.com/fastapi/typer.git",
+    "commit": "b4bd8b74fe5339444d7a3b71580649d59f6c085f",
+    "license": "MIT",
+    "license_sha256": "58992cebcf8dfb6e40c4e2112ed12126c243666dca3912a3d78b7ecac4859d49",
+    "repository_id": "abfde9651874d55da0323c39f6a40f4c533335c01dce5fa02d5abbf8356f0918",
+    "importable_document_count": 76,
+    "suite": "demo/evaluation/typer_docs_confirm_v023.json",
+    "policy": "run_once_after_candidate_freeze"
+  }
+}

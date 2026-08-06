@@ -1,0 +1,95 @@
+{
+  "name": "MemoryForge v0.2.3 Uvicorn document-frequency development",
+  "cases": [
+    {
+      "id": "uvicorn-standard-extra",
+      "category": "single_hop",
+      "question": "Which Uvicorn installation extra installs all optional dependencies?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/installation.md"],
+      "required_terms": ["uvicorn[standard]"],
+      "repository_id": "f42a5aa63ce93c62f5327b32b7a8cfe018628a76d863fbb89cc78b11149bdc41"
+    },
+    {
+      "id": "uvicorn-loop-auto",
+      "category": "single_hop",
+      "question": "How does Uvicorn loop auto choose between uvloop and asyncio?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/concepts/event-loop.md"],
+      "required_terms": ["uvloop", "asyncio"],
+      "repository_id": "f42a5aa63ce93c62f5327b32b7a8cfe018628a76d863fbb89cc78b11149bdc41"
+    },
+    {
+      "id": "uvicorn-http-auto",
+      "category": "single_hop",
+      "question": "How does Uvicorn HTTP auto choose between httptools and h11?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/concepts/http-protocols.md"],
+      "required_terms": ["httptools", "h11"],
+      "repository_id": "f42a5aa63ce93c62f5327b32b7a8cfe018628a76d863fbb89cc78b11149bdc41"
+    },
+    {
+      "id": "uvicorn-lifespan-sibling",
+      "category": "single_hop",
+      "question": "Why are ContextVar values from Uvicorn lifespan unavailable to the application task?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/concepts/lifespan.md"],
+      "required_terms": ["sibling task", "ContextVar"],
+      "repository_id": "f42a5aa63ce93c62f5327b32b7a8cfe018628a76d863fbb89cc78b11149bdc41"
+    },
+    {
+      "id": "uvicorn-concurrency-limit",
+      "category": "single_hop",
+      "question": "What response does Uvicorn send after limit-concurrency is reached?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/server-behavior.md"],
+      "required_terms": ["503 Service Unavailable"],
+      "repository_id": "f42a5aa63ce93c62f5327b32b7a8cfe018628a76d863fbb89cc78b11149bdc41"
+    },
+    {
+      "id": "uvicorn-backlog-default",
+      "category": "single_hop",
+      "question": "What is Uvicorn's default socket accept backlog?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/server-behavior.md"],
+      "required_terms": ["2048"],
+      "repository_id": "f42a5aa63ce93c62f5327b32b7a8cfe018628a76d863fbb89cc78b11149bdc41"
+    },
+    {
+      "id": "uvicorn-websocket-protocols",
+      "category": "single_hop",
+      "question": "Which WebSocket protocol implementations can Uvicorn select?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/concepts/websockets.md"],
+      "required_terms": ["wsproto", "websockets"],
+      "repository_id": "f42a5aa63ce93c62f5327b32b7a8cfe018628a76d863fbb89cc78b11149bdc41"
+    },
+    {
+      "id": "uvicorn-access-logs",
+      "category": "single_hop",
+      "question": "Which Uvicorn option disables access logs?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/concepts/logging.md"],
+      "required_terms": ["--no-access-log"],
+      "repository_id": "f42a5aa63ce93c62f5327b32b7a8cfe018628a76d863fbb89cc78b11149bdc41"
+    },
+    {
+      "id": "uvicorn-head-requests",
+      "category": "single_hop",
+      "question": "How should an ASGI application treat HEAD requests under Uvicorn?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/server-behavior.md"],
+      "required_terms": ["GET", "headers"],
+      "repository_id": "f42a5aa63ce93c62f5327b32b7a8cfe018628a76d863fbb89cc78b11149bdc41"
+    },
+    {
+      "id": "uvicorn-lifespan-disable",
+      "category": "single_hop",
+      "question": "How can the Uvicorn lifespan protocol be disabled?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/concepts/lifespan.md"],
+      "required_terms": ["lifespan", "off"],
+      "repository_id": "f42a5aa63ce93c62f5327b32b7a8cfe018628a76d863fbb89cc78b11149bdc41"
+    }
+  ]
+}
