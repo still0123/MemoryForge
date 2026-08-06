@@ -61,16 +61,25 @@ WorkspaceOption = Annotated[
 ]
 
 
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(__version__)
+        raise typer.Exit()
+
+
 @app.callback()
 def root(
     version: Annotated[
         bool,
-        typer.Option("--version", help="Show the installed MemoryForge version."),
+        typer.Option(
+            "--version",
+            help="Show the installed MemoryForge version.",
+            callback=_version_callback,
+            is_eager=True,
+        ),
     ] = False,
 ) -> None:
-    if version:
-        typer.echo(__version__)
-        raise typer.Exit()
+    del version
 
 
 @app.command()

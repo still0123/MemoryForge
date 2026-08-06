@@ -1,4 +1,15 @@
+import tomllib
 from pathlib import Path
+
+import memoryforge
+
+
+def test_package_and_cli_versions_match_v021() -> None:
+    root = Path(__file__).resolve().parent.parent
+    project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+
+    assert project["project"]["version"] == "0.2.1"
+    assert memoryforge.__version__ == "0.2.1"
 
 
 def test_release_workflow_keeps_the_tag_and_artifact_contract() -> None:

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.2.1 — 2026-08-06
 
 - 合并多仓库 Code Wiki、会话上下文和大仓库刷新改进；
 - 受限修复中文否定同义改写的 Citation 选择，不放宽无答案问题；
