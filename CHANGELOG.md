@@ -11,7 +11,8 @@
 - 受限修复中文否定同义改写的 Citation 选择，不放宽无答案问题；
 - 固定 Click 20 题外部评测：Citation grounding 100%，但 Answer accuracy 仅 10%/0%，
   Source recall@3 为 0%，保留为外部有效性负结果；
-- 原 AgentSkill-Eval 30 题 Answer/Citation 为 100%，Source recall@3 保持 96.2%。
+- 强化回答准确率契约，要求关键事实和冻结来源同时命中；AgentSkill-Eval 30 题严格 Answer 为
+  96.7%，Citation grounding 为 100%，Source recall@3 为 96.2%。
 - 新增 annotated tag 发布工作流，冻结 Hatchling 构建环境并校验 Wheel/sdist、SHA256、
   公开仓库 artifact attestation、Release 上传和远端资产回下载；个人私有仓库在 provenance
   明确标记 attestation 不适用。

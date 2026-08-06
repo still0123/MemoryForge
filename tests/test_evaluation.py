@@ -100,7 +100,7 @@ def test_eval_compares_wiki_answers_with_raw_fts(tmp_path: Path, monkeypatch) ->
     assert payload["raw_fts_baseline"]["expected_source_recall_at_3"] == 100.0
 
 
-def test_eval_citation_accuracy_drops_when_a_case_routes_to_the_wrong_source(
+def test_eval_does_not_count_an_answer_from_the_wrong_source_as_correct(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -144,7 +144,7 @@ def test_eval_citation_accuracy_drops_when_a_case_routes_to_the_wrong_source(
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.stdout)
-    assert payload["memoryforge"]["answer_accuracy"] == 100.0
+    assert payload["memoryforge"]["answer_accuracy"] == 50.0
     assert payload["memoryforge"]["citation_grounding_accuracy"] == 100.0
     assert payload["memoryforge"]["source_recall_at_3"] == 50.0
 
