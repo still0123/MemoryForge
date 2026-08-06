@@ -1,31 +1,31 @@
 {
-  "name": "MemoryForge v0.2.7 Textual page-aware fact confirmation",
+  "name": "MemoryForge v0.2.7 Textual page-aware fact development",
   "cases": [
     {
-      "id": "textual-watch-change",
+      "id": "textual-reactive-default",
       "category": "single_hop",
-      "question": "When does Textual call a watch method for a reactive attribute?",
+      "question": "What does the first positional argument to Textual reactive define?",
       "expected_status": "answered",
       "expected_source_paths": ["docs/guide/reactivity.md"],
-      "required_terms": ["only", "changes"],
+      "required_terms": ["default value", "first positional argument"],
       "repository_id": "a3b74bb0923ff017e6b7db5eaaf5303108d2ec375ca60b5de4fc18eebc5f0736"
     },
     {
-      "id": "textual-compute-cache",
+      "id": "textual-single-refresh",
       "category": "single_hop",
-      "question": "How are Textual reactive compute method values cached and updated?",
+      "question": "How many refreshes occur after modifying multiple Textual reactive attributes?",
       "expected_status": "answered",
       "expected_source_paths": ["docs/guide/reactivity.md"],
-      "required_terms": ["cache", "reactive attribute changes"],
+      "required_terms": ["single refresh"],
       "repository_id": "a3b74bb0923ff017e6b7db5eaaf5303108d2ec375ca60b5de4fc18eebc5f0736"
     },
     {
-      "id": "textual-set-reactive",
+      "id": "textual-same-value-refresh",
       "category": "single_hop",
-      "question": "How can a Textual reactive value be set without invoking its watcher?",
+      "question": "Does assigning the same Textual reactive value prompt an unnecessary refresh?",
       "expected_status": "answered",
       "expected_source_paths": ["docs/guide/reactivity.md"],
-      "required_terms": ["set_reactive", "doesn't immediately invoke"],
+      "required_terms": ["same value", "wont prompt"],
       "repository_id": "a3b74bb0923ff017e6b7db5eaaf5303108d2ec375ca60b5de4fc18eebc5f0736"
     },
     {
@@ -56,12 +56,12 @@
       "repository_id": "a3b74bb0923ff017e6b7db5eaaf5303108d2ec375ca60b5de4fc18eebc5f0736"
     },
     {
-      "id": "textual-run-test",
+      "id": "textual-run-test-headless",
       "category": "single_hop",
-      "question": "What does Textual App.run_test return while running headlessly?",
+      "question": "Which mode does Textual App.run_test use instead of updating the terminal?",
       "expected_status": "answered",
       "expected_source_paths": ["docs/guide/testing.md"],
-      "required_terms": ["Pilot", "headless"],
+      "required_terms": ["headless"],
       "repository_id": "a3b74bb0923ff017e6b7db5eaaf5303108d2ec375ca60b5de4fc18eebc5f0736"
     },
     {
@@ -83,12 +83,12 @@
       "repository_id": "a3b74bb0923ff017e6b7db5eaaf5303108d2ec375ca60b5de4fc18eebc5f0736"
     },
     {
-      "id": "textual-wait-screen",
+      "id": "textual-lifetime-screens",
       "category": "single_hop",
-      "question": "Where may Textual push_screen_wait be called without blocking app updates?",
+      "question": "How should Textual define screens that exist for the app lifetime?",
       "expected_status": "answered",
       "expected_source_paths": ["docs/guide/screens.md"],
-      "required_terms": ["only", "worker"],
+      "required_terms": ["recommend", "SCREENS", "lifetime"],
       "repository_id": "a3b74bb0923ff017e6b7db5eaaf5303108d2ec375ca60b5de4fc18eebc5f0736"
     },
     {
