@@ -1,0 +1,93 @@
+{
+  "name": "MemoryForge v0.3.1 learn-claude-code QA development",
+  "cases": [
+    {
+      "id": "dev-s01-run-bash-signature",
+      "category": "single_hop",
+      "question": "What is the signature of s01_agent_loop.code.run_bash?",
+      "expected_status": "answered",
+      "expected_source_paths": ["s01_agent_loop/code.py"],
+      "required_terms": ["def run_bash(command: str) -> str:"],
+      "repository_ids": ["f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6"]
+    },
+    {
+      "id": "dev-s03-check-permission-signature",
+      "category": "single_hop",
+      "question": "What does s03_permission.code.check_permission accept and return?",
+      "expected_status": "answered",
+      "expected_source_paths": ["s03_permission/code.py"],
+      "required_terms": ["def check_permission(block) -> bool:"],
+      "repository_ids": ["f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6"]
+    },
+    {
+      "id": "dev-s03-ask-user-parameters",
+      "category": "single_hop",
+      "question": "Which parameters does s03_permission.code.ask_user accept?",
+      "expected_status": "answered",
+      "expected_source_paths": ["s03_permission/code.py"],
+      "required_terms": ["tool_name: str", "args: dict", "reason: str"],
+      "repository_ids": ["f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6"]
+    },
+    {
+      "id": "dev-s05-todo-write-signature",
+      "category": "single_hop",
+      "question": "What is the signature of s05_todo_write.code.run_todo_write?",
+      "expected_status": "answered",
+      "expected_source_paths": ["s05_todo_write/code.py"],
+      "required_terms": ["def run_todo_write(todos: list) -> str:"],
+      "repository_ids": ["f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6"]
+    },
+    {
+      "id": "dev-s06-spawn-subagent-signature",
+      "category": "single_hop",
+      "question": "What is the signature of s06_subagent.code.spawn_subagent?",
+      "expected_status": "answered",
+      "expected_source_paths": ["s06_subagent/code.py"],
+      "required_terms": ["def spawn_subagent(description: str) -> str:"],
+      "repository_ids": ["f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6"]
+    },
+    {
+      "id": "dev-s12-task-class",
+      "category": "single_hop",
+      "question": "Which class represents a task in s12_task_system.code?",
+      "expected_status": "answered",
+      "expected_source_paths": ["s12_task_system/code.py"],
+      "required_terms": ["@dataclass", "class Task:"],
+      "repository_ids": ["f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6"]
+    },
+    {
+      "id": "dev-s12-create-task-signature",
+      "category": "single_hop",
+      "question": "What arguments does s12_task_system.code.create_task accept?",
+      "expected_status": "answered",
+      "expected_source_paths": ["s12_task_system/code.py"],
+      "required_terms": ["subject: str", "description: str", "blockedBy: list[str]"],
+      "repository_ids": ["f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6"]
+    },
+    {
+      "id": "dev-s12-can-start-paraphrase",
+      "category": "paraphrase",
+      "question": "Which s12 task helper decides whether a task can start?",
+      "expected_status": "answered",
+      "expected_source_paths": ["s12_task_system/code.py"],
+      "required_terms": ["can_start", "bool"],
+      "repository_ids": ["f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6"]
+    },
+    {
+      "id": "dev-agent-loop-multi-source",
+      "category": "multi_source",
+      "question": "What agent_loop signatures are defined in s01_agent_loop and s12_task_system?",
+      "expected_status": "answered",
+      "expected_source_paths": ["s01_agent_loop/code.py", "s12_task_system/code.py"],
+      "required_terms": ["def agent_loop(messages: list)", "context: dict"],
+      "repository_ids": ["f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6"]
+    },
+    {
+      "id": "dev-unknown-vector-database",
+      "category": "unanswerable",
+      "question": "Which function stores agent embeddings in a PostgreSQL vector database?",
+      "expected_status": "unknown",
+      "repository_ids": ["f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6"]
+    }
+  ]
+}
