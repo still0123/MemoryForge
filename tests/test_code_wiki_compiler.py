@@ -15,8 +15,10 @@ from memoryforge.code_wiki_compiler import (
     CodeWikiCompilationError,
     compile_code_wiki,
 )
+from memoryforge.evaluation import run_evaluation
 from memoryforge.linting import lint_workspace
 from memoryforge.module_planner import build_architecture_graph, build_module_plan
+from memoryforge.query import _page_citations
 from memoryforge.workspace import (
     Workspace,
     init_workspace,
@@ -129,6 +131,58 @@ def test_code_wiki_rejects_a_forged_symbol_body_hash(tmp_path: Path) -> None:
 
     with pytest.raises(CodeWikiCompilationError, match="evidence hash"):
         compile_code_wiki(workspace, forged, plan)
+
+
+def test_code_wiki_dependencies_are_queryable_and_grounded(tmp_path: Path) -> None:
+    _checkout, workspace, repository_id = _synced_repository(
+        tmp_path,
+        {
+            "src/helper.ts": "export const helper = (value: string): string => value;\n",
+            "src/service.ts": (
+                'import { helper } from "./helper.js";\n\n'
+                "export const service = (): string => helper(`a  b`);\n"
+            ),
+        },
+    )
+    _compile_and_apply(workspace, repository_id)
+    service_page = workspace / make_code_wiki_path(repository_id, "src/service")
+    content = service_page.read_text(encoding="utf-8")
+    assert (
+        '- `src.service -> src.helper` (imports): "import { helper } from \\"./helper.js\\";"'
+    ) in content
+    citations = _page_citations(content)
+    dependencies = [citation for citation in citations if citation.get("routing_text")]
+    assert {citation["quote"] for citation in dependencies} == {
+        'import { helper } from "./helper.js";',
+        "helper(`a  b`)",
+    }
+    assert not any(citation.get("is_summary", False) for citation in dependencies)
+
+    suite = tmp_path / "relations.json"
+    suite.write_text(
+        json.dumps(
+            {
+                "name": "queryable relations",
+                "cases": [
+                    {
+                        "id": "service-import",
+                        "category": "single_hop",
+                        "question": "Which module does src.service import?",
+                        "expected_status": "answered",
+                        "expected_source_paths": ["src/service.ts"],
+                        "required_terms": ["import", "helper", "./helper.js"],
+                        "repository_ids": [repository_id],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = run_evaluation(workspace, suite)
+
+    assert result["memoryforge"]["answer_accuracy"] == 100.0
+    assert result["memoryforge"]["citation_grounding_accuracy"] == 100.0
 
 
 def test_code_wiki_archives_modules_removed_from_the_current_snapshot(
