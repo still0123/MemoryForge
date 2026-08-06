@@ -1,0 +1,81 @@
+{
+  "name": "Click public documentation holdout split v0.2.1",
+  "cases": [
+    {
+      "id": "holdout-abort-exit",
+      "category": "single_hop",
+      "question": "What does Click print and which exit code does it use for an Abort exception?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/exceptions.md"],
+      "required_terms": ["Aborted!", "1"]
+    },
+    {
+      "id": "holdout-range-clamp",
+      "category": "single_hop",
+      "question": "What happens to an out-of-range value when an IntRange enables clamp mode?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/parameter-types.md"],
+      "required_terms": ["clamp", "boundary"]
+    },
+    {
+      "id": "holdout-testing-files",
+      "category": "single_hop",
+      "question": "How should tests isolate commands that read or write files?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/testing.md"],
+      "required_terms": ["tmp_path", "absolute paths"]
+    },
+    {
+      "id": "holdout-options-opinion",
+      "category": "single_hop",
+      "question": "Why does Click recommend using positional arguments sparingly?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/design-opinions.md"],
+      "required_terms": ["Positional arguments", "confusing"]
+    },
+    {
+      "id": "holdout-atomic-write",
+      "category": "paraphrase",
+      "question": "How can a command avoid replacing a destination file until writing completes?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/handling-files.md"],
+      "required_terms": ["atomic=True", "original location"]
+    },
+    {
+      "id": "holdout-group-no-command",
+      "category": "paraphrase",
+      "question": "How can a Click group run its callback when the user provides no subcommand?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/commands-and-groups.md"],
+      "required_terms": ["invoke_without_command=True", "invoked_subcommand"]
+    },
+    {
+      "id": "holdout-entry-point-completion",
+      "category": "multi_source",
+      "question": "Why should a Click app use an entry point, and why is that required for shell completion?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/quickstart.md", "docs/shell-completion.md"],
+      "required_terms": ["entry point", "completion", "python"]
+    },
+    {
+      "id": "holdout-group-registration",
+      "category": "multi_source",
+      "question": "How can commands be registered with a Group immediately or later from another module?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/quickstart.md", "docs/commands-and-groups.md"],
+      "required_terms": ["Group", "add_command"]
+    },
+    {
+      "id": "holdout-sql-migrations",
+      "category": "unanswerable",
+      "question": "Which SQL migration tool does Click recommend for production databases?",
+      "expected_status": "unknown"
+    },
+    {
+      "id": "holdout-cloud-regions",
+      "category": "unanswerable",
+      "question": "How many cloud regions does the Click service deploy to?",
+      "expected_status": "unknown"
+    }
+  ]
+}
