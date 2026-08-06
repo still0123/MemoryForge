@@ -14,3 +14,8 @@ This repository contains MemoryForge and its own Feishu demonstration agent.
   raw local page hashes as the user-facing source.
 - Do not import private data, modify source material, commit, push, deploy, or
   run destructive commands unless the user explicitly asks.
+- Zero-spend is a hard project constraint. Never enable or use billable APIs,
+  models, cloud services, storage, GitHub-hosted runners, subscriptions, or
+  metered features. Do not add payment methods, raise spending limits, or
+  re-enable repository GitHub Actions. Use local free tools only. If a task
+  cannot be completed at zero cost, stop and report the blocker.

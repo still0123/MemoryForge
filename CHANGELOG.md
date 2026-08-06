@@ -4,6 +4,13 @@
 
 - 关闭 GitHub Actions 并移除 hosted CI/Release workflow；
 - 新增本地零付费质量门禁，覆盖 Ruff、Mypy、pytest、Wheel/sdist 双 clean-room 和 SHA256。
+- 强化回答准确率契约，要求关键事实和冻结来源同时命中；AgentSkill-Eval 30 题严格 Answer 为
+  96.7%，Citation grounding 为 100%，Source recall@3 为 96.2%；
+- 追加独立 Click 20 题复评；回答准确率 5.0%、来源召回 16.7%，再次确认外部有效性缺口；
+- 修复离线 semantic retrieval 实验调用 `_candidate_pages` 时的陈旧签名；
+- 拒绝未通过 MkDocs confirmation 的英文页面 rank-fusion 候选，生产查询保持不变；
+- 增加纯标准库 document-frequency 页面路由；Uvicorn development 100%，Typer confirmation
+  83.3%，旧 30 题检索与 Citation 指标无回退。
 
 ## v0.2.1 — 2026-08-06
 
@@ -11,16 +18,10 @@
 - 受限修复中文否定同义改写的 Citation 选择，不放宽无答案问题；
 - 固定 Click 20 题外部评测：Citation grounding 100%，但 Answer accuracy 仅 10%/0%，
   Source recall@3 为 0%，保留为外部有效性负结果；
-- 强化回答准确率契约，要求关键事实和冻结来源同时命中；AgentSkill-Eval 30 题严格 Answer 为
-  96.7%，Citation grounding 为 100%，Source recall@3 为 96.2%。
+- 原 AgentSkill-Eval 30 题 Answer/Citation 为 100%，Source recall@3 保持 96.2%。
 - 新增 annotated tag 发布工作流，冻结 Hatchling 构建环境并校验 Wheel/sdist、SHA256、
   公开仓库 artifact attestation、Release 上传和远端资产回下载；个人私有仓库在 provenance
   明确标记 attestation 不适用。
-- 追加独立 Click 20 题复评；回答准确率 5.0%、来源召回 16.7%，再次确认外部有效性缺口；
-- 修复离线 semantic retrieval 实验调用 `_candidate_pages` 时的陈旧签名；
-- 拒绝未通过 MkDocs confirmation 的英文页面 rank-fusion 候选，生产查询保持不变；
-- 增加纯标准库 document-frequency 页面路由；Uvicorn development 100%，Typer confirmation
-  83.3%，旧 30 题无回退；
 
 ## v0.2.0 — 2026-08-06
 

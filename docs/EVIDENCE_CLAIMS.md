@@ -26,7 +26,7 @@
 
 | 主张 | Evidence | 边界 |
 | --- | --- | --- |
-| 原 30 题 Answer/Citation 为 100%，Source recall@3 为 96.2% | [`agent_skill_eval_public.json`](../demo/results/agent_skill_eval_public.json) | 单一公开仓库固定题集 |
+| 原 30 题严格 Answer 为 96.7%，Citation 为 100%，Source recall@3 为 96.2% | [`agent_skill_eval_public.json`](../demo/results/agent_skill_eval_public.json) | Answer 必须同时命中冻结来源；单一公开仓库固定题集 |
 | Click development/holdout Answer accuracy 为 10%/0% | [`click_docs_dev_v021.json`](../demo/results/click_docs_dev_v021.json)、[`click_docs_holdout_v021.json`](../demo/results/click_docs_holdout_v021.json) | 外部迁移负结果 |
 | Click 两套 split 的 Citation grounding 为 100% | 同上 | 只证明引用可回读，不证明答案正确 |
 | Click Source recall@3 为 0% | 同上 | holdout 已揭盲；禁止据此继续调参 |
