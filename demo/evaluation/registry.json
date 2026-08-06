@@ -6,7 +6,11 @@
     "single_hop",
     "multi_source",
     "paraphrase",
-    "unanswerable"
+    "unanswerable",
+    "exact_symbol",
+    "code_behavior",
+    "temporal_update",
+    "cross_repository"
   ],
   "qa_case_types_required": [
     "single_hop",
@@ -18,6 +22,17 @@
     "temporal_update",
     "cross_repository"
   ],
+  "case_type_overlay": {
+    "path": "demo/evaluation/case_type_overlay.json",
+    "sha256": "d73dd1ea36bfd7d421dbaaa33c1003b81e71e41d785b110633cea9556696f11b"
+  },
+  "taxonomy_evidence": {
+    "path": "demo/results/benchmark_taxonomy_baseline.json",
+    "sha256": "fe103345252782f7ba4929bfa502c46509741067b53b17979d19427cc3d01cef",
+    "evaluation_commit": "1d025e6a3aa56a7ed70d4a3fba1959dafdd95b72",
+    "evaluated_case_count": 116,
+    "frozen_confirmation_status": "not_run"
+  },
   "suites": [
     {
       "suite_id": "doc-wiki-qa.agent-skill-eval",

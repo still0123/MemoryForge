@@ -4,6 +4,7 @@ import json
 import subprocess
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 import memoryforge.evaluation as evaluation_module
@@ -89,7 +90,10 @@ def test_eval_compares_wiki_answers_with_raw_fts(tmp_path: Path, monkeypatch) ->
     payload = json.loads(result.stdout)
     assert payload["memoryforge"] == {
         "answer_accuracy": 100.0,
+        "page_route_recall_at_3": 100.0,
         "source_recall_at_3": 100.0,
+        "fact_source_recall": 100.0,
+        "fact_selection_accuracy": 100.0,
         "citation_grounding_accuracy": 100.0,
         "multi_source_coverage": 0.0,
         "abstention_accuracy": 0.0,
@@ -97,8 +101,11 @@ def test_eval_compares_wiki_answers_with_raw_fts(tmp_path: Path, monkeypatch) ->
         "average_wiki_pages_read": 1.0,
         "average_raw_sources_read": 0.0,
         "average_evidence_characters": 41.0,
+        "error_classification_counts": {"none": 1},
     }
     assert payload["raw_fts_baseline"]["expected_source_recall_at_3"] == 100.0
+    assert payload["cases"][0]["memoryforge"]["routed_source_paths"] == ["note.md"]
+    assert payload["cases"][0]["memoryforge"]["error_classification"] == "none"
 
 
 def test_eval_does_not_count_an_answer_from_the_wrong_source_as_correct(
@@ -330,6 +337,19 @@ def test_repository_aware_source_matching_rejects_same_path_from_wrong_repositor
     assert not evaluation_module._repository_paths_isolated(wrong, expected)
 
 
+def test_repository_isolation_does_not_duplicate_source_recall() -> None:
+    repository = "a" * 64
+    expected = {(repository, "expected.md")}
+    wrong_path_same_repository = {(repository, "other.md")}
+
+    assert not evaluation_module._sources_recalled(
+        wrong_path_same_repository,
+        expected,
+        require_all=True,
+    )
+    assert evaluation_module._repository_paths_isolated(wrong_path_same_repository, expected)
+
+
 def test_code_wiki_fact_wrapper_is_grounded_by_its_canonical_code() -> None:
     quote = (
         "`mgr.ANASMgr` (struct): "
@@ -350,7 +370,7 @@ def test_cross_repository_labels_align_repositories_with_source_paths() -> None:
     second_repository = "b" * 64
     case = evaluation_module.EvaluationCase(
         id="cross-repository",
-        category="multi_source",
+        category="cross_repository",
         question="Compare both schedulers",
         expected_status="answered",
         expected_source_paths=("first/README.md", "second/README.md"),
@@ -365,6 +385,68 @@ def test_cross_repository_labels_align_repositories_with_source_paths() -> None:
         (first_repository, "first/README.md"),
         (second_repository, "second/README.md"),
     }
+
+
+def test_failure_classification_separates_route_fact_and_answer_failures() -> None:
+    case = evaluation_module.EvaluationCase(
+        id="cache-expiry",
+        category="exact_symbol",
+        question="What is the cache expiry?",
+        expected_status="answered",
+        expected_source_paths=("cache.md",),
+        required_terms=("sixty",),
+    )
+    common = {
+        "case": case,
+        "answer_status": "answered",
+        "answer_correct": False,
+        "citation_grounded": True,
+        "citations_current": True,
+        "all_expected_sources_cited": True,
+        "repository_path_isolated": True,
+    }
+
+    assert (
+        evaluation_module._classify_error(
+            **common,
+            page_route_recalled=False,
+            fact_selection_correct=False,
+        )
+        == "page_route_miss"
+    )
+    assert (
+        evaluation_module._classify_error(
+            **common,
+            page_route_recalled=True,
+            fact_selection_correct=False,
+        )
+        == "fact_selection_miss"
+    )
+    assert (
+        evaluation_module._classify_error(
+            **common,
+            page_route_recalled=True,
+            fact_selection_correct=True,
+        )
+        == "wrong_answer"
+    )
+
+
+@pytest.mark.parametrize(
+    "category",
+    ["exact_symbol", "code_behavior", "temporal_update"],
+)
+def test_extended_single_source_categories_are_valid(category: str) -> None:
+    case = evaluation_module.EvaluationCase(
+        id=f"{category}-case",
+        category=category,
+        question="What does the source say?",
+        expected_status="answered",
+        expected_source_paths=("source.md",),
+        required_terms=("source",),
+    )
+
+    assert case.category == category
 
 
 def test_eval_cites_all_expected_sources_for_multi_source_case(

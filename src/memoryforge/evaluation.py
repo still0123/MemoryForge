@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from memoryforge.manifests import SourceManifestStore
 from memoryforge.query import answer_question
 from memoryforge.workspace import (
+    Workspace,
     list_current_git_source_versions,
     list_git_checkouts,
     read_source_excerpt,
@@ -20,6 +21,27 @@ from memoryforge.workspace import (
 
 RepositoryId = Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")]
 SourceKey = tuple[str | None, str]
+CaseCategory = Literal[
+    "single_hop",
+    "multi_source",
+    "unanswerable",
+    "paraphrase",
+    "exact_symbol",
+    "code_behavior",
+    "temporal_update",
+    "cross_repository",
+]
+ErrorClassification = Literal[
+    "none",
+    "page_route_miss",
+    "fact_selection_miss",
+    "insufficient_support",
+    "citation_stale",
+    "multi_source_incomplete",
+    "repository_isolation_failure",
+    "wrong_answer",
+    "wrong_abstention",
+]
 _CODE_WIKI_FACT = re.compile(r"^`[^`]+` \([^)]+\): `(?P<code>.*)`$")
 
 
@@ -27,7 +49,7 @@ class EvaluationCase(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     id: str = Field(min_length=1)
-    category: Literal["single_hop", "multi_source", "unanswerable", "paraphrase"]
+    category: CaseCategory
     question: str = Field(min_length=1)
     expected_status: Literal["answered", "unknown"]
     expected_source_paths: tuple[str, ...] = ()
@@ -42,7 +64,7 @@ class EvaluationCase(BaseModel):
             raise ValueError("answered evaluation cases require expected_source_paths")
         if self.expected_status == "answered" and not self.required_terms:
             raise ValueError("answered evaluation cases require required_terms")
-        if self.category == "multi_source" and len(self.expected_source_paths) < 2:
+        if _is_multi_source(self.category) and len(self.expected_source_paths) < 2:
             raise ValueError("multi_source evaluation cases require at least two sources")
         if self.category == "unanswerable" and self.expected_status != "unknown":
             raise ValueError("unanswerable evaluation cases must expect unknown")
@@ -51,7 +73,7 @@ class EvaluationCase(BaseModel):
         if len(self.repository_ids) != len(set(self.repository_ids)):
             raise ValueError("repository_ids must not contain duplicates")
         if len(self.repository_ids) > 1:
-            if self.category != "multi_source":
+            if not _is_multi_source(self.category):
                 raise ValueError("multiple repository_ids require a multi_source case")
             if len(self.repository_ids) != len(self.expected_source_paths):
                 raise ValueError("multiple repository_ids must align with expected_source_paths")
@@ -74,35 +96,61 @@ def run_evaluation(workspace_root: Path, config_path: Path) -> dict[str, object]
             workspace_root / ".memoryforge/manifests/sources"
         ).list_all()
     }
-    source_repositories = {
-        source.source_id: repository.repository_id
+    current_git_sources = [
+        (repository.repository_id, source)
         for repository in list_git_checkouts(workspace_root)
         for source in list_current_git_source_versions(workspace_root, repository.repository_id)
+    ]
+    source_repositories = {
+        source.source_id: repository_id for repository_id, source in current_git_sources
+    }
+    current_source_versions = {
+        source.source_id: source.source_version for _, source in current_git_sources
     }
     cases = [
-        _evaluate_case(workspace_root, case, source_paths, source_repositories)
+        _evaluate_case(
+            workspace_root,
+            case,
+            source_paths,
+            source_repositories,
+            current_source_versions,
+        )
         for case in suite.cases
     ]
     total = len(cases)
+    answerable = [case for case in cases if case["category"] != "unanswerable"]
+    classifications = {
+        classification: sum(
+            case["memoryforge"]["error_classification"] == classification for case in cases
+        )
+        for classification in sorted(
+            {case["memoryforge"]["error_classification"] for case in cases}
+        )
+    }
     return {
         "suite": suite.name,
         "case_count": total,
         "memoryforge": {
             "answer_accuracy": _percentage(case["memoryforge"]["answer_correct"] for case in cases),
+            "page_route_recall_at_3": _percentage(
+                case["memoryforge"]["page_route_expected_sources_recalled"] for case in answerable
+            ),
             "source_recall_at_3": _percentage(
-                case["memoryforge"]["expected_sources_recalled"]
-                for case in cases
-                if case["category"] != "unanswerable"
+                case["memoryforge"]["expected_sources_recalled"] for case in answerable
+            ),
+            "fact_source_recall": _percentage(
+                case["memoryforge"]["expected_sources_recalled"] for case in answerable
+            ),
+            "fact_selection_accuracy": _percentage(
+                case["memoryforge"]["fact_selection_correct"] for case in answerable
             ),
             "citation_grounding_accuracy": _percentage(
-                case["memoryforge"]["citation_grounded"]
-                for case in cases
-                if case["category"] != "unanswerable"
+                case["memoryforge"]["citation_grounded"] for case in answerable
             ),
             "multi_source_coverage": _percentage(
                 case["memoryforge"]["all_expected_sources_cited"]
                 for case in cases
-                if case["category"] == "multi_source"
+                if _is_multi_source(case["category"])
             ),
             "abstention_accuracy": _percentage(
                 case["memoryforge"]["abstention_correct"]
@@ -127,6 +175,7 @@ def run_evaluation(workspace_root: Path, config_path: Path) -> dict[str, object]
                 sum(case["memoryforge"]["evidence_characters"] for case in cases) / total,
                 2,
             ),
+            "error_classification_counts": classifications,
         },
         "raw_fts_baseline": {
             "expected_source_recall_at_3": _percentage(
@@ -137,7 +186,7 @@ def run_evaluation(workspace_root: Path, config_path: Path) -> dict[str, object]
             "multi_source_coverage": _percentage(
                 case["raw_fts_baseline"]["expected_sources_in_top_3"]
                 for case in cases
-                if case["category"] == "multi_source"
+                if _is_multi_source(case["category"])
             ),
             "average_exposed_characters": round(
                 sum(case["raw_fts_baseline"]["exposed_characters"] for case in cases) / total,
@@ -153,8 +202,9 @@ def _evaluate_case(
     case: EvaluationCase,
     source_paths: dict[str, str],
     source_repositories: dict[str, str],
+    current_source_versions: dict[str, int],
 ) -> dict[str, Any]:
-    citation_limit = len(case.expected_source_paths) if case.category == "multi_source" else 1
+    citation_limit = len(case.expected_source_paths) if _is_multi_source(case.category) else 1
     repository_ids = case.repository_ids or (
         (case.repository_id,) if case.repository_id is not None else ()
     )
@@ -186,10 +236,33 @@ def _evaluate_case(
         if citation["source_id"] in source_paths
     }
     expected_sources = _expected_sources(case.expected_source_paths, repository_ids)
+    trace = answer.get("trace", [])
+    routed_wiki_pages = [
+        step["artifact"]
+        for step in trace
+        if step["level"] == "L1" and step["artifact"].startswith("wiki/pages/")
+    ]
+    workspace = Workspace.open(workspace_root)
+    routed_source_ids = {
+        source_id
+        for page_path in routed_wiki_pages
+        for source_id in workspace.source_ids_for_page(page_path)
+    }
+    routed_sources = {
+        (source_repositories.get(source_id), source_paths[source_id])
+        for source_id in routed_source_ids
+        if source_id in source_paths
+    }
+    require_all_sources = _is_multi_source(case.category)
+    page_route_expected_sources_recalled = _sources_recalled(
+        routed_sources,
+        expected_sources,
+        require_all=require_all_sources,
+    )
     expected_sources_recalled = _sources_recalled(
         actual_sources,
         expected_sources,
-        require_all=case.category == "multi_source",
+        require_all=require_all_sources,
     )
     citation_grounded = bool(citations) and all(
         _citation_quote_grounded(citation["quote"], excerpt)
@@ -197,11 +270,40 @@ def _evaluate_case(
     )
     if case.expected_status == "unknown":
         citation_grounded = not citations and answer["status"] == "unknown"
+    selected_fact_text = "\n".join(str(citation["quote"]) for citation in citations)
+    fact_terms_correct = all(
+        term.casefold() in selected_fact_text.casefold() for term in case.required_terms
+    ) and all(term.casefold() not in selected_fact_text.casefold() for term in case.forbidden_terms)
+    fact_selection_correct = expected_sources_recalled and fact_terms_correct
+    answer_terms_correct = all(
+        term.casefold() in answer_text.casefold() for term in case.required_terms
+    ) and all(term.casefold() not in answer_text.casefold() for term in case.forbidden_terms)
     answer_correct = (
         answer["status"] == case.expected_status
         and expected_sources_recalled
-        and all(term.casefold() in answer_text.casefold() for term in case.required_terms)
-        and all(term.casefold() not in answer_text.casefold() for term in case.forbidden_terms)
+        and answer_terms_correct
+    )
+    all_expected_sources_cited = _sources_recalled(
+        actual_sources,
+        expected_sources,
+        require_all=True,
+    )
+    repository_path_isolated = _repository_paths_isolated(actual_sources, expected_sources)
+    citations_current = all(
+        current_source_versions.get(citation["source_id"], citation["source_version"])
+        == citation["source_version"]
+        for citation in citations
+    )
+    error_classification = _classify_error(
+        case=case,
+        answer_status=answer["status"],
+        answer_correct=answer_correct,
+        page_route_recalled=page_route_expected_sources_recalled,
+        fact_selection_correct=fact_selection_correct,
+        citation_grounded=citation_grounded,
+        citations_current=citations_current,
+        all_expected_sources_cited=all_expected_sources_cited,
+        repository_path_isolated=repository_path_isolated,
     )
     raw_results = search_sources(
         workspace_root,
@@ -230,31 +332,32 @@ def _evaluate_case(
         "question": case.question,
         "memoryforge": {
             "answer_correct": answer_correct,
+            "page_route_expected_sources_recalled": page_route_expected_sources_recalled,
+            "fact_selection_correct": fact_selection_correct,
             "citation_grounded": citation_grounded,
+            "citations_current": citations_current,
             "expected_sources_recalled": expected_sources_recalled,
-            "all_expected_sources_cited": _sources_recalled(
-                actual_sources,
-                expected_sources,
-                require_all=True,
-            ),
-            "repository_path_isolated": _repository_paths_isolated(
-                actual_sources, expected_sources
-            ),
+            "all_expected_sources_cited": all_expected_sources_cited,
+            "repository_path_isolated": repository_path_isolated,
             "expected_repository_ids": sorted(repository_id for repository_id in repository_ids),
             "abstention_correct": answer["status"] == case.expected_status,
-            "wiki_pages_read": sum(step["level"] == "L1" for step in answer.get("trace", [])),
-            "raw_sources_read": sum(step["level"] == "L3" for step in answer.get("trace", [])),
+            "error_classification": error_classification,
+            "wiki_pages_read": sum(step["level"] == "L1" for step in trace),
+            "raw_sources_read": sum(step["level"] == "L3" for step in trace),
             "evidence_characters": sum(len(excerpt) for excerpt in evidence),
             "wiki_pages": answer["wiki_pages"],
+            "routed_wiki_pages": routed_wiki_pages,
             "cited_source_paths": sorted(path for _, path in actual_sources),
             "cited_sources": _serialise_sources(actual_sources),
+            "routed_source_paths": sorted(path for _, path in routed_sources),
+            "routed_sources": _serialise_sources(routed_sources),
         },
         "raw_fts_baseline": {
             "expected_source_in_top_3": raw_expected_source_in_top_3,
             "expected_sources_in_top_3": raw_expected_sources_in_top_3,
             "expected_sources_recalled": (
                 raw_expected_sources_in_top_3
-                if case.category == "multi_source"
+                if _is_multi_source(case.category)
                 else raw_expected_source_in_top_3
             ),
             "raw_source_paths": sorted(raw_source_paths),
@@ -265,6 +368,41 @@ def _evaluate_case(
             "exposed_characters": sum(len(result.snippet) for result in raw_results),
         },
     }
+
+
+def _classify_error(
+    *,
+    case: EvaluationCase,
+    answer_status: str,
+    answer_correct: bool,
+    page_route_recalled: bool,
+    fact_selection_correct: bool,
+    citation_grounded: bool,
+    citations_current: bool,
+    all_expected_sources_cited: bool,
+    repository_path_isolated: bool,
+) -> ErrorClassification:
+    if answer_correct:
+        return "none"
+    if case.expected_status == "unknown":
+        return "wrong_abstention"
+    if not page_route_recalled:
+        return "page_route_miss"
+    if answer_status == "unknown":
+        return "insufficient_support"
+    if not citations_current:
+        return "citation_stale"
+    if not repository_path_isolated:
+        return "repository_isolation_failure"
+    if _is_multi_source(case.category) and not all_expected_sources_cited:
+        return "multi_source_incomplete"
+    if not fact_selection_correct or not citation_grounded:
+        return "fact_selection_miss"
+    return "wrong_answer"
+
+
+def _is_multi_source(category: str) -> bool:
+    return category in {"multi_source", "cross_repository"}
 
 
 def _percentage(values: Iterable[bool]) -> float:
@@ -316,8 +454,6 @@ def _repository_paths_isolated(
     actual_sources: set[SourceKey],
     expected_sources: set[SourceKey],
 ) -> bool:
-    if not _sources_recalled(actual_sources, expected_sources, require_all=False):
-        return False
     for actual_repository, actual_path in actual_sources:
         expected_repositories = {
             expected_repository
