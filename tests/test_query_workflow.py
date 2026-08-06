@@ -1142,6 +1142,51 @@ def test_rank_matches_prefers_summary_but_only_when_fact_terms_match() -> None:
     assert query_module._direct_matching_terms({"service", "module"}, summary) == {"service"}
 
 
+def test_rank_matches_prefers_specific_fact_then_page_rank() -> None:
+    summary = {
+        "source_id": "a" * 64,
+        "source_version": 1,
+        "locator": "chars:0-20",
+        "quote": "HTTP Core connection pool.",
+    }
+    specific = {
+        "source_id": "b" * 64,
+        "source_version": 1,
+        "locator": "chars:0-20",
+        "quote": "HTTP Core connection pool is task-safe.",
+    }
+
+    ranked = query_module._rank_matches(
+        [
+            (
+                frozenset({"http", "core", "connection", "pool"}),
+                True,
+                "wiki/pages/first.md",
+                summary,
+            ),
+            (
+                frozenset({"http", "core", "connection", "pool", "safe"}),
+                False,
+                "wiki/pages/first.md",
+                specific,
+            ),
+            (
+                frozenset({"http", "core", "connection", "pool", "safe"}),
+                False,
+                "wiki/pages/second.md",
+                specific,
+            ),
+        ],
+        question_terms={"http", "core", "connection", "pool", "safe"},
+        page_ranks={"wiki/pages/first.md": 0, "wiki/pages/second.md": 1},
+    )
+
+    assert [(page, citation["quote"]) for _, page, citation in ranked[:2]] == [
+        ("wiki/pages/first.md", specific["quote"]),
+        ("wiki/pages/second.md", specific["quote"]),
+    ]
+
+
 def test_candidate_pages_prioritize_explicit_terms_over_generic_cjk_terms(
     tmp_path: Path,
 ) -> None:

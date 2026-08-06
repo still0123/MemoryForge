@@ -18,9 +18,9 @@ three-page candidate budget, without changing page routing.
 
 ## Allowed Change
 
-Pass the existing candidate page rank into the deterministic fact ranker.
-Compare direct fact overlap first, then page rank, before using the existing
-summary fallback.
+For English questions, pass the existing candidate page rank into the
+deterministic fact ranker. Compare direct fact overlap first, then page rank,
+before using the existing summary fallback. Chinese ranking remains unchanged.
 
 No page route, page-budget increase, fact parser, model call, vector database,
 dependency, cache, schema, source filter, or configuration.
