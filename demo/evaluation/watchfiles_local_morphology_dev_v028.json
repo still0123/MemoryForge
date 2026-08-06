@@ -1,0 +1,95 @@
+{
+  "name": "MemoryForge v0.2.8 Watchfiles local fact morphology development",
+  "cases": [
+    {
+      "id": "watchfiles-python-versions",
+      "category": "single_hop",
+      "question": "Which Python versions are required by Watchfiles?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/index.md"],
+      "required_terms": ["Python 3.10", "Python 3.15"],
+      "repository_id": "dcd8ddeb4bb60e333e9983134478a3499ca51087075841c5f4c4527d2ee13611"
+    },
+    {
+      "id": "watchfiles-source-rust",
+      "category": "single_hop",
+      "question": "What is required when installing Watchfiles from source?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/index.md"],
+      "required_terms": ["Rust stable"],
+      "repository_id": "dcd8ddeb4bb60e333e9983134478a3499ca51087075841c5f4c4527d2ee13611"
+    },
+    {
+      "id": "watchfiles-debounced-changes",
+      "category": "single_hop",
+      "question": "How are file changes debounced by Watchfiles?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/index.md"],
+      "required_terms": ["grouping changes into batches"],
+      "repository_id": "dcd8ddeb4bb60e333e9983134478a3499ca51087075841c5f4c4527d2ee13611"
+    },
+    {
+      "id": "watchfiles-sync-threading",
+      "category": "single_hop",
+      "question": "Who creates the thread used by synchronous Watchfiles methods?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/index.md"],
+      "required_terms": ["rust code", "new thread"],
+      "repository_id": "dcd8ddeb4bb60e333e9983134478a3499ca51087075841c5f4c4527d2ee13611"
+    },
+    {
+      "id": "watchfiles-async-thread-wait",
+      "category": "single_hop",
+      "question": "How do asynchronous Watchfiles methods wait for changes in a thread?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/index.md"],
+      "required_terms": ["anyio.to_thread.run_sync"],
+      "repository_id": "dcd8ddeb4bb60e333e9983134478a3499ca51087075841c5f4c4527d2ee13611"
+    },
+    {
+      "id": "watchfiles-cli-recursion",
+      "category": "single_hop",
+      "question": "Which directories are watched by the Watchfiles CLI by default?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/cli.md"],
+      "required_terms": ["current directory", "all subdirectories"],
+      "repository_id": "dcd8ddeb4bb60e333e9983134478a3499ca51087075841c5f4c4527d2ee13611"
+    },
+    {
+      "id": "watchfiles-python-filter",
+      "category": "single_hop",
+      "question": "How can the Watchfiles CLI react only to Python file changes?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/cli.md"],
+      "required_terms": ["--filter python"],
+      "repository_id": "dcd8ddeb4bb60e333e9983134478a3499ca51087075841c5f4c4527d2ee13611"
+    },
+    {
+      "id": "watchfiles-filter-callable",
+      "category": "single_hop",
+      "question": "What replaced watcher_cls when Watchgod migrated to Watchfiles?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/migrating.md"],
+      "required_terms": ["watch_filter", "simple callable"],
+      "repository_id": "dcd8ddeb4bb60e333e9983134478a3499ca51087075841c5f4c4527d2ee13611"
+    },
+    {
+      "id": "watchfiles-os-notifications",
+      "category": "single_hop",
+      "question": "What replaced file scanning and polling when Watchgod became Watchfiles?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/migrating.md"],
+      "required_terms": ["OS file system notifications", "Notify"],
+      "repository_id": "dcd8ddeb4bb60e333e9983134478a3499ca51087075841c5f4c4527d2ee13611"
+    },
+    {
+      "id": "watchfiles-only-added",
+      "category": "single_hop",
+      "question": "What does the Watchfiles only_added filter accept?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/api/filters.md"],
+      "required_terms": ["Change.added"],
+      "repository_id": "dcd8ddeb4bb60e333e9983134478a3499ca51087075841c5f4c4527d2ee13611"
+    }
+  ]
+}

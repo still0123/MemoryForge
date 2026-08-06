@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import subprocess
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -56,7 +57,7 @@ def test_feishu_import_fetches_markdown_as_local_only_source(tmp_path: Path, mon
     imported = json.loads(result.stdout)
     assert imported["status"] == "created"
     source = imported["sources"][0]
-    with sqlite3.connect(Workspace.open(workspace).index_path) as connection:
+    with closing(sqlite3.connect(Workspace.open(workspace).index_path)) as connection, connection:
         stored = connection.execute(
             """
             SELECT s.source_path, v.sensitivity
@@ -244,7 +245,7 @@ def test_refresh_registers_a_preexisting_feishu_source(tmp_path: Path, monkeypat
         ).exit_code
         == 0
     )
-    with sqlite3.connect(Workspace.open(workspace).index_path) as connection:
+    with closing(sqlite3.connect(Workspace.open(workspace).index_path)) as connection, connection:
         connection.execute("DELETE FROM feishu_documents")
 
     registered = list_feishu_documents(workspace)

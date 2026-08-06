@@ -1142,6 +1142,88 @@ def test_rank_matches_prefers_summary_but_only_when_fact_terms_match() -> None:
     assert query_module._direct_matching_terms({"service", "module"}, summary) == {"service"}
 
 
+def test_local_english_matching_handles_inflections_without_changing_terms() -> None:
+    citation = {
+        "source_id": "a" * 64,
+        "source_version": 1,
+        "locator": "chars:0-20",
+        "quote": "Reusing the loader keeps cached directories.",
+    }
+
+    assert query_module._local_english_matching_terms(
+        {"reuse", "cache", "directory"},
+        citation,
+        enabled=True,
+    ) == {"reuse", "cache", "directory"}
+    assert (
+        query_module._local_english_matching_terms(
+            {"reuse", "cache", "directory"},
+            citation,
+            enabled=False,
+        )
+        == set()
+    )
+
+
+def test_ask_admits_a_fact_with_one_local_inflection_match(tmp_path: Path) -> None:
+    pages = tmp_path / "wiki" / "pages"
+    pages.mkdir(parents=True)
+    quote = "The loader stores cached directory listings."
+    (tmp_path / "wiki/INDEX.md").write_text(
+        "# Knowledge Index\n\n- [Loader](pages/loader.md) — loader cache configuration\n",
+        encoding="utf-8",
+    )
+    (pages / "loader.md").write_text(_wiki_page(quote), encoding="utf-8")
+
+    result = query_module.answer_question(
+        tmp_path,
+        "Which GriffeLoader option enables cache?",
+    )
+
+    assert result["answer"] == quote
+
+
+def test_rank_matches_prefers_local_morphology_then_page_rank() -> None:
+    summary = {
+        "source_id": "a" * 64,
+        "source_version": 1,
+        "locator": "chars:0-20",
+        "quote": "Loader package overview.",
+    }
+    detail = {
+        "source_id": "b" * 64,
+        "source_version": 1,
+        "locator": "chars:0-20",
+        "quote": "Reusing the loader keeps cached directories.",
+    }
+
+    ranked = query_module._rank_matches(
+        [
+            (frozenset({"loader"}), True, "wiki/pages/first.md", summary),
+            (
+                frozenset({"reuse", "loader", "cache"}),
+                False,
+                "wiki/pages/first.md",
+                detail,
+            ),
+            (
+                frozenset({"reuse", "loader", "cache"}),
+                False,
+                "wiki/pages/second.md",
+                detail,
+            ),
+        ],
+        question_terms={"reuse", "loader", "cache"},
+        page_ranks={"wiki/pages/first.md": 0, "wiki/pages/second.md": 1},
+        local_morphology_pages={"wiki/pages/first.md", "wiki/pages/second.md"},
+    )
+
+    assert [(page, citation["quote"]) for _, page, citation in ranked[:2]] == [
+        ("wiki/pages/first.md", detail["quote"]),
+        ("wiki/pages/second.md", detail["quote"]),
+    ]
+
+
 def test_candidate_pages_prioritize_explicit_terms_over_generic_cjk_terms(
     tmp_path: Path,
 ) -> None:

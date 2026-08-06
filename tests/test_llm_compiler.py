@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 from typing import Any
 
@@ -440,7 +441,10 @@ def test_llm_compiler_rejects_omitted_pending_source_before_staging(
         )
 
     assert not (workspace_path / ".memoryforge/staging/proposed").exists()
-    with sqlite3.connect(workspace_path / ".memoryforge/index.sqlite") as connection:
+    with (
+        closing(sqlite3.connect(workspace_path / ".memoryforge/index.sqlite")) as connection,
+        connection,
+    ):
         rows = connection.execute("SELECT source_id FROM applied_source_versions").fetchall()
     assert rows == []
 
@@ -500,7 +504,10 @@ def test_llm_compiler_keeps_distinct_pages_when_model_paths_collide(
     assert applied.exit_code == 0, applied.output
     assert (workspace_path / first_path).is_file()
     assert (workspace_path / second_path).is_file()
-    with sqlite3.connect(workspace_path / ".memoryforge/index.sqlite") as connection:
+    with (
+        closing(sqlite3.connect(workspace_path / ".memoryforge/index.sqlite")) as connection,
+        connection,
+    ):
         applied_ids = {
             source_id
             for (source_id,) in connection.execute("SELECT source_id FROM applied_source_versions")
@@ -629,7 +636,10 @@ def test_llm_compiler_rejects_update_owned_by_another_source(
 
     assert conflicting_path.read_text(encoding="utf-8") == original_page
     assert not (workspace_path / ".memoryforge/staging/proposed").exists()
-    with sqlite3.connect(workspace_path / ".memoryforge/index.sqlite") as connection:
+    with (
+        closing(sqlite3.connect(workspace_path / ".memoryforge/index.sqlite")) as connection,
+        connection,
+    ):
         assert (
             connection.execute(
                 "SELECT 1 FROM applied_source_versions WHERE source_id = ?", (second_id,)

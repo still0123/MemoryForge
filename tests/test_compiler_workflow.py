@@ -4,6 +4,7 @@ import hashlib
 import json
 import sqlite3
 import subprocess
+from contextlib import closing
 from pathlib import Path
 from typing import Any
 
@@ -365,6 +366,45 @@ def test_deterministic_compiler_splits_markdown_list_items_into_facts(
     assert page.count("[^source-") == 4
 
 
+def test_deterministic_compiler_keeps_markdown_list_continuations(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    continued_fact = (
+        "`max_connections`: The maximum number of concurrent connections that the pool\n"
+        "                     should allow. Requests above this limit block until a\n"
+        "                     connection is available."
+    )
+    source_text = (
+        "# Pool options\n\n"
+        f"* {continued_fact}\n"
+        "* `max_keepalive_connections`: The maximum number of idle connections.\n"
+    )
+    runner, workspace, _ = _initialized_workspace(tmp_path, monkeypatch, source_text=source_text)
+
+    ingested = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
+    assert ingested.exit_code == 0, ingested.output
+    reviewed = runner.invoke(
+        app,
+        ["review", json.loads(ingested.stdout)["changeset_id"], "--workspace", str(workspace)],
+    )
+
+    assert reviewed.exit_code == 0, reviewed.output
+    page = next(
+        content
+        for path, content in json.loads(reviewed.stdout)["candidate_files"].items()
+        if path.startswith("wiki/pages/")
+    )
+    assert (
+        "`max_connections`: The maximum number of concurrent connections that the pool "
+        "should allow. Requests above this limit block until a connection is available."
+    ) in page
+    assert "`max_keepalive_connections`: The maximum number of idle connections." in page
+    fact_start = source_text.index(continued_fact)
+    assert f"`chars:{fact_start}-{fact_start + len(continued_fact)}`" in page
+    assert page.count("[^source-") == 4
+
+
 def test_ingest_rejects_unknown_source_id(tmp_path: Path, monkeypatch) -> None:
     runner, workspace, _ = _initialized_workspace(tmp_path, monkeypatch)
     unknown_source_id = "0" * 64
@@ -470,7 +510,10 @@ def test_apply_restores_old_file_and_keeps_proposal_when_git_commit_fails(
     staging = workspace_path / ".memoryforge/staging"
     assert (staging / changeset_id).is_dir()
     assert not (staging / "applied" / changeset_id).exists()
-    with sqlite3.connect(workspace_path / ".memoryforge/index.sqlite") as connection:
+    with (
+        closing(sqlite3.connect(workspace_path / ".memoryforge/index.sqlite")) as connection,
+        connection,
+    ):
         applied_version = connection.execute(
             "SELECT source_version_id FROM applied_source_versions WHERE source_id = ?",
             (imported["source_id"],),
@@ -922,7 +965,10 @@ def _current_source_versions(
     source_ids: tuple[str, ...],
 ) -> dict[str, int]:
     placeholders = ", ".join("?" for _ in source_ids)
-    with sqlite3.connect(workspace_path / ".memoryforge/index.sqlite") as connection:
+    with (
+        closing(sqlite3.connect(workspace_path / ".memoryforge/index.sqlite")) as connection,
+        connection,
+    ):
         rows = connection.execute(
             f"""
             SELECT s.source_id, v.id
@@ -936,7 +982,10 @@ def _current_source_versions(
 
 
 def _applied_source_versions(workspace_path: Path) -> dict[str, int]:
-    with sqlite3.connect(workspace_path / ".memoryforge/index.sqlite") as connection:
+    with (
+        closing(sqlite3.connect(workspace_path / ".memoryforge/index.sqlite")) as connection,
+        connection,
+    ):
         rows = connection.execute(
             "SELECT source_id, source_version_id FROM applied_source_versions ORDER BY source_id"
         ).fetchall()

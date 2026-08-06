@@ -1236,7 +1236,7 @@ def _validate_workspace_identity_readonly(root: Path) -> None:
         raise WorkspaceError("MemoryForge workspace database is invalid")
 
     try:
-        with sqlite3.connect(database_path.as_uri() + "?mode=ro", uri=True) as connection:
+        with _connect_readonly(database_path) as connection:
             rows = connection.execute(
                 """
                 SELECT name
@@ -1250,7 +1250,7 @@ def _validate_workspace_identity_readonly(root: Path) -> None:
     unified = {"sources", "blobs", "source_versions", "source_fts"} <= tables
     origin_main = {"source_documents", "source_fts"} <= tables
     if origin_main:
-        with sqlite3.connect(database_path.as_uri() + "?mode=ro", uri=True) as connection:
+        with _connect_readonly(database_path) as connection:
             document_columns = {
                 str(row[1])
                 for row in connection.execute("PRAGMA table_info(source_documents)").fetchall()
