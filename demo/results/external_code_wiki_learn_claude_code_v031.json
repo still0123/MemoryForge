@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "memoryforge_commit": "c122cdf3ec99c77d195b7f1b74f3d376a7357ffc",
+  "memoryforge_commit": "5a28c862289bfe938786ac026b8b4a5ee6247911",
   "memoryforge_worktree_dirty": false,
   "source_manifest": {
     "path": "demo/evaluation/external_code_wiki_learn_claude_code_sources_v031.json",

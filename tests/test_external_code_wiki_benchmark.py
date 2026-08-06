@@ -83,6 +83,18 @@ def test_learn_claude_code_qa_splits_are_frozen() -> None:
     assert {case.id for case in suites["development"].cases}.isdisjoint(
         case.id for case in suites["confirmation"].cases
     )
+    result_path = benchmark.REPO_ROOT / protocol["development"]["result_path"]
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    assert (
+        hashlib.sha256(result_path.read_bytes()).hexdigest()
+        == protocol["development"]["result_sha256"]
+    )
+    assert all(
+        result["memoryforge"][name] == value
+        for name, value in protocol["development"]["metrics"].items()
+    )
+    assert protocol["development"]["passed"] is False
+    assert protocol["confirmation"]["status"] == "not_run_after_development_failure"
     assert protocol["confirmation"]["labels_must_not_be_used_for_tuning"] is True
 
 

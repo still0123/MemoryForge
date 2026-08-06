@@ -43,6 +43,30 @@ determinism 标记为不适用，不以 0% 解释为失败。
 完整机器证据：
 [`external_code_wiki_learn_claude_code_v031.json`](../demo/results/external_code_wiki_learn_claude_code_v031.json)。
 
+## 问答评测
+
+另冻结 10 道 development 和 5 道 confirmation 问答，覆盖代码签名、模块、改写、
+多来源和拒答。问答不调用模型。
+
+Development 结果：
+
+| 指标 | 结果 |
+| --- | ---: |
+| Answer accuracy | 60.0% |
+| Source recall@3 | 100.0% |
+| Citation grounding | 88.9% |
+| Multi-source coverage | 100.0% |
+| Abstention accuracy | 0.0% |
+| Repository path isolation | 100.0% |
+
+Development 未达到 Answer 80%、Citation 100% 和 Abstention 100% 的预注册门禁，因此
+confirmation 未运行。负结果表明页面召回已经正确，但事实选择、多来源 grounding 和无答案拒答仍需改进。
+
+问答协议与机器结果：
+
+- [`learn_claude_code_qa_protocol_v031.json`](../demo/evaluation/learn_claude_code_qa_protocol_v031.json)
+- [`learn_claude_code_qa_dev_v031.json`](../demo/results/learn_claude_code_qa_dev_v031.json)
+
 ## 复现
 
 ```bash
@@ -56,6 +80,10 @@ git -C /tmp/learn-claude-code checkout \
   --source-repo learn_claude_code=/tmp/learn-claude-code \
   --workdir /tmp/learn-claude-code-benchmark-v031 \
   --output demo/results/external_code_wiki_learn_claude_code_v031.json
+
+.venv/bin/memoryforge eval \
+  demo/evaluation/learn_claude_code_qa_dev_v031.json \
+  --workspace /tmp/learn-claude-code-benchmark-v031/learn_claude_code/workspace
 ```
 
 该评测是非穷举正样本检查，不证明全仓 precision、跨语言 Web 前端覆盖或任意 Agent
