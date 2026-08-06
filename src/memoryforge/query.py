@@ -18,6 +18,10 @@ from memoryforge.workspace import (
 )
 
 _FACT = re.compile(r"^- (?P<quote>.+?) \[\^(?P<footnote>[^\]]+)\]$", re.MULTILINE)
+_RELATION_FACT = re.compile(
+    r"^(?P<route>`[^`]+` \([a-z_]+\)): "
+    r'(?P<evidence>"(?:\\.|[^"\\])*")$'
+)
 _FOOTNOTE = re.compile(
     r"^\[\^(?P<footnote>[^\]]+)\]: source "
     r"`(?P<source_id>[a-f0-9]{64})` · "
@@ -81,6 +85,8 @@ class CitationPayload(TypedDict):
     locator: str
     quote: str
     section_path: NotRequired[str]
+    routing_text: NotRequired[str]
+    is_summary: NotRequired[bool]
 
 
 class EvidencePayload(CitationPayload):
@@ -183,7 +189,7 @@ def answer_question(
         if not any(_CJK.fullmatch(term) for term in question_terms) and not code_page:
             local_morphology_pages.add(page_path)
         trace.append({"level": "L1", "artifact": page_path})
-        for index, citation in enumerate(_page_citations(content)):
+        for citation in _page_citations(content):
             exact_overlap = (
                 _section_matching_terms(question_terms, citation)
                 if use_section_routes
@@ -195,7 +201,8 @@ def answer_question(
                 include_section=use_section_routes,
                 enabled=page_path in local_morphology_pages,
             )
-            raw_candidate_matches.append((frozenset(overlap), index == 0, page_path, citation))
+            is_summary = citation.get("is_summary", False)
+            raw_candidate_matches.append((frozenset(overlap), is_summary, page_path, citation))
             has_cjk_terms = any(_CJK.fullmatch(term) for term in question_terms)
             required_overlap = 1 if len(question_terms) == 1 else 2
             if has_cjk_terms:
@@ -203,7 +210,7 @@ def answer_question(
                 aligned_negation = any(cue in question for cue in _NEGATION_CUES) and any(
                     cue in citation["quote"] for cue in _NEGATION_CUES
                 )
-                if page_rank == 0 and index == 0 and aligned_negation:
+                if page_rank == 0 and is_summary and aligned_negation:
                     required_overlap = min(required_overlap, 2)
                 if len(overlap) >= 2 and any(not _CJK.fullmatch(term) for term in overlap):
                     required_overlap = 2
@@ -224,7 +231,7 @@ def answer_question(
             ):
                 sufficient_match = False
             if sufficient_match:
-                raw_matches.append((frozenset(overlap), index == 0, page_path, citation))
+                raw_matches.append((frozenset(overlap), is_summary, page_path, citation))
 
     if "方法" in base_question_terms and identifier_terms:
         method_symbol = max(identifier_terms, key=len)
@@ -972,50 +979,72 @@ def _safe_wiki_page(workspace_root: Path, page: Path) -> Path | None:
 def _page_citations(content: str) -> list[CitationPayload]:
     if not _page_matches_frontmatter(content):
         return []
-    section_match = re.search(
-        r"^## (?:Verified facts|Verified symbols)\s*$\n(?P<section>.*?)(?=^## |\Z)",
+    section_matches = re.finditer(
+        r"^## (?P<name>Verified facts|Verified symbols|Verified dependencies)\s*$"
+        r"\n(?P<section>.*?)(?=^## |\Z)",
         content,
         re.MULTILINE | re.DOTALL,
     )
-    if section_match is None:
-        return []
 
     footnotes = {
         match.group("footnote"): match.groupdict() for match in _FOOTNOTE.finditer(content)
     }
     citations: list[CitationPayload] = []
-    for fact in _FACT.finditer(section_match.group("section")):
-        footnote = footnotes.get(fact.group("footnote"))
-        if footnote is None:
-            continue
-        citation: CitationPayload = {
-            "source_id": footnote["source_id"],
-            "source_version": int(footnote["source_version"]),
-            "locator": footnote["locator"],
-            "quote": fact.group("quote"),
-        }
-        section = next(
-            (
-                match.group("section")
-                for match in reversed(list(_FACT_SECTION.finditer(section_match.group("section"))))
-                if match.start() <= fact.start()
-            ),
-            "",
-        )
-        if section:
-            citation["section_path"] = section
-        citations.append(citation)
+    for section_match in section_matches:
+        section_name = section_match.group("name")
+        section_text = section_match.group("section")
+        for fact_index, fact in enumerate(_FACT.finditer(section_text)):
+            footnote = footnotes.get(fact.group("footnote"))
+            if footnote is None:
+                continue
+            quote = fact.group("quote")
+            relation_fact = _RELATION_FACT.fullmatch(quote)
+            if section_name == "Verified dependencies":
+                if relation_fact is None:
+                    continue
+                try:
+                    evidence = json.loads(relation_fact.group("evidence"))
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(evidence, str):
+                    continue
+                quote = evidence
+            citation: CitationPayload = {
+                "source_id": footnote["source_id"],
+                "source_version": int(footnote["source_version"]),
+                "locator": footnote["locator"],
+                "quote": quote,
+            }
+            if relation_fact is not None:
+                citation["routing_text"] = relation_fact.group("route")
+            if section_name != "Verified dependencies" and fact_index == 0:
+                citation["is_summary"] = True
+            section = next(
+                (
+                    match.group("section")
+                    for match in reversed(list(_FACT_SECTION.finditer(section_text)))
+                    if match.start() <= fact.start()
+                ),
+                "",
+            )
+            if section:
+                citation["section_path"] = section
+            citations.append(citation)
     return citations
 
 
 def _citation_terms(citation: CitationPayload) -> set[str]:
-    return _terms(f"{citation.get('section_path', '')} {citation['quote']}")
+    return _terms(
+        f"{citation.get('section_path', '')} {citation.get('routing_text', '')} {citation['quote']}"
+    )
 
 
 def _matching_terms(question_terms: set[str], citation: CitationPayload) -> set[str]:
     # Keep ranking grounded in fact text instead of treating a section heading
     # as if it were an answer.
-    return (question_terms & _terms(citation["quote"])) - _QUESTION_NOISE_TERMS
+    return (
+        question_terms & _terms(f"{citation.get('routing_text', '')} {citation['quote']}")
+    ) - _QUESTION_NOISE_TERMS
 
 
 def _section_matching_terms(question_terms: set[str], citation: CitationPayload) -> set[str]:
@@ -1024,7 +1053,9 @@ def _section_matching_terms(question_terms: set[str], citation: CitationPayload)
 
 
 def _direct_matching_terms(question_terms: set[str], citation: CitationPayload) -> set[str]:
-    return (question_terms & _terms(citation["quote"])) - _QUESTION_NOISE_TERMS
+    return (
+        question_terms & _terms(f"{citation.get('routing_text', '')} {citation['quote']}")
+    ) - _QUESTION_NOISE_TERMS
 
 
 def _local_english_matching_terms(
@@ -1034,7 +1065,11 @@ def _local_english_matching_terms(
     include_section: bool = False,
     enabled: bool,
 ) -> set[str]:
-    citation_terms = _citation_terms(citation) if include_section else _terms(citation["quote"])
+    citation_terms = (
+        _citation_terms(citation)
+        if include_section
+        else _terms(f"{citation.get('routing_text', '')} {citation['quote']}")
+    )
     exact = (question_terms & citation_terms) - _QUESTION_NOISE_TERMS
     if not enabled:
         return exact

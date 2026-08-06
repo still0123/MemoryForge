@@ -54,7 +54,7 @@ def compile_code_wiki(
     opened = Workspace.open_readonly(root)
     _validate_inputs(opened, snapshot, plan, architecture)
     graph = architecture or build_architecture_graph(snapshot, plan)
-    _validate_code_evidence(opened, snapshot)
+    source_texts = _validate_code_evidence(opened, snapshot)
     modules = _flatten_modules(plan.modules)
     modules_by_id = {module.module_id: module for module in modules}
     symbols_by_id = {symbol.symbol_id: symbol for symbol in snapshot.symbols}
@@ -71,6 +71,7 @@ def compile_code_wiki(
                 outgoing.get(module.module_id, ()),
                 relations_by_id,
                 snapshot,
+                source_texts,
             )
         else:
             all_candidates[module.wiki_path] = _render_navigation_module_page(
@@ -227,7 +228,7 @@ def _validate_inputs(
 def _validate_code_evidence(
     workspace: Workspace,
     snapshot: CodeIndexSnapshot,
-) -> None:
+) -> dict[str, str]:
     texts = {
         source_id: read_source_version_text(
             workspace.root,
@@ -248,6 +249,7 @@ def _validate_code_evidence(
                 raise CodeWikiCompilationError(
                     f"code relation evidence is empty: {relation.relation_id}"
                 )
+    return texts
 
 
 def _render_source_module_page(
@@ -257,6 +259,7 @@ def _render_source_module_page(
     outgoing: tuple[ArchitectureEdge, ...],
     relations_by_id: dict[str, CodeRelation],
     snapshot: CodeIndexSnapshot,
+    source_texts: dict[str, str],
 ) -> str:
     symbols = [symbols_by_id[symbol_id] for symbol_id in module.symbol_ids]
     source_ids = tuple(sorted({symbol.location.source_id for symbol in symbols}))
@@ -293,6 +296,8 @@ def _render_source_module_page(
         outgoing,
         relations_by_id,
         set(source_ids),
+        symbols_by_id,
+        source_texts,
     )
     lines.extend(["## Verified symbols", ""])
     for index, symbol in enumerate(symbols, start=1):
@@ -363,6 +368,8 @@ def _append_source_architecture(
     outgoing: tuple[ArchitectureEdge, ...],
     relations_by_id: dict[str, CodeRelation],
     source_ids: set[str],
+    symbols_by_id: dict[str, CodeSymbol],
+    source_texts: dict[str, str],
 ) -> tuple[tuple[str, CodeLocation], ...]:
     if not outgoing:
         return ()
@@ -381,8 +388,6 @@ def _append_source_architecture(
     lines.extend(["```", "", "## Verified dependencies", ""])
     citations: list[tuple[str, CodeLocation]] = []
     for edge in outgoing:
-        target = modules_by_id[edge.target_module_id]
-        references: list[str] = []
         for relation_id in edge.relation_ids:
             relation = relations_by_id.get(relation_id)
             if relation is None or relation.source_symbol_id not in module.symbol_ids:
@@ -395,14 +400,15 @@ def _append_source_architecture(
                     f"architecture evidence is not owned by its source module: {relation_id}"
                 )
             label = f"relation-{relation_id}"
-            references.append(f"[^{label}]")
             citations.append((label, evidence))
-        lines.append(
-            f"- `{edge.type.value}` → "
-            f"[{target.title}]({_relative_link(module.wiki_path, target.wiki_path)}) "
-            f"({len(edge.relation_ids)} verified relation"
-            f"{'s' if len(edge.relation_ids) != 1 else ''}) " + " ".join(references)
-        )
+            source_symbol = symbols_by_id[relation.source_symbol_id]
+            target_symbol = symbols_by_id[relation.target_symbol_id]
+            evidence_quote = _excerpt(source_texts, evidence)
+            lines.append(
+                f"- `{source_symbol.qualified_name} -> {target_symbol.qualified_name}` "
+                f"({relation.type.value}): "
+                f"{json.dumps(evidence_quote, ensure_ascii=False)} [^{label}]"
+            )
     lines.append("")
     return tuple(citations)
 
