@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "name": "MemoryForge v0.2.1 external Code Wiki sources",
+  "repositories": [
+    {
+      "name": "click",
+      "remote_url": "https://github.com/pallets/click.git",
+      "commit": "00e592cea702e0b2caa0dee42489fdb1c22cd845",
+      "license": "BSD-3-Clause",
+      "license_path": "LICENSE.txt",
+      "license_sha256": "9a8ad106a394e853bfe21f42f4e72d592819a22805d991b5f3275029292b658d",
+      "language": "python",
+      "code_paths": ["src/click"],
+      "expected_source_count": 17
+    },
+    {
+      "name": "cobra",
+      "remote_url": "https://github.com/spf13/cobra.git",
+      "commit": "adbc8813901bba65827259daa8e22ff94ec1f30e",
+      "license": "Apache-2.0",
+      "license_path": "LICENSE.txt",
+      "license_sha256": "5e3400b93bbb099e83e52bab885e7441750673c21f97988ca3f1240639b63283",
+      "language": "go",
+      "code_paths": ["."],
+      "expected_source_count": 36
+    },
+    {
+      "name": "zod",
+      "remote_url": "https://github.com/colinhacks/zod.git",
+      "commit": "912f0f51b0ced654d0069741e7160834dca742ee",
+      "license": "MIT",
+      "license_path": "LICENSE",
+      "license_sha256": "3f1189b28e3866e0d979968d466b78f813f76827cfdca1fbb124cc0a5c8841f8",
+      "language": "typescript",
+      "code_paths": ["packages/zod/src/v4/core"],
+      "expected_source_count": 34
+    }
+  ]
+}

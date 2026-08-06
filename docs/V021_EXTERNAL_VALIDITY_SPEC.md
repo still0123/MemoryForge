@@ -60,6 +60,9 @@ CI、依赖和发布链路。
 仓库必须先通过许可证、固定 Commit、文件规模和生成目录审计。每个仓库只选择明确源码子目录，
 排除 vendor、build、dist、generated 和 fixture 快照。
 
+固定 Commit、许可证哈希、源码路径与文件数见
+`demo/evaluation/external_code_wiki_sources_v021.json`。
+
 每个仓库至少冻结：
 
 - 20 个 Symbol expectation；
