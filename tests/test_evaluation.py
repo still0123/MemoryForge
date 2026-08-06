@@ -337,6 +337,19 @@ def test_repository_aware_source_matching_rejects_same_path_from_wrong_repositor
     assert not evaluation_module._repository_paths_isolated(wrong, expected)
 
 
+def test_repository_isolation_does_not_duplicate_source_recall() -> None:
+    repository = "a" * 64
+    expected = {(repository, "expected.md")}
+    wrong_path_same_repository = {(repository, "other.md")}
+
+    assert not evaluation_module._sources_recalled(
+        wrong_path_same_repository,
+        expected,
+        require_all=True,
+    )
+    assert evaluation_module._repository_paths_isolated(wrong_path_same_repository, expected)
+
+
 def test_code_wiki_fact_wrapper_is_grounded_by_its_canonical_code() -> None:
     quote = (
         "`mgr.ANASMgr` (struct): "

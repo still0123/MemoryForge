@@ -454,8 +454,6 @@ def _repository_paths_isolated(
     actual_sources: set[SourceKey],
     expected_sources: set[SourceKey],
 ) -> bool:
-    if not _sources_recalled(actual_sources, expected_sources, require_all=False):
-        return False
     for actual_repository, actual_path in actual_sources:
         expected_repositories = {
             expected_repository
