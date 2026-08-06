@@ -49,6 +49,7 @@ def build_summary(results: dict[str, Path]) -> dict[str, Any]:
     per_suite = []
     failures = []
     classification_counts: Counter[str] = Counter()
+    macro_values: dict[str, list[float]] = {name: [] for name in MACRO_METRICS}
     total_cases = 0
     for alias in EXPECTED_RESULTS:
         path = results[alias]
@@ -57,6 +58,12 @@ def build_summary(results: dict[str, Path]) -> dict[str, Any]:
         metrics = payload["memoryforge"]
         cases = payload["cases"]
         total_cases += len(cases)
+        for metric in MACRO_METRICS:
+            if metric == "repository_path_isolation_accuracy" and not any(
+                case["memoryforge"]["expected_repository_ids"] for case in cases
+            ):
+                continue
+            macro_values[metric].append(float(metrics[metric]))
         for case in cases:
             classification = str(case["memoryforge"]["error_classification"])
             classification_counts[classification] += 1
@@ -86,13 +93,7 @@ def build_summary(results: dict[str, Path]) -> dict[str, Any]:
                 "error_classification_counts": metrics["error_classification_counts"],
             }
         )
-    macro = {
-        name: round(
-            sum(float(suite["metrics"][name]) for suite in per_suite) / len(per_suite),
-            1,
-        )
-        for name in MACRO_METRICS
-    }
+    macro = {name: round(sum(values) / len(values), 1) for name, values in macro_values.items()}
     confirmation = REPO_ROOT / "demo/evaluation/learn_claude_code_qa_confirm_v031.json"
     return {
         "schema_version": 1,
@@ -101,6 +102,7 @@ def build_summary(results: dict[str, Path]) -> dict[str, Any]:
         "evaluated_case_count": total_cases,
         "failed_case_count": len(failures),
         "macro_metrics": macro,
+        "macro_metric_suite_counts": {name: len(values) for name, values in macro_values.items()},
         "error_classification_counts": dict(sorted(classification_counts.items())),
         "per_suite": per_suite,
         "failures": failures,
