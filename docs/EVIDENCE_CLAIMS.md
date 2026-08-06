@@ -9,7 +9,8 @@
 | 完整测试、Ruff、Mypy、四矩阵 CI 通过 | GitHub Actions `31074527750` 与最终发布 PR | 不代表生产流量验证 |
 | 开发与构建依赖可冻结重放 | [`constraints/dev.txt`](../constraints/dev.txt)，SHA256 `48debebcfd2da302201688e0582c676cb571d66e96cd7a2a2e0654f49a544571` | 仅覆盖声明的平台与 Python 版本 |
 | Wheel 和 sdist 可独立安装 | tag workflow 与 [`run_release_check.py`](../demo/run_release_check.py) | 本地预演完成；正式 SHA 等 tag workflow |
-| Release 产物有 attestation 和回下载校验 | [release workflow](../.github/workflows/release.yml) | 创建 `v0.2.1` 后产生真实远端证据 |
+| Release 产物有 SHA256 和回下载校验 | [release workflow](../.github/workflows/release.yml) | tag workflow 产生真实远端证据 |
+| 公开仓库 Release 产物有 GitHub attestation | 同上 | 个人私有仓库不提供该功能，provenance 明确标记 N/A |
 
 ## 代码 Wiki
 

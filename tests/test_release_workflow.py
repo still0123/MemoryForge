@@ -26,6 +26,8 @@ def test_release_workflow_keeps_the_tag_and_artifact_contract() -> None:
         "PIP_CONSTRAINT:",
         "pip install hatchling",
         "--no-build-isolation dist/memoryforge-*.tar.gz",
+        "github.event.repository.visibility == 'public'",
+        "not_applicable_private_repository",
         "actions/attest-build-provenance@v3",
         "gh release upload",
         "gh release download",

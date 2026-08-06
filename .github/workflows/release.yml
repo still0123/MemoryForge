@@ -57,6 +57,7 @@ jobs:
         env:
           RELEASE_TAG: ${{ github.ref_name }}
           RELEASE_COMMIT: ${{ github.sha }}
+          REPOSITORY_VISIBILITY: ${{ github.event.repository.visibility }}
         run: |
           python - <<'PY'
           import hashlib
@@ -75,6 +76,11 @@ jobs:
               "sdist": sdist.name,
               "sdist_sha256": hashlib.sha256(sdist.read_bytes()).hexdigest(),
               "sdist_clean_room": True,
+              "attestation": (
+                  "required"
+                  if os.environ["REPOSITORY_VISIBILITY"] == "public"
+                  else "not_applicable_private_repository"
+              ),
           }
           provenance_path.write_text(json.dumps(provenance, indent=2) + "\n")
           PY
@@ -83,7 +89,9 @@ jobs:
             sha256sum memoryforge-*.whl memoryforge-*.tar.gz release-provenance.json \
               > SHA256SUMS
           )
-      - uses: actions/attest-build-provenance@v3
+      - name: Attest public repository artifacts
+        if: github.event.repository.visibility == 'public'
+        uses: actions/attest-build-provenance@v3
         with:
           subject-path: |
             dist/memoryforge-*.whl
