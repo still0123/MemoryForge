@@ -81,5 +81,29 @@ Runner 会校验 HEAD、origin 和许可证哈希。任一冻结标签、Citatio
 - 100% 只表示冻结的 60/45/15 条人工正样本全部命中，不能外推为全仓 precision 或 recall；
 - 本轮不含负 Relation 标签，因此不宣称 Relation precision；
 - Cobra 的 `.` 选择包含仓库测试文件；这是 manifest 明示范围，不代表生产源码专属结果；
-- 本轮未改动上游仓库，不测单文件增量页面比例；
-- 性能 profile、增量门禁和第二套文档评测属于后续 Phase。
+- 第二套文档评测属于后续 Phase。
+
+## 性能与单文件更新
+
+在 `d90a129` 上，每仓从空 Workspace 运行 3 次，随后在临时 detached worktree 中给一个选定
+Source 增加一个合成函数并提交。计时不包含生成该 Git Commit 的耗时；未清空操作系统文件
+缓存。结果取中位数：
+
+| 仓库 | 冷启动 | 单文件更新 | 更新/冷启动 | 峰值 RSS | 变化页面占比 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Click | 6.20s | 6.71s | 108.2% | 85.0 MiB | 5.88% |
+| Cobra | 5.51s | 5.57s | 101.0% | 102.6 MiB | 50.00% |
+| Zod | 5.40s | 6.40s | 118.5% | 99.6 MiB | 2.94% |
+
+最大仓库按 Symbol 数选择 Zod。其单文件更新超过冷启动的 50%，但未超过 10 秒，因此未同时
+触发预注册缓存门禁，决策为 `NO_CHANGE`。未增加文件级缓存。
+
+Cobra 只有 2 个当前 Module，单页变化导致 50% 页面占比，未通过 25% 增量页面门禁。这是当前
+模块粒度的真实负结果，不改写为成功。
+
+完整性能 Evidence：
+[`external_code_wiki_profile_v021.json`](../demo/results/external_code_wiki_profile_v021.json)。
+
+```text
+SHA256 cc3d7dcbbb47350bfe171b248646fda4fe29bfc8152346e98f0dc7f21661a1fa
+```
