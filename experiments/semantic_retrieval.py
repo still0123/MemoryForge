@@ -22,7 +22,6 @@ from memoryforge.evaluation import EvaluationCase, EvaluationSuite
 from memoryforge.manifests import SourceManifestStore
 from memoryforge.query import (
     _candidate_pages,
-    _expanded_question_terms,
     _has_many_index_routes,
     _page_citations,
     _safe_wiki_page,
@@ -150,7 +149,7 @@ def run_experiment(
 
 
 def _current_pages(workspace_root: Path, case: EvaluationCase, max_pages: int) -> list[Path]:
-    question_terms = _expanded_question_terms(_terms(case.question))
+    question_terms = _terms(case.question)
     if not question_terms:
         return []
     trace: list[dict[str, str]] = []

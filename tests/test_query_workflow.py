@@ -1329,19 +1329,6 @@ def test_terms_match_camel_case_identifier_suffixes() -> None:
     assert "runneradapter" in question_terms & fact_terms
 
 
-def test_expanded_question_terms_adds_english_inflections() -> None:
-    terms = query_module._terms("installs fixes rewriting formatting previewed classes")
-
-    assert {
-        "install",
-        "fix",
-        "rewrite",
-        "format",
-        "preview",
-        "class",
-    } <= query_module._expanded_question_terms(terms)
-
-
 def test_ask_prefers_a_camel_case_identifier_over_project_background(
     tmp_path: Path,
     monkeypatch,
