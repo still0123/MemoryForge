@@ -22,3 +22,6 @@ logs/
 *.pem
 *.p12
 *.pfx
+
+# The local web showcase is maintained separately from the core package.
+showcase/
