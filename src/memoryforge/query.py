@@ -156,6 +156,8 @@ def answer_question(
 
     raw_matches: list[tuple[frozenset[str], bool, str, CitationPayload]] = []
     raw_candidate_matches: list[tuple[frozenset[str], bool, str, CitationPayload]] = []
+    page_ranks: dict[str, int] = {}
+    local_morphology_pages: set[str] = set()
 
     for page_rank, page in enumerate(
         _candidate_pages(
@@ -169,14 +171,30 @@ def answer_question(
         )
     ):
         content = page.read_text(encoding="utf-8")
-        trace.append({"level": "L1", "artifact": str(page.relative_to(workspace_root))})
+        page_path = str(page.relative_to(workspace_root))
+        page_ranks[page_path] = page_rank
+        prefix = content[:400]
+        code_page = (
+            'title: "Code:' in prefix
+            or 'title: "Code module:' in prefix
+            or "generated: code_wiki" in prefix
+            or "generated: code_module_overview" in prefix
+        )
+        if not any(_CJK.fullmatch(term) for term in question_terms) and not code_page:
+            local_morphology_pages.add(page_path)
+        trace.append({"level": "L1", "artifact": page_path})
         for index, citation in enumerate(_page_citations(content)):
-            overlap = (
+            exact_overlap = (
                 _section_matching_terms(question_terms, citation)
                 if use_section_routes
                 else _matching_terms(question_terms, citation)
             )
-            page_path = str(page.relative_to(workspace_root))
+            overlap = _local_english_matching_terms(
+                question_terms,
+                citation,
+                include_section=use_section_routes,
+                enabled=page_path in local_morphology_pages,
+            )
             raw_candidate_matches.append((frozenset(overlap), index == 0, page_path, citation))
             has_cjk_terms = any(_CJK.fullmatch(term) for term in question_terms)
             required_overlap = 1 if len(question_terms) == 1 else 2
@@ -190,6 +208,8 @@ def answer_question(
                 if len(overlap) >= 2 and any(not _CJK.fullmatch(term) for term in overlap):
                     required_overlap = 2
             sufficient_match = len(overlap) >= required_overlap
+            if page_path in local_morphology_pages and overlap - exact_overlap:
+                sufficient_match = True
             if "字段" in base_question_terms and overlap & focus_terms:
                 sufficient_match = True
             if "方法" in base_question_terms and overlap & identifier_terms:
@@ -216,6 +236,8 @@ def answer_question(
     matches = _rank_matches(
         raw_matches,
         question_terms=question_terms,
+        page_ranks=page_ranks,
+        local_morphology_pages=local_morphology_pages,
         focus_terms=focus_terms,
         prioritize_focus=bool(yes_no_focus_terms and {"依赖", "外部"} <= base_question_terms),
         prefer_environment_assignments=prefer_environment_assignments,
@@ -225,6 +247,8 @@ def answer_question(
     candidate_matches = _rank_matches(
         raw_candidate_matches,
         question_terms=question_terms,
+        page_ranks=page_ranks,
+        local_morphology_pages=local_morphology_pages,
         focus_terms=focus_terms,
         prioritize_focus=bool(yes_no_focus_terms and {"依赖", "外部"} <= base_question_terms),
         prefer_environment_assignments=prefer_environment_assignments,
@@ -762,13 +786,18 @@ def _rank_matches(
     matches: list[tuple[frozenset[str], bool, str, CitationPayload]],
     *,
     question_terms: set[str],
+    page_ranks: dict[str, int] | None = None,
+    local_morphology_pages: set[str] | None = None,
     focus_terms: set[str] | None = None,
     prioritize_focus: bool = False,
     prefer_environment_assignments: bool = False,
     prefer_failure_facts: bool = False,
     prefer_code_modules: bool = False,
 ) -> list[tuple[tuple[int, ...], str, CitationPayload]]:
+    page_ranks = page_ranks or {}
+    local_morphology_pages = local_morphology_pages or set()
     focus_terms = focus_terms or set()
+    page_aware = bool(page_ranks) and not any(_CJK.fullmatch(term) for term in question_terms)
     frequencies = Counter(
         term
         for overlap, _summary, _page_path, _citation in matches
@@ -782,7 +811,11 @@ def _rank_matches(
         distinctive_non_cjk_terms = [
             term for term in non_cjk_terms if frequencies[term] <= max(1, len(matches) // 2)
         ]
-        direct_overlap = _direct_matching_terms(question_terms, citation)
+        direct_overlap = _local_english_matching_terms(
+            question_terms,
+            citation,
+            enabled=page_path in local_morphology_pages,
+        )
         module_path = _citation_module_path(citation)
         module_section_score = (
             3
@@ -811,6 +844,8 @@ def _rank_matches(
                 and not citation["quote"].lstrip().startswith("|")
             ),
             len(focus_overlap) if prioritize_focus else 0,
+            len(direct_overlap) if page_aware else 0,
+            -page_ranks.get(page_path, len(page_ranks)) if page_aware else 0,
             int(
                 summary
                 and not (
@@ -990,6 +1025,45 @@ def _section_matching_terms(question_terms: set[str], citation: CitationPayload)
 
 def _direct_matching_terms(question_terms: set[str], citation: CitationPayload) -> set[str]:
     return (question_terms & _terms(citation["quote"])) - _QUESTION_NOISE_TERMS
+
+
+def _local_english_matching_terms(
+    question_terms: set[str],
+    citation: CitationPayload,
+    *,
+    include_section: bool = False,
+    enabled: bool,
+) -> set[str]:
+    citation_terms = _citation_terms(citation) if include_section else _terms(citation["quote"])
+    exact = (question_terms & citation_terms) - _QUESTION_NOISE_TERMS
+    if not enabled:
+        return exact
+    citation_forms = {form for term in citation_terms for form in _local_english_forms(term)}
+    return exact | {
+        term
+        for term in question_terms - _QUESTION_NOISE_TERMS
+        if _local_english_forms(term) & citation_forms
+    }
+
+
+def _local_english_forms(term: str) -> set[str]:
+    if not term.isascii() or not term.isalpha():
+        return {term}
+    forms = {term}
+    if len(term) > 4 and term.endswith("ies"):
+        forms.add(f"{term[:-3]}y")
+    elif len(term) > 4 and term.endswith("es"):
+        forms.update((term[:-1], term[:-2]))
+    elif len(term) > 3 and term.endswith("s") and not term.endswith("ss"):
+        forms.add(term[:-1])
+    if len(term) > 4 and term.endswith("ed"):
+        forms.update((term[:-2], term[:-1]))
+    if len(term) > 5 and term.endswith("ing"):
+        stem = term[:-3]
+        forms.update((stem, f"{stem}e"))
+        if len(stem) > 2 and stem[-1] == stem[-2]:
+            forms.add(stem[:-1])
+    return forms
 
 
 def _has_direct_evidence(question_terms: set[str], citation: CitationPayload) -> bool:
