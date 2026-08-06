@@ -122,10 +122,11 @@ Zod 的变化页面占比分别为 5.88% 和 2.94%，Cobra 因当前仅 2 个 Mo
 
 v0.2.0 的 30 题基线不得回退。新题集允许负面结果，但 Citation integrity 必须为 100%。
 
-当前状态：Click 公开文档 development/holdout 各 10 题已从 clean Commit `fbc86e7` 运行。
-两套 split 的 answer accuracy 均为 10.0%，Source recall@3 分别为 50.0% 和 25.0%，
-Citation grounding 均为 100.0%。原 AgentSkill-Eval 30 题核心指标 delta 全为 0。holdout
-已揭盲，本阶段不据此修改查询逻辑；完整结果见 `docs/CLICK_DOCS_BENCHMARK.md`。
+当前状态：Click 公开文档 development/holdout 各 10 题已冻结并在 clean Commit `293bd8f`
+复跑。Answer accuracy 分别为 10.0% 和 0.0%，Source recall@3 均为 0.0%，Citation grounding
+均为 100.0%。原 AgentSkill-Eval 30 题 Answer/Citation 为 100%，Source recall@3 保持
+v0.2.0 的 96.2%，其余核心指标无回退。holdout 已揭盲，本阶段不据此调参；完整结果见
+`docs/CLICK_DOCS_BENCHMARK.md`。
 
 ## 8. Phase 5：发布自动化
 

@@ -30,9 +30,9 @@ CODE_METRICS = (
     "deterministic_replay",
 )
 PUBLIC_METRICS = {
-    "answer_accuracy": 96.7,
+    "answer_accuracy": 100.0,
     "source_recall_at_3": 96.2,
-    "citation_grounding_accuracy": 96.2,
+    "citation_grounding_accuracy": 100.0,
     "multi_source_coverage": 100.0,
     "abstention_accuracy": 100.0,
 }

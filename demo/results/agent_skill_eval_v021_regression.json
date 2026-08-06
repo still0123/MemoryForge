@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "memoryforge_commit": "fbc86e74850da97b14bfd54ce6f1976b922e97e4",
+  "memoryforge_commit": "293bd8f5fa2d1de9dfba75989205fdc7930b371a",
   "source_repositories": [
     {
       "repository_id": "db29dfd06f0a2853c9764f1393b680d6a592b1a5771a012b6e1387fc17aac597",
@@ -26,7 +26,8 @@
         "source_id": "c795a256eb094f3c07f2f7e7a5eac92c36f9df5a1186d11e2eca0d0cd3abc2aa",
         "source_version": 29,
         "locator": "chars:25-183",
-        "quote": "本地实验引擎把冻结的 `ExperimentManifest`、Variant、Case 和运行时配置展开成可审计的 PairBlock/Run，并按 PairBlock 内预先随机化的顺序调用 Runner Adapter。它是单机 P0 的控制面，不依赖数据库服务、Redis、Celery 或 Web API。"
+        "quote": "本地实验引擎把冻结的 `ExperimentManifest`、Variant、Case 和运行时配置展开成可审计的 PairBlock/Run，并按 PairBlock 内预先随机化的顺序调用 Runner Adapter。它是单机 P0 的控制面，不依赖数据库服务、Redis、Celery 或 Web API。",
+        "section_path": "P0 本地配对实验引擎 / 目标与边界"
       }
     ],
     "trace": [
@@ -48,7 +49,7 @@
       },
       {
         "level": "L1",
-        "artifact": "wiki/pages/ad1f1f6377f66150bff8584da873559ae822efb10a4e9709ee8a402ada67882f.md"
+        "artifact": "wiki/pages/50a5c402d2d94c8bea643ea4611da6e142e84130040123407651f4b174ecde2a.md"
       },
       {
         "level": "L2",
@@ -64,14 +65,14 @@
     "suite": "AgentSkill-Eval public documentation",
     "case_count": 30,
     "memoryforge": {
-      "answer_accuracy": 96.7,
+      "answer_accuracy": 100.0,
       "source_recall_at_3": 96.2,
-      "citation_grounding_accuracy": 96.2,
+      "citation_grounding_accuracy": 100.0,
       "multi_source_coverage": 100.0,
       "abstention_accuracy": 100.0,
       "average_wiki_pages_read": 3.0,
       "average_raw_sources_read": 0.0,
-      "average_evidence_characters": 143.17
+      "average_evidence_characters": 159.2
     },
     "raw_fts_baseline": {
       "expected_source_recall_at_3": 57.7,
@@ -271,11 +272,13 @@
           "abstention_correct": true,
           "wiki_pages_read": 3,
           "raw_sources_read": 0,
-          "evidence_characters": 131,
+          "evidence_characters": 338,
           "wiki_pages": [
-            "wiki/pages/7f8151ac637e6dcf6ecbf0ef71c23891290bc9336b55f56be084309dd9ac24d2.md"
+            "wiki/pages/7f8151ac637e6dcf6ecbf0ef71c23891290bc9336b55f56be084309dd9ac24d2.md",
+            "wiki/pages/82f5391fa1380c7d23b899cd33e38e924bf952b09c8211715dda568915a30092.md"
           ],
           "cited_source_paths": [
+            "docs/observed-promotion-workflow.md",
             "docs/promotion-workflow-integration.md"
           ]
         },
@@ -750,8 +753,8 @@
           "raw_sources_read": 0,
           "evidence_characters": 300,
           "wiki_pages": [
-            "wiki/pages/b41d0d9a203daa2b4a0085b97439fc424b59d65e2907b2248a03c5944edbfbfd.md",
-            "wiki/pages/c795a256eb094f3c07f2f7e7a5eac92c36f9df5a1186d11e2eca0d0cd3abc2aa.md"
+            "wiki/pages/c795a256eb094f3c07f2f7e7a5eac92c36f9df5a1186d11e2eca0d0cd3abc2aa.md",
+            "wiki/pages/b41d0d9a203daa2b4a0085b97439fc424b59d65e2907b2248a03c5944edbfbfd.md"
           ],
           "cited_source_paths": [
             "docs/local-experiment-engine.md",
@@ -941,17 +944,17 @@
         "memoryforge": {
           "answer_correct": true,
           "citation_grounded": true,
-          "expected_sources_recalled": true,
-          "all_expected_sources_cited": true,
+          "expected_sources_recalled": false,
+          "all_expected_sources_cited": false,
           "abstention_correct": true,
           "wiki_pages_read": 3,
           "raw_sources_read": 0,
-          "evidence_characters": 90,
+          "evidence_characters": 63,
           "wiki_pages": [
-            "wiki/pages/e87c5fbf3b7b952213cc6387fb7e96e6b1b0fa7f505ed8f717dd8313afe52c6c.md"
+            "wiki/pages/638d936fbb9d0f657de7893f7365ae1c1f6e2fb33c0b99f92914c3e98cef3437.md"
           ],
           "cited_source_paths": [
-            "docs/evolution-timeline-dashboard.md"
+            "docs/dashboard-mvp.md"
           ]
         },
         "raw_fts_baseline": {
@@ -975,16 +978,20 @@
         "category": "paraphrase",
         "question": "怎样核验实验统计不是模拟出来的？",
         "memoryforge": {
-          "answer_correct": false,
-          "citation_grounded": false,
-          "expected_sources_recalled": false,
-          "all_expected_sources_cited": false,
-          "abstention_correct": false,
+          "answer_correct": true,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
           "wiki_pages_read": 3,
           "raw_sources_read": 0,
-          "evidence_characters": 0,
-          "wiki_pages": [],
-          "cited_source_paths": []
+          "evidence_characters": 189,
+          "wiki_pages": [
+            "wiki/pages/a19b4bd7fa32bf164a474323bd6186a66d9ef639a1f10905423bbe8d82b33291.md"
+          ],
+          "cited_source_paths": [
+            "docs/statistics-and-reports.md"
+          ]
         },
         "raw_fts_baseline": {
           "expected_source_in_top_3": false,
@@ -1086,11 +1093,13 @@
           "abstention_correct": true,
           "wiki_pages_read": 3,
           "raw_sources_read": 0,
-          "evidence_characters": 120,
+          "evidence_characters": 232,
           "wiki_pages": [
-            "wiki/pages/a0c98300c8c29d3393560a9ad7c6455541cddfa354546d6ceb5731b187ff5cfa.md"
+            "wiki/pages/a0c98300c8c29d3393560a9ad7c6455541cddfa354546d6ceb5731b187ff5cfa.md",
+            "wiki/pages/4ae5b91eeb70634845b6c72f82a8f04cb183ebeb7832bea043918587d6b6d6c2.md"
           ],
           "cited_source_paths": [
+            "docs/baseline-opportunity-screening.md",
             "docs/evidence-and-replay.md"
           ]
         },

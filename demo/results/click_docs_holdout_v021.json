@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "memoryforge_commit": "fbc86e74850da97b14bfd54ce6f1976b922e97e4",
+  "memoryforge_commit": "293bd8f5fa2d1de9dfba75989205fdc7930b371a",
   "source_repositories": [
     {
       "repository_id": "df3e9a7cc5cdbfd38722df9b0bd3ac96c0e59c752a1db087dd20644a8933b372",
@@ -26,7 +26,8 @@
         "source_id": "30fd67991ddd442cb09f3635dbc9353813534c7bd6b73df05abf2601c8ceb7c3",
         "source_version": 8,
         "locator": "chars:65-327",
-        "quote": "Commands and Groups are the building blocks for Click applications. {class}`Command` wraps a function to make it into a cli command. {class}`Group` wraps Commands and Groups to make them into applications. {class}`Context` is how groups and commands communicate."
+        "quote": "Commands and Groups are the building blocks for Click applications. {class}`Command` wraps a function to make it into a cli command. {class}`Group` wraps Commands and Groups to make them into applications. {class}`Context` is how groups and commands communicate.",
+        "section_path": "Basic Commands, Groups, Context"
       }
     ],
     "trace": [
@@ -64,14 +65,14 @@
     "suite": "Click public documentation holdout split v0.2.1",
     "case_count": 10,
     "memoryforge": {
-      "answer_accuracy": 10.0,
-      "source_recall_at_3": 25.0,
+      "answer_accuracy": 0.0,
+      "source_recall_at_3": 0.0,
       "citation_grounding_accuracy": 100.0,
       "multi_source_coverage": 0.0,
       "abstention_accuracy": 0.0,
       "average_wiki_pages_read": 3.0,
       "average_raw_sources_read": 0.0,
-      "average_evidence_characters": 304.6
+      "average_evidence_characters": 228.0
     },
     "raw_fts_baseline": {
       "expected_source_recall_at_3": 62.5,
@@ -120,19 +121,19 @@
         "category": "single_hop",
         "question": "What happens to an out-of-range value when an IntRange enables clamp mode?",
         "memoryforge": {
-          "answer_correct": true,
+          "answer_correct": false,
           "citation_grounded": true,
-          "expected_sources_recalled": true,
-          "all_expected_sources_cited": true,
+          "expected_sources_recalled": false,
+          "all_expected_sources_cited": false,
           "abstention_correct": true,
           "wiki_pages_read": 3,
           "raw_sources_read": 0,
-          "evidence_characters": 301,
+          "evidence_characters": 163,
           "wiki_pages": [
-            "wiki/pages/adf14b0e27a5091d493fec46f30f5718dc83be7dd91d568d66157dc5e4bec3cc.md"
+            "wiki/pages/920f3713bd863da0fb6c8e5b38258621366854ff4a0c1ebd3b6eed67e0a5373b.md"
           ],
           "cited_source_paths": [
-            "docs/parameter-types.md"
+            "docs/prompts.md"
           ]
         },
         "raw_fts_baseline": {
@@ -199,12 +200,12 @@
           "abstention_correct": true,
           "wiki_pages_read": 3,
           "raw_sources_read": 0,
-          "evidence_characters": 217,
+          "evidence_characters": 70,
           "wiki_pages": [
-            "wiki/pages/de78bb84f30baf06a4b4f1fe9226f0f8aefcf68e79f3afcf54da5c8236f7a5fa.md"
+            "wiki/pages/676326574cbc87a7244585497a3852e168b6252b0f53c0a4dee7d50465b7f7e3.md"
           ],
           "cited_source_paths": [
-            "docs/options.md"
+            "docs/arguments.md"
           ]
         },
         "raw_fts_baseline": {
@@ -235,12 +236,12 @@
           "abstention_correct": true,
           "wiki_pages_read": 3,
           "raw_sources_read": 0,
-          "evidence_characters": 416,
+          "evidence_characters": 95,
           "wiki_pages": [
-            "wiki/pages/676326574cbc87a7244585497a3852e168b6252b0f53c0a4dee7d50465b7f7e3.md"
+            "wiki/pages/e3ffd4d1e1eeed6544bfaa49dde2b7912790b2bf86c841d901f443587b98ae59.md"
           ],
           "cited_source_paths": [
-            "docs/arguments.md"
+            "docs/why.md"
           ]
         },
         "raw_fts_baseline": {
@@ -266,17 +267,17 @@
         "memoryforge": {
           "answer_correct": false,
           "citation_grounded": true,
-          "expected_sources_recalled": true,
-          "all_expected_sources_cited": true,
+          "expected_sources_recalled": false,
+          "all_expected_sources_cited": false,
           "abstention_correct": true,
           "wiki_pages_read": 3,
           "raw_sources_read": 0,
-          "evidence_characters": 353,
+          "evidence_characters": 193,
           "wiki_pages": [
-            "wiki/pages/30fd67991ddd442cb09f3635dbc9353813534c7bd6b73df05abf2601c8ceb7c3.md"
+            "wiki/pages/2be700a1bccecdf4005bcf0b5d5e7473394f2819e7ed2de77824758592d1c311.md"
           ],
           "cited_source_paths": [
-            "docs/commands-and-groups.md"
+            "docs/utils.md"
           ]
         },
         "raw_fts_baseline": {
@@ -309,8 +310,8 @@
           "raw_sources_read": 0,
           "evidence_characters": 401,
           "wiki_pages": [
-            "wiki/pages/920f3713bd863da0fb6c8e5b38258621366854ff4a0c1ebd3b6eed67e0a5373b.md",
-            "wiki/pages/f7f7bb360f22d7a56734fde92a14b8953521624c658329e4dca13e4a753699fa.md"
+            "wiki/pages/f7f7bb360f22d7a56734fde92a14b8953521624c658329e4dca13e4a753699fa.md",
+            "wiki/pages/920f3713bd863da0fb6c8e5b38258621366854ff4a0c1ebd3b6eed67e0a5373b.md"
           ],
           "cited_source_paths": [
             "docs/extending-click.md",

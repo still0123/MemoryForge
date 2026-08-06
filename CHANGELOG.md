@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- 合并多仓库 Code Wiki、会话上下文和大仓库刷新改进；
+- 受限修复中文否定同义改写的 Citation 选择，不放宽无答案问题；
+- 固定 Click 20 题外部评测：Citation grounding 100%，但 Answer accuracy 仅 10%/0%，
+  Source recall@3 为 0%，保留为外部有效性负结果；
+- 原 AgentSkill-Eval 30 题 Answer/Citation 为 100%，Source recall@3 保持 96.2%。
+
 ## v0.2.0 — 2026-08-06
 
 以可信 Code Wiki、稳定发布和独立复现为重点的第二个公开版本。

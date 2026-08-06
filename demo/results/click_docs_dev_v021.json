@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "memoryforge_commit": "fbc86e74850da97b14bfd54ce6f1976b922e97e4",
+  "memoryforge_commit": "293bd8f5fa2d1de9dfba75989205fdc7930b371a",
   "source_repositories": [
     {
       "repository_id": "df3e9a7cc5cdbfd38722df9b0bd3ac96c0e59c752a1db087dd20644a8933b372",
@@ -26,7 +26,8 @@
         "source_id": "30fd67991ddd442cb09f3635dbc9353813534c7bd6b73df05abf2601c8ceb7c3",
         "source_version": 8,
         "locator": "chars:65-327",
-        "quote": "Commands and Groups are the building blocks for Click applications. {class}`Command` wraps a function to make it into a cli command. {class}`Group` wraps Commands and Groups to make them into applications. {class}`Context` is how groups and commands communicate."
+        "quote": "Commands and Groups are the building blocks for Click applications. {class}`Command` wraps a function to make it into a cli command. {class}`Group` wraps Commands and Groups to make them into applications. {class}`Context` is how groups and commands communicate.",
+        "section_path": "Basic Commands, Groups, Context"
       }
     ],
     "trace": [
@@ -65,13 +66,13 @@
     "case_count": 10,
     "memoryforge": {
       "answer_accuracy": 10.0,
-      "source_recall_at_3": 50.0,
+      "source_recall_at_3": 0.0,
       "citation_grounding_accuracy": 100.0,
       "multi_source_coverage": 0.0,
       "abstention_accuracy": 0.0,
       "average_wiki_pages_read": 3.0,
       "average_raw_sources_read": 0.0,
-      "average_evidence_characters": 305.0
+      "average_evidence_characters": 300.4
     },
     "raw_fts_baseline": {
       "expected_source_recall_at_3": 75.0,
@@ -158,17 +159,17 @@
         "memoryforge": {
           "answer_correct": false,
           "citation_grounded": true,
-          "expected_sources_recalled": true,
-          "all_expected_sources_cited": true,
+          "expected_sources_recalled": false,
+          "all_expected_sources_cited": false,
           "abstention_correct": true,
           "wiki_pages_read": 3,
           "raw_sources_read": 0,
-          "evidence_characters": 470,
+          "evidence_characters": 79,
           "wiki_pages": [
-            "wiki/pages/3de2ee0c8d8da67e824e8dd44d62ae5130df39f21141b1fc5a21767075c64ae6.md"
+            "wiki/pages/69f8f1b6b7e7a6e8f082b03ad1cdd2f181c9066a5376341afe075b44b106b165.md"
           ],
           "cited_source_paths": [
-            "docs/shell-completion.md"
+            "docs/unicode-support.md"
           ]
         },
         "raw_fts_baseline": {
@@ -194,17 +195,17 @@
         "memoryforge": {
           "answer_correct": false,
           "citation_grounded": true,
-          "expected_sources_recalled": true,
-          "all_expected_sources_cited": true,
+          "expected_sources_recalled": false,
+          "all_expected_sources_cited": false,
           "abstention_correct": true,
           "wiki_pages_read": 3,
           "raw_sources_read": 0,
-          "evidence_characters": 245,
+          "evidence_characters": 217,
           "wiki_pages": [
-            "wiki/pages/5a8a189c3dad44cf57e806c79c81168de2cc0978eb57405824c22a445bee2fc4.md"
+            "wiki/pages/f7f7bb360f22d7a56734fde92a14b8953521624c658329e4dca13e4a753699fa.md"
           ],
           "cited_source_paths": [
-            "docs/testing.md"
+            "docs/extending-click.md"
           ]
         },
         "raw_fts_baseline": {
@@ -230,17 +231,17 @@
         "memoryforge": {
           "answer_correct": false,
           "citation_grounded": true,
-          "expected_sources_recalled": true,
-          "all_expected_sources_cited": true,
+          "expected_sources_recalled": false,
+          "all_expected_sources_cited": false,
           "abstention_correct": true,
           "wiki_pages_read": 3,
           "raw_sources_read": 0,
-          "evidence_characters": 309,
+          "evidence_characters": 258,
           "wiki_pages": [
-            "wiki/pages/676326574cbc87a7244585497a3852e168b6252b0f53c0a4dee7d50465b7f7e3.md"
+            "wiki/pages/226b085f18abffc65aee9ffd4ebd87507785e2cc897f5170ae635f4e20e56795.md"
           ],
           "cited_source_paths": [
-            "docs/arguments.md"
+            "docs/standalone-apps.md"
           ]
         },
         "raw_fts_baseline": {
@@ -266,17 +267,17 @@
         "memoryforge": {
           "answer_correct": false,
           "citation_grounded": true,
-          "expected_sources_recalled": true,
-          "all_expected_sources_cited": true,
+          "expected_sources_recalled": false,
+          "all_expected_sources_cited": false,
           "abstention_correct": true,
           "wiki_pages_read": 3,
           "raw_sources_read": 0,
-          "evidence_characters": 124,
+          "evidence_characters": 209,
           "wiki_pages": [
-            "wiki/pages/920f3713bd863da0fb6c8e5b38258621366854ff4a0c1ebd3b6eed67e0a5373b.md"
+            "wiki/pages/f7f7bb360f22d7a56734fde92a14b8953521624c658329e4dca13e4a753699fa.md"
           ],
           "cited_source_paths": [
-            "docs/prompts.md"
+            "docs/extending-click.md"
           ]
         },
         "raw_fts_baseline": {
@@ -309,8 +310,8 @@
           "raw_sources_read": 0,
           "evidence_characters": 286,
           "wiki_pages": [
-            "wiki/pages/920f3713bd863da0fb6c8e5b38258621366854ff4a0c1ebd3b6eed67e0a5373b.md",
-            "wiki/pages/d6c97d61f80fd80949630f2f89698c6d492cbe5b4724c52e335d3ee437375819.md"
+            "wiki/pages/d6c97d61f80fd80949630f2f89698c6d492cbe5b4724c52e335d3ee437375819.md",
+            "wiki/pages/920f3713bd863da0fb6c8e5b38258621366854ff4a0c1ebd3b6eed67e0a5373b.md"
           ],
           "cited_source_paths": [
             "docs/option-decorators.md",
@@ -346,14 +347,12 @@
           "abstention_correct": true,
           "wiki_pages_read": 3,
           "raw_sources_read": 0,
-          "evidence_characters": 701,
+          "evidence_characters": 1099,
           "wiki_pages": [
-            "wiki/pages/f7f7bb360f22d7a56734fde92a14b8953521624c658329e4dca13e4a753699fa.md",
-            "wiki/pages/e3ffd4d1e1eeed6544bfaa49dde2b7912790b2bf86c841d901f443587b98ae59.md"
+            "wiki/pages/f7f7bb360f22d7a56734fde92a14b8953521624c658329e4dca13e4a753699fa.md"
           ],
           "cited_source_paths": [
-            "docs/extending-click.md",
-            "docs/why.md"
+            "docs/extending-click.md"
           ]
         },
         "raw_fts_baseline": {
@@ -385,12 +384,12 @@
           "abstention_correct": false,
           "wiki_pages_read": 3,
           "raw_sources_read": 0,
-          "evidence_characters": 257,
+          "evidence_characters": 198,
           "wiki_pages": [
-            "wiki/pages/418d116439c0f8dba0509e1696d37144752f83c8970e460b50d593fdba8b88ef.md"
+            "wiki/pages/920f3713bd863da0fb6c8e5b38258621366854ff4a0c1ebd3b6eed67e0a5373b.md"
           ],
           "cited_source_paths": [
-            "docs/entry-points.md"
+            "docs/prompts.md"
           ]
         },
         "raw_fts_baseline": {
