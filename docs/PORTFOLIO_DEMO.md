@@ -48,7 +48,7 @@ init → git-add → git-sync → ingest → review → approve → apply → li
 ```
 
 本次公开基线使用 `AgentSkill-Eval@93f5dc0`，会导入 56 个来源文件，生成 57 个 Wiki 文件，运行
-30 道题。当前结果是：回答准确率 96.7%、Top-3 来源召回率 96.2%、引用落地准确率 96.2%、
+30 道题。当前结果是：回答准确率 100%、Top-3 来源召回率 100%、引用落地准确率 100%、
 拒答准确率 100%。同一题集上的 Raw FTS Top-3 来源召回率为 57.7%，完整方法见
 [公开 Benchmark](BENCHMARK.md)。
 
