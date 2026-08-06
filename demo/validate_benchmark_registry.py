@@ -64,6 +64,7 @@ def validate_registry(path: Path = DEFAULT_REGISTRY) -> dict[str, object]:
 
     qa_case_count = 0
     qa_case_types: set[str] = set()
+    registered_cases: dict[tuple[str, str], set[str]] = {}
     suite_types: set[str] = set()
     evidence_count = 1
     for suite in suites:
@@ -99,9 +100,10 @@ def validate_registry(path: Path = DEFAULT_REGISTRY) -> dict[str, object]:
             if split is None:
                 continue
             _validate_artifact(split, suite_id)
-            case_count, case_types = _suite_cases(split)
+            case_count, case_types, case_ids = _suite_cases(split)
             if case_count != split.get("case_count"):
                 raise ValueError(f"case count mismatch: {suite_id}/{split_name}")
+            registered_cases[(suite_id, split_name)] = case_ids
             if suite_type in {"document_wiki_qa", "code_wiki_qa"}:
                 qa_case_count += case_count
                 qa_case_types.update(case_types)
@@ -127,10 +129,31 @@ def validate_registry(path: Path = DEFAULT_REGISTRY) -> dict[str, object]:
 
     if suite_types != SUITE_TYPES:
         raise ValueError("registry must contain all four benchmark suite types")
+    overlay = registry.get("case_type_overlay")
+    if not isinstance(overlay, dict):
+        raise ValueError("benchmark registry requires a case type overlay")
+    _validate_artifact(overlay, "benchmark-case-types")
+    overlay_payload = json.loads((REPO_ROOT / overlay["path"]).read_text(encoding="utf-8"))
+    mappings = overlay_payload.get("mappings")
+    if not isinstance(mappings, list) or not mappings:
+        raise ValueError("case type overlay requires mappings")
+    mapping_keys = {
+        (mapping.get("suite_id"), mapping.get("split"), mapping.get("case_id"))
+        for mapping in mappings
+    }
+    if len(mapping_keys) != len(mappings):
+        raise ValueError("case type overlay mappings must be unique")
+    for mapping in mappings:
+        key = (mapping.get("suite_id"), mapping.get("split"))
+        if mapping.get("case_id") not in registered_cases.get(key, set()):
+            raise ValueError("case type overlay references an unknown case")
+        qa_case_types.add(str(mapping.get("case_type")))
     if qa_case_count != registry.get("qa_case_count") or not 100 <= qa_case_count <= 140:
         raise ValueError("registered QA case count must stay within 100-140")
     if qa_case_types != set(registry.get("qa_case_types_present", [])):
         raise ValueError("registered QA case types do not match suite contents")
+    if qa_case_types != set(registry.get("qa_case_types_required", [])):
+        raise ValueError("registered QA case types do not cover the required taxonomy")
     return {
         "status": "valid",
         "suite_count": len(suites),
@@ -169,18 +192,21 @@ def _validate_artifact(artifact: dict[str, Any], suite_id: str) -> None:
         raise ValueError(f"registered artifact SHA256 mismatch: {suite_id}")
 
 
-def _suite_cases(split: dict[str, Any]) -> tuple[int, set[str]]:
+def _suite_cases(split: dict[str, Any]) -> tuple[int, set[str], set[str]]:
     artifact = json.loads((REPO_ROOT / split["path"]).read_text(encoding="utf-8"))
     if "cases" in artifact and isinstance(artifact["cases"], list):
-        return len(artifact["cases"]), {
-            str(case["category"]) for case in artifact["cases"] if "category" in case
-        }
+        return (
+            len(artifact["cases"]),
+            {str(case["category"]) for case in artifact["cases"] if "category" in case},
+            {str(case["id"]) for case in artifact["cases"]},
+        )
     source_count = len(artifact["expected_source_paths"])
     return (
         source_count
         + len(artifact["symbols"])
         + len(artifact["relations"])
         + len(artifact["modules"]),
+        set(),
         set(),
     )
 

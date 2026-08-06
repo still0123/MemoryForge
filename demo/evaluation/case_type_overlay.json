@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "suite_id": "benchmark-case-types",
+  "suite_revision": 1,
+  "mappings": [
+    {
+      "suite_id": "code-wiki-qa.learn-claude-code",
+      "split": "development",
+      "case_id": "dev-s01-run-bash-signature",
+      "case_type": "exact_symbol"
+    },
+    {
+      "suite_id": "code-wiki-qa.learn-claude-code",
+      "split": "development",
+      "case_id": "dev-s03-check-permission-signature",
+      "case_type": "exact_symbol"
+    },
+    {
+      "suite_id": "code-wiki-qa.learn-claude-code",
+      "split": "development",
+      "case_id": "dev-s05-todo-write-signature",
+      "case_type": "exact_symbol"
+    },
+    {
+      "suite_id": "code-wiki-qa.learn-claude-code",
+      "split": "development",
+      "case_id": "dev-s06-spawn-subagent-signature",
+      "case_type": "exact_symbol"
+    },
+    {
+      "suite_id": "code-wiki-qa.learn-claude-code",
+      "split": "development",
+      "case_id": "dev-s12-can-start-paraphrase",
+      "case_type": "code_behavior"
+    },
+    {
+      "suite_id": "doc-wiki-qa.click",
+      "split": "development",
+      "case_id": "dev-confirm-abort",
+      "case_type": "code_behavior"
+    },
+    {
+      "suite_id": "doc-wiki-qa.document-frequency",
+      "split": "development",
+      "case_id": "uvicorn-lifespan-sibling",
+      "case_type": "code_behavior"
+    },
+    {
+      "suite_id": "source-lifecycle.local-git",
+      "split": "development",
+      "case_id": "registration-idempotency",
+      "case_type": "temporal_update"
+    },
+    {
+      "suite_id": "source-lifecycle.local-git",
+      "split": "development",
+      "case_id": "document-source-version-update",
+      "case_type": "temporal_update"
+    },
+    {
+      "suite_id": "source-lifecycle.local-git",
+      "split": "development",
+      "case_id": "code-source-version-update",
+      "case_type": "temporal_update"
+    },
+    {
+      "suite_id": "source-lifecycle.local-git",
+      "split": "development",
+      "case_id": "deleted-source-deactivation",
+      "case_type": "temporal_update"
+    },
+    {
+      "suite_id": "source-lifecycle.local-git",
+      "split": "development",
+      "case_id": "deleted-page-review-and-apply",
+      "case_type": "temporal_update"
+    },
+    {
+      "suite_id": "source-lifecycle.local-git",
+      "split": "development",
+      "case_id": "stale-source-version-rejection",
+      "case_type": "temporal_update"
+    },
+    {
+      "suite_id": "source-lifecycle.local-git",
+      "split": "development",
+      "case_id": "same-keyword-repository-isolation",
+      "case_type": "cross_repository"
+    }
+  ]
+}

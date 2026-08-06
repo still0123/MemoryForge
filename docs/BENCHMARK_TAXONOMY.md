@@ -48,10 +48,11 @@ and one primary deterministic classification.
 
 ## Known Gaps
 
-- current frozen QA labels cover `single_hop`, `multi_source`, `paraphrase`,
-  and `unanswerable`;
-- `exact_symbol`, `code_behavior`, `temporal_update`, and `cross_repository`
-  schemas are supported but do not yet have a complete frozen QA split;
+- immutable legacy categories remain `single_hop`, `multi_source`,
+  `paraphrase`, and `unanswerable`;
+- a separate frozen case-type overlay maps existing cases to `exact_symbol`,
+  `code_behavior`, `temporal_update`, and `cross_repository` without rewriting
+  legacy labels;
 - support score, selective accuracy, coverage, and risk-coverage remain future
   phases;
 - historical Evidence remains immutable and therefore does not gain the new
