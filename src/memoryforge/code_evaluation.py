@@ -64,7 +64,7 @@ class CodeEvaluationSuite(BaseModel):
     symbols: tuple[SymbolExpectation, ...]
     relations: tuple[RelationExpectation, ...]
     modules: tuple[ModuleExpectation, ...]
-    incremental: IncrementalExpectation
+    incremental: IncrementalExpectation | None = None
 
 
 def run_code_evaluation(

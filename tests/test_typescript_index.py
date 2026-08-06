@@ -171,6 +171,68 @@ def test_typescript_symbol_ids_survive_body_changes_across_commits(
     assert first_helper.location.source_version != second_helper.location.source_version
 
 
+def test_typescript_index_accepts_variance_annotations_with_exact_evidence(
+    tmp_path: Path,
+) -> None:
+    helper_source = """export interface Sink<in T> {
+  write(value: T): void;
+}
+
+export interface Source<
+  /** variance annotation after a comment */
+  out T,
+> {
+  read(): T;
+}
+
+export interface Transform<in out T> {
+  apply(value: T): T;
+}
+
+export namespace Input {
+  export interface Props {}
+}
+
+export namespace Output {
+  export interface Props {}
+}
+
+export class Counter {
+  get value(): number {
+    return 1;
+  }
+
+  set value(value: number) {}
+}
+"""
+    _checkout, workspace, repository_id = _synced_typescript_repository(
+        tmp_path,
+        helper_source=helper_source,
+        service_source="export const ready = true;\n",
+    )
+
+    snapshot = build_code_index(workspace, repository_id)
+    sink = _symbol(snapshot, "src.helper.Sink")
+    source = _symbol(snapshot, "src.helper.Source")
+    transform = _symbol(snapshot, "src.helper.Transform")
+    input_props = _symbol(snapshot, "src.helper.Input.Props")
+    output_props = _symbol(snapshot, "src.helper.Output.Props")
+    getter = _symbol(snapshot, "src.helper.Counter.value@get")
+    setter = _symbol(snapshot, "src.helper.Counter.value@set")
+
+    assert sink.kind is CodeSymbolKind.INTERFACE
+    assert source.kind is CodeSymbolKind.INTERFACE
+    assert transform.kind is CodeSymbolKind.INTERFACE
+    assert input_props.symbol_id != output_props.symbol_id
+    assert getter.symbol_id != setter.symbol_id
+    assert read_source_excerpt(
+        workspace,
+        source_id=sink.location.source_id,
+        source_version=sink.location.source_version,
+        locator=sink.location.locator,
+    ).startswith("export interface Sink<in T>")
+
+
 def test_typescript_index_rejects_syntax_errors_in_synced_evidence(
     tmp_path: Path,
 ) -> None:

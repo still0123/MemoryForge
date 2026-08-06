@@ -148,5 +148,4 @@ wheel build
 git diff --check
 ```
 
-完成后更新公开 Benchmark 结果，提交并推送
-`feat/c4-trusted-architecture`，由人工决定后续合并顺序。
+C4 已随 PR #2 合入 `main`，并包含在 `v0.2.0` Release。

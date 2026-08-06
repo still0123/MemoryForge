@@ -140,6 +140,40 @@ def test_python_symbol_ids_survive_body_changes_across_commits(tmp_path: Path) -
     assert first_helper.location.source_version != second_helper.location.source_version
 
 
+def test_python_index_canonicalizes_overloads_and_conditional_definitions(
+    tmp_path: Path,
+) -> None:
+    source = """from typing import TYPE_CHECKING, overload
+
+@overload
+def choose(value: int) -> int: ...
+
+@overload
+def choose(value: str) -> str: ...
+
+def choose(value):
+    return value
+
+if TYPE_CHECKING:
+    def platform_name() -> str:
+        return "typing"
+else:
+    def platform_name() -> str:
+        return "runtime"
+"""
+    _checkout, workspace, repository_id = _synced_python_repository(tmp_path, source)
+
+    snapshot = build_code_index(workspace, repository_id)
+    symbols = [symbol for symbol in snapshot.symbols if symbol.qualified_name != "src.service"]
+
+    assert [symbol.qualified_name for symbol in symbols] == [
+        "src.service.choose",
+        "src.service.platform_name",
+    ]
+    assert symbols[0].signature.startswith("def choose(value)")
+    assert "@overload" not in symbols[0].signature
+
+
 def test_python_index_rejects_syntax_errors_in_synced_evidence(tmp_path: Path) -> None:
     checkout, workspace, repository_id = _synced_python_repository(
         tmp_path,
