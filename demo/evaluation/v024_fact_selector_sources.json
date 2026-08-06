@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "name": "MemoryForge v0.2.4 deterministic fact selector sources",
+  "development": {
+    "repository": "encode/uvicorn",
+    "commit": "ee8e45ca472db17b4aef1d539f209539062d002e",
+    "suite": "demo/evaluation/uvicorn_docs_dev_v023.json"
+  },
+  "confirmation": {
+    "repository": "Textualize/rich",
+    "remote_url": "https://github.com/Textualize/rich.git",
+    "commit": "9d8f9a372cc5916fd4781fec207ced7ddac2f08f",
+    "license": "MIT",
+    "license_sha256": "deed7c17a4318158190a3ea239cc879a5a50271cebb98ae7025f48fbe58dca15",
+    "repository_id": "1ded11bc811d5e90af3e1450ca07fd81b2eb57296a157bec05157c772c564835",
+    "importable_document_count": 20,
+    "suite": "demo/evaluation/rich_facts_confirm_v024.json",
+    "policy": "run_once_after_candidate_freeze"
+  }
+}

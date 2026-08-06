@@ -1,0 +1,113 @@
+{
+  "name": "MemoryForge v0.2.4 Rich fact selector confirmation",
+  "cases": [
+    {
+      "id": "rich-install",
+      "category": "single_hop",
+      "question": "Which command installs Rich?",
+      "expected_status": "answered",
+      "expected_source_paths": ["README.md"],
+      "required_terms": ["python -m pip install rich"],
+      "repository_id": "1ded11bc811d5e90af3e1450ca07fd81b2eb57296a157bec05157c772c564835"
+    },
+    {
+      "id": "rich-console-wrap",
+      "category": "single_hop",
+      "question": "How does Rich Console.print handle text wider than the terminal?",
+      "expected_status": "answered",
+      "expected_source_paths": ["README.md"],
+      "required_terms": ["word-wrap", "terminal width"],
+      "repository_id": "1ded11bc811d5e90af3e1450ca07fd81b2eb57296a157bec05157c772c564835"
+    },
+    {
+      "id": "rich-ansi-alignment",
+      "category": "single_hop",
+      "question": "How should existing ANSI escape codes be converted so Rich can preserve alignment?",
+      "expected_status": "answered",
+      "expected_source_paths": ["questions/ansi_escapes.question.md"],
+      "required_terms": ["Text.from_ansi"],
+      "repository_id": "1ded11bc811d5e90af3e1450ca07fd81b2eb57296a157bec05157c772c564835"
+    },
+    {
+      "id": "rich-emoji-width",
+      "category": "single_hop",
+      "question": "Why can emoji break Rich Table or Panel alignment?",
+      "expected_status": "answered",
+      "expected_source_paths": ["questions/emoji_broken.question.md"],
+      "required_terms": ["double space", "width"],
+      "repository_id": "1ded11bc811d5e90af3e1450ca07fd81b2eb57296a157bec05157c772c564835"
+    },
+    {
+      "id": "rich-highlighter",
+      "category": "single_hop",
+      "question": "What should be done when Rich's default highlighter incorrectly highlights text?",
+      "expected_status": "answered",
+      "expected_source_paths": ["questions/highlight_incorrect.question.md"],
+      "required_terms": ["disabling highlighting", "custom highlighter"],
+      "repository_id": "1ded11bc811d5e90af3e1450ca07fd81b2eb57296a157bec05157c772c564835"
+    },
+    {
+      "id": "rich-jupyter-spacing",
+      "category": "single_hop",
+      "question": "Why does Rich avoid changing Jupyter spacing without cross-implementation evidence?",
+      "expected_status": "answered",
+      "expected_source_paths": ["questions/jupyter.question.md"],
+      "required_terms": ["break somewhere else", "evidence"],
+      "repository_id": "1ded11bc811d5e90af3e1450ca07fd81b2eb57296a157bec05157c772c564835"
+    },
+    {
+      "id": "rich-log-renderable",
+      "category": "single_hop",
+      "question": "What should be used instead of Python logging when logging Rich renderables only to stdout?",
+      "expected_status": "answered",
+      "expected_source_paths": ["questions/log_renderables.question.md"],
+      "required_terms": ["Console.log"],
+      "repository_id": "1ded11bc811d5e90af3e1450ca07fd81b2eb57296a157bec05157c772c564835"
+    },
+    {
+      "id": "rich-handler-markup",
+      "category": "single_hop",
+      "question": "Why is console markup disabled by default in RichHandler?",
+      "expected_status": "answered",
+      "expected_source_paths": ["questions/logging_color.question.md"],
+      "required_terms": ["won't work anywhere else", "disabled by default"],
+      "repository_id": "1ded11bc811d5e90af3e1450ca07fd81b2eb57296a157bec05157c772c564835"
+    },
+    {
+      "id": "rich-spinner-lines",
+      "category": "single_hop",
+      "question": "Why can python -m rich.spinner show extra lines?",
+      "expected_status": "answered",
+      "expected_source_paths": ["questions/rich_spinner.question.md"],
+      "required_terms": ["emoji", "width"],
+      "repository_id": "1ded11bc811d5e90af3e1450ca07fd81b2eb57296a157bec05157c772c564835"
+    },
+    {
+      "id": "rich-square-brackets",
+      "category": "single_hop",
+      "question": "How can literal square brackets be printed without Rich treating them as markup tags?",
+      "expected_status": "answered",
+      "expected_source_paths": ["questions/square_brackets.question.md"],
+      "required_terms": ["disable markup", "escape"],
+      "repository_id": "1ded11bc811d5e90af3e1450ca07fd81b2eb57296a157bec05157c772c564835"
+    },
+    {
+      "id": "rich-traceback-install",
+      "category": "single_hop",
+      "question": "Does Rich automatically install its traceback handler?",
+      "expected_status": "answered",
+      "expected_source_paths": ["questions/tracebacks_installed.question.md"],
+      "required_terms": ["never", "rich.traceback.install"],
+      "repository_id": "1ded11bc811d5e90af3e1450ca07fd81b2eb57296a157bec05157c772c564835"
+    },
+    {
+      "id": "rich-strange-colors",
+      "category": "single_hop",
+      "question": "Why can Rich print numbers or IP addresses with unexpected colors?",
+      "expected_status": "answered",
+      "expected_source_paths": ["questions/highlighting_unexpected.question.md"],
+      "required_terms": ["highlight", "patterns"],
+      "repository_id": "1ded11bc811d5e90af3e1450ca07fd81b2eb57296a157bec05157c772c564835"
+    }
+  ]
+}
