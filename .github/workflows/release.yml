@@ -12,6 +12,8 @@ permissions:
 
 jobs:
   release:
+    # Zero-spend policy: keep remote jobs disabled; publish locally if needed.
+    if: ${{ false }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1

@@ -14,6 +14,8 @@ permissions:
 
 jobs:
   test:
+    # Zero-spend policy: keep remote jobs disabled; run these commands locally.
+    if: ${{ false }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:

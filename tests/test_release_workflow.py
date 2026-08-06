@@ -46,6 +46,14 @@ def test_release_workflow_keeps_the_tag_and_artifact_contract() -> None:
         assert required in workflow
 
 
+def test_remote_workflows_are_disabled_by_zero_spend_policy() -> None:
+    root = Path(__file__).resolve().parent.parent
+
+    for path in (root / ".github/workflows").glob("*.yml"):
+        workflow = path.read_text(encoding="utf-8")
+        assert "if: ${{ false }}" in workflow
+
+
 def test_release_check_requires_the_frozen_public_repository_identity() -> None:
     root = Path(__file__).resolve().parent.parent
     evidence = json.loads(
