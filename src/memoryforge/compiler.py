@@ -80,7 +80,8 @@ _MARKDOWN_HEADING = re.compile(
     re.MULTILINE,
 )
 _MARKDOWN_LIST_ITEM = re.compile(
-    r"^[ \t]*(?:[-*+]|\d+[.)])[ \t]+(?P<fact>.+?)[ \t]*$",
+    r"^[ \t]*(?:[-*+]|\d+[.)])[ \t]+"
+    r"(?P<fact>[^\n]+(?:\n(?![ \t]*(?:[-*+]|\d+[.)])[ \t]+)[ \t]+\S[^\n]*)*)[ \t]*$",
     re.MULTILINE,
 )
 # Markdown lists are compiled as separate facts. Keep enough facts to retain
@@ -1780,7 +1781,7 @@ def _target_page_path(
 def _render_page(source: CurrentSource, facts: list[SourceFact]) -> str:
     displayed_facts = [
         SourceFact(
-            quote=" ".join(fact.quote.splitlines()),
+            quote=" ".join(line.strip() for line in fact.quote.splitlines()),
             start=fact.start,
             section_path=fact.section_path,
         )
@@ -1989,7 +1990,7 @@ def _render_deterministic_group_page(
         excerpts.append(
             (
                 source,
-                " ".join(fact.quote.splitlines()),
+                " ".join(line.strip() for line in fact.quote.splitlines()),
                 f"chars:{fact.start}-{fact.start + len(fact.quote)}",
             )
         )
