@@ -606,10 +606,7 @@ def _document_frequency_pages(
         for path in sorted(pages_root.rglob("*.md"))
         if (page := _safe_wiki_page(workspace_root, path)) is not None
         and not _is_code_page(page)
-        and (
-            allowed_paths is None
-            or str(page.relative_to(workspace_root)) in allowed_paths
-        )
+        and (allowed_paths is None or str(page.relative_to(workspace_root)) in allowed_paths)
     ]
     page_terms = [(page, _terms(page.read_text(encoding="utf-8"))) for page in pages]
     frequencies = Counter(term for _, terms in page_terms for term in terms)

@@ -36,6 +36,13 @@ Confirmation, run once after candidate freeze:
 Confirmation failure rejects and reverts the candidate. Typer failures must not
 guide tuning.
 
+## Result
+
+Accepted. Uvicorn development page recall reached 100.0%. Frozen Typer
+confirmation reached 83.3% through the production route and 91.7% through the
+isolated DF scorer, above the 75% gate. See
+[`V023_DOCUMENT_FREQUENCY_NORMALIZATION_REPORT.md`](V023_DOCUMENT_FREQUENCY_NORMALIZATION_REPORT.md).
+
 ## Artifacts
 
 - `demo/evaluation/v023_df_routing_sources.json`
