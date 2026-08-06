@@ -1211,7 +1211,7 @@ def test_candidate_pages_fill_the_remaining_budget_with_relaxed_fts_matches(
     assert calls == [(2, True), (2, False)]
 
 
-def test_candidate_pages_prefers_index_routes_before_relaxed_fts_matches(
+def test_candidate_pages_fuses_index_route_with_relaxed_fts_matches(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -1258,8 +1258,57 @@ def test_candidate_pages_prefers_index_routes_before_relaxed_fts_matches(
         prefer_index_routes=True,
     )
 
-    assert selected == [index_page, broad_page]
+    assert selected == [broad_page, index_page]
     assert calls == [True, False]
+
+
+def test_candidate_pages_fuses_index_and_fts_rankings(tmp_path: Path, monkeypatch) -> None:
+    workspace = tmp_path / "workspace"
+    pages = workspace / "wiki" / "pages"
+    pages.mkdir(parents=True)
+    ranked_pages = [pages / f"{name}.md" for name in ("a", "b", "c", "d", "e")]
+    for page in ranked_pages:
+        page.write_text("# Page\n", encoding="utf-8")
+    (workspace / "wiki/INDEX.md").write_text(
+        "# Knowledge Index\n\n"
+        + "".join(
+            f"- [{page.stem}](pages/{page.name}) — shared topic {page.stem}\n"
+            for page in ranked_pages
+        ),
+        encoding="utf-8",
+    )
+    index_path = workspace / ".memoryforge/index.sqlite"
+    index_path.parent.mkdir()
+    index_path.touch()
+    calls: list[int] = []
+
+    def fake_fts(
+        _workspace: Path,
+        _question: str,
+        *,
+        limit: int,
+        repository_id: str | None = None,
+        require_all_terms: bool = True,
+    ) -> tuple[str, ...]:
+        calls.append(limit)
+        if require_all_terms:
+            return ()
+        return tuple(f"wiki/pages/{name}.md" for name in ("e", "d", "c", "b", "a"))
+
+    monkeypatch.setattr(query_module, "find_applied_page_paths", fake_fts)
+
+    selected = query_module._candidate_pages(
+        workspace,
+        "shared topic",
+        {"shared", "topic"},
+        max_pages=3,
+        trace=[],
+        repository_id=None,
+        prefer_index_routes=True,
+    )
+
+    assert selected == [ranked_pages[0], ranked_pages[4], ranked_pages[1]]
+    assert calls == [5, 5]
 
 
 def test_ask_keeps_the_original_question_when_querying_fts(
