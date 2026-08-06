@@ -1,0 +1,48 @@
+{
+  "name": "MemoryForge v0.3.1 learn-claude-code QA confirmation",
+  "cases": [
+    {
+      "id": "confirm-s05-normalize-todos",
+      "category": "single_hop",
+      "question": "What is the signature of s05_todo_write.code._normalize_todos?",
+      "expected_status": "answered",
+      "expected_source_paths": ["s05_todo_write/code.py"],
+      "required_terms": ["def _normalize_todos(todos):"],
+      "repository_ids": ["f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6"]
+    },
+    {
+      "id": "confirm-s12-claim-task",
+      "category": "single_hop",
+      "question": "What arguments does s12_task_system.code.claim_task accept?",
+      "expected_status": "answered",
+      "expected_source_paths": ["s12_task_system/code.py"],
+      "required_terms": ["task_id: str", "owner: str", "agent"],
+      "repository_ids": ["f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6"]
+    },
+    {
+      "id": "confirm-s03-deny-list-paraphrase",
+      "category": "paraphrase",
+      "question": "Which s03 permission helper checks a shell command against blocked patterns?",
+      "expected_status": "answered",
+      "expected_source_paths": ["s03_permission/code.py"],
+      "required_terms": ["check_deny_list", "command: str"],
+      "repository_ids": ["f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6"]
+    },
+    {
+      "id": "confirm-run-read-multi-source",
+      "category": "multi_source",
+      "question": "What run_read signatures are defined in s03_permission and s06_subagent?",
+      "expected_status": "answered",
+      "expected_source_paths": ["s03_permission/code.py", "s06_subagent/code.py"],
+      "required_terms": ["def run_read(path: str", "limit: int | None"],
+      "repository_ids": ["f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6"]
+    },
+    {
+      "id": "confirm-unknown-kubernetes-pod",
+      "category": "unanswerable",
+      "question": "Which function launches a Kubernetes pod for each subagent?",
+      "expected_status": "unknown",
+      "repository_ids": ["f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6"]
+    }
+  ]
+}

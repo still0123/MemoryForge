@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import subprocess
 from pathlib import Path
 
 import pytest
+
+from memoryforge.evaluation import EvaluationSuite
 
 _SCRIPT = Path(__file__).resolve().parent.parent / "demo" / "run_external_code_wiki_benchmark.py"
 _spec = importlib.util.spec_from_file_location("run_external_code_wiki_benchmark", _SCRIPT)
@@ -35,13 +38,64 @@ def test_external_suite_contract_is_frozen() -> None:
     }
     for repository in manifest["repositories"]:
         suite = benchmark.CodeEvaluationSuite.model_validate_json(
-            benchmark.SUITES[repository["name"]].read_text(encoding="utf-8")
+            (benchmark.REPO_ROOT / repository["suite"]).read_text(encoding="utf-8")
         )
         assert len(suite.expected_source_paths) == repository["expected_source_count"]
         assert len(suite.symbols) == 20
         assert len(suite.relations) == 15
         assert len(suite.modules) == 5
         assert suite.incremental is None
+
+
+def test_learn_claude_code_suite_contract_is_frozen() -> None:
+    manifest_path = (
+        benchmark.REPO_ROOT
+        / "demo/evaluation/external_code_wiki_learn_claude_code_sources_v031.json"
+    )
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    repository = manifest["repositories"][0]
+    suite = benchmark.CodeEvaluationSuite.model_validate_json(
+        (benchmark.REPO_ROOT / repository["suite"]).read_text(encoding="utf-8")
+    )
+
+    assert repository["name"] == "learn_claude_code"
+    assert len(suite.expected_source_paths) == repository["expected_source_count"] == 5
+    assert len(suite.symbols) == 20
+    assert len(suite.relations) == 15
+    assert len(suite.modules) == 5
+    assert suite.incremental is None
+
+
+def test_learn_claude_code_qa_splits_are_frozen() -> None:
+    evaluation_dir = benchmark.REPO_ROOT / "demo/evaluation"
+    protocol = json.loads(
+        (evaluation_dir / "learn_claude_code_qa_protocol_v031.json").read_text(encoding="utf-8")
+    )
+    suites = {}
+    for split in ("development", "confirmation"):
+        path = benchmark.REPO_ROOT / protocol[split]["path"]
+        suites[split] = EvaluationSuite.model_validate_json(path.read_text(encoding="utf-8"))
+        assert hashlib.sha256(path.read_bytes()).hexdigest() == protocol[split]["sha256"]
+        assert len(suites[split].cases) == protocol[split]["case_count"]
+
+    assert len(suites["development"].cases) == 10
+    assert len(suites["confirmation"].cases) == 5
+    assert {case.id for case in suites["development"].cases}.isdisjoint(
+        case.id for case in suites["confirmation"].cases
+    )
+    result_path = benchmark.REPO_ROOT / protocol["development"]["result_path"]
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    assert (
+        hashlib.sha256(result_path.read_bytes()).hexdigest()
+        == protocol["development"]["result_sha256"]
+    )
+    assert all(
+        result["memoryforge"][name] == value
+        for name, value in protocol["development"]["metrics"].items()
+    )
+    assert protocol["development"]["passed"] is False
+    assert protocol["confirmation"]["status"] == "not_run_after_development_failure"
+    assert protocol["confirmation"]["labels_must_not_be_used_for_tuning"] is True
 
 
 def test_external_benchmark_rejects_wrong_pinned_commit(tmp_path: Path) -> None:

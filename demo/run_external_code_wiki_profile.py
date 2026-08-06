@@ -37,10 +37,6 @@ from memoryforge.workspace import (
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = REPO_ROOT / "demo/evaluation/external_code_wiki_sources_v021.json"
-SUITES = {
-    name: REPO_ROOT / f"demo/evaluation/external_code_wiki_{name}_v021.json"
-    for name in ("click", "cobra", "zod")
-}
 _MARKERS = {
     ".py": "\n\ndef memoryforge_profile_marker() -> None:\n    pass\n",
     ".go": "\n\nfunc memoryforgeProfileMarker() {}\n",
@@ -157,7 +153,7 @@ def _profile_repository(
 ) -> dict[str, Any]:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     repository = next(item for item in manifest["repositories"] if str(item["name"]) == name)
-    suite = json.loads(SUITES[name].read_text(encoding="utf-8"))
+    suite = json.loads((REPO_ROOT / str(repository["suite"])).read_text(encoding="utf-8"))
     changed_path = str(suite["expected_source_paths"][0])
     source_worktree = run_dir / "source"
     workspace_path = run_dir / "workspace"
@@ -492,7 +488,7 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--repetitions", type=int, default=3)
     parser.add_argument("--manifest", type=Path, default=MANIFEST)
     parser.add_argument("--child", action="store_true", help=argparse.SUPPRESS)
-    parser.add_argument("--repository", choices=tuple(SUITES), help=argparse.SUPPRESS)
+    parser.add_argument("--repository", help=argparse.SUPPRESS)
     parser.add_argument("--source", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--run-dir", type=Path, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)

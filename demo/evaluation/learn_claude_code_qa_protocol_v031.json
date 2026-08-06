@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "dataset_version": "learn-claude-code-qa-v031",
+  "status": "development_failed_confirmation_not_run",
+  "source_repository": "https://github.com/shareAI-lab/learn-claude-code.git",
+  "source_commit": "7b564c3ee6996039cb4e13a53024dfe2d4388d35",
+  "repository_id": "f9618a931031275ed789cac036a5680ef4f0c18fc1155e59aa031d33beca2aa6",
+  "development": {
+    "path": "demo/evaluation/learn_claude_code_qa_dev_v031.json",
+    "sha256": "3085859283115b351ce1c38a6bf1c111b1ac7e669f96ed1e3aa4f9fc31610b7d",
+    "case_count": 10,
+    "result_path": "demo/results/learn_claude_code_qa_dev_v031.json",
+    "result_sha256": "65ae9959e64b67e45bdc2a4572548af4bffe98026fbb511687f108d32a2b099e",
+    "metrics": {
+      "answer_accuracy": 60.0,
+      "source_recall_at_3": 100.0,
+      "citation_grounding_accuracy": 88.9,
+      "multi_source_coverage": 100.0,
+      "abstention_accuracy": 0.0,
+      "repository_path_isolation_accuracy": 100.0
+    },
+    "passed": false
+  },
+  "confirmation": {
+    "path": "demo/evaluation/learn_claude_code_qa_confirm_v031.json",
+    "sha256": "b86fe1f7999c09af9bf7c6bed4951c1c4c565318c39192bea1831d942466c117",
+    "case_count": 5,
+    "status": "not_run_after_development_failure",
+    "run_once_after_development_passes": true,
+    "labels_must_not_be_used_for_tuning": true
+  },
+  "execution": {
+    "model_calls": 0,
+    "max_wiki_pages": 3,
+    "selected_code_sources": 5
+  },
+  "gates": {
+    "answer_accuracy_minimum": 80.0,
+    "source_recall_at_3_minimum": 80.0,
+    "citation_grounding_accuracy": 100.0,
+    "multi_source_coverage": 100.0,
+    "abstention_accuracy": 100.0,
+    "repository_path_isolation_accuracy": 100.0
+  },
+  "decision": {
+    "development_failure_stops_confirmation": true,
+    "negative_results_must_be_retained": true
+  }
+}

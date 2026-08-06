@@ -15,10 +15,6 @@ from memoryforge.code_evaluation import CodeEvaluationSuite, run_code_evaluation
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = REPO_ROOT / "demo/evaluation/external_code_wiki_sources_v021.json"
-SUITES = {
-    name: REPO_ROOT / f"demo/evaluation/external_code_wiki_{name}_v021.json"
-    for name in ("click", "cobra", "zod")
-}
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -55,7 +51,7 @@ def build_evidence(
             workdir / str(repository["name"]),
             sources[str(repository["name"])].resolve(),
             repository,
-            SUITES[str(repository["name"])],
+            REPO_ROOT / str(repository["suite"]),
         )
         for repository in repositories
     ]

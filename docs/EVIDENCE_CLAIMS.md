@@ -17,6 +17,8 @@
 | 主张 | Evidence | 边界 |
 | --- | --- | --- |
 | Click/Cobra/Zod 共索引 2,445 Symbols、3,718 Relations | [`external_code_wiki_v021.json`](../demo/results/external_code_wiki_v021.json) | 固定 87 个 Source |
+| learn-claude-code 索引 72 Symbols、111 Relations，冻结 20/15/5 标签均为 100% | [`external_code_wiki_learn_claude_code_v031.json`](../demo/results/external_code_wiki_learn_claude_code_v031.json) | 固定 5 个 canonical lesson Source；非穷举正样本 |
+| learn-claude-code QA development Answer 为 60%、Citation 为 88.9%、Abstention 为 0% | [`learn_claude_code_qa_dev_v031.json`](../demo/results/learn_claude_code_qa_dev_v031.json) | 未过门禁，confirmation 未运行 |
 | 60 Symbol、45 Relation、15 Module 正样本全部命中 | 同上，SHA256 `9073b96cad920df5bddcd46eadbbe507b0b673e8d714a0619ad0913fb6f6c496` | 非穷举正样本；不等于全仓 precision/recall |
 | Zod 64 条 Architecture edge 的 Mermaid/Citation 为 100% | 同上 | Click/Cobra 无跨模块边，相关指标 N/A |
 | 缓存决策为 `NO_CHANGE` | [`external_code_wiki_profile_v021.json`](../demo/results/external_code_wiki_profile_v021.json) | macOS 单机、每仓 3 次中位数 |

@@ -1,0 +1,56 @@
+{
+  "name": "MemoryForge v0.3.1 learn-claude-code external Code Wiki benchmark",
+  "expected_source_paths": [
+    "s01_agent_loop/code.py",
+    "s03_permission/code.py",
+    "s05_todo_write/code.py",
+    "s06_subagent/code.py",
+    "s12_task_system/code.py"
+  ],
+  "symbols": [
+    {"qualified_name": "s01_agent_loop.code.run_bash", "kind": "function"},
+    {"qualified_name": "s01_agent_loop.code.agent_loop", "kind": "function"},
+    {"qualified_name": "s03_permission.code.check_deny_list", "kind": "function"},
+    {"qualified_name": "s03_permission.code.check_rules", "kind": "function"},
+    {"qualified_name": "s03_permission.code.check_permission", "kind": "function"},
+    {"qualified_name": "s03_permission.code.agent_loop", "kind": "function"},
+    {"qualified_name": "s05_todo_write.code._normalize_todos", "kind": "function"},
+    {"qualified_name": "s05_todo_write.code.run_todo_write", "kind": "function"},
+    {"qualified_name": "s05_todo_write.code.trigger_hooks", "kind": "function"},
+    {"qualified_name": "s05_todo_write.code.agent_loop", "kind": "function"},
+    {"qualified_name": "s06_subagent.code.extract_text", "kind": "function"},
+    {"qualified_name": "s06_subagent.code.spawn_subagent", "kind": "function"},
+    {"qualified_name": "s06_subagent.code.run_todo_write", "kind": "function"},
+    {"qualified_name": "s06_subagent.code.agent_loop", "kind": "function"},
+    {"qualified_name": "s12_task_system.code.Task", "kind": "class"},
+    {"qualified_name": "s12_task_system.code.create_task", "kind": "function"},
+    {"qualified_name": "s12_task_system.code.claim_task", "kind": "function"},
+    {"qualified_name": "s12_task_system.code.complete_task", "kind": "function"},
+    {"qualified_name": "s12_task_system.code.update_context", "kind": "function"},
+    {"qualified_name": "s12_task_system.code.agent_loop", "kind": "function"}
+  ],
+  "relations": [
+    {"tier": "core", "type": "calls", "source": "s01_agent_loop.code.agent_loop", "target": "s01_agent_loop.code.run_bash"},
+    {"tier": "core", "type": "calls", "source": "s03_permission.code.agent_loop", "target": "s03_permission.code.check_permission"},
+    {"tier": "core", "type": "calls", "source": "s03_permission.code.check_permission", "target": "s03_permission.code.ask_user"},
+    {"tier": "core", "type": "calls", "source": "s03_permission.code.check_permission", "target": "s03_permission.code.check_deny_list"},
+    {"tier": "core", "type": "calls", "source": "s03_permission.code.check_permission", "target": "s03_permission.code.check_rules"},
+    {"tier": "core", "type": "calls", "source": "s05_todo_write.code.agent_loop", "target": "s05_todo_write.code.trigger_hooks"},
+    {"tier": "core", "type": "calls", "source": "s05_todo_write.code.run_todo_write", "target": "s05_todo_write.code._normalize_todos"},
+    {"tier": "core", "type": "calls", "source": "s06_subagent.code.spawn_subagent", "target": "s06_subagent.code.trigger_hooks"},
+    {"tier": "core", "type": "calls", "source": "s06_subagent.code.spawn_subagent", "target": "s06_subagent.code.extract_text"},
+    {"tier": "core", "type": "calls", "source": "s06_subagent.code.run_todo_write", "target": "s06_subagent.code._normalize_todos"},
+    {"tier": "core", "type": "calls", "source": "s12_task_system.code.create_task", "target": "s12_task_system.code.Task"},
+    {"tier": "core", "type": "calls", "source": "s12_task_system.code.create_task", "target": "s12_task_system.code.save_task"},
+    {"tier": "core", "type": "calls", "source": "s12_task_system.code.claim_task", "target": "s12_task_system.code.can_start"},
+    {"tier": "core", "type": "calls", "source": "s12_task_system.code.complete_task", "target": "s12_task_system.code.save_task"},
+    {"tier": "core", "type": "calls", "source": "s12_task_system.code.agent_loop", "target": "s12_task_system.code.update_context"}
+  ],
+  "modules": [
+    {"symbol": "s01_agent_loop.code.agent_loop", "module_path": "s01-agent-loop/code"},
+    {"symbol": "s03_permission.code.check_permission", "module_path": "s03-permission/code"},
+    {"symbol": "s05_todo_write.code.run_todo_write", "module_path": "s05-todo-write/code"},
+    {"symbol": "s06_subagent.code.spawn_subagent", "module_path": "s06-subagent/code"},
+    {"symbol": "s12_task_system.code.Task", "module_path": "s12-task-system/code"}
+  ]
+}

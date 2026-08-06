@@ -1,0 +1,364 @@
+{
+  "schema_version": 1,
+  "memoryforge_commit": "5a28c862289bfe938786ac026b8b4a5ee6247911",
+  "memoryforge_worktree_dirty": false,
+  "source_manifest": {
+    "path": "demo/evaluation/external_code_wiki_learn_claude_code_sources_v031.json",
+    "sha256": "e7a7fd3c046c8c3ed6159e6f790df540726de87c8a92fffaadcf6503e1ffdcd3"
+  },
+  "label_scope": "non_exhaustive_manually_verified_positive_sample",
+  "repositories": [
+    {
+      "name": "learn_claude_code",
+      "remote_url": "https://github.com/shareAI-lab/learn-claude-code.git",
+      "commit": "7b564c3ee6996039cb4e13a53024dfe2d4388d35",
+      "license": "MIT",
+      "license_sha256": "204ff5ee216c8f895268a23b66d959f82aa4d868e871e0690fbf2844eff8a26b",
+      "checkout_worktree_dirty": false,
+      "code_paths": [
+        "s01_agent_loop/code.py",
+        "s03_permission/code.py",
+        "s05_todo_write/code.py",
+        "s06_subagent/code.py",
+        "s12_task_system/code.py"
+      ],
+      "suite": {
+        "path": "demo/evaluation/external_code_wiki_learn_claude_code_v031.json",
+        "sha256": "ad72345d4f19c70aa6a2f050abc945ebe0ca3e51a135f0571cb599098ba75d2f",
+        "manual_symbol_labels": 20,
+        "manual_relation_labels": 15,
+        "manual_module_labels": 5
+      },
+      "workflow": {
+        "synced_document_count": 49,
+        "indexed_source_count": 5,
+        "code_wiki_file_count": 10,
+        "lint": {
+          "status": "clean",
+          "checked_pages": 10,
+          "issues": []
+        }
+      },
+      "not_applicable_metrics": [
+        "known_gap_relation_recall",
+        "mermaid_edge_coverage",
+        "architecture_citation_coverage",
+        "architecture_mermaid_determinism"
+      ],
+      "evaluation": {
+        "suite": "MemoryForge v0.3.1 learn-claude-code external Code Wiki benchmark",
+        "schema_version": 1,
+        "counts": {
+          "symbols": 72,
+          "relations": 111,
+          "modules": 10,
+          "architecture_edges": 0
+        },
+        "metrics": {
+          "expected_source_coverage": 100.0,
+          "symbol_recall": 100.0,
+          "core_relation_recall": 100.0,
+          "known_gap_relation_recall": 0.0,
+          "overall_relation_recall": 100.0,
+          "module_assignment_accuracy": 100.0,
+          "citation_grounding_accuracy": 100.0,
+          "architecture_edge_grounding": 100.0,
+          "mermaid_edge_coverage": 0.0,
+          "architecture_citation_coverage": 0.0,
+          "architecture_mermaid_determinism": 0.0,
+          "deterministic_replay": 100.0
+        },
+        "gates": {
+          "core_symbols": true,
+          "core_relations": true,
+          "module_assignment": true,
+          "citations": true,
+          "architecture_wiki": true,
+          "deterministic": true
+        },
+        "cases": {
+          "sources": [
+            {
+              "path": "s01_agent_loop/code.py",
+              "found": true
+            },
+            {
+              "path": "s03_permission/code.py",
+              "found": true
+            },
+            {
+              "path": "s05_todo_write/code.py",
+              "found": true
+            },
+            {
+              "path": "s06_subagent/code.py",
+              "found": true
+            },
+            {
+              "path": "s12_task_system/code.py",
+              "found": true
+            }
+          ],
+          "symbols": [
+            {
+              "qualified_name": "s01_agent_loop.code.run_bash",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "s01_agent_loop.code.agent_loop",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "s03_permission.code.check_deny_list",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "s03_permission.code.check_rules",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "s03_permission.code.check_permission",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "s03_permission.code.agent_loop",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "s05_todo_write.code._normalize_todos",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "s05_todo_write.code.run_todo_write",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "s05_todo_write.code.trigger_hooks",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "s05_todo_write.code.agent_loop",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "s06_subagent.code.extract_text",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "s06_subagent.code.spawn_subagent",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "s06_subagent.code.run_todo_write",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "s06_subagent.code.agent_loop",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "s12_task_system.code.Task",
+              "kind": "class",
+              "found": true
+            },
+            {
+              "qualified_name": "s12_task_system.code.create_task",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "s12_task_system.code.claim_task",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "s12_task_system.code.complete_task",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "s12_task_system.code.update_context",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "s12_task_system.code.agent_loop",
+              "kind": "function",
+              "found": true
+            }
+          ],
+          "relations": [
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "s01_agent_loop.code.agent_loop",
+              "target": "s01_agent_loop.code.run_bash",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "s03_permission.code.agent_loop",
+              "target": "s03_permission.code.check_permission",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "s03_permission.code.check_permission",
+              "target": "s03_permission.code.ask_user",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "s03_permission.code.check_permission",
+              "target": "s03_permission.code.check_deny_list",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "s03_permission.code.check_permission",
+              "target": "s03_permission.code.check_rules",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "s05_todo_write.code.agent_loop",
+              "target": "s05_todo_write.code.trigger_hooks",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "s05_todo_write.code.run_todo_write",
+              "target": "s05_todo_write.code._normalize_todos",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "s06_subagent.code.spawn_subagent",
+              "target": "s06_subagent.code.trigger_hooks",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "s06_subagent.code.spawn_subagent",
+              "target": "s06_subagent.code.extract_text",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "s06_subagent.code.run_todo_write",
+              "target": "s06_subagent.code._normalize_todos",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "s12_task_system.code.create_task",
+              "target": "s12_task_system.code.Task",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "s12_task_system.code.create_task",
+              "target": "s12_task_system.code.save_task",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "s12_task_system.code.claim_task",
+              "target": "s12_task_system.code.can_start",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "s12_task_system.code.complete_task",
+              "target": "s12_task_system.code.save_task",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "s12_task_system.code.agent_loop",
+              "target": "s12_task_system.code.update_context",
+              "found": true
+            }
+          ],
+          "modules": [
+            {
+              "symbol": "s01_agent_loop.code.agent_loop",
+              "module_path": "s01-agent-loop/code",
+              "found": true
+            },
+            {
+              "symbol": "s03_permission.code.check_permission",
+              "module_path": "s03-permission/code",
+              "found": true
+            },
+            {
+              "symbol": "s05_todo_write.code.run_todo_write",
+              "module_path": "s05-todo-write/code",
+              "found": true
+            },
+            {
+              "symbol": "s06_subagent.code.spawn_subagent",
+              "module_path": "s06-subagent/code",
+              "found": true
+            },
+            {
+              "symbol": "s12_task_system.code.Task",
+              "module_path": "s12-task-system/code",
+              "found": true
+            }
+          ]
+        }
+      },
+      "passed": true
+    }
+  ],
+  "summary": {
+    "repository_count": 1,
+    "expected_source_count": 5,
+    "manual_symbol_labels": 20,
+    "manual_relation_labels": 15,
+    "manual_module_labels": 5,
+    "actual_counts": {
+      "symbols": 72,
+      "relations": 111,
+      "modules": 10,
+      "architecture_edges": 0,
+      "code_wiki_files": 10
+    },
+    "metrics": {
+      "expected_source_coverage": 100.0,
+      "symbol_label_match": 100.0,
+      "relation_label_match": 100.0,
+      "module_label_match": 100.0
+    },
+    "passed": true
+  }
+}

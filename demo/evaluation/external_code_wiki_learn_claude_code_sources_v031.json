@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "name": "MemoryForge v0.3.1 learn-claude-code external Code Wiki source",
+  "repositories": [
+    {
+      "name": "learn_claude_code",
+      "remote_url": "https://github.com/shareAI-lab/learn-claude-code.git",
+      "commit": "7b564c3ee6996039cb4e13a53024dfe2d4388d35",
+      "license": "MIT",
+      "license_path": "LICENSE",
+      "license_sha256": "204ff5ee216c8f895268a23b66d959f82aa4d868e871e0690fbf2844eff8a26b",
+      "language": "python",
+      "code_paths": [
+        "s01_agent_loop/code.py",
+        "s03_permission/code.py",
+        "s05_todo_write/code.py",
+        "s06_subagent/code.py",
+        "s12_task_system/code.py"
+      ],
+      "suite": "demo/evaluation/external_code_wiki_learn_claude_code_v031.json",
+      "expected_source_count": 5
+    }
+  ]
+}
