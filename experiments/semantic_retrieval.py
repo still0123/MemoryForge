@@ -22,6 +22,7 @@ from memoryforge.evaluation import EvaluationCase, EvaluationSuite
 from memoryforge.manifests import SourceManifestStore
 from memoryforge.query import (
     _candidate_pages,
+    _has_many_index_routes,
     _page_citations,
     _safe_wiki_page,
     _terms,
@@ -154,10 +155,12 @@ def _current_pages(workspace_root: Path, case: EvaluationCase, max_pages: int) -
     trace: list[dict[str, str]] = []
     return _candidate_pages(
         workspace_root,
+        case.question,
         question_terms,
         max_pages=max_pages,
         trace=trace,
         repository_id=case.repository_id,
+        prefer_index_routes=_has_many_index_routes(workspace_root),
     )
 
 

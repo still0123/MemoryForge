@@ -3,8 +3,9 @@ import json
 import tomllib
 from pathlib import Path
 
-import memoryforge
 import pytest
+
+import memoryforge
 
 _SCRIPT = Path(__file__).resolve().parent.parent / "demo" / "run_release_check.py"
 _spec = importlib.util.spec_from_file_location("run_release_check", _SCRIPT)
