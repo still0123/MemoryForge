@@ -1,0 +1,113 @@
+{
+  "name": "MemoryForge v0.2.2 HTTPX document routing confirmation",
+  "cases": [
+    {
+      "id": "httpx-env-disable",
+      "category": "single_hop",
+      "question": "How can HTTPX ignore proxy and certificate environment variables?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/environment_variables.md"],
+      "required_terms": ["trust_env", "False"],
+      "repository_id": "bf7a3fa2ba465b8907987bdaf220f733639ea74cedadac36f4a76fb13f5704b0"
+    },
+    {
+      "id": "httpx-timeout-types",
+      "category": "single_hop",
+      "question": "Which four timeout types can HTTPX configure separately?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/advanced/timeouts.md"],
+      "required_terms": ["connect", "read", "write", "pool"],
+      "repository_id": "bf7a3fa2ba465b8907987bdaf220f733639ea74cedadac36f4a76fb13f5704b0"
+    },
+    {
+      "id": "httpx-pool-limits",
+      "category": "single_hop",
+      "question": "What defaults does HTTPX use for maximum connections, keep-alive connections, and keep-alive expiry?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/advanced/resource-limits.md"],
+      "required_terms": ["100", "20", "5"],
+      "repository_id": "bf7a3fa2ba465b8907987bdaf220f733639ea74cedadac36f4a76fb13f5704b0"
+    },
+    {
+      "id": "httpx-client-pooling",
+      "category": "single_hop",
+      "question": "Why is an HTTPX Client more efficient than repeated top-level requests?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/advanced/clients.md"],
+      "required_terms": ["connection pooling", "TCP connection"],
+      "repository_id": "bf7a3fa2ba465b8907987bdaf220f733639ea74cedadac36f4a76fb13f5704b0"
+    },
+    {
+      "id": "httpx-event-hooks",
+      "category": "single_hop",
+      "question": "When do HTTPX request and response event hooks run?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/advanced/event-hooks.md"],
+      "required_terms": ["before", "returned"],
+      "repository_id": "bf7a3fa2ba465b8907987bdaf220f733639ea74cedadac36f4a76fb13f5704b0"
+    },
+    {
+      "id": "httpx-transport-retries",
+      "category": "single_hop",
+      "question": "Which failures can HTTPTransport retries handle directly?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/advanced/transports.md"],
+      "required_terms": ["ConnectError", "ConnectTimeout"],
+      "repository_id": "bf7a3fa2ba465b8907987bdaf220f733639ea74cedadac36f4a76fb13f5704b0"
+    },
+    {
+      "id": "httpx-async-hot-loop",
+      "category": "single_hop",
+      "question": "Why should an AsyncClient not be created inside a hot loop?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/async.md"],
+      "required_terms": ["connection pooling", "single"],
+      "repository_id": "bf7a3fa2ba465b8907987bdaf220f733639ea74cedadac36f4a76fb13f5704b0"
+    },
+    {
+      "id": "httpx-http2-version",
+      "category": "single_hop",
+      "question": "How can a response reveal whether HTTPX actually used HTTP/2?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/http2.md"],
+      "required_terms": ["http_version", "HTTP/2"],
+      "repository_id": "bf7a3fa2ba465b8907987bdaf220f733639ea74cedadac36f4a76fb13f5704b0"
+    },
+    {
+      "id": "httpx-redirect-default",
+      "category": "single_hop",
+      "question": "Does HTTPX follow redirects by default, and how is it enabled?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/compatibility.md"],
+      "required_terms": ["does not", "follow_redirects=True"],
+      "repository_id": "bf7a3fa2ba465b8907987bdaf220f733639ea74cedadac36f4a76fb13f5704b0"
+    },
+    {
+      "id": "httpx-custom-auth-io",
+      "category": "single_hop",
+      "question": "Which authentication methods should be overridden when a custom HTTPX auth scheme performs disk I/O?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/advanced/authentication.md"],
+      "required_terms": ["sync_auth_flow", "async_auth_flow"],
+      "repository_id": "bf7a3fa2ba465b8907987bdaf220f733639ea74cedadac36f4a76fb13f5704b0"
+    },
+    {
+      "id": "httpx-text-fallback",
+      "category": "single_hop",
+      "question": "What encoding does HTTPX assume when a response omits charset information?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/advanced/text-encodings.md"],
+      "required_terms": ["utf-8"],
+      "repository_id": "bf7a3fa2ba465b8907987bdaf220f733639ea74cedadac36f4a76fb13f5704b0"
+    },
+    {
+      "id": "httpx-manual-stream-close",
+      "category": "single_hop",
+      "question": "What cleanup is required when using HTTPX manual async streaming mode?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/async.md"],
+      "required_terms": ["Response.aclose", "resource leaks"],
+      "repository_id": "bf7a3fa2ba465b8907987bdaf220f733639ea74cedadac36f4a76fb13f5704b0"
+    }
+  ]
+}

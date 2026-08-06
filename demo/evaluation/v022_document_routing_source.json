@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "name": "MemoryForge v0.2.2 deterministic document routing sources",
+  "development": {
+    "repository": "pallets/click",
+    "suite": "demo/evaluation/click_docs_dev_v021.json",
+    "policy": "development_only"
+  },
+  "confirmation": {
+    "repository": "encode/httpx",
+    "remote_url": "https://github.com/encode/httpx.git",
+    "commit": "26d48e0634e6ee9cdc0533996db289ce4b430177",
+    "version": "0.28.1",
+    "license": "BSD-3-Clause",
+    "license_path": "LICENSE.md",
+    "license_sha256": "4ec59d544f12b5f539a3a716fd321ac58ccd8030b465221f2c880200cdf28d8d",
+    "repository_id": "bf7a3fa2ba465b8907987bdaf220f733639ea74cedadac36f4a76fb13f5704b0",
+    "tracked_text_candidates": 30,
+    "suite": "demo/evaluation/httpx_docs_confirm_v022.json",
+    "policy": "run_once_after_implementation_freeze"
+  }
+}
