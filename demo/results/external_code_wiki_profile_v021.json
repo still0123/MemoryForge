@@ -1,0 +1,455 @@
+{
+  "schema_version": 1,
+  "memoryforge_commit": "d90a129c5202ab19a06d082dde01c46c422c7554",
+  "memoryforge_worktree_dirty": false,
+  "scope": {
+    "cold_start": "empty MemoryForge workspace; operating-system file cache not flushed",
+    "single_file_update": "committed synthetic function added to one selected source; Git commit time excluded",
+    "timing": "wall clock seconds; medians decide the cache gate",
+    "peak_rss": "per-repetition process high-water mark"
+  },
+  "environment": {
+    "platform": "macOS-26.5.2-arm64-arm-64bit",
+    "python": "3.11.15",
+    "tree_sitter": "0.25.2",
+    "tree_sitter_python": "0.25.0",
+    "tree_sitter_go": "0.25.0",
+    "tree_sitter_typescript": "0.23.2"
+  },
+  "source_manifest": {
+    "path": "demo/evaluation/external_code_wiki_sources_v021.json",
+    "sha256": "16c10ae28f1bc992e6b00d4953682a54c0273ba5960c44f777e64072e2a12af7"
+  },
+  "repetitions": 3,
+  "repositories": [
+    {
+      "name": "click",
+      "counts": {
+        "sources": 17,
+        "symbols": 600,
+        "relations": 852,
+        "modules": 18
+      },
+      "median": {
+        "cold_start": {
+          "source_scan_and_sync_seconds": 4.847508,
+          "tree_sitter_parse_seconds": 0.024321,
+          "relation_resolver_seconds": 0.041529,
+          "code_index_other_seconds": 0.823872,
+          "module_plan_seconds": 0.002117,
+          "wiki_compile_seconds": 0.481352,
+          "total_seconds": 6.197169
+        },
+        "single_file_update": {
+          "source_scan_and_sync_seconds": 5.175479,
+          "tree_sitter_parse_seconds": 0.022945,
+          "relation_resolver_seconds": 0.044989,
+          "code_index_other_seconds": 0.809906,
+          "module_plan_seconds": 0.001719,
+          "wiki_compile_seconds": 0.597798,
+          "total_seconds": 6.707477
+        },
+        "single_file_update_to_cold_ratio": 1.082345,
+        "peak_rss_mib": 84.984
+      },
+      "single_file_change": {
+        "changed_file": "src/click/__init__.py",
+        "changed_pages": [
+          "wiki/pages/code/src/click.md"
+        ],
+        "changed_page_ratio": 0.058824
+      },
+      "samples": [
+        {
+          "cold_start": {
+            "source_scan_and_sync_seconds": 4.847508,
+            "tree_sitter_parse_seconds": 0.023632,
+            "relation_resolver_seconds": 0.041997,
+            "code_index_other_seconds": 0.800681,
+            "module_plan_seconds": 0.001851,
+            "wiki_compile_seconds": 0.481352,
+            "total_seconds": 6.197169
+          },
+          "single_file_update": {
+            "source_scan_and_sync_seconds": 5.175479,
+            "tree_sitter_parse_seconds": 0.02277,
+            "relation_resolver_seconds": 0.043316,
+            "code_index_other_seconds": 0.809906,
+            "module_plan_seconds": 0.001719,
+            "wiki_compile_seconds": 0.565774,
+            "total_seconds": 6.619088,
+            "changed_file": "src/click/__init__.py",
+            "commit": "77ed598a333e2922fbbb0f1daea13234eb0d1371",
+            "changed_pages": [
+              "wiki/pages/code/src/click.md"
+            ],
+            "changed_page_ratio": 0.058824
+          },
+          "counts": {
+            "sources": 17,
+            "symbols": 600,
+            "relations": 852,
+            "modules": 18
+          },
+          "peak_rss_bytes": 89112576
+        },
+        {
+          "cold_start": {
+            "source_scan_and_sync_seconds": 4.562899,
+            "tree_sitter_parse_seconds": 0.024321,
+            "relation_resolver_seconds": 0.041529,
+            "code_index_other_seconds": 0.894642,
+            "module_plan_seconds": 0.002323,
+            "wiki_compile_seconds": 0.495525,
+            "total_seconds": 6.021415
+          },
+          "single_file_update": {
+            "source_scan_and_sync_seconds": 5.161475,
+            "tree_sitter_parse_seconds": 0.023755,
+            "relation_resolver_seconds": 0.04617,
+            "code_index_other_seconds": 0.876396,
+            "module_plan_seconds": 0.00172,
+            "wiki_compile_seconds": 0.597798,
+            "total_seconds": 6.707477,
+            "changed_file": "src/click/__init__.py",
+            "commit": "e75c36a0d794c2757d61257f688d254e3d873242",
+            "changed_pages": [
+              "wiki/pages/code/src/click.md"
+            ],
+            "changed_page_ratio": 0.058824
+          },
+          "counts": {
+            "sources": 17,
+            "symbols": 600,
+            "relations": 852,
+            "modules": 18
+          },
+          "peak_rss_bytes": 90439680
+        },
+        {
+          "cold_start": {
+            "source_scan_and_sync_seconds": 5.046328,
+            "tree_sitter_parse_seconds": 0.025187,
+            "relation_resolver_seconds": 0.041389,
+            "code_index_other_seconds": 0.823872,
+            "module_plan_seconds": 0.002117,
+            "wiki_compile_seconds": 0.472599,
+            "total_seconds": 6.411663
+          },
+          "single_file_update": {
+            "source_scan_and_sync_seconds": 5.235641,
+            "tree_sitter_parse_seconds": 0.022945,
+            "relation_resolver_seconds": 0.044989,
+            "code_index_other_seconds": 0.800724,
+            "module_plan_seconds": 0.001716,
+            "wiki_compile_seconds": 0.614983,
+            "total_seconds": 6.721147,
+            "changed_file": "src/click/__init__.py",
+            "commit": "f2448f6b90e9751eb5dcaff7a2a002151bb66ff9",
+            "changed_pages": [
+              "wiki/pages/code/src/click.md"
+            ],
+            "changed_page_ratio": 0.058824
+          },
+          "counts": {
+            "sources": 17,
+            "symbols": 600,
+            "relations": 852,
+            "modules": 18
+          },
+          "peak_rss_bytes": 88817664
+        }
+      ]
+    },
+    {
+      "name": "cobra",
+      "counts": {
+        "sources": 36,
+        "symbols": 649,
+        "relations": 1546,
+        "modules": 2
+      },
+      "median": {
+        "cold_start": {
+          "source_scan_and_sync_seconds": 3.09636,
+          "tree_sitter_parse_seconds": 0.02966,
+          "relation_resolver_seconds": 0.105922,
+          "code_index_other_seconds": 1.371739,
+          "module_plan_seconds": 0.001719,
+          "wiki_compile_seconds": 0.953105,
+          "total_seconds": 5.51185
+        },
+        "single_file_update": {
+          "source_scan_and_sync_seconds": 3.130328,
+          "tree_sitter_parse_seconds": 0.029796,
+          "relation_resolver_seconds": 0.109478,
+          "code_index_other_seconds": 1.260978,
+          "module_plan_seconds": 0.001457,
+          "wiki_compile_seconds": 1.043495,
+          "total_seconds": 5.5692
+        },
+        "single_file_update_to_cold_ratio": 1.010405,
+        "peak_rss_mib": 102.594
+      },
+      "single_file_change": {
+        "changed_file": "active_help.go",
+        "changed_pages": [
+          "wiki/pages/code/cobra.md"
+        ],
+        "changed_page_ratio": 0.5
+      },
+      "samples": [
+        {
+          "cold_start": {
+            "source_scan_and_sync_seconds": 3.09636,
+            "tree_sitter_parse_seconds": 0.02966,
+            "relation_resolver_seconds": 0.105922,
+            "code_index_other_seconds": 1.423953,
+            "module_plan_seconds": 0.001719,
+            "wiki_compile_seconds": 0.953105,
+            "total_seconds": 5.610908
+          },
+          "single_file_update": {
+            "source_scan_and_sync_seconds": 3.118939,
+            "tree_sitter_parse_seconds": 0.029796,
+            "relation_resolver_seconds": 0.109478,
+            "code_index_other_seconds": 1.26586,
+            "module_plan_seconds": 0.001475,
+            "wiki_compile_seconds": 1.043495,
+            "total_seconds": 5.5692,
+            "changed_file": "active_help.go",
+            "commit": "4a05fc1aa74fd4c143751dd232662c8986e80a51",
+            "changed_pages": [
+              "wiki/pages/code/cobra.md"
+            ],
+            "changed_page_ratio": 0.5
+          },
+          "counts": {
+            "sources": 36,
+            "symbols": 649,
+            "relations": 1546,
+            "modules": 2
+          },
+          "peak_rss_bytes": 110411776
+        },
+        {
+          "cold_start": {
+            "source_scan_and_sync_seconds": 3.062004,
+            "tree_sitter_parse_seconds": 0.028884,
+            "relation_resolver_seconds": 0.103912,
+            "code_index_other_seconds": 1.34737,
+            "module_plan_seconds": 0.001668,
+            "wiki_compile_seconds": 0.963269,
+            "total_seconds": 5.507269
+          },
+          "single_file_update": {
+            "source_scan_and_sync_seconds": 3.130328,
+            "tree_sitter_parse_seconds": 0.029868,
+            "relation_resolver_seconds": 0.111706,
+            "code_index_other_seconds": 1.221161,
+            "module_plan_seconds": 0.00143,
+            "wiki_compile_seconds": 1.033079,
+            "total_seconds": 5.527712,
+            "changed_file": "active_help.go",
+            "commit": "8c443b6bf30145d6b827e53b3adcd89945974aa9",
+            "changed_pages": [
+              "wiki/pages/code/cobra.md"
+            ],
+            "changed_page_ratio": 0.5
+          },
+          "counts": {
+            "sources": 36,
+            "symbols": 649,
+            "relations": 1546,
+            "modules": 2
+          },
+          "peak_rss_bytes": 107577344
+        },
+        {
+          "cold_start": {
+            "source_scan_and_sync_seconds": 3.135495,
+            "tree_sitter_parse_seconds": 0.03476,
+            "relation_resolver_seconds": 0.10758,
+            "code_index_other_seconds": 1.371739,
+            "module_plan_seconds": 0.001753,
+            "wiki_compile_seconds": 0.860358,
+            "total_seconds": 5.51185
+          },
+          "single_file_update": {
+            "source_scan_and_sync_seconds": 3.188057,
+            "tree_sitter_parse_seconds": 0.028936,
+            "relation_resolver_seconds": 0.108031,
+            "code_index_other_seconds": 1.260978,
+            "module_plan_seconds": 0.001457,
+            "wiki_compile_seconds": 1.051406,
+            "total_seconds": 5.639,
+            "changed_file": "active_help.go",
+            "commit": "87a48f15e3589fc25e48db9dfce3c21babca4c0d",
+            "changed_pages": [
+              "wiki/pages/code/cobra.md"
+            ],
+            "changed_page_ratio": 0.5
+          },
+          "counts": {
+            "sources": 36,
+            "symbols": 649,
+            "relations": 1546,
+            "modules": 2
+          },
+          "peak_rss_bytes": 106168320
+        }
+      ]
+    },
+    {
+      "name": "zod",
+      "counts": {
+        "sources": 34,
+        "symbols": 1199,
+        "relations": 1323,
+        "modules": 40
+      },
+      "median": {
+        "cold_start": {
+          "source_scan_and_sync_seconds": 2.840727,
+          "tree_sitter_parse_seconds": 0.038084,
+          "relation_resolver_seconds": 0.102543,
+          "code_index_other_seconds": 1.365994,
+          "module_plan_seconds": 0.003992,
+          "wiki_compile_seconds": 0.877152,
+          "total_seconds": 5.403057
+        },
+        "single_file_update": {
+          "source_scan_and_sync_seconds": 3.464762,
+          "tree_sitter_parse_seconds": 0.037614,
+          "relation_resolver_seconds": 0.109343,
+          "code_index_other_seconds": 1.568276,
+          "module_plan_seconds": 0.004047,
+          "wiki_compile_seconds": 1.227569,
+          "total_seconds": 6.401153
+        },
+        "single_file_update_to_cold_ratio": 1.184728,
+        "peak_rss_mib": 99.641
+      },
+      "single_file_change": {
+        "changed_file": "packages/zod/src/v4/core/api.ts",
+        "changed_pages": [
+          "wiki/pages/code/packages/zod/src/v4/core/api.md"
+        ],
+        "changed_page_ratio": 0.029412
+      },
+      "samples": [
+        {
+          "cold_start": {
+            "source_scan_and_sync_seconds": 2.833764,
+            "tree_sitter_parse_seconds": 0.039346,
+            "relation_resolver_seconds": 0.102543,
+            "code_index_other_seconds": 1.556302,
+            "module_plan_seconds": 0.003885,
+            "wiki_compile_seconds": 0.877152,
+            "total_seconds": 5.413163
+          },
+          "single_file_update": {
+            "source_scan_and_sync_seconds": 3.464762,
+            "tree_sitter_parse_seconds": 0.037614,
+            "relation_resolver_seconds": 0.109398,
+            "code_index_other_seconds": 1.504889,
+            "module_plan_seconds": 0.004047,
+            "wiki_compile_seconds": 1.227569,
+            "total_seconds": 6.348403,
+            "changed_file": "packages/zod/src/v4/core/api.ts",
+            "commit": "a291e6f2d827b27434f2c087b595ae3e42568da5",
+            "changed_pages": [
+              "wiki/pages/code/packages/zod/src/v4/core/api.md"
+            ],
+            "changed_page_ratio": 0.029412
+          },
+          "counts": {
+            "sources": 34,
+            "symbols": 1199,
+            "relations": 1323,
+            "modules": 40
+          },
+          "peak_rss_bytes": 105758720
+        },
+        {
+          "cold_start": {
+            "source_scan_and_sync_seconds": 2.840727,
+            "tree_sitter_parse_seconds": 0.038084,
+            "relation_resolver_seconds": 0.102831,
+            "code_index_other_seconds": 1.357349,
+            "module_plan_seconds": 0.004124,
+            "wiki_compile_seconds": 0.880704,
+            "total_seconds": 5.224001
+          },
+          "single_file_update": {
+            "source_scan_and_sync_seconds": 3.454813,
+            "tree_sitter_parse_seconds": 0.039113,
+            "relation_resolver_seconds": 0.104796,
+            "code_index_other_seconds": 1.568276,
+            "module_plan_seconds": 0.003848,
+            "wiki_compile_seconds": 1.230172,
+            "total_seconds": 6.401153,
+            "changed_file": "packages/zod/src/v4/core/api.ts",
+            "commit": "08b08d28bd5ae06be3db67c942d51ba381054c9b",
+            "changed_pages": [
+              "wiki/pages/code/packages/zod/src/v4/core/api.md"
+            ],
+            "changed_page_ratio": 0.029412
+          },
+          "counts": {
+            "sources": 34,
+            "symbols": 1199,
+            "relations": 1323,
+            "modules": 40
+          },
+          "peak_rss_bytes": 104202240
+        },
+        {
+          "cold_start": {
+            "source_scan_and_sync_seconds": 3.020093,
+            "tree_sitter_parse_seconds": 0.037041,
+            "relation_resolver_seconds": 0.101811,
+            "code_index_other_seconds": 1.365994,
+            "module_plan_seconds": 0.003992,
+            "wiki_compile_seconds": 0.873974,
+            "total_seconds": 5.403057
+          },
+          "single_file_update": {
+            "source_scan_and_sync_seconds": 3.492935,
+            "tree_sitter_parse_seconds": 0.037566,
+            "relation_resolver_seconds": 0.109343,
+            "code_index_other_seconds": 1.656729,
+            "module_plan_seconds": 0.004098,
+            "wiki_compile_seconds": 1.19893,
+            "total_seconds": 6.49987,
+            "changed_file": "packages/zod/src/v4/core/api.ts",
+            "commit": "1016d4fd539280895e83bfadda6738be1123ba07",
+            "changed_pages": [
+              "wiki/pages/code/packages/zod/src/v4/core/api.md"
+            ],
+            "changed_page_ratio": 0.029412
+          },
+          "counts": {
+            "sources": 34,
+            "symbols": 1199,
+            "relations": 1323,
+            "modules": 40
+          },
+          "peak_rss_bytes": 104480768
+        }
+      ]
+    }
+  ],
+  "cache_gate": {
+    "largest_repository_by_symbol_count": "zod",
+    "cold_start_seconds": 5.403057,
+    "single_file_update_seconds": 6.401153,
+    "single_file_update_to_cold_ratio": 1.184728,
+    "thresholds": {
+      "single_file_update_seconds_gt": 10.0,
+      "single_file_update_to_cold_ratio_gt": 0.5
+    },
+    "triggered": false,
+    "decision": "NO_CHANGE"
+  }
+}

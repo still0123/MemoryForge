@@ -87,8 +87,9 @@ Symbol/Relation 召回与 precision 必须完整报告。未达目标时允许�
 - `docs/EXTERNAL_CODE_WIKI_BENCHMARK.md`
 
 当前状态：人工正样本标签、Runner 和基线 Evidence 已完成。60 个 Symbol、45 条 Relation、
-15 条 Module assignment 均命中；该结果不代表全仓 precision/recall。增量与性能仍由后续阶段
-单独验证。
+15 条 Module assignment 均命中；该结果不代表全仓 precision/recall。单文件测试中 Click 和
+Zod 的变化页面占比分别为 5.88% 和 2.94%，Cobra 因当前仅 2 个 Module 而达到 50%，未通过
+25% 门禁。Relation precision 仍未完成。
 
 ## 6. Phase 3：性能决策
 
@@ -102,6 +103,11 @@ Symbol/Relation 召回与 precision 必须完整报告。未达目标时允许�
 
 只有最大仓库的单文件更新同时超过冷启动耗时 50% 且超过 10 秒，才允许实现文件级解析缓存。
 缓存只能按 Blob SHA、语言和 parser version 复用不可变代码事实。未触发阈值时输出 `NO_CHANGE`。
+
+当前状态：已在 clean Commit `d90a129` 上完成三仓各 3 次 profile。最大仓库 Zod 的冷启动和
+单文件更新中位数分别为 5.40 秒和 6.40 秒；更新比例为 118.5%，但未超过 10 秒，因此缓存门禁
+未触发，决策为 `NO_CHANGE`。完整结果见
+`demo/results/external_code_wiki_profile_v021.json`。
 
 ## 7. Phase 4：第二套文档评测
 
