@@ -15,6 +15,7 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PINNED_PUBLIC_COMMIT = "93f5dc05229da250b041850ad8deeeec886ef304"
+PINNED_PUBLIC_REPOSITORY_ID = "db29dfd06f0a2853c9764f1393b680d6a592b1a5771a012b6e1387fc17aac597"
 CODE_METRICS = (
     "expected_source_coverage",
     "symbol_recall",
@@ -216,8 +217,12 @@ def _validate_code_evidence(evidence: dict[str, Any]) -> None:
 
 def _validate_public_evidence(evidence: dict[str, Any]) -> None:
     repositories = evidence["source_repositories"]
-    if len(repositories) != 1 or repositories[0]["commit"] != PINNED_PUBLIC_COMMIT:
-        raise SystemExit("public Demo used an unexpected source revision")
+    if (
+        len(repositories) != 1
+        or repositories[0]["commit"] != PINNED_PUBLIC_COMMIT
+        or repositories[0]["repository_id"] != PINNED_PUBLIC_REPOSITORY_ID
+    ):
+        raise SystemExit("public Demo used an unexpected source identity")
     metrics = evidence["evaluation"]["memoryforge"]
     failed = [name for name, expected in PUBLIC_METRICS.items() if metrics.get(name) != expected]
     if failed:
