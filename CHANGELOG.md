@@ -9,6 +9,8 @@
 - 原 AgentSkill-Eval 30 题 Answer/Citation 为 100%，Source recall@3 保持 96.2%。
 - 新增 annotated tag 发布工作流，冻结 Hatchling 构建环境并校验 Wheel/sdist、SHA256、
   artifact attestation、Release 上传和远端资产回下载。
+- 追加独立 Click 20 题复评；回答准确率 5.0%、来源召回 16.7%，再次确认外部有效性缺口；
+- 修复离线 semantic retrieval 实验调用 `_candidate_pages` 时的陈旧签名；
 
 ## v0.2.0 — 2026-08-06
 

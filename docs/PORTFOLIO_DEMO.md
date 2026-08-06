@@ -52,6 +52,10 @@ init → git-add → git-sync → ingest → review → approve → apply → li
 拒答准确率 100%。同一题集上的 Raw FTS Top-3 来源召回率为 57.7%，完整方法见
 [公开 Benchmark](BENCHMARK.md)。
 
+必须同时展示外部有效性边界：正式 Click 评测和独立 20 题复评均未通过 Phase 4 门禁，独立
+复评回答准确率只有 5.0%。详见 [正式结果](CLICK_DOCS_BENCHMARK.md) 和
+[独立复评](EXTERNAL_DOCUMENT_WIKI_BENCHMARK.md)。
+
 再打开 [`code_wiki_public.json`](../demo/results/code_wiki_public.json) 和
 [`release_provenance.json`](../demo/results/release_provenance.json)：前者证明三语言 Symbol、
 Relation、Module、Mermaid edge 和 Citation 指标均为 100%，单文件更新只影响 20% 的源码模块页；

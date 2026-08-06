@@ -81,7 +81,9 @@ Runner 会校验 HEAD、origin 和许可证哈希。任一冻结标签、Citatio
 - 100% 只表示冻结的 60/45/15 条人工正样本全部命中，不能外推为全仓 precision 或 recall；
 - 本轮不含负 Relation 标签，因此不宣称 Relation precision；
 - Cobra 的 `.` 选择包含仓库测试文件；这是 manifest 明示范围，不代表生产源码专属结果；
-- 第二套文档评测属于后续 Phase。
+- Click 文档评测与独立复评均得到负结果，见
+  [`CLICK_DOCS_BENCHMARK.md`](CLICK_DOCS_BENCHMARK.md) 和
+  [`EXTERNAL_DOCUMENT_WIKI_BENCHMARK.md`](EXTERNAL_DOCUMENT_WIKI_BENCHMARK.md)。
 
 ## 性能与单文件更新
 

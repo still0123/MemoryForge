@@ -56,6 +56,15 @@ Agent 的证据终止约束、增量主题扩展、
 
 完整方法和失败案例见 [`docs/BENCHMARK.md`](../docs/BENCHMARK.md)。
 
+## Click 外部文档独立复评
+
+在主线正式 Click 评测之外，另冻结 development / holdout 各 10 题。合并回答准确率 5.0%、
+来源召回率 16.7%、Citation grounding 94.4%，再次确认 Phase 4 负结果。
+
+正式结果见 [`CLICK_DOCS_BENCHMARK.md`](../docs/CLICK_DOCS_BENCHMARK.md)；独立题集位于
+`evaluation/external_document_click_{dev,holdout}_v021.json`，复评报告见
+[`EXTERNAL_DOCUMENT_WIKI_BENCHMARK.md`](../docs/EXTERNAL_DOCUMENT_WIKI_BENCHMARK.md)。
+
 ## 代码 Wiki C0-C4
 
 ```bash

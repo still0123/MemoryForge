@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "experiment": "page-level-character-ngram-proxy",
+  "suite": "MemoryForge v0.2.1 Click document development split",
+  "case_count": 10,
+  "answered_case_count": 9,
+  "max_pages": 3,
+  "runtime": {
+    "qmd_command": false,
+    "sentence_transformers_module": false,
+    "true_embedding_backend_used": false
+  },
+  "metric_definition": "For answered cases, recall is true when the expected source path is represented by the top page candidates; multi_source cases require every expected source. Unanswerable cases are excluded from recall.",
+  "baseline": {
+    "name": "current INDEX + FTS5 candidate path",
+    "source_recall_at_3": 33.3,
+    "paraphrase_source_recall_at_3": 50.0,
+    "average_pages_ranked": 3.0
+  },
+  "proxy": {
+    "name": "page-level character n-gram cosine proxy",
+    "source_recall_at_3": 88.9,
+    "paraphrase_source_recall_at_3": 100.0,
+    "average_pages_ranked": 3.0
+  },
+  "decision": {
+    "status": "candidate_for_integration",
+    "recall_gain_points": 55.6,
+    "reason": "proxy improves recall by at least 10 points within the page budget"
+  },
+  "cases": [
+    {
+      "id": "dev-quickstart-install",
+      "category": "single_hop",
+      "baseline_recalled": false,
+      "proxy_recalled": true,
+      "baseline_page_count": 3,
+      "proxy_page_count": 3
+    },
+    {
+      "id": "dev-variadic-argument",
+      "category": "single_hop",
+      "baseline_recalled": false,
+      "proxy_recalled": true,
+      "baseline_page_count": 3,
+      "proxy_page_count": 3
+    },
+    {
+      "id": "dev-confirm-abort",
+      "category": "single_hop",
+      "baseline_recalled": true,
+      "proxy_recalled": true,
+      "baseline_page_count": 3,
+      "proxy_page_count": 3
+    },
+    {
+      "id": "dev-testing-thread-safety",
+      "category": "single_hop",
+      "baseline_recalled": false,
+      "proxy_recalled": true,
+      "baseline_page_count": 3,
+      "proxy_page_count": 3
+    },
+    {
+      "id": "dev-standalone-mode",
+      "category": "single_hop",
+      "baseline_recalled": true,
+      "proxy_recalled": true,
+      "baseline_page_count": 3,
+      "proxy_page_count": 3
+    },
+    {
+      "id": "dev-entry-point-briefcase",
+      "category": "multi_source",
+      "baseline_recalled": false,
+      "proxy_recalled": true,
+      "baseline_page_count": 3,
+      "proxy_page_count": 3
+    },
+    {
+      "id": "dev-custom-type-atomic-file",
+      "category": "multi_source",
+      "baseline_recalled": false,
+      "proxy_recalled": false,
+      "baseline_page_count": 3,
+      "proxy_page_count": 3
+    },
+    {
+      "id": "dev-unknown-session-database",
+      "category": "unanswerable",
+      "baseline_recalled": null,
+      "proxy_recalled": null,
+      "baseline_page_count": 3,
+      "proxy_page_count": 3
+    },
+    {
+      "id": "dev-paraphrase-no-autocorrect",
+      "category": "paraphrase",
+      "baseline_recalled": false,
+      "proxy_recalled": true,
+      "baseline_page_count": 3,
+      "proxy_page_count": 3
+    },
+    {
+      "id": "dev-paraphrase-bash-completion",
+      "category": "paraphrase",
+      "baseline_recalled": true,
+      "proxy_recalled": true,
+      "baseline_page_count": 3,
+      "proxy_page_count": 3
+    }
+  ]
+}

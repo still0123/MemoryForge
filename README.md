@@ -188,6 +188,10 @@ init -> git-add --public -> git-sync -> ingest -> review -> approve -> apply -> 
 
 Raw FTS 只负责检索，不生成答案，所以不能拿它计算回答、引用或拒答准确率。完整方法、失败案例和复现说明见 [公开 Benchmark](docs/BENCHMARK.md)。
 
+主线 Click 文档评测与一套独立 20 题复评都没有复现上述结果；独立复评回答准确率 5.0%、
+来源召回率 16.7%。正式结果见 [Click 外部评测](docs/CLICK_DOCS_BENCHMARK.md)，复评题集和
+Evidence 见 [独立复评](docs/EXTERNAL_DOCUMENT_WIKI_BENCHMARK.md)。
+
 ### 从 Wheel 独立复现
 
 发布检查会创建全新虚拟环境，只安装 Wheel，并运行 CLI、代码 Wiki Benchmark 和可选的完整公开

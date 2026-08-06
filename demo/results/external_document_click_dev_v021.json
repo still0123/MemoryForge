@@ -1,0 +1,449 @@
+{
+  "schema_version": 1,
+  "memoryforge_commit": "ee63b9396946804fb2b78ae1318fe84fc9559bb9",
+  "source_repositories": [
+    {
+      "repository_id": "df3e9a7cc5cdbfd38722df9b0bd3ac96c0e59c752a1db087dd20644a8933b372",
+      "remote_url": "https://github.com/pallets/click.git",
+      "commit": "00e592cea702e0b2caa0dee42489fdb1c22cd845",
+      "source_count": 38
+    }
+  ],
+  "workflow": {
+    "source_count": 38,
+    "wiki_file_count": 39,
+    "lint": {
+      "status": "clean",
+      "checked_pages": 39,
+      "issues": []
+    }
+  },
+  "sample_query": {
+    "question": "What command installs Click from PyPI?",
+    "answer": "Click makes it very easy to document your command line tools. For most things Click automatically generates help pages for you. By design the text is customizable, but the layout is not.",
+    "citations": [
+      {
+        "source_id": "4f22f21458de8bac605ff52e695753dcbf5eff07e1ca7c4790fc069f3efc11ed",
+        "source_version": 14,
+        "locator": "chars:44-230",
+        "quote": "Click makes it very easy to document your command line tools. For most things Click automatically generates help pages for you. By design the text is customizable, but the layout is not.",
+        "section_path": "Help Pages"
+      }
+    ],
+    "trace": [
+      {
+        "level": "L0",
+        "artifact": "wiki/INDEX.md"
+      },
+      {
+        "level": "L0",
+        "artifact": "SQLite FTS5 applied-source index"
+      },
+      {
+        "level": "L1",
+        "artifact": "wiki/pages/2be700a1bccecdf4005bcf0b5d5e7473394f2819e7ed2de77824758592d1c311.md"
+      },
+      {
+        "level": "L1",
+        "artifact": "wiki/pages/30fd67991ddd442cb09f3635dbc9353813534c7bd6b73df05abf2601c8ceb7c3.md"
+      },
+      {
+        "level": "L1",
+        "artifact": "wiki/pages/4f22f21458de8bac605ff52e695753dcbf5eff07e1ca7c4790fc069f3efc11ed.md"
+      },
+      {
+        "level": "L2",
+        "artifact": "wiki/pages/4f22f21458de8bac605ff52e695753dcbf5eff07e1ca7c4790fc069f3efc11ed.md"
+      },
+      {
+        "level": "L3",
+        "artifact": "source 4f22f21458de8bac605ff52e695753dcbf5eff07e1ca7c4790fc069f3efc11ed revision 14"
+      }
+    ]
+  },
+  "evaluation": {
+    "suite": "MemoryForge v0.2.1 Click document development split",
+    "case_count": 10,
+    "memoryforge": {
+      "answer_accuracy": 10.0,
+      "source_recall_at_3": 22.2,
+      "citation_grounding_accuracy": 100.0,
+      "multi_source_coverage": 0.0,
+      "abstention_accuracy": 0.0,
+      "average_wiki_pages_read": 3.0,
+      "average_raw_sources_read": 0.0,
+      "average_evidence_characters": 279.8
+    },
+    "raw_fts_baseline": {
+      "expected_source_recall_at_3": 88.9,
+      "multi_source_coverage": 100.0,
+      "average_exposed_characters": 727.4
+    },
+    "cases": [
+      {
+        "id": "dev-quickstart-install",
+        "category": "single_hop",
+        "question": "What command installs Click from PyPI?",
+        "memoryforge": {
+          "answer_correct": false,
+          "citation_grounded": true,
+          "expected_sources_recalled": false,
+          "all_expected_sources_cited": false,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 186,
+          "wiki_pages": [
+            "wiki/pages/4f22f21458de8bac605ff52e695753dcbf5eff07e1ca7c4790fc069f3efc11ed.md"
+          ],
+          "cited_source_paths": [
+            "docs/documentation.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": false,
+          "expected_sources_in_top_3": false,
+          "expected_sources_recalled": false,
+          "raw_source_paths": [
+            "docs/entry-points.md",
+            "docs/index.md",
+            "docs/standalone-apps.md"
+          ],
+          "expected_source_paths": [
+            "docs/quickstart.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      },
+      {
+        "id": "dev-variadic-argument",
+        "category": "single_hop",
+        "question": "How does Click represent a variadic argument configured with nargs=-1?",
+        "memoryforge": {
+          "answer_correct": false,
+          "citation_grounded": true,
+          "expected_sources_recalled": false,
+          "all_expected_sources_cited": false,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 193,
+          "wiki_pages": [
+            "wiki/pages/2be700a1bccecdf4005bcf0b5d5e7473394f2819e7ed2de77824758592d1c311.md"
+          ],
+          "cited_source_paths": [
+            "docs/utils.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/arguments.md",
+            "docs/options.md",
+            "docs/unicode-support.md"
+          ],
+          "expected_source_paths": [
+            "docs/arguments.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      },
+      {
+        "id": "dev-confirm-abort",
+        "category": "single_hop",
+        "question": "How can click.confirm abort automatically when the user declines?",
+        "memoryforge": {
+          "answer_correct": false,
+          "citation_grounded": true,
+          "expected_sources_recalled": false,
+          "all_expected_sources_cited": false,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 186,
+          "wiki_pages": [
+            "wiki/pages/4f22f21458de8bac605ff52e695753dcbf5eff07e1ca7c4790fc069f3efc11ed.md"
+          ],
+          "cited_source_paths": [
+            "docs/documentation.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/api.md",
+            "docs/exceptions.md",
+            "docs/prompts.md"
+          ],
+          "expected_source_paths": [
+            "docs/prompts.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 728
+        }
+      },
+      {
+        "id": "dev-testing-thread-safety",
+        "category": "single_hop",
+        "question": "Why must CliRunner.invoke not run concurrently in multiple threads?",
+        "memoryforge": {
+          "answer_correct": false,
+          "citation_grounded": true,
+          "expected_sources_recalled": false,
+          "all_expected_sources_cited": false,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 209,
+          "wiki_pages": [
+            "wiki/pages/226b085f18abffc65aee9ffd4ebd87507785e2cc897f5170ae635f4e20e56795.md"
+          ],
+          "cited_source_paths": [
+            "docs/standalone-apps.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/commands-and-groups.md",
+            "docs/testing.md",
+            "docs/upgrade-guides.md"
+          ],
+          "expected_source_paths": [
+            "docs/testing.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 728
+        }
+      },
+      {
+        "id": "dev-standalone-mode",
+        "category": "single_hop",
+        "question": "What does standalone_mode=False disable?",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 211,
+          "wiki_pages": [
+            "wiki/pages/cbe18d55972b213ab9e860f3689cf4dabc39fba1280872e72e61d70808f37d5d.md"
+          ],
+          "cited_source_paths": [
+            "docs/exceptions.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/documentation.md",
+            "docs/exceptions.md",
+            "docs/options.md"
+          ],
+          "expected_source_paths": [
+            "docs/exceptions.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 732
+        }
+      },
+      {
+        "id": "dev-entry-point-briefcase",
+        "category": "multi_source",
+        "question": "Which pyproject setting creates an installable Click command, and which package file must Briefcase use to launch it?",
+        "memoryforge": {
+          "answer_correct": false,
+          "citation_grounded": true,
+          "expected_sources_recalled": false,
+          "all_expected_sources_cited": false,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 630,
+          "wiki_pages": [
+            "wiki/pages/3253cf687216993717aa12afc43df6b7d14eaa4f51e9c9b5cace96e0080ccf98.md",
+            "wiki/pages/2be700a1bccecdf4005bcf0b5d5e7473394f2819e7ed2de77824758592d1c311.md"
+          ],
+          "cited_source_paths": [
+            "docs/contributing.md",
+            "docs/utils.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/entry-points.md",
+            "docs/standalone-apps.md",
+            "docs/testing.md"
+          ],
+          "expected_source_paths": [
+            "docs/entry-points.md",
+            "docs/standalone-apps.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      },
+      {
+        "id": "dev-custom-type-atomic-file",
+        "category": "multi_source",
+        "question": "How do you implement a custom Click parameter converter and make file output atomic?",
+        "memoryforge": {
+          "answer_correct": false,
+          "citation_grounded": true,
+          "expected_sources_recalled": false,
+          "all_expected_sources_cited": false,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 337,
+          "wiki_pages": [
+            "wiki/pages/920f3713bd863da0fb6c8e5b38258621366854ff4a0c1ebd3b6eed67e0a5373b.md",
+            "wiki/pages/8cf7720c86f7bdbb2030b7ea9c7f0378989d1adacc42de6b1c6348a508ab7322.md"
+          ],
+          "cited_source_paths": [
+            "docs/prompts.md",
+            "docs/wincmd.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/handling-files.md",
+            "docs/parameter-types.md",
+            "docs/shell-completion.md"
+          ],
+          "expected_source_paths": [
+            "docs/handling-files.md",
+            "docs/parameter-types.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      },
+      {
+        "id": "dev-unknown-session-database",
+        "category": "unanswerable",
+        "question": "Which database backend does Click use to persist user sessions?",
+        "memoryforge": {
+          "answer_correct": false,
+          "citation_grounded": false,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": false,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 198,
+          "wiki_pages": [
+            "wiki/pages/920f3713bd863da0fb6c8e5b38258621366854ff4a0c1ebd3b6eed67e0a5373b.md"
+          ],
+          "cited_source_paths": [
+            "docs/prompts.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/commands-and-groups.md",
+            "docs/entry-points.md",
+            "docs/quickstart.md"
+          ],
+          "expected_source_paths": [],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      },
+      {
+        "id": "dev-paraphrase-no-autocorrect",
+        "category": "paraphrase",
+        "question": "Why does Click avoid magically fixing abbreviated long option names?",
+        "memoryforge": {
+          "answer_correct": false,
+          "citation_grounded": true,
+          "expected_sources_recalled": false,
+          "all_expected_sources_cited": false,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 341,
+          "wiki_pages": [
+            "wiki/pages/2be700a1bccecdf4005bcf0b5d5e7473394f2819e7ed2de77824758592d1c311.md"
+          ],
+          "cited_source_paths": [
+            "docs/utils.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/arguments.md",
+            "docs/extending-click.md",
+            "docs/why.md"
+          ],
+          "expected_source_paths": [
+            "docs/why.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      },
+      {
+        "id": "dev-paraphrase-bash-completion",
+        "category": "paraphrase",
+        "question": "How can foo-bar generate its Bash tab completion script?",
+        "memoryforge": {
+          "answer_correct": false,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 307,
+          "wiki_pages": [
+            "wiki/pages/3de2ee0c8d8da67e824e8dd44d62ae5130df39f21141b1fc5a21767075c64ae6.md"
+          ],
+          "cited_source_paths": [
+            "docs/shell-completion.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/command-line-reference.md",
+            "docs/complex.md",
+            "docs/shell-completion.md"
+          ],
+          "expected_source_paths": [
+            "docs/shell-completion.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 730
+        }
+      }
+    ]
+  }
+}

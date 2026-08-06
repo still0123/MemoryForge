@@ -128,6 +128,10 @@ v0.2.0 的 30 题基线不得回退。新题集允许负面结果，但 Citation
 v0.2.0 的 96.2%，其余核心指标无回退。holdout 已揭盲，本阶段不据此调参；完整结果见
 `docs/CLICK_DOCS_BENCHMARK.md`。
 
+另有一套独立冻结的 Click 20 题复评：合并回答准确率 5.0%，来源召回 16.7%，Citation
+grounding 94.4%。该复评同样未修改生产查询，结果见
+[`EXTERNAL_DOCUMENT_WIKI_BENCHMARK.md`](EXTERNAL_DOCUMENT_WIKI_BENCHMARK.md)。
+
 ## 8. Phase 5：发布自动化
 
 Tag workflow 必须：
