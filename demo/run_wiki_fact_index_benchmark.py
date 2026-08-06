@@ -15,8 +15,8 @@ from typing import Any, cast
 from memoryforge.workspace import search_wiki_facts
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-MANIFEST = REPO_ROOT / "demo/evaluation/external_code_wiki_learn_claude_code_sources_v031.json"
-REPOSITORY_NAME = "learn_claude_code"
+MANIFEST = REPO_ROOT / "demo/evaluation/wiki_fact_index_sources.json"
+SAMPLE_REPOSITORY = "learn_claude_code"
 _EXTERNAL_SCRIPT = REPO_ROOT / "demo/run_external_code_wiki_benchmark.py"
 _SPEC = importlib.util.spec_from_file_location("run_external_code_wiki_benchmark", _EXTERNAL_SCRIPT)
 if _SPEC is None or _SPEC.loader is None:
@@ -27,7 +27,7 @@ _SPEC.loader.exec_module(external_benchmark)
 
 def main(argv: list[str] | None = None) -> None:
     args = _parse_args(argv)
-    source_repo = args.source_repo.resolve()
+    sources = _parse_sources(args.source_repo)
     workdir = args.workdir.resolve()
     output = args.output.resolve()
     if workdir.exists() and any(workdir.iterdir()):
@@ -39,11 +39,16 @@ def main(argv: list[str] | None = None) -> None:
         run_root = workdir / name
         structural = external_benchmark.build_evidence(
             run_root,
-            {REPOSITORY_NAME: source_repo},
+            sources,
             MANIFEST,
         )
-        workspace = run_root / REPOSITORY_NAME / "workspace"
-        fact_evidence = _fact_evidence(workspace)
+        fact_evidence = {
+            repository: _fact_evidence(
+                run_root / repository / "workspace",
+                sample_query=("check_permission" if repository == SAMPLE_REPOSITORY else None),
+            )
+            for repository in sorted(sources)
+        }
         runs.append(
             {
                 "name": name,
@@ -51,23 +56,37 @@ def main(argv: list[str] | None = None) -> None:
                 "fact_evidence": fact_evidence,
             }
         )
-        canonical_rows.append(fact_evidence["canonical_rows_sha256"])
+        canonical_rows.append(
+            hashlib.sha256(
+                json.dumps(
+                    {
+                        repository: facts["canonical_rows_sha256"]
+                        for repository, facts in fact_evidence.items()
+                    },
+                    sort_keys=True,
+                ).encode("utf-8")
+            ).hexdigest()
+        )
 
-    first = runs[0]["fact_evidence"]
+    first = cast(dict[str, dict[str, Any]], runs[0]["fact_evidence"])
+    all_fact_runs = [
+        facts
+        for run in runs
+        for facts in cast(dict[str, dict[str, Any]], run["fact_evidence"]).values()
+    ]
     deterministic = canonical_rows[0] == canonical_rows[1]
     gates = {
         "structural_benchmark": all(run["structural_passed"] for run in runs),
         "fact_rows_match_fts": all(
-            run["fact_evidence"]["fact_count"] == run["fact_evidence"]["fts_count"] for run in runs
+            facts["fact_count"] == facts["fts_count"] for facts in all_fact_runs
         ),
         "facts_use_applied_source_versions": all(
-            run["fact_evidence"]["fact_count"]
-            == run["fact_evidence"]["applied_source_version_fact_count"]
-            for run in runs
+            facts["fact_count"] == facts["applied_source_version_fact_count"]
+            for facts in all_fact_runs
         ),
-        "metadata_round_trip": all(
-            run["fact_evidence"]["invalid_metadata_count"] == 0 for run in runs
-        ),
+        "metadata_round_trip": all(facts["invalid_metadata_count"] == 0 for facts in all_fact_runs),
+        "symbol_metadata_present": sum(facts["symbol_count"] for facts in first.values()) > 0,
+        "relation_metadata_present": sum(facts["relation_count"] for facts in first.values()) > 0,
         "deterministic_replay": deterministic,
     }
     evidence = {
@@ -78,18 +97,22 @@ def main(argv: list[str] | None = None) -> None:
             "path": str(MANIFEST.relative_to(REPO_ROOT)),
             "sha256": hashlib.sha256(MANIFEST.read_bytes()).hexdigest(),
         },
-        "source_repository": {
-            "remote_url": _git_at(source_repo, "remote", "get-url", "origin"),
-            "commit": _git_at(source_repo, "rev-parse", "HEAD"),
-        },
+        "source_repositories": [
+            {
+                "name": name,
+                "remote_url": _git_at(source, "remote", "get-url", "origin"),
+                "commit": _git_at(source, "rev-parse", "HEAD"),
+            }
+            for name, source in sorted(sources.items())
+        ],
         "counts": {
-            "facts": first["fact_count"],
-            "pages_with_facts": first["page_count"],
-            "symbols": first["symbol_count"],
-            "relations": first["relation_count"],
+            "facts": sum(facts["fact_count"] for facts in first.values()),
+            "pages_with_facts": sum(facts["page_count"] for facts in first.values()),
+            "symbols": sum(facts["symbol_count"] for facts in first.values()),
+            "relations": sum(facts["relation_count"] for facts in first.values()),
         },
         "canonical_rows_sha256": canonical_rows[0],
-        "sample_exact_symbol_search": first["sample_exact_symbol_search"],
+        "sample_exact_symbol_search": first[SAMPLE_REPOSITORY]["sample_exact_symbol_search"],
         "runs": runs,
         "gates": gates,
         "passed": all(gates.values()),
@@ -101,7 +124,7 @@ def main(argv: list[str] | None = None) -> None:
         raise SystemExit("Wiki Fact index benchmark failed")
 
 
-def _fact_evidence(workspace: Path) -> dict[str, Any]:
+def _fact_evidence(workspace: Path, *, sample_query: str | None) -> dict[str, Any]:
     database = workspace / ".memoryforge/index.sqlite"
     with sqlite3.connect(database) as connection:
         connection.row_factory = sqlite3.Row
@@ -139,11 +162,15 @@ def _fact_evidence(workspace: Path) -> dict[str, Any]:
         or not row["quote"]
         for row in rows
     )
-    exact_results = search_wiki_facts(
-        workspace,
-        "check_permission",
-        repository_id=repository_id,
-        limit=3,
+    exact_results = (
+        search_wiki_facts(
+            workspace,
+            sample_query,
+            repository_id=repository_id,
+            limit=3,
+        )
+        if sample_query
+        else ()
     )
     return {
         "fact_count": len(rows),
@@ -189,10 +216,34 @@ def _git_at(root: Path, *args: str) -> str:
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source-repo", type=Path, required=True)
+    parser.add_argument(
+        "--source-repo",
+        action="append",
+        required=True,
+        help="Pinned checkout in NAME=/absolute/path form; repeat for every manifest repository.",
+    )
     parser.add_argument("--workdir", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     return parser.parse_args(argv)
+
+
+def _parse_sources(values: list[str]) -> dict[str, Path]:
+    sources: dict[str, Path] = {}
+    for value in values:
+        name, separator, path = value.partition("=")
+        if not separator or not name or not path or name in sources:
+            raise ValueError("--source-repo must use one unique NAME=/absolute/path")
+        source = Path(path).resolve()
+        if not (source / ".git").exists():
+            raise ValueError(f"source repository is not a Git checkout: {source}")
+        sources[name] = source
+    expected = {
+        str(repository["name"])
+        for repository in json.loads(MANIFEST.read_text(encoding="utf-8"))["repositories"]
+    }
+    if set(sources) != expected:
+        raise ValueError(f"--source-repo names must be: {', '.join(sorted(expected))}")
+    return sources
 
 
 if __name__ == "__main__":
