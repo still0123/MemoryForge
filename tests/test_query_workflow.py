@@ -1142,36 +1142,6 @@ def test_rank_matches_prefers_summary_but_only_when_fact_terms_match() -> None:
     assert query_module._direct_matching_terms({"service", "module"}, summary) == {"service"}
 
 
-def test_rank_matches_prefers_specific_english_fact_over_summary() -> None:
-    summary = {
-        "source_id": "a" * 64,
-        "source_version": 1,
-        "locator": "chars:0-20",
-        "quote": "Uvicorn provides event loop implementations.",
-    }
-    detail = {
-        "source_id": "b" * 64,
-        "source_version": 1,
-        "locator": "chars:0-20",
-        "quote": "Uvicorn loop auto selects uvloop or asyncio.",
-    }
-
-    ranked = query_module._rank_matches(
-        [
-            (frozenset({"uvicorn", "loop"}), True, "wiki/pages/summary.md", summary),
-            (
-                frozenset({"uvicorn", "loop", "auto", "uvloop", "asyncio"}),
-                False,
-                "wiki/pages/detail.md",
-                detail,
-            ),
-        ],
-        question_terms={"uvicorn", "loop", "auto", "uvloop", "asyncio"},
-    )
-
-    assert ranked[0][1] == "wiki/pages/detail.md"
-
-
 def test_candidate_pages_prioritize_explicit_terms_over_generic_cjk_terms(
     tmp_path: Path,
 ) -> None:

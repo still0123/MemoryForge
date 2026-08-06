@@ -778,15 +778,11 @@ def _rank_matches(
     for overlap, summary, page_path, citation in matches:
         ranking_overlap = overlap - _RANKING_STOP_WORDS
         focus_overlap = ranking_overlap & focus_terms
-        inverse_frequency = sum(1000 // frequencies[term] for term in ranking_overlap)
         non_cjk_terms = [term for term in ranking_overlap if not _CJK.fullmatch(term)]
         distinctive_non_cjk_terms = [
             term for term in non_cjk_terms if frequencies[term] <= max(1, len(matches) // 2)
         ]
         direct_overlap = _direct_matching_terms(question_terms, citation)
-        prefer_specific_fact = not any(_CJK.fullmatch(term) for term in question_terms) and not (
-            prefer_environment_assignments or prefer_code_modules or prefer_failure_facts
-        )
         module_path = _citation_module_path(citation)
         module_section_score = (
             3
@@ -815,8 +811,6 @@ def _rank_matches(
                 and not citation["quote"].lstrip().startswith("|")
             ),
             len(focus_overlap) if prioritize_focus else 0,
-            len(direct_overlap) if prefer_specific_fact else 0,
-            inverse_frequency if prefer_specific_fact else 0,
             int(
                 summary
                 and not (
@@ -831,7 +825,7 @@ def _rank_matches(
                 and not citation["quote"].lstrip().startswith("|")
             ),
             len(focus_overlap) if not prioritize_focus else 0,
-            inverse_frequency,
+            sum(1000 // frequencies[term] for term in ranking_overlap),
             int(bool(direct_overlap)),
             len(direct_overlap),
             len(ranking_overlap),
