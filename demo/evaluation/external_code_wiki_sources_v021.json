@@ -11,6 +11,7 @@
       "license_sha256": "9a8ad106a394e853bfe21f42f4e72d592819a22805d991b5f3275029292b658d",
       "language": "python",
       "code_paths": ["src/click"],
+      "suite": "demo/evaluation/external_code_wiki_click_v021.json",
       "expected_source_count": 17
     },
     {
@@ -22,6 +23,7 @@
       "license_sha256": "5e3400b93bbb099e83e52bab885e7441750673c21f97988ca3f1240639b63283",
       "language": "go",
       "code_paths": ["."],
+      "suite": "demo/evaluation/external_code_wiki_cobra_v021.json",
       "expected_source_count": 36
     },
     {
@@ -33,6 +35,7 @@
       "license_sha256": "3f1189b28e3866e0d979968d466b78f813f76827cfdca1fbb124cc0a5c8841f8",
       "language": "typescript",
       "code_paths": ["packages/zod/src/v4/core"],
+      "suite": "demo/evaluation/external_code_wiki_zod_v021.json",
       "expected_source_count": 34
     }
   ]

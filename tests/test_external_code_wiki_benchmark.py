@@ -35,13 +35,32 @@ def test_external_suite_contract_is_frozen() -> None:
     }
     for repository in manifest["repositories"]:
         suite = benchmark.CodeEvaluationSuite.model_validate_json(
-            benchmark.SUITES[repository["name"]].read_text(encoding="utf-8")
+            (benchmark.REPO_ROOT / repository["suite"]).read_text(encoding="utf-8")
         )
         assert len(suite.expected_source_paths) == repository["expected_source_count"]
         assert len(suite.symbols) == 20
         assert len(suite.relations) == 15
         assert len(suite.modules) == 5
         assert suite.incremental is None
+
+
+def test_learn_claude_code_suite_contract_is_frozen() -> None:
+    manifest_path = (
+        benchmark.REPO_ROOT
+        / "demo/evaluation/external_code_wiki_learn_claude_code_sources_v031.json"
+    )
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    repository = manifest["repositories"][0]
+    suite = benchmark.CodeEvaluationSuite.model_validate_json(
+        (benchmark.REPO_ROOT / repository["suite"]).read_text(encoding="utf-8")
+    )
+
+    assert repository["name"] == "learn_claude_code"
+    assert len(suite.expected_source_paths) == repository["expected_source_count"] == 5
+    assert len(suite.symbols) == 20
+    assert len(suite.relations) == 15
+    assert len(suite.modules) == 5
+    assert suite.incremental is None
 
 
 def test_external_benchmark_rejects_wrong_pinned_commit(tmp_path: Path) -> None:
