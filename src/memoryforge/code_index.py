@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath
 
 import tree_sitter_python
@@ -167,10 +167,13 @@ def _build_python_code_index(
             source,
         )
         analyses.append(analysis)
+        canonical_symbols = {
+            definition.symbol.symbol_id: definition.symbol for definition in analysis.definitions
+        }
         symbols.extend(
             [
                 analysis.module_symbol,
-                *(definition.symbol for definition in analysis.definitions),
+                *canonical_symbols.values(),
             ]
         )
         for key, evidence in parsed_relations.items():
@@ -231,6 +234,7 @@ def _parse_python_source(
         definitions=definitions,
         relation_evidence=relation_evidence,
     )
+    definitions = _canonicalize_python_definitions(definitions)
     return (
         _PythonAnalysis(
             source=source,
@@ -239,6 +243,33 @@ def _parse_python_source(
             definitions=tuple(definitions),
         ),
         relation_evidence,
+    )
+
+
+def _canonicalize_python_definitions(
+    definitions: list[_ParsedDefinition],
+) -> list[_ParsedDefinition]:
+    """Represent overloads and conditional definitions as one logical symbol."""
+
+    selected: dict[str, CodeSymbol] = {}
+    for definition in definitions:
+        current = selected.get(definition.symbol.symbol_id)
+        if current is None or (
+            _is_overload_signature(current.signature)
+            and not _is_overload_signature(definition.symbol.signature)
+        ):
+            selected[definition.symbol.symbol_id] = definition.symbol
+    return [
+        replace(definition, symbol=selected[definition.symbol.symbol_id])
+        for definition in definitions
+    ]
+
+
+def _is_overload_signature(signature: str) -> bool:
+    return any(
+        line.lstrip().startswith("@")
+        and line.strip().removeprefix("@").split("(", 1)[0].endswith("overload")
+        for line in signature.splitlines()
     )
 
 

@@ -160,6 +160,8 @@ def _collect_go_definitions(
     definitions: list[_GoDefinition] = []
     for node in _walk(root):
         if node.type == "type_spec":
+            if _inside_go_function(node):
+                continue
             name_node = node.child_by_field_name("name")
             type_node = node.child_by_field_name("type")
             if name_node is None or type_node is None:
@@ -231,6 +233,15 @@ def _collect_go_definitions(
                 )
             )
     return definitions
+
+
+def _inside_go_function(node: Node) -> bool:
+    parent = node.parent
+    while parent is not None:
+        if parent.type in {"function_declaration", "method_declaration", "func_literal"}:
+            return True
+        parent = parent.parent
+    return False
 
 
 def _add_contains_relations(

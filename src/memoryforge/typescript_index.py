@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import posixpath
+import re
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -42,6 +43,8 @@ from memoryforge.workspace import (
 
 _TS_LANGUAGE = Language(tree_sitter_typescript.language_typescript())
 _TSX_LANGUAGE = Language(tree_sitter_typescript.language_tsx())
+_TYPE_PARAMETER_VARIANCE = re.compile(rb"(?<=[<,])\s*(?:(?:in|out)\s+){1,2}(?=[A-Za-z_$])")
+_LINE_TYPE_PARAMETER_VARIANCE = re.compile(rb"(?m)^[ \t]*(?:(?:in|out)[ \t]+){1,2}(?=[A-Za-z_$])")
 _FUNCTION_NODES = {
     "function_declaration",
     "generator_function_declaration",
@@ -105,7 +108,7 @@ def _build_typescript_code_index(
             continue
         content = text.encode()
         language = _TSX_LANGUAGE if record.relative_path.endswith(".tsx") else _TS_LANGUAGE
-        tree = Parser(language).parse(content)
+        tree = _parse_typescript(content, language)
         if tree.root_node.has_error:
             raise CodeIndexError(
                 f"TypeScript source contains syntax errors: {record.relative_path}"
@@ -163,6 +166,23 @@ def _build_typescript_code_index(
     )
 
 
+def _parse_typescript(content: bytes, language: Language) -> Tree:
+    parser = Parser(language)
+    tree = parser.parse(content)
+    if not tree.root_node.has_error:
+        return tree
+    # tree-sitter-typescript 0.23.2 lacks TypeScript 5 variance annotations.
+    compatible = _TYPE_PARAMETER_VARIANCE.sub(
+        lambda match: b" " * len(match.group()),
+        content,
+    )
+    compatible = _LINE_TYPE_PARAMETER_VARIANCE.sub(
+        lambda match: b" " * len(match.group()),
+        compatible,
+    )
+    return parser.parse(compatible) if compatible != content else tree
+
+
 def _collect_definitions(
     repository_id: str,
     commit_sha: str,
@@ -181,13 +201,14 @@ def _collect_definitions(
         if name_node is None:
             continue
         name = node_text(source, name_node)
+        scope = _typescript_definition_scope(source, node)
         symbol = _typescript_symbol(
             repository_id,
             commit_sha,
             source,
             node,
             kind,
-            f"{source.module_scope}.{name}",
+            f"{scope}.{name}",
             name,
         )
         definitions.append(
@@ -208,6 +229,7 @@ def _collect_definitions(
             if name_node is None:
                 continue
             name = node_text(source, name_node)
+            scope = _typescript_definition_scope(source, node)
             definitions.append(
                 _TypeScriptDefinition(
                     node=node,
@@ -217,7 +239,7 @@ def _collect_definitions(
                         source,
                         node,
                         CodeSymbolKind.FUNCTION,
-                        f"{source.module_scope}.{name}",
+                        f"{scope}.{name}",
                         name,
                     ),
                     module_symbol_id=module_symbol.symbol_id,
@@ -236,6 +258,7 @@ def _collect_definitions(
             if not is_function and not _is_const_declarator(source, node):
                 continue
             kind = CodeSymbolKind.FUNCTION if is_function else CodeSymbolKind.CONSTANT
+            scope = _typescript_definition_scope(source, node)
             definitions.append(
                 _TypeScriptDefinition(
                     node=node,
@@ -245,7 +268,7 @@ def _collect_definitions(
                         source,
                         node,
                         kind,
-                        f"{source.module_scope}.{name}",
+                        f"{scope}.{name}",
                         name,
                     ),
                     module_symbol_id=module_symbol.symbol_id,
@@ -260,6 +283,13 @@ def _collect_definitions(
             if class_symbol is None or name_node is None:
                 continue
             name = node_text(source, name_node)
+            accessor = next(
+                (child.type for child in node.children if child.type in {"get", "set"}),
+                None,
+            )
+            qualified_name = f"{class_symbol.qualified_name}.{name}"
+            if accessor is not None:
+                qualified_name += f"@{accessor}"
             definitions.append(
                 _TypeScriptDefinition(
                     node=node,
@@ -269,7 +299,7 @@ def _collect_definitions(
                         source,
                         node,
                         CodeSymbolKind.METHOD,
-                        f"{class_symbol.qualified_name}.{name}",
+                        qualified_name,
                         name,
                     ),
                     module_symbol_id=module_symbol.symbol_id,
@@ -277,6 +307,18 @@ def _collect_definitions(
                 )
             )
     return definitions
+
+
+def _typescript_definition_scope(source: _TypeScriptSource, node: Node) -> str:
+    namespaces: list[str] = []
+    parent = node.parent
+    while parent is not None:
+        if parent.type == "internal_module":
+            name = parent.child_by_field_name("name")
+            if name is not None:
+                namespaces.append(node_text(source, name))
+        parent = parent.parent
+    return ".".join((source.module_scope, *reversed(namespaces)))
 
 
 def _add_contains_relations(
