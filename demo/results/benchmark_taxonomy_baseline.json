@@ -1,0 +1,624 @@
+{
+  "schema_version": 1,
+  "evaluation_commit": "1d025e6a3aa56a7ed70d4a3fba1959dafdd95b72",
+  "evaluation_worktree_dirty": false,
+  "evaluated_case_count": 116,
+  "failed_case_count": 45,
+  "macro_metrics": {
+    "answer_accuracy": 54.3,
+    "page_route_recall_at_3": 87.1,
+    "fact_source_recall": 78.4,
+    "fact_selection_accuracy": 55.0,
+    "citation_grounding_accuracy": 98.8,
+    "repository_path_isolation_accuracy": 100.0
+  },
+  "macro_metric_suite_counts": {
+    "answer_accuracy": 9,
+    "page_route_recall_at_3": 9,
+    "fact_source_recall": 9,
+    "fact_selection_accuracy": 9,
+    "citation_grounding_accuracy": 9,
+    "repository_path_isolation_accuracy": 6
+  },
+  "error_classification_counts": {
+    "fact_selection_miss": 29,
+    "multi_source_incomplete": 1,
+    "none": 71,
+    "page_route_miss": 11,
+    "wrong_abstention": 4
+  },
+  "per_suite": [
+    {
+      "suite_id": "doc-wiki-qa.agent-skill-eval",
+      "split": "development",
+      "suite_name": "AgentSkill-Eval public documentation",
+      "case_count": 30,
+      "result_sha256": "e95b3c6c8f605d4275b1a897c5cc207fb881cecb1540509c909e1bc7679c76f9",
+      "metrics": {
+        "answer_accuracy": 96.7,
+        "page_route_recall_at_3": 96.2,
+        "fact_source_recall": 96.2,
+        "fact_selection_accuracy": 96.2,
+        "citation_grounding_accuracy": 100.0,
+        "repository_path_isolation_accuracy": 0.0
+      },
+      "error_classification_counts": {
+        "none": 29,
+        "page_route_miss": 1
+      }
+    },
+    {
+      "suite_id": "doc-wiki-qa.click",
+      "split": "development",
+      "suite_name": "Click public documentation development split v0.2.1",
+      "case_count": 10,
+      "result_sha256": "e6555c70b7a1b2bb3ba033af7fbbd30cdffb41922fbf898630481fb5af6a7e52",
+      "metrics": {
+        "answer_accuracy": 10.0,
+        "page_route_recall_at_3": 62.5,
+        "fact_source_recall": 50.0,
+        "fact_selection_accuracy": 12.5,
+        "citation_grounding_accuracy": 100.0,
+        "repository_path_isolation_accuracy": 0.0
+      },
+      "error_classification_counts": {
+        "fact_selection_miss": 4,
+        "none": 1,
+        "page_route_miss": 3,
+        "wrong_abstention": 2
+      }
+    },
+    {
+      "suite_id": "doc-wiki-qa.click",
+      "split": "holdout",
+      "suite_name": "Click public documentation holdout split v0.2.1",
+      "case_count": 10,
+      "result_sha256": "8949ad71d5bc0a6643efad7503e6dc874a30b70a8d18b557309dc3e4a2ff5f36",
+      "metrics": {
+        "answer_accuracy": 40.0,
+        "page_route_recall_at_3": 50.0,
+        "fact_source_recall": 37.5,
+        "fact_selection_accuracy": 37.5,
+        "citation_grounding_accuracy": 100.0,
+        "repository_path_isolation_accuracy": 0.0
+      },
+      "error_classification_counts": {
+        "multi_source_incomplete": 1,
+        "none": 4,
+        "page_route_miss": 4,
+        "wrong_abstention": 1
+      }
+    },
+    {
+      "suite_id": "doc-wiki-qa.document-frequency",
+      "split": "development",
+      "suite_name": "MemoryForge v0.2.3 Uvicorn document-frequency development",
+      "case_count": 10,
+      "result_sha256": "17ed3bc60cc325c82bd9e788f3f117e65c94180d413d11b8979d0ef4b493415a",
+      "metrics": {
+        "answer_accuracy": 60.0,
+        "page_route_recall_at_3": 100.0,
+        "fact_source_recall": 80.0,
+        "fact_selection_accuracy": 60.0,
+        "citation_grounding_accuracy": 100.0,
+        "repository_path_isolation_accuracy": 100.0
+      },
+      "error_classification_counts": {
+        "fact_selection_miss": 4,
+        "none": 6
+      }
+    },
+    {
+      "suite_id": "doc-wiki-qa.document-frequency",
+      "split": "confirmation",
+      "suite_name": "MemoryForge v0.2.3 Typer document-frequency confirmation",
+      "case_count": 12,
+      "result_sha256": "2246c1ad4b27d28f78133c178ea6f41b9f05fcf04836045716e326a07d8e84c8",
+      "metrics": {
+        "answer_accuracy": 8.3,
+        "page_route_recall_at_3": 83.3,
+        "fact_source_recall": 58.3,
+        "fact_selection_accuracy": 8.3,
+        "citation_grounding_accuracy": 100.0,
+        "repository_path_isolation_accuracy": 100.0
+      },
+      "error_classification_counts": {
+        "fact_selection_miss": 9,
+        "none": 1,
+        "page_route_miss": 2
+      }
+    },
+    {
+      "suite_id": "doc-wiki-qa.local-fact-morphology",
+      "split": "development",
+      "suite_name": "MemoryForge v0.2.8 Watchfiles local fact morphology development",
+      "case_count": 10,
+      "result_sha256": "d73cfce5ec2bbd69e27ff20aad2ae0698cb52b9dbbe61b353eb47800b721cc3e",
+      "metrics": {
+        "answer_accuracy": 80.0,
+        "page_route_recall_at_3": 100.0,
+        "fact_source_recall": 100.0,
+        "fact_selection_accuracy": 80.0,
+        "citation_grounding_accuracy": 100.0,
+        "repository_path_isolation_accuracy": 100.0
+      },
+      "error_classification_counts": {
+        "fact_selection_miss": 2,
+        "none": 8
+      }
+    },
+    {
+      "suite_id": "doc-wiki-qa.local-fact-morphology",
+      "split": "confirmation",
+      "suite_name": "MemoryForge v0.2.8 Structlog local fact morphology confirmation",
+      "case_count": 12,
+      "result_sha256": "d90a6983f5efac5eca6e444b5bb2a0513e3d7f929ef8e44560852b06f9880ba7",
+      "metrics": {
+        "answer_accuracy": 66.7,
+        "page_route_recall_at_3": 100.0,
+        "fact_source_recall": 100.0,
+        "fact_selection_accuracy": 66.7,
+        "citation_grounding_accuracy": 100.0,
+        "repository_path_isolation_accuracy": 100.0
+      },
+      "error_classification_counts": {
+        "fact_selection_miss": 4,
+        "none": 8
+      }
+    },
+    {
+      "suite_id": "doc-wiki-qa.page-aware-griffe",
+      "split": "confirmation",
+      "suite_name": "MemoryForge v0.2.7 Griffe page-aware fact confirmation",
+      "case_count": 12,
+      "result_sha256": "1c361f82a44cf6ff47654f44f887236f7d40ae437d3dd34880fb4fbdaca289c9",
+      "metrics": {
+        "answer_accuracy": 66.7,
+        "page_route_recall_at_3": 91.7,
+        "fact_source_recall": 83.3,
+        "fact_selection_accuracy": 66.7,
+        "citation_grounding_accuracy": 100.0,
+        "repository_path_isolation_accuracy": 100.0
+      },
+      "error_classification_counts": {
+        "fact_selection_miss": 3,
+        "none": 8,
+        "page_route_miss": 1
+      }
+    },
+    {
+      "suite_id": "code-wiki-qa.learn-claude-code",
+      "split": "development",
+      "suite_name": "MemoryForge v0.3.1 learn-claude-code QA development",
+      "case_count": 10,
+      "result_sha256": "317daeb0328918b4417d26c7f45a70831f5407abb7ba3306230745fc411d4cee",
+      "metrics": {
+        "answer_accuracy": 60.0,
+        "page_route_recall_at_3": 100.0,
+        "fact_source_recall": 100.0,
+        "fact_selection_accuracy": 66.7,
+        "citation_grounding_accuracy": 88.9,
+        "repository_path_isolation_accuracy": 100.0
+      },
+      "error_classification_counts": {
+        "fact_selection_miss": 3,
+        "none": 6,
+        "wrong_abstention": 1
+      }
+    }
+  ],
+  "failures": [
+    {
+      "suite_id": "doc-wiki-qa.agent-skill-eval",
+      "split": "development",
+      "id": "unknown-frontend-framework",
+      "category": "single_hop",
+      "error_classification": "page_route_miss",
+      "page_route_recalled": false,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "doc-wiki-qa.click",
+      "split": "development",
+      "id": "dev-command-decorator",
+      "category": "single_hop",
+      "error_classification": "page_route_miss",
+      "page_route_recalled": false,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "doc-wiki-qa.click",
+      "split": "development",
+      "id": "dev-shell-builtins",
+      "category": "single_hop",
+      "error_classification": "fact_selection_miss",
+      "page_route_recalled": true,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "doc-wiki-qa.click",
+      "split": "development",
+      "id": "dev-testing-thread-safety",
+      "category": "single_hop",
+      "error_classification": "fact_selection_miss",
+      "page_route_recalled": true,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "doc-wiki-qa.click",
+      "split": "development",
+      "id": "dev-dash-filename",
+      "category": "paraphrase",
+      "error_classification": "fact_selection_miss",
+      "page_route_recalled": true,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "doc-wiki-qa.click",
+      "split": "development",
+      "id": "dev-confirm-abort",
+      "category": "paraphrase",
+      "error_classification": "fact_selection_miss",
+      "page_route_recalled": true,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "doc-wiki-qa.click",
+      "split": "development",
+      "id": "dev-options-arguments",
+      "category": "multi_source",
+      "error_classification": "page_route_miss",
+      "page_route_recalled": false,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "doc-wiki-qa.click",
+      "split": "development",
+      "id": "dev-path-dash-input",
+      "category": "multi_source",
+      "error_classification": "page_route_miss",
+      "page_route_recalled": false,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "doc-wiki-qa.click",
+      "split": "development",
+      "id": "dev-database-backend",
+      "category": "unanswerable",
+      "error_classification": "wrong_abstention",
+      "page_route_recalled": true,
+      "fact_selection_correct": true
+    },
+    {
+      "suite_id": "doc-wiki-qa.click",
+      "split": "development",
+      "id": "dev-http-port",
+      "category": "unanswerable",
+      "error_classification": "wrong_abstention",
+      "page_route_recalled": true,
+      "fact_selection_correct": true
+    },
+    {
+      "suite_id": "doc-wiki-qa.click",
+      "split": "holdout",
+      "id": "holdout-options-opinion",
+      "category": "single_hop",
+      "error_classification": "page_route_miss",
+      "page_route_recalled": false,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "doc-wiki-qa.click",
+      "split": "holdout",
+      "id": "holdout-atomic-write",
+      "category": "paraphrase",
+      "error_classification": "page_route_miss",
+      "page_route_recalled": false,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "doc-wiki-qa.click",
+      "split": "holdout",
+      "id": "holdout-group-no-command",
+      "category": "paraphrase",
+      "error_classification": "page_route_miss",
+      "page_route_recalled": false,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "doc-wiki-qa.click",
+      "split": "holdout",
+      "id": "holdout-entry-point-completion",
+      "category": "multi_source",
+      "error_classification": "page_route_miss",
+      "page_route_recalled": false,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "doc-wiki-qa.click",
+      "split": "holdout",
+      "id": "holdout-group-registration",
+      "category": "multi_source",
+      "error_classification": "multi_source_incomplete",
+      "page_route_recalled": true,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "doc-wiki-qa.click",
+      "split": "holdout",
+      "id": "holdout-sql-migrations",
+      "category": "unanswerable",
+      "error_classification": "wrong_abstention",
+      "page_route_recalled": true,
+      "fact_selection_correct": true
+    },
+    {
+      "suite_id": "doc-wiki-qa.document-frequency",
+      "split": "development",
+      "id": "uvicorn-standard-extra",
+      "category": "single_hop",
+      "error_classification": "fact_selection_miss",
+      "page_route_recalled": true,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "doc-wiki-qa.document-frequency",
+      "split": "development",
+      "id": "uvicorn-lifespan-sibling",
+      "category": "single_hop",
+      "error_classification": "fact_selection_miss",
+      "page_route_recalled": true,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "doc-wiki-qa.document-frequency",
+      "split": "development",
+      "id": "uvicorn-websocket-protocols",
+      "category": "single_hop",
+      "error_classification": "fact_selection_miss",
+      "page_route_recalled": true,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "doc-wiki-qa.document-frequency",
+      "split": "development",
+      "id": "uvicorn-access-logs",
+      "category": "single_hop",
+      "error_classification": "fact_selection_miss",
+      "page_route_recalled": true,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "doc-wiki-qa.document-frequency",
+      "split": "confirmation",
+      "id": "typer-install-uv",
+      "category": "single_hop",
+      "error_classification": "page_route_miss",
+      "page_route_recalled": false,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "doc-wiki-qa.document-frequency",
+      "split": "confirmation",
+      "id": "typer-argument-envvar",
+      "category": "single_hop",
+      "error_classification": "fact_selection_miss",
+      "page_route_recalled": true,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "doc-wiki-qa.document-frequency",
+      "split": "confirmation",
+      "id": "typer-command-dashes",
+      "category": "single_hop",
+      "error_classification": "fact_selection_miss",
+      "page_route_recalled": true,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "doc-wiki-qa.document-frequency",
+      "split": "confirmation",
+      "id": "typer-multiple-options",
+      "category": "single_hop",
+      "error_classification": "fact_selection_miss",
+      "page_route_recalled": true,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "doc-wiki-qa.document-frequency",
+      "split": "confirmation",
+      "id": "typer-path-exists",
+      "category": "single_hop",
+      "error_classification": "fact_selection_miss",
+      "page_route_recalled": true,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "doc-wiki-qa.document-frequency",
+      "split": "confirmation",
+      "id": "typer-password-confirm",
+      "category": "single_hop",
+      "error_classification": "fact_selection_miss",
+      "page_route_recalled": true,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "doc-wiki-qa.document-frequency",
+      "split": "confirmation",
+      "id": "typer-autocompletion",
+      "category": "single_hop",
+      "error_classification": "fact_selection_miss",
+      "page_route_recalled": true,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "doc-wiki-qa.document-frequency",
+      "split": "confirmation",
+      "id": "typer-testing-runner",
+      "category": "single_hop",
+      "error_classification": "fact_selection_miss",
+      "page_route_recalled": true,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "doc-wiki-qa.document-frequency",
+      "split": "confirmation",
+      "id": "typer-add-subapp",
+      "category": "single_hop",
+      "error_classification": "page_route_miss",
+      "page_route_recalled": false,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "doc-wiki-qa.document-frequency",
+      "split": "confirmation",
+      "id": "typer-progressbar",
+      "category": "single_hop",
+      "error_classification": "fact_selection_miss",
+      "page_route_recalled": true,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "doc-wiki-qa.document-frequency",
+      "split": "confirmation",
+      "id": "typer-exit-code",
+      "category": "single_hop",
+      "error_classification": "fact_selection_miss",
+      "page_route_recalled": true,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "doc-wiki-qa.local-fact-morphology",
+      "split": "development",
+      "id": "watchfiles-python-filter",
+      "category": "single_hop",
+      "error_classification": "fact_selection_miss",
+      "page_route_recalled": true,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "doc-wiki-qa.local-fact-morphology",
+      "split": "development",
+      "id": "watchfiles-os-notifications",
+      "category": "single_hop",
+      "error_classification": "fact_selection_miss",
+      "page_route_recalled": true,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "doc-wiki-qa.local-fact-morphology",
+      "split": "confirmation",
+      "id": "structlog-last-processor",
+      "category": "single_hop",
+      "error_classification": "fact_selection_miss",
+      "page_route_recalled": true,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "doc-wiki-qa.local-fact-morphology",
+      "split": "confirmation",
+      "id": "structlog-context-isolation",
+      "category": "single_hop",
+      "error_classification": "fact_selection_miss",
+      "page_route_recalled": true,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "doc-wiki-qa.local-fact-morphology",
+      "split": "confirmation",
+      "id": "structlog-capture-processors",
+      "category": "single_hop",
+      "error_classification": "fact_selection_miss",
+      "page_route_recalled": true,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "doc-wiki-qa.local-fact-morphology",
+      "split": "confirmation",
+      "id": "structlog-bound-no-io",
+      "category": "single_hop",
+      "error_classification": "fact_selection_miss",
+      "page_route_recalled": true,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "doc-wiki-qa.page-aware-griffe",
+      "split": "confirmation",
+      "id": "griffe-load-fallback",
+      "category": "single_hop",
+      "error_classification": "page_route_miss",
+      "page_route_recalled": false,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "doc-wiki-qa.page-aware-griffe",
+      "split": "confirmation",
+      "id": "griffe-loader-cache",
+      "category": "single_hop",
+      "error_classification": "fact_selection_miss",
+      "page_route_recalled": true,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "doc-wiki-qa.page-aware-griffe",
+      "split": "confirmation",
+      "id": "griffe-alias-postprocess",
+      "category": "single_hop",
+      "error_classification": "fact_selection_miss",
+      "page_route_recalled": true,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "doc-wiki-qa.page-aware-griffe",
+      "split": "confirmation",
+      "id": "griffe-git-worktree",
+      "category": "single_hop",
+      "error_classification": "fact_selection_miss",
+      "page_route_recalled": true,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "code-wiki-qa.learn-claude-code",
+      "split": "development",
+      "id": "dev-s03-check-permission-signature",
+      "category": "single_hop",
+      "error_classification": "fact_selection_miss",
+      "page_route_recalled": true,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "code-wiki-qa.learn-claude-code",
+      "split": "development",
+      "id": "dev-s05-todo-write-signature",
+      "category": "single_hop",
+      "error_classification": "fact_selection_miss",
+      "page_route_recalled": true,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "code-wiki-qa.learn-claude-code",
+      "split": "development",
+      "id": "dev-agent-loop-multi-source",
+      "category": "multi_source",
+      "error_classification": "fact_selection_miss",
+      "page_route_recalled": true,
+      "fact_selection_correct": false
+    },
+    {
+      "suite_id": "code-wiki-qa.learn-claude-code",
+      "split": "development",
+      "id": "dev-unknown-vector-database",
+      "category": "unanswerable",
+      "error_classification": "wrong_abstention",
+      "page_route_recalled": true,
+      "fact_selection_correct": true
+    }
+  ],
+  "unrun_frozen_split": {
+    "suite_id": "code-wiki-qa.learn-claude-code",
+    "split": "confirmation",
+    "path": "demo/evaluation/learn_claude_code_qa_confirm_v031.json",
+    "sha256": "b86fe1f7999c09af9bf7c6bed4951c1c4c565318c39192bea1831d942466c117",
+    "status": "not_run"
+  }
+}

@@ -18,6 +18,13 @@
     "temporal_update",
     "cross_repository"
   ],
+  "taxonomy_evidence": {
+    "path": "demo/results/benchmark_taxonomy_baseline.json",
+    "sha256": "fe103345252782f7ba4929bfa502c46509741067b53b17979d19427cc3d01cef",
+    "evaluation_commit": "1d025e6a3aa56a7ed70d4a3fba1959dafdd95b72",
+    "evaluated_case_count": 116,
+    "frozen_confirmation_status": "not_run"
+  },
   "suites": [
     {
       "suite_id": "doc-wiki-qa.agent-skill-eval",

@@ -44,10 +44,28 @@ def validate_registry(path: Path = DEFAULT_REGISTRY) -> dict[str, object]:
     if len(suite_ids) != len(set(suite_ids)):
         raise ValueError("benchmark suite IDs must be unique")
 
+    taxonomy_evidence = registry.get("taxonomy_evidence")
+    if not isinstance(taxonomy_evidence, dict):
+        raise ValueError("benchmark registry requires taxonomy evidence")
+    _validate_artifact(taxonomy_evidence, "benchmark-taxonomy")
+    if COMMIT.fullmatch(str(taxonomy_evidence.get("evaluation_commit"))) is None:
+        raise ValueError("benchmark taxonomy Commit is invalid")
+    taxonomy_payload = json.loads(
+        (REPO_ROOT / taxonomy_evidence["path"]).read_text(encoding="utf-8")
+    )
+    if (
+        taxonomy_payload.get("evaluation_commit") != taxonomy_evidence["evaluation_commit"]
+        or taxonomy_payload.get("evaluation_worktree_dirty") is not False
+        or taxonomy_payload.get("evaluated_case_count") != taxonomy_evidence["evaluated_case_count"]
+        or taxonomy_payload.get("unrun_frozen_split", {}).get("status")
+        != taxonomy_evidence["frozen_confirmation_status"]
+    ):
+        raise ValueError("benchmark taxonomy evidence contract failed")
+
     qa_case_count = 0
     qa_case_types: set[str] = set()
     suite_types: set[str] = set()
-    evidence_count = 0
+    evidence_count = 1
     for suite in suites:
         suite_id = suite.get("suite_id")
         if not isinstance(suite_id, str) or SUITE_ID.fullmatch(suite_id) is None:
