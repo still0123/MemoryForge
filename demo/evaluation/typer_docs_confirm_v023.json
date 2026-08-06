@@ -1,0 +1,113 @@
+{
+  "name": "MemoryForge v0.2.3 Typer document-frequency confirmation",
+  "cases": [
+    {
+      "id": "typer-install-uv",
+      "category": "single_hop",
+      "question": "Which uv command adds Typer to a project?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/tutorial/install.md"],
+      "required_terms": ["uv add typer"],
+      "repository_id": "abfde9651874d55da0323c39f6a40f4c533335c01dce5fa02d5abbf8356f0918"
+    },
+    {
+      "id": "typer-optional-argument",
+      "category": "single_hop",
+      "question": "How is a Typer CLI argument made optional with a default value?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/tutorial/arguments/optional.md"],
+      "required_terms": ["typer.Argument", "default"],
+      "repository_id": "abfde9651874d55da0323c39f6a40f4c533335c01dce5fa02d5abbf8356f0918"
+    },
+    {
+      "id": "typer-argument-envvar",
+      "category": "single_hop",
+      "question": "How can a Typer argument read from an environment variable?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/tutorial/arguments/envvar.md"],
+      "required_terms": ["envvar"],
+      "repository_id": "abfde9651874d55da0323c39f6a40f4c533335c01dce5fa02d5abbf8356f0918"
+    },
+    {
+      "id": "typer-command-dashes",
+      "category": "single_hop",
+      "question": "How does Typer convert underscores in function names into command names?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/tutorial/commands/name.md"],
+      "required_terms": ["dashes"],
+      "repository_id": "abfde9651874d55da0323c39f6a40f4c533335c01dce5fa02d5abbf8356f0918"
+    },
+    {
+      "id": "typer-multiple-options",
+      "category": "single_hop",
+      "question": "Which Python type annotation accepts a CLI option multiple times in Typer?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/tutorial/multiple-values/multiple-options.md"],
+      "required_terms": ["list"],
+      "repository_id": "abfde9651874d55da0323c39f6a40f4c533335c01dce5fa02d5abbf8356f0918"
+    },
+    {
+      "id": "typer-path-exists",
+      "category": "single_hop",
+      "question": "Which Typer Path option validates that an input path exists?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/tutorial/parameter-types/path.md"],
+      "required_terms": ["exists"],
+      "repository_id": "abfde9651874d55da0323c39f6a40f4c533335c01dce5fa02d5abbf8356f0918"
+    },
+    {
+      "id": "typer-password-confirm",
+      "category": "single_hop",
+      "question": "How can a Typer password option hide input and require confirmation?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/tutorial/options/password.md"],
+      "required_terms": ["hide_input", "confirmation_prompt"],
+      "repository_id": "abfde9651874d55da0323c39f6a40f4c533335c01dce5fa02d5abbf8356f0918"
+    },
+    {
+      "id": "typer-autocompletion",
+      "category": "single_hop",
+      "question": "Which Typer option parameter supplies a custom shell completion function?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/tutorial/options-autocompletion.md"],
+      "required_terms": ["autocompletion"],
+      "repository_id": "abfde9651874d55da0323c39f6a40f4c533335c01dce5fa02d5abbf8356f0918"
+    },
+    {
+      "id": "typer-testing-runner",
+      "category": "single_hop",
+      "question": "Which testing helper invokes a Typer application in pytest?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/tutorial/testing.md"],
+      "required_terms": ["CliRunner", "invoke"],
+      "repository_id": "abfde9651874d55da0323c39f6a40f4c533335c01dce5fa02d5abbf8356f0918"
+    },
+    {
+      "id": "typer-add-subapp",
+      "category": "single_hop",
+      "question": "Which method attaches a Typer sub-application to a parent app?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/tutorial/subcommands/add-typer.md"],
+      "required_terms": ["add_typer"],
+      "repository_id": "abfde9651874d55da0323c39f6a40f4c533335c01dce5fa02d5abbf8356f0918"
+    },
+    {
+      "id": "typer-progressbar",
+      "category": "single_hop",
+      "question": "Which Typer utility displays progress while iterating items?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/tutorial/progressbar.md"],
+      "required_terms": ["progressbar"],
+      "repository_id": "abfde9651874d55da0323c39f6a40f4c533335c01dce5fa02d5abbf8356f0918"
+    },
+    {
+      "id": "typer-exit-code",
+      "category": "single_hop",
+      "question": "How can a Typer command terminate with a specific exit code?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/tutorial/terminating.md"],
+      "required_terms": ["typer.Exit", "code"],
+      "repository_id": "abfde9651874d55da0323c39f6a40f4c533335c01dce5fa02d5abbf8356f0918"
+    }
+  ]
+}
