@@ -1,0 +1,453 @@
+{
+  "suite": "MemoryForge v0.2.7 Griffe page-aware fact confirmation",
+  "case_count": 12,
+  "memoryforge": {
+    "answer_accuracy": 66.7,
+    "source_recall_at_3": 83.3,
+    "citation_grounding_accuracy": 100.0,
+    "multi_source_coverage": 0.0,
+    "abstention_accuracy": 0.0,
+    "average_wiki_pages_read": 3.0,
+    "average_raw_sources_read": 0.0,
+    "average_evidence_characters": 491.5
+  },
+  "raw_fts_baseline": {
+    "expected_source_recall_at_3": 100.0,
+    "multi_source_coverage": 0.0,
+    "average_exposed_characters": 726.33
+  },
+  "cases": [
+    {
+      "id": "griffe-load-fallback",
+      "category": "single_hop",
+      "question": "What does Griffe do when it cannot find source code for a module?",
+      "memoryforge": {
+        "answer_correct": false,
+        "citation_grounded": true,
+        "expected_sources_recalled": false,
+        "all_expected_sources_cited": false,
+        "abstention_correct": true,
+        "wiki_pages_read": 3,
+        "raw_sources_read": 0,
+        "evidence_characters": 1327,
+        "wiki_pages": [
+          "wiki/pages/ea88f2a24cef79a76711b91af9c6e58ae91a4289ff12fb64a9db1ff2504060b0.md"
+        ],
+        "cited_source_paths": [
+          "docs/guide/users/recommendations/public-apis.md"
+        ]
+      },
+      "raw_fts_baseline": {
+        "expected_source_in_top_3": true,
+        "expected_sources_in_top_3": true,
+        "expected_sources_recalled": true,
+        "raw_source_paths": [
+          "docs/guide/users/loading.md",
+          "docs/guide/users/navigating.md",
+          "docs/guide/users/recommendations/public-apis.md"
+        ],
+        "expected_source_paths": [
+          "docs/guide/users/loading.md"
+        ],
+        "result_count": 3,
+        "exposed_characters": 726
+      }
+    },
+    {
+      "id": "griffe-relative-paths",
+      "category": "single_hop",
+      "question": "How can Griffe ignore an existing relative path when loading a package?",
+      "memoryforge": {
+        "answer_correct": true,
+        "citation_grounded": true,
+        "expected_sources_recalled": true,
+        "all_expected_sources_cited": true,
+        "abstention_correct": true,
+        "wiki_pages_read": 3,
+        "raw_sources_read": 0,
+        "evidence_characters": 325,
+        "wiki_pages": [
+          "wiki/pages/607c9b160d6fab76d7e18caa1774aa8d0416fa9151619ecd47baa3eaeb503d58.md"
+        ],
+        "cited_source_paths": [
+          "docs/guide/users/loading.md"
+        ]
+      },
+      "raw_fts_baseline": {
+        "expected_source_in_top_3": true,
+        "expected_sources_in_top_3": true,
+        "expected_sources_recalled": true,
+        "raw_source_paths": [
+          "CHANGELOG.md",
+          "docs/guide/users/loading.md",
+          "docs/guide/users/navigating.md"
+        ],
+        "expected_source_paths": [
+          "docs/guide/users/loading.md"
+        ],
+        "result_count": 3,
+        "exposed_characters": 726
+      }
+    },
+    {
+      "id": "griffe-loader-cache",
+      "category": "single_hop",
+      "question": "What does reusing a GriffeLoader cache?",
+      "memoryforge": {
+        "answer_correct": false,
+        "citation_grounded": true,
+        "expected_sources_recalled": true,
+        "all_expected_sources_cited": true,
+        "abstention_correct": true,
+        "wiki_pages_read": 3,
+        "raw_sources_read": 0,
+        "evidence_characters": 1174,
+        "wiki_pages": [
+          "wiki/pages/607c9b160d6fab76d7e18caa1774aa8d0416fa9151619ecd47baa3eaeb503d58.md"
+        ],
+        "cited_source_paths": [
+          "docs/guide/users/loading.md"
+        ]
+      },
+      "raw_fts_baseline": {
+        "expected_source_in_top_3": true,
+        "expected_sources_in_top_3": true,
+        "expected_sources_recalled": true,
+        "raw_source_paths": [
+          "docs/guide/contributors/architecture.md",
+          "docs/guide/users/how-to/support-decorators.md",
+          "docs/guide/users/loading.md"
+        ],
+        "expected_source_paths": [
+          "docs/guide/users/loading.md"
+        ],
+        "result_count": 3,
+        "exposed_characters": 726
+      }
+    },
+    {
+      "id": "griffe-disallow-inspection",
+      "category": "single_hop",
+      "question": "What happens when Griffe cannot find sources and allow_inspection is false?",
+      "memoryforge": {
+        "answer_correct": true,
+        "citation_grounded": true,
+        "expected_sources_recalled": true,
+        "all_expected_sources_cited": true,
+        "abstention_correct": true,
+        "wiki_pages_read": 3,
+        "raw_sources_read": 0,
+        "evidence_characters": 310,
+        "wiki_pages": [
+          "wiki/pages/607c9b160d6fab76d7e18caa1774aa8d0416fa9151619ecd47baa3eaeb503d58.md"
+        ],
+        "cited_source_paths": [
+          "docs/guide/users/loading.md"
+        ]
+      },
+      "raw_fts_baseline": {
+        "expected_source_in_top_3": true,
+        "expected_sources_in_top_3": true,
+        "expected_sources_recalled": true,
+        "raw_source_paths": [
+          "docs/guide/users/checking.md",
+          "docs/guide/users/loading.md",
+          "docs/reference/docstrings.md"
+        ],
+        "expected_source_paths": [
+          "docs/guide/users/loading.md"
+        ],
+        "result_count": 3,
+        "exposed_characters": 726
+      }
+    },
+    {
+      "id": "griffe-alias-postprocess",
+      "category": "single_hop",
+      "question": "When does Griffe perform alias resolution?",
+      "memoryforge": {
+        "answer_correct": false,
+        "citation_grounded": true,
+        "expected_sources_recalled": false,
+        "all_expected_sources_cited": false,
+        "abstention_correct": true,
+        "wiki_pages_read": 3,
+        "raw_sources_read": 0,
+        "evidence_characters": 456,
+        "wiki_pages": [
+          "wiki/pages/24da35c0f752ab36ef599d2357cfc77cf32681fc2f0aebd92ee4eec7870e3f69.md"
+        ],
+        "cited_source_paths": [
+          "docs/guide/users/navigating.md"
+        ]
+      },
+      "raw_fts_baseline": {
+        "expected_source_in_top_3": true,
+        "expected_sources_in_top_3": true,
+        "expected_sources_recalled": true,
+        "raw_source_paths": [
+          "CHANGELOG.md",
+          "docs/guide/users/loading.md",
+          "docs/guide/users/navigating.md"
+        ],
+        "expected_source_paths": [
+          "docs/guide/users/loading.md"
+        ],
+        "result_count": 3,
+        "exposed_characters": 728
+      }
+    },
+    {
+      "id": "griffe-cross-package-aliases",
+      "category": "single_hop",
+      "question": "How does reusing a GriffeLoader help aliases across packages?",
+      "memoryforge": {
+        "answer_correct": true,
+        "citation_grounded": true,
+        "expected_sources_recalled": true,
+        "all_expected_sources_cited": true,
+        "abstention_correct": true,
+        "wiki_pages_read": 3,
+        "raw_sources_read": 0,
+        "evidence_characters": 132,
+        "wiki_pages": [
+          "wiki/pages/607c9b160d6fab76d7e18caa1774aa8d0416fa9151619ecd47baa3eaeb503d58.md"
+        ],
+        "cited_source_paths": [
+          "docs/guide/users/loading.md"
+        ]
+      },
+      "raw_fts_baseline": {
+        "expected_source_in_top_3": true,
+        "expected_sources_in_top_3": true,
+        "expected_sources_recalled": true,
+        "raw_source_paths": [
+          "docs/guide/users/extending.md",
+          "docs/guide/users/loading.md",
+          "docs/guide/users/recommendations/public-apis.md"
+        ],
+        "expected_source_paths": [
+          "docs/guide/users/loading.md"
+        ],
+        "result_count": 3,
+        "exposed_characters": 726
+      }
+    },
+    {
+      "id": "griffe-extension-member-access",
+      "category": "single_hop",
+      "question": "Which member access method should Griffe extensions use while loading?",
+      "memoryforge": {
+        "answer_correct": true,
+        "citation_grounded": true,
+        "expected_sources_recalled": true,
+        "all_expected_sources_cited": true,
+        "abstention_correct": true,
+        "wiki_pages_read": 3,
+        "raw_sources_read": 0,
+        "evidence_characters": 364,
+        "wiki_pages": [
+          "wiki/pages/24da35c0f752ab36ef599d2357cfc77cf32681fc2f0aebd92ee4eec7870e3f69.md"
+        ],
+        "cited_source_paths": [
+          "docs/guide/users/navigating.md"
+        ]
+      },
+      "raw_fts_baseline": {
+        "expected_source_in_top_3": true,
+        "expected_sources_in_top_3": true,
+        "expected_sources_recalled": true,
+        "raw_source_paths": [
+          "docs/guide/users/loading.md",
+          "docs/guide/users/navigating.md",
+          "docs/introduction.md"
+        ],
+        "expected_source_paths": [
+          "docs/guide/users/navigating.md"
+        ],
+        "result_count": 3,
+        "exposed_characters": 726
+      }
+    },
+    {
+      "id": "griffe-inherited-cache",
+      "category": "single_hop",
+      "question": "Who is responsible for caching Griffe inherited_members results?",
+      "memoryforge": {
+        "answer_correct": true,
+        "citation_grounded": true,
+        "expected_sources_recalled": true,
+        "all_expected_sources_cited": true,
+        "abstention_correct": true,
+        "wiki_pages_read": 3,
+        "raw_sources_read": 0,
+        "evidence_characters": 707,
+        "wiki_pages": [
+          "wiki/pages/24da35c0f752ab36ef599d2357cfc77cf32681fc2f0aebd92ee4eec7870e3f69.md"
+        ],
+        "cited_source_paths": [
+          "docs/guide/users/navigating.md"
+        ]
+      },
+      "raw_fts_baseline": {
+        "expected_source_in_top_3": true,
+        "expected_sources_in_top_3": true,
+        "expected_sources_recalled": true,
+        "raw_source_paths": [
+          "docs/guide/users/how-to/selectively-inspect.md",
+          "docs/guide/users/navigating.md",
+          "docs/reference/api/extensions.md"
+        ],
+        "expected_source_paths": [
+          "docs/guide/users/navigating.md"
+        ],
+        "result_count": 3,
+        "exposed_characters": 726
+      }
+    },
+    {
+      "id": "griffe-src-layout-search",
+      "category": "single_hop",
+      "question": "Which Griffe check option locates packages in src-layout subfolders?",
+      "memoryforge": {
+        "answer_correct": true,
+        "citation_grounded": true,
+        "expected_sources_recalled": true,
+        "all_expected_sources_cited": true,
+        "abstention_correct": true,
+        "wiki_pages_read": 3,
+        "raw_sources_read": 0,
+        "evidence_characters": 220,
+        "wiki_pages": [
+          "wiki/pages/b03d4890ed66fb1548c1781e77ce4cae1c7132f6d7939924171cefbfacf4251c.md"
+        ],
+        "cited_source_paths": [
+          "docs/guide/users/checking.md"
+        ]
+      },
+      "raw_fts_baseline": {
+        "expected_source_in_top_3": true,
+        "expected_sources_in_top_3": true,
+        "expected_sources_recalled": true,
+        "raw_source_paths": [
+          "docs/guide/contributors/architecture.md",
+          "docs/guide/users/checking.md",
+          "docs/guide/users/loading.md"
+        ],
+        "expected_source_paths": [
+          "docs/guide/users/checking.md"
+        ],
+        "result_count": 3,
+        "exposed_characters": 728
+      }
+    },
+    {
+      "id": "griffe-git-worktree",
+      "category": "single_hop",
+      "question": "How does Griffe check another Git reference?",
+      "memoryforge": {
+        "answer_correct": false,
+        "citation_grounded": true,
+        "expected_sources_recalled": true,
+        "all_expected_sources_cited": true,
+        "abstention_correct": true,
+        "wiki_pages_read": 3,
+        "raw_sources_read": 0,
+        "evidence_characters": 86,
+        "wiki_pages": [
+          "wiki/pages/b03d4890ed66fb1548c1781e77ce4cae1c7132f6d7939924171cefbfacf4251c.md"
+        ],
+        "cited_source_paths": [
+          "docs/guide/users/checking.md"
+        ]
+      },
+      "raw_fts_baseline": {
+        "expected_source_in_top_3": true,
+        "expected_sources_in_top_3": true,
+        "expected_sources_recalled": true,
+        "raw_source_paths": [
+          "docs/guide/contributors/architecture.md",
+          "docs/guide/users/checking.md",
+          "docs/guide/users/loading.md"
+        ],
+        "expected_source_paths": [
+          "docs/guide/users/checking.md"
+        ],
+        "result_count": 3,
+        "exposed_characters": 726
+      }
+    },
+    {
+      "id": "griffe-full-json",
+      "category": "single_hop",
+      "question": "Which Griffe JSON option serializes every possible field?",
+      "memoryforge": {
+        "answer_correct": true,
+        "citation_grounded": true,
+        "expected_sources_recalled": true,
+        "all_expected_sources_cited": true,
+        "abstention_correct": true,
+        "wiki_pages_read": 3,
+        "raw_sources_read": 0,
+        "evidence_characters": 516,
+        "wiki_pages": [
+          "wiki/pages/be8c687f0ce9f4744037bcaa2466823c2087e768220919eb2d1cc5b2492a08ed.md"
+        ],
+        "cited_source_paths": [
+          "docs/guide/users/serializing.md"
+        ]
+      },
+      "raw_fts_baseline": {
+        "expected_source_in_top_3": true,
+        "expected_sources_in_top_3": true,
+        "expected_sources_recalled": true,
+        "raw_source_paths": [
+          "docs/guide/users/how-to/set-docstring-styles.md",
+          "docs/guide/users/navigating.md",
+          "docs/guide/users/serializing.md"
+        ],
+        "expected_source_paths": [
+          "docs/guide/users/serializing.md"
+        ],
+        "result_count": 3,
+        "exposed_characters": 726
+      }
+    },
+    {
+      "id": "griffe-docstring-parser",
+      "category": "single_hop",
+      "question": "Can Griffe parse an arbitrary docstring without its loader?",
+      "memoryforge": {
+        "answer_correct": true,
+        "citation_grounded": true,
+        "expected_sources_recalled": true,
+        "all_expected_sources_cited": true,
+        "abstention_correct": true,
+        "wiki_pages_read": 3,
+        "raw_sources_read": 0,
+        "evidence_characters": 281,
+        "wiki_pages": [
+          "wiki/pages/cf17be85db0f0a844a687403ec39c516ecd98206b913c367fe9126c00495ee67.md"
+        ],
+        "cited_source_paths": [
+          "docs/guide/users/how-to/parse-docstrings.md"
+        ]
+      },
+      "raw_fts_baseline": {
+        "expected_source_in_top_3": true,
+        "expected_sources_in_top_3": true,
+        "expected_sources_recalled": true,
+        "raw_source_paths": [
+          "docs/guide/users/how-to/parse-docstrings.md",
+          "docs/guide/users/loading.md",
+          "docs/guide/users/navigating.md"
+        ],
+        "expected_source_paths": [
+          "docs/guide/users/how-to/parse-docstrings.md"
+        ],
+        "result_count": 3,
+        "exposed_characters": 726
+      }
+    }
+  ]
+}
