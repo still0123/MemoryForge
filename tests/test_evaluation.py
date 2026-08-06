@@ -93,6 +93,7 @@ def test_eval_compares_wiki_answers_with_raw_fts(tmp_path: Path, monkeypatch) ->
         "citation_grounding_accuracy": 100.0,
         "multi_source_coverage": 0.0,
         "abstention_accuracy": 0.0,
+        "repository_path_isolation_accuracy": 0.0,
         "average_wiki_pages_read": 1.0,
         "average_raw_sources_read": 0.0,
         "average_evidence_characters": 41.0,
@@ -312,6 +313,58 @@ def test_eval_keeps_same_relative_paths_separate_across_git_repositories(
         ["README.md"],
         ["README.md"],
     ]
+    assert payload["memoryforge"]["repository_path_isolation_accuracy"] == 100.0
+
+
+def test_repository_aware_source_matching_rejects_same_path_from_wrong_repository() -> None:
+    first_repository = "a" * 64
+    second_repository = "b" * 64
+    expected = {(first_repository, "README.md")}
+    wrong = {(second_repository, "README.md")}
+
+    assert not evaluation_module._sources_recalled(
+        wrong,
+        expected,
+        require_all=True,
+    )
+    assert not evaluation_module._repository_paths_isolated(wrong, expected)
+
+
+def test_code_wiki_fact_wrapper_is_grounded_by_its_canonical_code() -> None:
+    quote = (
+        "`mgr.ANASMgr` (struct): "
+        "`ANASMgr struct { FrameWork *mgr.Mgr GreyManager *greyimpl.IlmfGreyManager }`"
+    )
+    excerpt = """
+    type ANASMgr struct {
+        FrameWork *mgr.Mgr
+        GreyManager *greyimpl.IlmfGreyManager
+    }
+    """
+
+    assert evaluation_module._citation_quote_grounded(quote, excerpt)
+
+
+def test_cross_repository_labels_align_repositories_with_source_paths() -> None:
+    first_repository = "a" * 64
+    second_repository = "b" * 64
+    case = evaluation_module.EvaluationCase(
+        id="cross-repository",
+        category="multi_source",
+        question="Compare both schedulers",
+        expected_status="answered",
+        expected_source_paths=("first/README.md", "second/README.md"),
+        required_terms=("scheduler",),
+        repository_ids=(first_repository, second_repository),
+    )
+
+    assert evaluation_module._expected_sources(
+        case.expected_source_paths,
+        case.repository_ids,
+    ) == {
+        (first_repository, "first/README.md"),
+        (second_repository, "second/README.md"),
+    }
 
 
 def test_eval_cites_all_expected_sources_for_multi_source_case(
