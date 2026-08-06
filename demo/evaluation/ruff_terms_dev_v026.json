@@ -1,0 +1,95 @@
+{
+  "name": "MemoryForge v0.2.6 Ruff English-term development",
+  "cases": [
+    {
+      "id": "ruff-install-uv",
+      "category": "single_hop",
+      "question": "Which uv command installs the latest Ruff tool?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/installation.md"],
+      "required_terms": ["uv tool install ruff@latest"],
+      "repository_id": "96a7df7e055b6620096c6eebb38f24d474f57eb8c091bb82847d6e5331393152"
+    },
+    {
+      "id": "ruff-default-line-length",
+      "category": "single_hop",
+      "question": "What line length does Ruff use by default?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/configuration.md"],
+      "required_terms": ["line-length", "88"],
+      "repository_id": "96a7df7e055b6620096c6eebb38f24d474f57eb8c091bb82847d6e5331393152"
+    },
+    {
+      "id": "ruff-enable-unsafe-fixes",
+      "category": "single_hop",
+      "question": "Which flag enables Ruff's unsafe fixes?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/linter.md"],
+      "required_terms": ["--unsafe-fixes"],
+      "repository_id": "96a7df7e055b6620096c6eebb38f24d474f57eb8c091bb82847d6e5331393152"
+    },
+    {
+      "id": "ruff-format-check",
+      "category": "single_hop",
+      "question": "Which Ruff formatter flag checks files without rewriting them?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/formatter.md"],
+      "required_terms": ["--check", "avoid writing"],
+      "repository_id": "96a7df7e055b6620096c6eebb38f24d474f57eb8c091bb82847d6e5331393152"
+    },
+    {
+      "id": "ruff-disable-markdown-formatting",
+      "category": "single_hop",
+      "question": "How are Markdown files excluded from Ruff formatting?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/formatter.md"],
+      "required_terms": ["extend-exclude", "*.md"],
+      "repository_id": "96a7df7e055b6620096c6eebb38f24d474f57eb8c091bb82847d6e5331393152"
+    },
+    {
+      "id": "ruff-python-versions",
+      "category": "single_hop",
+      "question": "Which Python versions can Ruff lint?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/faq.md"],
+      "required_terms": ["3.7 onwards"],
+      "repository_id": "96a7df7e055b6620096c6eebb38f24d474f57eb8c091bb82847d6e5331393152"
+    },
+    {
+      "id": "ruff-neovim-enable",
+      "category": "single_hop",
+      "question": "Which Neovim command enables the Ruff language server?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/editors/setup.md"],
+      "required_terms": ["vim.lsp.enable('ruff')"],
+      "repository_id": "96a7df7e055b6620096c6eebb38f24d474f57eb8c091bb82847d6e5331393152"
+    },
+    {
+      "id": "ruff-editor-preference-default",
+      "category": "single_hop",
+      "question": "What is Ruff's default editor configuration preference?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/editors/settings.md"],
+      "required_terms": ["editorFirst"],
+      "repository_id": "96a7df7e055b6620096c6eebb38f24d474f57eb8c091bb82847d6e5331393152"
+    },
+    {
+      "id": "ruff-breaking-version",
+      "category": "single_hop",
+      "question": "Which Ruff version component increases for breaking changes?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/versioning.md"],
+      "required_terms": ["minor", "breaking changes"],
+      "repository_id": "96a7df7e055b6620096c6eebb38f24d474f57eb8c091bb82847d6e5331393152"
+    },
+    {
+      "id": "ruff-preview-purpose",
+      "category": "single_hop",
+      "question": "Why are Ruff's previewed features exposed before stabilization?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/versioning.md"],
+      "required_terms": ["community feedback", "confidence"],
+      "repository_id": "96a7df7e055b6620096c6eebb38f24d474f57eb8c091bb82847d6e5331393152"
+    }
+  ]
+}

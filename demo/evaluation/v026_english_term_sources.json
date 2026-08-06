@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "name": "MemoryForge v0.2.6 English term normalization sources",
+  "development": {
+    "repository": "astral-sh/ruff",
+    "remote_url": "https://github.com/astral-sh/ruff.git",
+    "commit": "64021cfab5c053d9ae0e221705f89a64fbbf202c",
+    "license": "MIT",
+    "license_sha256": "2597d854122b77ddc71971564ca2350a37608575ce324adc5650a2b2051c8f18",
+    "repository_id": "96a7df7e055b6620096c6eebb38f24d474f57eb8c091bb82847d6e5331393152",
+    "importable_document_count": 18,
+    "suite": "demo/evaluation/ruff_terms_dev_v026.json"
+  },
+  "confirmation": {
+    "repository": "python-attrs/attrs",
+    "remote_url": "https://github.com/python-attrs/attrs.git",
+    "commit": "51e8a602f3a5d9e1e0c3f8ccf014a3567a1f7c78",
+    "license": "MIT",
+    "license_sha256": "882115c95dfc2af1eeb6714f8ec6d5cbcabf667caff8729f42420da63f714e9f",
+    "repository_id": "4dd5c563558a4d42e9d722dc4afad778416cbc2be04cceb98c4eaac9a087b8e2",
+    "importable_document_count": 16,
+    "suite": "demo/evaluation/attrs_terms_confirm_v026.json",
+    "policy": "run_once_after_candidate_freeze"
+  }
+}

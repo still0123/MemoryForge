@@ -1,0 +1,113 @@
+{
+  "name": "MemoryForge v0.2.6 attrs English-term confirmation",
+  "cases": [
+    {
+      "id": "attrs-private-alias",
+      "category": "single_hop",
+      "question": "How are private attribute names transformed in generated attrs initializers?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/init.md"],
+      "required_terms": ["strip the underscore", "__init__"],
+      "repository_id": "4dd5c563558a4d42e9d722dc4afad778416cbc2be04cceb98c4eaac9a087b8e2"
+    },
+    {
+      "id": "attrs-mutable-default",
+      "category": "single_hop",
+      "question": "How should attrs create mutable default lists?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/init.md"],
+      "required_terms": ["factory=list"],
+      "repository_id": "4dd5c563558a4d42e9d722dc4afad778416cbc2be04cceb98c4eaac9a087b8e2"
+    },
+    {
+      "id": "attrs-validator-timing",
+      "category": "single_hop",
+      "question": "When are attrs validators run during initialization?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/init.md"],
+      "required_terms": ["after", "initialized"],
+      "repository_id": "4dd5c563558a4d42e9d722dc4afad778416cbc2be04cceb98c4eaac9a087b8e2"
+    },
+    {
+      "id": "attrs-converter-order",
+      "category": "single_hop",
+      "question": "Do attrs converters execute before or after validators?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/init.md"],
+      "required_terms": ["before", "validators"],
+      "repository_id": "4dd5c563558a4d42e9d722dc4afad778416cbc2be04cceb98c4eaac9a087b8e2"
+    },
+    {
+      "id": "attrs-hash-by-value",
+      "category": "single_hop",
+      "question": "How should attrs classes become hashable by value?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/hashing.md"],
+      "required_terms": ["@define(frozen=True)"],
+      "repository_id": "4dd5c563558a4d42e9d722dc4afad778416cbc2be04cceb98c4eaac9a087b8e2"
+    },
+    {
+      "id": "attrs-cache-hash",
+      "category": "single_hop",
+      "question": "Which attrs option caches expensive hash codes?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/hashing.md"],
+      "required_terms": ["cache_hash=True"],
+      "repository_id": "4dd5c563558a4d42e9d722dc4afad778416cbc2be04cceb98c4eaac9a087b8e2"
+    },
+    {
+      "id": "attrs-class-variable",
+      "category": "single_hop",
+      "question": "Which annotation prevents class variables from becoming attrs fields?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/types.md"],
+      "required_terms": ["typing.ClassVar", "skip"],
+      "repository_id": "4dd5c563558a4d42e9d722dc4afad778416cbc2be04cceb98c4eaac9a087b8e2"
+    },
+    {
+      "id": "attrs-slotted-cached-property",
+      "category": "single_hop",
+      "question": "How does attrs support cached properties on slotted classes?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/how-does-it-work.md"],
+      "required_terms": ["cached_property", "__slots__"],
+      "repository_id": "4dd5c563558a4d42e9d722dc4afad778416cbc2be04cceb98c4eaac9a087b8e2"
+    },
+    {
+      "id": "attrs-frozen-exception",
+      "category": "single_hop",
+      "question": "Which exception is raised when frozen attrs instances are modified?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/how-does-it-work.md"],
+      "required_terms": ["FrozenInstanceError"],
+      "repository_id": "4dd5c563558a4d42e9d722dc4afad778416cbc2be04cceb98c4eaac9a087b8e2"
+    },
+    {
+      "id": "attrs-default-equality",
+      "category": "single_hop",
+      "question": "When are two attrs class instances equal by default?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/comparison.md"],
+      "required_terms": ["same type", "fields are equal"],
+      "repository_id": "4dd5c563558a4d42e9d722dc4afad778416cbc2be04cceb98c4eaac9a087b8e2"
+    },
+    {
+      "id": "attrs-exclude-comparison",
+      "category": "single_hop",
+      "question": "How is an attrs field excluded from equality comparisons?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/comparison.md"],
+      "required_terms": ["eq=False"],
+      "repository_id": "4dd5c563558a4d42e9d722dc4afad778416cbc2be04cceb98c4eaac9a087b8e2"
+    },
+    {
+      "id": "attrs-modern-slots",
+      "category": "single_hop",
+      "question": "Are slots enabled by default in attrs' modern APIs?",
+      "expected_status": "answered",
+      "expected_source_paths": ["docs/names.md"],
+      "required_terms": ["modern defaults", "slots"],
+      "repository_id": "4dd5c563558a4d42e9d722dc4afad778416cbc2be04cceb98c4eaac9a087b8e2"
+    }
+  ]
+}
