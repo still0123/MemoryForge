@@ -137,16 +137,16 @@ Tag workflow 必须：
 3. 构建 Wheel 和 sdist；
 4. 在全新环境分别安装；
 5. 运行 release check；
-6. 生成 SHA256、tag-aligned provenance 和 GitHub artifact attestation；
+6. 生成 SHA256 和 tag-aligned provenance，公开仓库再生成 GitHub artifact attestation；
 7. 上传 Release assets；
 8. 下载远端资产并校验 SHA256。
 
 provenance 的 Commit 必须等于 annotated tag 解引用 Commit。
 
 当前状态：已新增 `.github/workflows/release.yml`，覆盖 annotated tag/version 校验、冻结
-Hatchling 的无隔离构建、Wheel/sdist 双 clean-room、SHA256、artifact attestation、Release 上传和
-远端资产回下载校验。本地已通过约束重放、双构建产物安装和 release check；真实 attestation、
-Release 上传与回下载将在创建 `v0.2.1` annotated tag 后执行。
+Hatchling 的无隔离构建、Wheel/sdist 双 clean-room、SHA256、条件 attestation、Release 上传和
+远端资产回下载校验。本地已通过约束重放、双构建产物安装和 release check；真实 Release 上传与
+回下载将在创建 `v0.2.1` annotated tag 后执行。
 
 ## 9. Phase 6：面试材料
 
@@ -164,6 +164,10 @@ Evidence，不新增 Web UI。
 当前状态：`docs/EVIDENCE_CLAIMS.md` 已建立；`PORTFOLIO_DEMO.md`、`RESUME.md`、`BENCHMARK.md`
 和 `CHANGELOG.md` 已同时记录固定领域强结果、Click 外部负结果与发布边界。版本号已对齐为
 `0.2.1`，等待合并后的 `main` 创建 annotated tag。
+
+首次 tag 运行证明 GitHub 不向个人私有仓库提供 artifact attestations。发布流程不会擅自改变仓库
+可见性：公开仓库强制执行 attestation；私有仓库在 provenance 标记
+`not_applicable_private_repository`，Wheel/sdist、SHA256 与远端回下载校验仍为强制门禁。
 
 ## 10. 条件功能
 
