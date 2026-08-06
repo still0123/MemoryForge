@@ -16,6 +16,8 @@
 - 拒绝未通过 MkDocs confirmation 的英文页面 rank-fusion 候选，生产查询保持不变；
 - 增加纯标准库 document-frequency 页面路由；Uvicorn development 100%，Typer confirmation
   83.3%，旧 30 题无回退；
+- 增加候选页内英文词形匹配和 page-aware fact 排序；Watchfiles grounded Answer 从 20% 提升至
+  80%，Structlog confirmation 为 66.7%，Citation grounding 均为 100%。
 
 ## v0.2.0 — 2026-08-06
 
