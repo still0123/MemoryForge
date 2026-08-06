@@ -40,12 +40,15 @@ jobs:
       - run: pytest -W error::ResourceWarning --cov=memoryforge --cov-report=term-missing
       - if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
         run: |
-          python -m build --wheel --sdist --outdir dist
+          python -m build --wheel --sdist --no-isolation --outdir dist
           python demo/run_release_check.py \
             --wheel dist/memoryforge-*.whl \
             --workdir /tmp/memoryforge-release-check \
             --output /tmp/memoryforge-release-provenance.json
           python -m venv /tmp/memoryforge-sdist-check
-          /tmp/memoryforge-sdist-check/bin/python -m pip install dist/memoryforge-*.tar.gz
+          /tmp/memoryforge-sdist-check/bin/python -m pip install \
+            -c constraints/dev.txt hatchling
+          /tmp/memoryforge-sdist-check/bin/python -m pip install \
+            -c constraints/dev.txt --no-build-isolation dist/memoryforge-*.tar.gz
           /tmp/memoryforge-sdist-check/bin/python -m pip check
           /tmp/memoryforge-sdist-check/bin/python -m memoryforge --help
