@@ -1,0 +1,1160 @@
+{
+  "schema_version": 1,
+  "memoryforge_commit": "868fa7d5b54ecf11fc36c27d23339eebb289984f",
+  "source_repositories": [
+    {
+      "repository_id": "db29dfd06f0a2853c9764f1393b680d6a592b1a5771a012b6e1387fc17aac597",
+      "remote_url": "https://github.com/ranmaoxia0123/AgentSkill-Eval.git",
+      "commit": "93f5dc05229da250b041850ad8deeeec886ef304",
+      "source_count": 56
+    }
+  ],
+  "workflow": {
+    "source_count": 56,
+    "wiki_file_count": 57,
+    "lint": {
+      "status": "clean",
+      "checked_pages": 57,
+      "issues": []
+    }
+  },
+  "sample_query": {
+    "question": "怎样核验实验统计不是模拟出来的？",
+    "answer": "统计器只读取 Manifest 真值和选中 Attempt 的 `RunMeasurement`，不从 HTML、stdout 或文件名推断结果。报告要求目标 control/treatment 的所有 Run 已进入终态；发现未终态 Run、缺失 PairBlock 或同一 PairBlock/Variant 重复 Run 时直接拒绝生成，避免把进行中的实验包装成最终结论。",
+    "citations": [
+      {
+        "source_id": "a19b4bd7fa32bf164a474323bd6186a66d9ef639a1f10905423bbe8d82b33291",
+        "source_version": 54,
+        "locator": "chars:22-211",
+        "quote": "统计器只读取 Manifest 真值和选中 Attempt 的 `RunMeasurement`，不从 HTML、stdout 或文件名推断结果。报告要求目标 control/treatment 的所有 Run 已进入终态；发现未终态 Run、缺失 PairBlock 或同一 PairBlock/Variant 重复 Run 时直接拒绝生成，避免把进行中的实验包装成最终结论。",
+        "section_path": "配对统计与静态报告 / 分析入口"
+      }
+    ],
+    "trace": [
+      {
+        "level": "L0",
+        "artifact": "wiki/INDEX.md"
+      },
+      {
+        "level": "L0",
+        "artifact": "SQLite FTS5 applied-source index"
+      },
+      {
+        "level": "L1",
+        "artifact": "wiki/pages/a19b4bd7fa32bf164a474323bd6186a66d9ef639a1f10905423bbe8d82b33291.md"
+      },
+      {
+        "level": "L1",
+        "artifact": "wiki/pages/ad1f1f6377f66150bff8584da873559ae822efb10a4e9709ee8a402ada67882f.md"
+      },
+      {
+        "level": "L1",
+        "artifact": "wiki/pages/039d51e4ebbf8c02f44ac424f1cda5160358b7db6d76259e869da4bc62333ff2.md"
+      },
+      {
+        "level": "L2",
+        "artifact": "wiki/pages/a19b4bd7fa32bf164a474323bd6186a66d9ef639a1f10905423bbe8d82b33291.md"
+      },
+      {
+        "level": "L3",
+        "artifact": "source a19b4bd7fa32bf164a474323bd6186a66d9ef639a1f10905423bbe8d82b33291 revision 54"
+      }
+    ]
+  },
+  "evaluation": {
+    "suite": "AgentSkill-Eval public documentation",
+    "case_count": 30,
+    "memoryforge": {
+      "answer_accuracy": 100.0,
+      "source_recall_at_3": 96.2,
+      "citation_grounding_accuracy": 100.0,
+      "multi_source_coverage": 100.0,
+      "abstention_accuracy": 100.0,
+      "average_wiki_pages_read": 3.0,
+      "average_raw_sources_read": 0.0,
+      "average_evidence_characters": 159.2
+    },
+    "raw_fts_baseline": {
+      "expected_source_recall_at_3": 57.7,
+      "multi_source_coverage": 20.0,
+      "average_exposed_characters": 728.0
+    },
+    "cases": [
+      {
+        "id": "statistics-truth-source",
+        "category": "single_hop",
+        "question": "统计器如何避免把模拟实验结果当成真实结论？",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 189,
+          "wiki_pages": [
+            "wiki/pages/a19b4bd7fa32bf164a474323bd6186a66d9ef639a1f10905423bbe8d82b33291.md"
+          ],
+          "cited_source_paths": [
+            "docs/statistics-and-reports.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/learning/learning-goal.md",
+            "docs/portfolio-demo-and-interview-guide.md",
+            "docs/statistics-and-reports.md"
+          ],
+          "expected_source_paths": [
+            "docs/statistics-and-reports.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      },
+      {
+        "id": "trace-boundary",
+        "category": "single_hop",
+        "question": "Trace Intelligence 不保存什么？",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 127,
+          "wiki_pages": [
+            "wiki/pages/039d51e4ebbf8c02f44ac424f1cda5160358b7db6d76259e869da4bc62333ff2.md"
+          ],
+          "cited_source_paths": [
+            "docs/trace-intelligence.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/learning/agentskill-eval-newcomer-handbook.md",
+            "docs/learning/three-day-crash-course.md",
+            "docs/trace-intelligence.md"
+          ],
+          "expected_source_paths": [
+            "docs/trace-intelligence.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 730
+        }
+      },
+      {
+        "id": "real-agent-boundary",
+        "category": "single_hop",
+        "question": "Real Agent 模块会不会引入新的 Provider 编排框架？",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 110,
+          "wiki_pages": [
+            "wiki/pages/ad1f1f6377f66150bff8584da873559ae822efb10a4e9709ee8a402ada67882f.md"
+          ],
+          "cited_source_paths": [
+            "docs/real-agent-evidence.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/evaluation-validity.md",
+            "docs/learning/core-understanding.md",
+            "docs/real-agent-evidence.md"
+          ],
+          "expected_source_paths": [
+            "docs/real-agent-evidence.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      },
+      {
+        "id": "local-engine-boundary",
+        "category": "single_hop",
+        "question": "本地配对实验引擎依赖哪些服务？",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 158,
+          "wiki_pages": [
+            "wiki/pages/c795a256eb094f3c07f2f7e7a5eac92c36f9df5a1186d11e2eca0d0cd3abc2aa.md"
+          ],
+          "cited_source_paths": [
+            "docs/local-experiment-engine.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/README.md",
+            "docs/local-experiment-engine.md",
+            "docs/trace-intelligence.md"
+          ],
+          "expected_source_paths": [
+            "docs/local-experiment-engine.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      },
+      {
+        "id": "evidence-skill-activation",
+        "category": "single_hop",
+        "question": "为什么配置声明了 Skill 不足以证明 Skill 生效？",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 120,
+          "wiki_pages": [
+            "wiki/pages/a0c98300c8c29d3393560a9ad7c6455541cddfa354546d6ceb5731b187ff5cfa.md"
+          ],
+          "cited_source_paths": [
+            "docs/evidence-and-replay.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/evidence-and-replay.md",
+            "docs/learning/agentskill-eval-newcomer-handbook.md",
+            "docs/learning/one-day-crash-course.md"
+          ],
+          "expected_source_paths": [
+            "docs/evidence-and-replay.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      },
+      {
+        "id": "promotion-core-handoff",
+        "category": "single_hop",
+        "question": "Stage 4b 把 Evolution handoff 接入哪个 Promotion Core、复用了哪个评估器？",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 338,
+          "wiki_pages": [
+            "wiki/pages/7f8151ac637e6dcf6ecbf0ef71c23891290bc9336b55f56be084309dd9ac24d2.md",
+            "wiki/pages/82f5391fa1380c7d23b899cd33e38e924bf952b09c8211715dda568915a30092.md"
+          ],
+          "cited_source_paths": [
+            "docs/observed-promotion-workflow.md",
+            "docs/promotion-workflow-integration.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/portfolio-demo-and-interview-guide.md",
+            "docs/project-completion-status.md",
+            "docs/promotion-workflow-integration.md"
+          ],
+          "expected_source_paths": [
+            "docs/promotion-workflow-integration.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 728
+        }
+      },
+      {
+        "id": "memory-rag-boundary",
+        "category": "single_hop",
+        "question": "Memory/RAG MVP 刻意不用哪些能力？",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 182,
+          "wiki_pages": [
+            "wiki/pages/1eac09791d1e5997becfe6cefb4bbd634ecf699fdfdf6e48b930455d51575997.md"
+          ],
+          "cited_source_paths": [
+            "docs/memory-rag-evaluation.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": false,
+          "expected_sources_in_top_3": false,
+          "expected_sources_recalled": false,
+          "raw_source_paths": [
+            "README.md",
+            "docs/learning/agentskill-eval-newcomer-handbook.md",
+            "docs/portfolio-demo-and-interview-guide.md"
+          ],
+          "expected_source_paths": [
+            "docs/memory-rag-evaluation.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 730
+        }
+      },
+      {
+        "id": "observed-failure-boundary",
+        "category": "single_hop",
+        "question": "Observed Failure Evidence Bridge 会重新运行 Agent 吗？",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 142,
+          "wiki_pages": [
+            "wiki/pages/b41d0d9a203daa2b4a0085b97439fc424b59d65e2907b2248a03c5944edbfbfd.md"
+          ],
+          "cited_source_paths": [
+            "docs/observed-failure-evidence-bridge.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/evaluation-validity.md",
+            "docs/failure-evidence-enrichment.md",
+            "docs/observed-failure-evidence-bridge.md"
+          ],
+          "expected_source_paths": [
+            "docs/observed-failure-evidence-bridge.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      },
+      {
+        "id": "statistics-completeness-gate",
+        "category": "single_hop",
+        "question": "报告要求 Manifest 和 RunMeasurement 满足什么条件？",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 189,
+          "wiki_pages": [
+            "wiki/pages/a19b4bd7fa32bf164a474323bd6186a66d9ef639a1f10905423bbe8d82b33291.md"
+          ],
+          "cited_source_paths": [
+            "docs/statistics-and-reports.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": false,
+          "expected_sources_in_top_3": false,
+          "expected_sources_recalled": false,
+          "raw_source_paths": [
+            "docs/failure-evidence-enrichment.md",
+            "docs/learning/agentskill-eval-newcomer-handbook.md",
+            "docs/portfolio-demo-and-interview-guide.md"
+          ],
+          "expected_source_paths": [
+            "docs/statistics-and-reports.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 730
+        }
+      },
+      {
+        "id": "trace-unavailable-value",
+        "category": "single_hop",
+        "question": "Trace Intelligence 对 unavailable 和隐藏思维过程如何处理？",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 127,
+          "wiki_pages": [
+            "wiki/pages/039d51e4ebbf8c02f44ac424f1cda5160358b7db6d76259e869da4bc62333ff2.md"
+          ],
+          "cited_source_paths": [
+            "docs/trace-intelligence.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/dashboard-mvp.md",
+            "docs/observed-failure-evidence-bridge.md",
+            "docs/trace-intelligence.md"
+          ],
+          "expected_source_paths": [
+            "docs/trace-intelligence.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 730
+        }
+      },
+      {
+        "id": "real-agent-simulation",
+        "category": "single_hop",
+        "question": "Real Agent 证据为什么不能把模拟结果当成 Provider 结论？",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 110,
+          "wiki_pages": [
+            "wiki/pages/ad1f1f6377f66150bff8584da873559ae822efb10a4e9709ee8a402ada67882f.md"
+          ],
+          "cited_source_paths": [
+            "docs/real-agent-evidence.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": false,
+          "expected_sources_in_top_3": false,
+          "expected_sources_recalled": false,
+          "raw_source_paths": [
+            "docs/learning/one-day-crash-course.md",
+            "docs/learning/three-day-crash-course.md",
+            "docs/portfolio-demo-and-interview-guide.md"
+          ],
+          "expected_source_paths": [
+            "docs/real-agent-evidence.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      },
+      {
+        "id": "local-engine-workers",
+        "category": "single_hop",
+        "question": "本地实验引擎的 Redis 和 Celery 分别属于什么依赖？",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 158,
+          "wiki_pages": [
+            "wiki/pages/c795a256eb094f3c07f2f7e7a5eac92c36f9df5a1186d11e2eca0d0cd3abc2aa.md"
+          ],
+          "cited_source_paths": [
+            "docs/local-experiment-engine.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/evidence-and-replay.md",
+            "docs/learning/agentskill-eval-newcomer-handbook.md",
+            "docs/local-experiment-engine.md"
+          ],
+          "expected_source_paths": [
+            "docs/local-experiment-engine.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 730
+        }
+      },
+      {
+        "id": "evidence-secret-proof",
+        "category": "single_hop",
+        "question": "Evidence replay 为什么同时关注 Skill 和 Secret？",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 120,
+          "wiki_pages": [
+            "wiki/pages/a0c98300c8c29d3393560a9ad7c6455541cddfa354546d6ceb5731b187ff5cfa.md"
+          ],
+          "cited_source_paths": [
+            "docs/evidence-and-replay.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": false,
+          "expected_sources_in_top_3": false,
+          "expected_sources_recalled": false,
+          "raw_source_paths": [
+            "docs/learning/agentskill-eval-newcomer-handbook.md",
+            "docs/learning/three-day-crash-course.md",
+            "docs/portfolio-demo-and-interview-guide.md"
+          ],
+          "expected_source_paths": [
+            "docs/evidence-and-replay.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      },
+      {
+        "id": "promotion-evaluator",
+        "category": "single_hop",
+        "question": "Promotion Core 使用了哪个 IndependentFinalEvaluator？",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 131,
+          "wiki_pages": [
+            "wiki/pages/7f8151ac637e6dcf6ecbf0ef71c23891290bc9336b55f56be084309dd9ac24d2.md"
+          ],
+          "cited_source_paths": [
+            "docs/promotion-workflow-integration.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "README.md",
+            "docs/enriched-planning-proposal.md",
+            "docs/promotion-workflow-integration.md"
+          ],
+          "expected_source_paths": [
+            "docs/promotion-workflow-integration.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      },
+      {
+        "id": "memory-rag-no-judge",
+        "category": "single_hop",
+        "question": "Memory/RAG 的 MVP 为什么不使用 Embedding 和 LLM Judge？",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 182,
+          "wiki_pages": [
+            "wiki/pages/1eac09791d1e5997becfe6cefb4bbd634ecf699fdfdf6e48b930455d51575997.md"
+          ],
+          "cited_source_paths": [
+            "docs/memory-rag-evaluation.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": false,
+          "expected_sources_in_top_3": false,
+          "expected_sources_recalled": false,
+          "raw_source_paths": [
+            "docs/learning/agentskill-eval-newcomer-handbook.md",
+            "docs/learning/three-day-crash-course.md",
+            "docs/portfolio-demo-and-interview-guide.md"
+          ],
+          "expected_source_paths": [
+            "docs/memory-rag-evaluation.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 730
+        }
+      },
+      {
+        "id": "statistics-agent-boundary",
+        "category": "multi_source",
+        "question": "Manifest RunMeasurement 与 Provider 模拟结果分别如何保证实验结论可信？",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 299,
+          "wiki_pages": [
+            "wiki/pages/a19b4bd7fa32bf164a474323bd6186a66d9ef639a1f10905423bbe8d82b33291.md",
+            "wiki/pages/ad1f1f6377f66150bff8584da873559ae822efb10a4e9709ee8a402ada67882f.md"
+          ],
+          "cited_source_paths": [
+            "docs/real-agent-evidence.md",
+            "docs/statistics-and-reports.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": false,
+          "expected_sources_in_top_3": false,
+          "expected_sources_recalled": false,
+          "raw_source_paths": [
+            "docs/learning/agentskill-eval-newcomer-handbook.md",
+            "docs/learning/three-day-crash-course.md",
+            "docs/portfolio-demo-and-interview-guide.md"
+          ],
+          "expected_source_paths": [
+            "docs/real-agent-evidence.md",
+            "docs/statistics-and-reports.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      },
+      {
+        "id": "trace-memory-boundary",
+        "category": "multi_source",
+        "question": "Trace Intelligence 的隐藏思维过程边界与 Memory/RAG 的 LLM Judge、Embedding 边界是什么？",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 309,
+          "wiki_pages": [
+            "wiki/pages/039d51e4ebbf8c02f44ac424f1cda5160358b7db6d76259e869da4bc62333ff2.md",
+            "wiki/pages/1eac09791d1e5997becfe6cefb4bbd634ecf699fdfdf6e48b930455d51575997.md"
+          ],
+          "cited_source_paths": [
+            "docs/memory-rag-evaluation.md",
+            "docs/trace-intelligence.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/failure-evidence-enrichment.md",
+            "docs/memory-rag-evaluation.md",
+            "docs/trace-intelligence.md"
+          ],
+          "expected_source_paths": [
+            "docs/memory-rag-evaluation.md",
+            "docs/trace-intelligence.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      },
+      {
+        "id": "evidence-promotion-boundary",
+        "category": "multi_source",
+        "question": "Skill Secret 的证据要求与 Promotion Core、IndependentFinalEvaluator 有什么关系？",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 251,
+          "wiki_pages": [
+            "wiki/pages/7f8151ac637e6dcf6ecbf0ef71c23891290bc9336b55f56be084309dd9ac24d2.md",
+            "wiki/pages/a0c98300c8c29d3393560a9ad7c6455541cddfa354546d6ceb5731b187ff5cfa.md"
+          ],
+          "cited_source_paths": [
+            "docs/evidence-and-replay.md",
+            "docs/promotion-workflow-integration.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": false,
+          "expected_sources_in_top_3": false,
+          "expected_sources_recalled": false,
+          "raw_source_paths": [
+            "docs/learning/agentskill-eval-newcomer-handbook.md",
+            "docs/learning/three-day-crash-course.md",
+            "docs/portfolio-demo-and-interview-guide.md"
+          ],
+          "expected_source_paths": [
+            "docs/evidence-and-replay.md",
+            "docs/promotion-workflow-integration.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      },
+      {
+        "id": "engine-failure-boundary",
+        "category": "multi_source",
+        "question": "Redis Celery 与 FailureEvidenceBundle 不重新运行分别解决什么问题？",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 300,
+          "wiki_pages": [
+            "wiki/pages/c795a256eb094f3c07f2f7e7a5eac92c36f9df5a1186d11e2eca0d0cd3abc2aa.md",
+            "wiki/pages/b41d0d9a203daa2b4a0085b97439fc424b59d65e2907b2248a03c5944edbfbfd.md"
+          ],
+          "cited_source_paths": [
+            "docs/local-experiment-engine.md",
+            "docs/observed-failure-evidence-bridge.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": false,
+          "expected_sources_in_top_3": false,
+          "expected_sources_recalled": false,
+          "raw_source_paths": [
+            "docs/evidence-and-replay.md",
+            "docs/learning/agentskill-eval-newcomer-handbook.md",
+            "docs/learning/three-day-crash-course.md"
+          ],
+          "expected_source_paths": [
+            "docs/local-experiment-engine.md",
+            "docs/observed-failure-evidence-bridge.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      },
+      {
+        "id": "statistics-rag-boundary",
+        "category": "multi_source",
+        "question": "统计器的 Manifest RunMeasurement 与 Memory/RAG 的 Embedding、LLM Judge 分别是什么？",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 371,
+          "wiki_pages": [
+            "wiki/pages/a19b4bd7fa32bf164a474323bd6186a66d9ef639a1f10905423bbe8d82b33291.md",
+            "wiki/pages/1eac09791d1e5997becfe6cefb4bbd634ecf699fdfdf6e48b930455d51575997.md"
+          ],
+          "cited_source_paths": [
+            "docs/memory-rag-evaluation.md",
+            "docs/statistics-and-reports.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": false,
+          "expected_sources_in_top_3": false,
+          "expected_sources_recalled": false,
+          "raw_source_paths": [
+            "docs/evidence-and-replay.md",
+            "docs/learning/agentskill-eval-newcomer-handbook.md",
+            "docs/learning/three-day-crash-course.md"
+          ],
+          "expected_source_paths": [
+            "docs/memory-rag-evaluation.md",
+            "docs/statistics-and-reports.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      },
+      {
+        "id": "unknown-kubernetes-capacity",
+        "category": "unanswerable",
+        "question": "这个项目的 Kubernetes 集群有几个节点？",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 0,
+          "wiki_pages": [],
+          "cited_source_paths": []
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/learning/core-understanding.md",
+            "docs/learning/one-day-crash-course.md",
+            "docs/skill-evolution-execution-roadmap.md"
+          ],
+          "expected_source_paths": [],
+          "result_count": 3,
+          "exposed_characters": 732
+        }
+      },
+      {
+        "id": "unknown-author-birthday",
+        "category": "unanswerable",
+        "question": "作者的生日是什么？",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 0,
+          "wiki_pages": [],
+          "cited_source_paths": []
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/evidence-and-replay.md",
+            "docs/learning/agentskill-eval-newcomer-handbook.md",
+            "docs/learning/one-day-crash-course.md"
+          ],
+          "expected_source_paths": [],
+          "result_count": 3,
+          "exposed_characters": 730
+        }
+      },
+      {
+        "id": "unknown-gpu-model",
+        "category": "unanswerable",
+        "question": "系统使用什么 GPU 型号训练模型？",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 0,
+          "wiki_pages": [],
+          "cited_source_paths": []
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/learning/agentskill-eval-newcomer-handbook.md",
+            "docs/learning/three-day-crash-course.md",
+            "docs/portfolio-demo-and-interview-guide.md"
+          ],
+          "expected_source_paths": [],
+          "result_count": 3,
+          "exposed_characters": 730
+        }
+      },
+      {
+        "id": "unknown-sharding-key",
+        "category": "unanswerable",
+        "question": "数据库分片键应该如何选择？",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 0,
+          "wiki_pages": [],
+          "cited_source_paths": []
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/learning/agentskill-eval-newcomer-handbook.md",
+            "docs/portfolio-demo-and-interview-guide.md",
+            "docs/skilllearnbench-integration.md"
+          ],
+          "expected_source_paths": [],
+          "result_count": 3,
+          "exposed_characters": 730
+        }
+      },
+      {
+        "id": "unknown-frontend-framework",
+        "category": "single_hop",
+        "question": "前端页面使用 React 还是 Vue？",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_grounded": true,
+          "expected_sources_recalled": false,
+          "all_expected_sources_cited": false,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 63,
+          "wiki_pages": [
+            "wiki/pages/638d936fbb9d0f657de7893f7365ae1c1f6e2fb33c0b99f92914c3e98cef3437.md"
+          ],
+          "cited_source_paths": [
+            "docs/dashboard-mvp.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/dashboard-mvp.md",
+            "docs/evolution-timeline-dashboard.md",
+            "docs/project-completion-status.md"
+          ],
+          "expected_source_paths": [
+            "docs/evolution-timeline-dashboard.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 732
+        }
+      },
+      {
+        "id": "paraphrase-statistics",
+        "category": "paraphrase",
+        "question": "怎样核验实验统计不是模拟出来的？",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 189,
+          "wiki_pages": [
+            "wiki/pages/a19b4bd7fa32bf164a474323bd6186a66d9ef639a1f10905423bbe8d82b33291.md"
+          ],
+          "cited_source_paths": [
+            "docs/statistics-and-reports.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": false,
+          "expected_sources_in_top_3": false,
+          "expected_sources_recalled": false,
+          "raw_source_paths": [
+            "docs/learning/agentskill-eval-newcomer-handbook.md",
+            "docs/learning/one-day-crash-course.md",
+            "docs/local-experiment-engine.md"
+          ],
+          "expected_source_paths": [
+            "docs/statistics-and-reports.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 730
+        }
+      },
+      {
+        "id": "paraphrase-trace",
+        "category": "paraphrase",
+        "question": "Trace Intelligence 会不会把模型的隐藏思维过程保存下来？",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 127,
+          "wiki_pages": [
+            "wiki/pages/039d51e4ebbf8c02f44ac424f1cda5160358b7db6d76259e869da4bc62333ff2.md"
+          ],
+          "cited_source_paths": [
+            "docs/trace-intelligence.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/failure-evidence-enrichment.md",
+            "docs/observed-failure-evidence-bridge.md",
+            "docs/trace-intelligence.md"
+          ],
+          "expected_source_paths": [
+            "docs/trace-intelligence.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 730
+        }
+      },
+      {
+        "id": "paraphrase-real-agent",
+        "category": "paraphrase",
+        "question": "真实 Agent 评测是否另外搭建 Provider 编排系统？",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 110,
+          "wiki_pages": [
+            "wiki/pages/ad1f1f6377f66150bff8584da873559ae822efb10a4e9709ee8a402ada67882f.md"
+          ],
+          "cited_source_paths": [
+            "docs/real-agent-evidence.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/learning/agentskill-eval-newcomer-handbook.md",
+            "docs/real-agent-evidence.md",
+            "docs/runner-adapters.md"
+          ],
+          "expected_source_paths": [
+            "docs/real-agent-evidence.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 728
+        }
+      },
+      {
+        "id": "paraphrase-evidence",
+        "category": "paraphrase",
+        "question": "只写了 Skill 配置，为什么还不能说明它真的运行过？",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 232,
+          "wiki_pages": [
+            "wiki/pages/a0c98300c8c29d3393560a9ad7c6455541cddfa354546d6ceb5731b187ff5cfa.md",
+            "wiki/pages/4ae5b91eeb70634845b6c72f82a8f04cb183ebeb7832bea043918587d6b6d6c2.md"
+          ],
+          "cited_source_paths": [
+            "docs/baseline-opportunity-screening.md",
+            "docs/evidence-and-replay.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": false,
+          "expected_sources_in_top_3": false,
+          "expected_sources_recalled": false,
+          "raw_source_paths": [
+            "docs/learning/agentskill-eval-newcomer-handbook.md",
+            "docs/learning/one-day-crash-course.md",
+            "docs/learning/three-day-crash-course.md"
+          ],
+          "expected_source_paths": [
+            "docs/evidence-and-replay.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      },
+      {
+        "id": "paraphrase-failure",
+        "category": "paraphrase",
+        "question": "Observed Failure Evidence Bridge 会再次执行 Agent 来补证据吗？",
+        "memoryforge": {
+          "answer_correct": true,
+          "citation_grounded": true,
+          "expected_sources_recalled": true,
+          "all_expected_sources_cited": true,
+          "abstention_correct": true,
+          "wiki_pages_read": 3,
+          "raw_sources_read": 0,
+          "evidence_characters": 142,
+          "wiki_pages": [
+            "wiki/pages/b41d0d9a203daa2b4a0085b97439fc424b59d65e2907b2248a03c5944edbfbfd.md"
+          ],
+          "cited_source_paths": [
+            "docs/observed-failure-evidence-bridge.md"
+          ]
+        },
+        "raw_fts_baseline": {
+          "expected_source_in_top_3": true,
+          "expected_sources_in_top_3": true,
+          "expected_sources_recalled": true,
+          "raw_source_paths": [
+            "docs/failure-evidence-enrichment.md",
+            "docs/observed-failure-evidence-bridge.md",
+            "docs/real-agent-evidence.md"
+          ],
+          "expected_source_paths": [
+            "docs/observed-failure-evidence-bridge.md"
+          ],
+          "result_count": 3,
+          "exposed_characters": 726
+        }
+      }
+    ]
+  }
+}
