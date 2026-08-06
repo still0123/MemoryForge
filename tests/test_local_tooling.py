@@ -31,6 +31,7 @@ def test_local_check_keeps_the_quality_and_artifact_contract() -> None:
         "ruff format --check .",
         "mypy",
         "pytest -W error::ResourceWarning",
+        "error::pytest.PytestUnraisableExceptionWarning",
         '"$workdir/build/bin/python" -m build',
         "--wheel --sdist --no-isolation",
         "uv pip install",

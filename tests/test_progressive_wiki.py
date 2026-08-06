@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -220,7 +221,10 @@ def test_apply_records_versions_and_later_compile_reads_no_page_or_blob(
 
     _apply_pending(runner, workspace, changeset_id)
 
-    with sqlite3.connect(workspace / ".memoryforge/index.sqlite") as connection:
+    with (
+        closing(sqlite3.connect(workspace / ".memoryforge/index.sqlite")) as connection,
+        connection,
+    ):
         applied = connection.execute(
             "SELECT source_version_id FROM applied_source_versions WHERE source_id = ?",
             (imported["source_id"],),

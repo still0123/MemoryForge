@@ -4,6 +4,7 @@ import hashlib
 import json
 import sqlite3
 import subprocess
+from contextlib import closing
 from pathlib import Path
 from typing import Any
 
@@ -509,7 +510,10 @@ def test_apply_restores_old_file_and_keeps_proposal_when_git_commit_fails(
     staging = workspace_path / ".memoryforge/staging"
     assert (staging / changeset_id).is_dir()
     assert not (staging / "applied" / changeset_id).exists()
-    with sqlite3.connect(workspace_path / ".memoryforge/index.sqlite") as connection:
+    with (
+        closing(sqlite3.connect(workspace_path / ".memoryforge/index.sqlite")) as connection,
+        connection,
+    ):
         applied_version = connection.execute(
             "SELECT source_version_id FROM applied_source_versions WHERE source_id = ?",
             (imported["source_id"],),
@@ -961,7 +965,10 @@ def _current_source_versions(
     source_ids: tuple[str, ...],
 ) -> dict[str, int]:
     placeholders = ", ".join("?" for _ in source_ids)
-    with sqlite3.connect(workspace_path / ".memoryforge/index.sqlite") as connection:
+    with (
+        closing(sqlite3.connect(workspace_path / ".memoryforge/index.sqlite")) as connection,
+        connection,
+    ):
         rows = connection.execute(
             f"""
             SELECT s.source_id, v.id
@@ -975,7 +982,10 @@ def _current_source_versions(
 
 
 def _applied_source_versions(workspace_path: Path) -> dict[str, int]:
-    with sqlite3.connect(workspace_path / ".memoryforge/index.sqlite") as connection:
+    with (
+        closing(sqlite3.connect(workspace_path / ".memoryforge/index.sqlite")) as connection,
+        connection,
+    ):
         rows = connection.execute(
             "SELECT source_id, source_version_id FROM applied_source_versions ORDER BY source_id"
         ).fetchall()

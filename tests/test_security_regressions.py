@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -112,14 +113,14 @@ def test_legacy_phase1a_database_is_migrated_and_import_remains_usable(
     internal = workspace_root / ".memoryforge"
     internal.mkdir()
     database = internal / "index.sqlite"
-    with sqlite3.connect(database) as connection:
+    with closing(sqlite3.connect(database)) as connection, connection:
         connection.executescript(_LEGACY_SCHEMA)
     source_root, source = _source(tmp_path)
 
     imported = import_local_file(workspace_root, source, source_root=source_root)
 
     assert imported.status == "created"
-    with sqlite3.connect(database) as connection:
+    with closing(sqlite3.connect(database)) as connection, connection:
         columns = {row[1] for row in connection.execute("PRAGMA table_info(source_versions)")}
     assert {"sensitivity", "tags_json"} <= columns
     assert (workspace_root / ".git").is_dir()

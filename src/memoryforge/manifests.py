@@ -9,7 +9,7 @@ import re
 import sqlite3
 import stat
 import uuid
-from contextlib import suppress
+from contextlib import closing, suppress
 from datetime import datetime
 from pathlib import Path
 
@@ -178,7 +178,7 @@ class SourceManifestStore:
         if stat.S_ISLNK(database_stat.st_mode) or not stat.S_ISREG(database_stat.st_mode):
             raise WorkspaceError("Source manifest database evidence is unsafe")
         try:
-            with sqlite3.connect(database_path) as connection:
+            with closing(sqlite3.connect(database_path)) as connection:
                 rows = connection.execute(
                     """
                     SELECT

@@ -4,6 +4,8 @@ import hashlib
 import json
 import sqlite3
 import subprocess
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -959,10 +961,14 @@ def _last_synced_commit(workspace: Path, repository_id: str) -> str | None:
     return str(row["last_synced_commit"]) if row["last_synced_commit"] is not None else None
 
 
-def _connection(workspace: Path) -> sqlite3.Connection:
+@contextmanager
+def _connection(workspace: Path) -> Iterator[sqlite3.Connection]:
     connection = sqlite3.connect(workspace / ".memoryforge" / "index.sqlite")
     connection.row_factory = sqlite3.Row
-    return connection
+    try:
+        yield connection
+    finally:
+        connection.close()
 
 
 def _create_repository(tmp_path: Path) -> Path:

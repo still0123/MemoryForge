@@ -12,6 +12,8 @@ import pytest
 from pydantic import ValidationError
 from typer.testing import CliRunner
 
+import memoryforge.manifests as manifests_module
+import memoryforge.workspace as workspace_module
 from memoryforge.changesets import ChangeSetStore
 from memoryforge.cli import app
 from memoryforge.errors import ChangeSetStoreError, WorkspaceError
@@ -40,6 +42,57 @@ def test_workspace_open_rejects_non_workspace_before_writing(tmp_path: Path) -> 
 
     assert sorted(path.name for path in root.iterdir()) == ["keep.txt"]
     assert marker.read_text(encoding="utf-8") == "unchanged\n"
+
+
+def test_workspace_readonly_validation_closes_database(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace = Workspace.initialize(tmp_path / "workspace")
+    connections: list[sqlite3.Connection] = []
+    original_connect = sqlite3.connect
+
+    def tracking_connect(*args, **kwargs):
+        connection = original_connect(*args, **kwargs)
+        connections.append(connection)
+        return connection
+
+    monkeypatch.setattr(workspace_module.sqlite3, "connect", tracking_connect)
+
+    Workspace.open_readonly(workspace.root)
+
+    assert connections
+    for connection in connections:
+        with pytest.raises(sqlite3.ProgrammingError, match="closed"):
+            connection.execute("SELECT 1")
+
+
+def test_manifest_validation_closes_database(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_root = tmp_path / "source"
+    source_root.mkdir()
+    source = source_root / "evidence.md"
+    source.write_text("manifest evidence", encoding="utf-8")
+    workspace = Workspace.initialize(tmp_path / "workspace")
+    import_local_file(workspace.root, source, source_root=source_root)
+    connections: list[sqlite3.Connection] = []
+    original_connect = sqlite3.connect
+
+    def tracking_connect(*args, **kwargs):
+        connection = original_connect(*args, **kwargs)
+        connections.append(connection)
+        return connection
+
+    monkeypatch.setattr(manifests_module.sqlite3, "connect", tracking_connect)
+
+    SourceManifestStore(workspace.manifest_dir).list_all()
+
+    assert connections
+    for connection in connections:
+        with pytest.raises(sqlite3.ProgrammingError, match="closed"):
+            connection.execute("SELECT 1")
 
 
 def test_search_rejects_an_incomplete_workspace_without_upgrading_it(tmp_path: Path) -> None:

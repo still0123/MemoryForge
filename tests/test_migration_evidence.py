@@ -9,6 +9,7 @@ import sqlite3
 import stat
 import subprocess
 import textwrap
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -53,7 +54,7 @@ def test_real_phase1a_workspace_migrates_data_contract_and_manifests(
     assert results[0].source_id == source_id
     assert results[0].category.value == "notes"
 
-    with sqlite3.connect(opened.index_path) as connection:
+    with closing(sqlite3.connect(opened.index_path)) as connection, connection:
         connection.row_factory = sqlite3.Row
         row = connection.execute("SELECT category, legacy_category FROM source_versions").fetchone()
         assert row is not None
@@ -84,7 +85,7 @@ def test_database_schema_migration_rolls_back_every_column_on_failure(
     with pytest.raises(sqlite3.Error):
         workspace_module._migrate_database(database)
 
-    with sqlite3.connect(database) as connection:
+    with closing(sqlite3.connect(database)) as connection, connection:
         columns = {row[1] for row in connection.execute("PRAGMA table_info(source_versions)")}
     assert "sensitivity" not in columns
     assert "tags_json" not in columns
@@ -105,7 +106,7 @@ def test_origin_main_e603_workspace_migrates_and_remains_fully_usable(
     reopened = Workspace.open(workspace)
 
     assert reopened.root == opened.root
-    with sqlite3.connect(opened.index_path) as connection:
+    with closing(sqlite3.connect(opened.index_path)) as connection, connection:
         tables = {
             str(row[0])
             for row in connection.execute(
@@ -271,7 +272,7 @@ def test_origin_main_e603_migration_failure_rolls_back_database_and_new_blobs(
     with pytest.raises(sqlite3.Error):
         workspace_module._migrate_database(database)
 
-    with sqlite3.connect(database) as connection:
+    with closing(sqlite3.connect(database)) as connection, connection:
         tables = {
             str(row[0])
             for row in connection.execute(
@@ -433,7 +434,10 @@ def _legacy_workspace_with_data(tmp_path: Path) -> tuple[Path, str, str]:
     snapshot = workspace / snapshot_path
     snapshot.parent.mkdir(parents=True)
     snapshot.write_bytes(content_bytes)
-    with sqlite3.connect(workspace / ".memoryforge/index.sqlite") as connection:
+    with (
+        closing(sqlite3.connect(workspace / ".memoryforge/index.sqlite")) as connection,
+        connection,
+    ):
         source_row = connection.execute(
             """
             INSERT INTO sources(source_id, source_uri, source_path, source_kind, created_at)
@@ -478,7 +482,7 @@ def _legacy_workspace(tmp_path: Path) -> Path:
     (workspace / "wiki").mkdir()
     internal = workspace / ".memoryforge"
     internal.mkdir()
-    with sqlite3.connect(internal / "index.sqlite") as connection:
+    with closing(sqlite3.connect(internal / "index.sqlite")) as connection, connection:
         connection.executescript(_LEGACY_SCHEMA)
     return workspace
 
@@ -518,7 +522,7 @@ def _origin_main_e603_workspace_with_data(
         title="src_fedcba9876543210--fallback.txt",
     )
     records = [valid, defaulted]
-    with sqlite3.connect(internal / "index.sqlite") as connection:
+    with closing(sqlite3.connect(internal / "index.sqlite")) as connection, connection:
         connection.executescript(_E603_SCHEMA)
         for record in records:
             (workspace / str(record["raw_path"])).write_bytes(bytes(record["content"]))

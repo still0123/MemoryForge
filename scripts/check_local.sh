@@ -33,7 +33,9 @@ else
   echo "dependency check requires pip or uv" >&2
   exit 1
 fi
-"$python" -m pytest -W error::ResourceWarning --cov=memoryforge --cov-report=term-missing
+"$python" -m pytest -W error::ResourceWarning \
+  -W error::pytest.PytestUnraisableExceptionWarning \
+  --cov=memoryforge --cov-report=term-missing
 
 "$python" -m venv "$workdir/build"
 if command -v uv >/dev/null 2>&1; then
