@@ -209,6 +209,18 @@ uv build --wheel --out-dir dist
 v0.2.1 的实际 import 路径、依赖版本、Wheel/sdist SHA256 和 tag Commit 以 GitHub Release 中的
 `release-provenance.json` 与 `SHA256SUMS` 为准。
 
+### 本地零付费门禁
+
+仓库已关闭 GitHub Actions，后续不使用 hosted runner。完整检查、双 clean-room 构建和 SHA256
+Evidence 在本机执行：
+
+```bash
+./scripts/check_local.sh
+```
+
+产物默认写入被 Git 忽略的 `local-evidence/<UTC timestamp>/`。安装、命名产物和手动发布流程见
+[本地免费工具链](docs/LOCAL_FREE_TOOLING.md)。
+
 如果要按秋招面试的方式完整演示，直接看 [秋招演示与面试说明](docs/PORTFOLIO_DEMO.md)。里面包含 3 分钟讲解顺序、公开 Demo 命令、飞书展示命令和常见追问。
 
 发布范围与验证结果见 [CHANGELOG.md](CHANGELOG.md)；可直接用于简历的中文项目描述见 [简历表述](docs/RESUME.md)。

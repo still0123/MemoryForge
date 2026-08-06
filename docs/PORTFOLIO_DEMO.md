@@ -59,8 +59,8 @@ Answer accuracy 只有 10%/0%，尽管 Citation grounding 都是 100%。这说�
 再打开 [`code_wiki_public.json`](../demo/results/code_wiki_public.json) 和
 [`release_provenance.json`](../demo/results/release_provenance.json)：前者证明三语言 Symbol、
 Relation、Module、Mermaid edge 和 Citation 指标均为 100%，单文件更新只影响 20% 的源码模块页；
-后者是 v0.2.0 的历史发布证据。v0.2.1 的 Wheel/sdist、SHA256 和 attestation 以 GitHub Release
-资产为准。
+后者是 v0.2.0 的历史发布证据。v0.2.1 的 Wheel/sdist、SHA256 和 provenance 以 GitHub Release
+资产为准；后续版本使用本地门禁生成相同类型的 Evidence。
 
 ### 3. 展示带引用的回答
 

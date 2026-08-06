@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- 关闭 GitHub Actions 并移除 hosted CI/Release workflow；
+- 新增本地零付费质量门禁，覆盖 Ruff、Mypy、pytest、Wheel/sdist 双 clean-room 和 SHA256。
+
 ## v0.2.1 — 2026-08-06
 
 - 合并多仓库 Code Wiki、会话上下文和大仓库刷新改进；

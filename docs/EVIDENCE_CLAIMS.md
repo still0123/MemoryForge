@@ -6,11 +6,11 @@
 
 | 主张 | Evidence | 边界 |
 | --- | --- | --- |
-| 完整测试、Ruff、Mypy、四矩阵 CI 通过 | GitHub Actions `31074527750` 与最终发布 PR | 不代表生产流量验证 |
+| v0.2.1 的完整测试、Ruff、Mypy、四矩阵 CI 通过 | 历史 GitHub Actions `31074527750` | 仅证明已发布的 v0.2.1 Commit |
+| 后续变更使用本地完整门禁 | [`scripts/check_local.sh`](../scripts/check_local.sh) 与本地 SHA256 Evidence | GitHub Actions 已关闭；不得宣称远端 CI |
 | 开发与构建依赖可冻结重放 | [`constraints/dev.txt`](../constraints/dev.txt)，SHA256 `48debebcfd2da302201688e0582c676cb571d66e96cd7a2a2e0654f49a544571` | 仅覆盖声明的平台与 Python 版本 |
-| Wheel 和 sdist 可独立安装 | tag workflow 与 [`run_release_check.py`](../demo/run_release_check.py) | 本地预演完成；正式 SHA 等 tag workflow |
-| Release 产物有 SHA256 和回下载校验 | [release workflow](../.github/workflows/release.yml) | tag workflow 产生真实远端证据 |
-| 公开仓库 Release 产物有 GitHub attestation | 同上 | 个人私有仓库不提供该功能，provenance 明确标记 N/A |
+| Wheel 和 sdist 可独立安装 | 本地门禁与 [`run_release_check.py`](../demo/run_release_check.py) | 需要在精确 Commit 上重跑 |
+| Release 产物有 SHA256 | 本地 `SHA256SUMS` 与手动回下载校验 | 不再生成 hosted attestation |
 
 ## 代码 Wiki
 

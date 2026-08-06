@@ -18,6 +18,7 @@ memoryforge-demo/
 wiki/
 .botmux/
 logs/
+local-evidence/
 *.key
 *.pem
 *.p12

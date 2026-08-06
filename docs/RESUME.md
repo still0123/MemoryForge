@@ -19,7 +19,7 @@ Python · SQLite FTS5 · Pydantic · Typer · OpenAI-compatible API · 飞书
   来源召回，验证 Wiki 路由在固定领域的收益；同时冻结 Click 20 题外测并保留 10%/0% 的负结果，
   证明发布结论不会用 Citation 100% 掩盖 Answer accuracy 失败。
 - 建立 Evidence-driven 发布链：固定开发与构建依赖，执行 Wheel/sdist 双 clean-room、
-  SHA256、tag/Commit provenance、GitHub artifact attestation 与远端资产回下载校验。
+  SHA256、tag/Commit provenance 与远端资产手动回下载校验；关闭付费 hosted CI，统一使用本地门禁。
 
 ## 面试时的 30 秒介绍
 

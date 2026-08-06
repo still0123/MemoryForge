@@ -2,7 +2,7 @@
 
 ## 1. 状态与目标
 
-- 状态：发布准备完成，等待 annotated tag workflow
+- 状态：v0.2.1 已发布；其 hosted workflow 后续已由本地免费工具链替代
 - 基线：`v0.2.0@e7aef45e63018fdb795223b77384c84dbb06dff6`
 - 集成分支：`release/v0.2.1`
 - 目标版本：`v0.2.1`
@@ -143,10 +143,10 @@ Tag workflow 必须：
 
 provenance 的 Commit 必须等于 annotated tag 解引用 Commit。
 
-当前状态：已新增 `.github/workflows/release.yml`，覆盖 annotated tag/version 校验、冻结
-Hatchling 的无隔离构建、Wheel/sdist 双 clean-room、SHA256、条件 attestation、Release 上传和
-远端资产回下载校验。本地已通过约束重放、双构建产物安装和 release check；真实 Release 上传与
-回下载将在创建 `v0.2.1` annotated tag 后执行。
+历史状态：v0.2.1 使用 tag workflow 完成了 annotated tag/version 校验、冻结 Hatchling 的无隔离
+构建、Wheel/sdist 双 clean-room、SHA256、Release 上传和远端资产回下载校验。发布完成后仓库关闭
+GitHub Actions 并移除 workflow；后续版本使用 `scripts/check_local.sh` 生成本地 Evidence，再手动
+上传 Release 资产。
 
 ## 9. Phase 6：面试材料
 
