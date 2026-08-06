@@ -69,6 +69,8 @@ def build_evidence(workdir: Path) -> dict[str, Any]:
 
     suite = CodeEvaluationSuite.model_validate_json(SUITE.read_text(encoding="utf-8"))
     incremental = suite.incremental
+    if incremental is None:
+        raise RuntimeError("fixed C0 suite must define incremental expectations")
     changed_file = source_repo / incremental.relative_path
     original = changed_file.read_text(encoding="utf-8")
     if incremental.old_text not in original:
