@@ -4,7 +4,7 @@
 
 `ACCEPTED`
 
-Commit `e00fb8f766f1d7186f5abe7ea8ed045e702b525b` changes answer accuracy from
+Commit `42de67d385ad94f5500d7911845b391e8b9c3577` changes answer accuracy from
 text-only matching to a joint contract:
 
 1. answer status matches;
@@ -40,9 +40,9 @@ The AgentSkill-Eval replay preserves the frozen source identity:
 Evidence:
 
 - `demo/results/agent_skill_eval_public.json`
-  - SHA256: `3f3e9a885f1634fc87e9db98803d20b9c71307f563452f1fbce06e6f4330a43e`
+  - SHA256: `d777b5b7547b3e53d66742b03cd5a376d523d17ab7caa108bfa5684ec24f95cf`
 - `demo/results/typer_grounded_accuracy_audit_v025.json`
-  - SHA256: `4d54c2d69078ff567867a8d392854a37ef91a643935206f655e59162937fb8e6`
+  - SHA256: `7b26b5af5613ea2a998b220d2b5cfe17fce22f9333caf68210ba9bd484b85653`
 
 Normalized evaluation replay was byte-identical:
 
