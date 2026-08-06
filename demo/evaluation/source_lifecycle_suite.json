@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "suite_id": "source-lifecycle.local-git",
+  "suite_revision": 1,
+  "cases": [
+    {
+      "id": "registration-idempotency",
+      "category": "temporal_update",
+      "pytest_node": "tests/test_git_sync.py::test_register_and_list_git_checkout_are_idempotent"
+    },
+    {
+      "id": "document-source-version-update",
+      "category": "temporal_update",
+      "pytest_node": "tests/test_git_sync.py::test_git_sync_uses_remote_identity_and_tracks_source_revisions"
+    },
+    {
+      "id": "code-source-version-update",
+      "category": "temporal_update",
+      "pytest_node": "tests/test_git_sync.py::test_selected_code_module_builds_a_cited_page_and_tracks_updates"
+    },
+    {
+      "id": "deleted-source-deactivation",
+      "category": "temporal_update",
+      "pytest_node": "tests/test_git_sync.py::test_git_sync_deactivates_deleted_document_source"
+    },
+    {
+      "id": "deleted-page-review-and-apply",
+      "category": "temporal_update",
+      "pytest_node": "tests/test_git_sync.py::test_deleted_git_document_generates_reviewable_archive_and_apply_removes_page"
+    },
+    {
+      "id": "stale-source-version-rejection",
+      "category": "temporal_update",
+      "pytest_node": "tests/test_compiler_workflow.py::test_apply_rejects_stale_source_versions_before_writes"
+    },
+    {
+      "id": "same-keyword-repository-isolation",
+      "category": "cross_repository",
+      "pytest_node": "tests/test_git_sync.py::test_repository_scope_keeps_same_keyword_queries_in_one_git_checkout"
+    }
+  ]
+}
