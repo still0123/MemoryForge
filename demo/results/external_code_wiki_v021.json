@@ -1,0 +1,1299 @@
+{
+  "schema_version": 1,
+  "memoryforge_commit": "79054ae562d745552b3471af9d26d728bbc510ea",
+  "memoryforge_worktree_dirty": false,
+  "source_manifest": {
+    "path": "demo/evaluation/external_code_wiki_sources_v021.json",
+    "sha256": "16c10ae28f1bc992e6b00d4953682a54c0273ba5960c44f777e64072e2a12af7"
+  },
+  "label_scope": "non_exhaustive_manually_verified_positive_sample",
+  "repositories": [
+    {
+      "name": "click",
+      "remote_url": "https://github.com/pallets/click.git",
+      "commit": "00e592cea702e0b2caa0dee42489fdb1c22cd845",
+      "license": "BSD-3-Clause",
+      "license_sha256": "9a8ad106a394e853bfe21f42f4e72d592819a22805d991b5f3275029292b658d",
+      "checkout_worktree_dirty": false,
+      "code_paths": [
+        "src/click"
+      ],
+      "suite": {
+        "path": "demo/evaluation/external_code_wiki_click_v021.json",
+        "sha256": "4e987766c80be0e0b09ac20dbb5ed9331abc5918784fa5ef5a7b031e28a56f12",
+        "manual_symbol_labels": 20,
+        "manual_relation_labels": 15,
+        "manual_module_labels": 5
+      },
+      "workflow": {
+        "synced_document_count": 55,
+        "indexed_source_count": 17,
+        "code_wiki_file_count": 18,
+        "lint": {
+          "status": "clean",
+          "checked_pages": 18,
+          "issues": []
+        }
+      },
+      "not_applicable_metrics": [
+        "known_gap_relation_recall",
+        "mermaid_edge_coverage",
+        "architecture_citation_coverage",
+        "architecture_mermaid_determinism"
+      ],
+      "evaluation": {
+        "suite": "MemoryForge v0.2.1 Click external Code Wiki benchmark",
+        "schema_version": 1,
+        "counts": {
+          "symbols": 599,
+          "relations": 851,
+          "modules": 18,
+          "architecture_edges": 0
+        },
+        "metrics": {
+          "expected_source_coverage": 100.0,
+          "symbol_recall": 100.0,
+          "core_relation_recall": 100.0,
+          "known_gap_relation_recall": 0.0,
+          "overall_relation_recall": 100.0,
+          "module_assignment_accuracy": 100.0,
+          "citation_grounding_accuracy": 100.0,
+          "architecture_edge_grounding": 100.0,
+          "mermaid_edge_coverage": 0.0,
+          "architecture_citation_coverage": 0.0,
+          "architecture_mermaid_determinism": 0.0,
+          "deterministic_replay": 100.0
+        },
+        "gates": {
+          "core_symbols": true,
+          "core_relations": true,
+          "module_assignment": true,
+          "citations": true,
+          "architecture_wiki": true,
+          "deterministic": true
+        },
+        "cases": {
+          "sources": [
+            {
+              "path": "src/click/__init__.py",
+              "found": true
+            },
+            {
+              "path": "src/click/_compat.py",
+              "found": true
+            },
+            {
+              "path": "src/click/_termui_impl.py",
+              "found": true
+            },
+            {
+              "path": "src/click/_textwrap.py",
+              "found": true
+            },
+            {
+              "path": "src/click/_utils.py",
+              "found": true
+            },
+            {
+              "path": "src/click/_winconsole.py",
+              "found": true
+            },
+            {
+              "path": "src/click/core.py",
+              "found": true
+            },
+            {
+              "path": "src/click/decorators.py",
+              "found": true
+            },
+            {
+              "path": "src/click/exceptions.py",
+              "found": true
+            },
+            {
+              "path": "src/click/formatting.py",
+              "found": true
+            },
+            {
+              "path": "src/click/globals.py",
+              "found": true
+            },
+            {
+              "path": "src/click/parser.py",
+              "found": true
+            },
+            {
+              "path": "src/click/shell_completion.py",
+              "found": true
+            },
+            {
+              "path": "src/click/termui.py",
+              "found": true
+            },
+            {
+              "path": "src/click/testing.py",
+              "found": true
+            },
+            {
+              "path": "src/click/types.py",
+              "found": true
+            },
+            {
+              "path": "src/click/utils.py",
+              "found": true
+            }
+          ],
+          "symbols": [
+            {
+              "qualified_name": "src.click.core.Context",
+              "kind": "class",
+              "found": true
+            },
+            {
+              "qualified_name": "src.click.core.Context.invoke",
+              "kind": "method",
+              "found": true
+            },
+            {
+              "qualified_name": "src.click.core.Context.forward",
+              "kind": "method",
+              "found": true
+            },
+            {
+              "qualified_name": "src.click.core.Command",
+              "kind": "class",
+              "found": true
+            },
+            {
+              "qualified_name": "src.click.core.Command.make_parser",
+              "kind": "method",
+              "found": true
+            },
+            {
+              "qualified_name": "src.click.core.Command.parse_args",
+              "kind": "method",
+              "found": true
+            },
+            {
+              "qualified_name": "src.click.core.Group",
+              "kind": "class",
+              "found": true
+            },
+            {
+              "qualified_name": "src.click.core.Group.add_command",
+              "kind": "method",
+              "found": true
+            },
+            {
+              "qualified_name": "src.click.decorators.command",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "src.click.decorators.help_option",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "src.click.formatting.measure_table",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "src.click.formatting.iter_rows",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "src.click.formatting.wrap_text",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "src.click.formatting.HelpFormatter",
+              "kind": "class",
+              "found": true
+            },
+            {
+              "qualified_name": "src.click.formatting.HelpFormatter.write_dl",
+              "kind": "method",
+              "found": true
+            },
+            {
+              "qualified_name": "src.click.shell_completion.BashComplete",
+              "kind": "class",
+              "found": true
+            },
+            {
+              "qualified_name": "src.click.shell_completion.BashComplete.get_completion_args",
+              "kind": "method",
+              "found": true
+            },
+            {
+              "qualified_name": "src.click.shell_completion.split_arg_string",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "src.click.types.Choice",
+              "kind": "class",
+              "found": true
+            },
+            {
+              "qualified_name": "src.click.types.Choice.convert",
+              "kind": "method",
+              "found": true
+            }
+          ],
+          "relations": [
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "src.click.formatting.HelpFormatter.write_dl",
+              "target": "src.click.formatting.measure_table",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "src.click.formatting.HelpFormatter.write_dl",
+              "target": "src.click.formatting.iter_rows",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "src.click.formatting.HelpFormatter.write_dl",
+              "target": "src.click.formatting.wrap_text",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "src.click.decorators.help_option",
+              "target": "src.click.decorators.option",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "src.click.core.Group.add_command",
+              "target": "src.click.core._check_nested_chain",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "src.click.core.Context.forward",
+              "target": "src.click.core.Context.invoke",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "src.click.core.Command.parse_args",
+              "target": "src.click.core.Command.make_parser",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "src.click.core.Command.parse_args",
+              "target": "src.click.core.Command.get_params",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "src.click.shell_completion.BashComplete.get_completion_args",
+              "target": "src.click.shell_completion.split_arg_string",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "src.click.types.Choice.convert",
+              "target": "src.click.types.Choice.normalize_choice",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "src.click.types.Choice.convert",
+              "target": "src.click.types.Choice._normalized_mapping",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "src.click.types.Choice.convert",
+              "target": "src.click.types.Choice.get_invalid_choice_message",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "src.click._termui_impl.Editor.edit_files",
+              "target": "src.click._termui_impl.Editor.get_editor",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "src.click.core.Command.get_help",
+              "target": "src.click.core.Command.format_help",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "src.click.formatting.HelpFormatter.write_text",
+              "target": "src.click.formatting.wrap_text",
+              "found": true
+            }
+          ],
+          "modules": [
+            {
+              "symbol": "src.click.core.Context",
+              "module_path": "src/click/core",
+              "found": true
+            },
+            {
+              "symbol": "src.click.core.Command.parse_args",
+              "module_path": "src/click/core",
+              "found": true
+            },
+            {
+              "symbol": "src.click.decorators.help_option",
+              "module_path": "src/click/decorators",
+              "found": true
+            },
+            {
+              "symbol": "src.click.formatting.HelpFormatter.write_dl",
+              "module_path": "src/click/formatting",
+              "found": true
+            },
+            {
+              "symbol": "src.click.types.Choice.convert",
+              "module_path": "src/click/types",
+              "found": true
+            }
+          ]
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "cobra",
+      "remote_url": "https://github.com/spf13/cobra.git",
+      "commit": "adbc8813901bba65827259daa8e22ff94ec1f30e",
+      "license": "Apache-2.0",
+      "license_sha256": "5e3400b93bbb099e83e52bab885e7441750673c21f97988ca3f1240639b63283",
+      "checkout_worktree_dirty": false,
+      "code_paths": [
+        "."
+      ],
+      "suite": {
+        "path": "demo/evaluation/external_code_wiki_cobra_v021.json",
+        "sha256": "223a31ced074ed3993a8e6641bf4a5c729c9999d5acc39be56ba02b7a0837b05",
+        "manual_symbol_labels": 20,
+        "manual_relation_labels": 15,
+        "manual_module_labels": 5
+      },
+      "workflow": {
+        "synced_document_count": 37,
+        "indexed_source_count": 36,
+        "code_wiki_file_count": 2,
+        "lint": {
+          "status": "clean",
+          "checked_pages": 2,
+          "issues": []
+        }
+      },
+      "not_applicable_metrics": [
+        "known_gap_relation_recall",
+        "mermaid_edge_coverage",
+        "architecture_citation_coverage",
+        "architecture_mermaid_determinism"
+      ],
+      "evaluation": {
+        "suite": "MemoryForge v0.2.1 Cobra external Code Wiki benchmark",
+        "schema_version": 1,
+        "counts": {
+          "symbols": 648,
+          "relations": 1545,
+          "modules": 2,
+          "architecture_edges": 0
+        },
+        "metrics": {
+          "expected_source_coverage": 100.0,
+          "symbol_recall": 100.0,
+          "core_relation_recall": 100.0,
+          "known_gap_relation_recall": 0.0,
+          "overall_relation_recall": 100.0,
+          "module_assignment_accuracy": 100.0,
+          "citation_grounding_accuracy": 100.0,
+          "architecture_edge_grounding": 100.0,
+          "mermaid_edge_coverage": 0.0,
+          "architecture_citation_coverage": 0.0,
+          "architecture_mermaid_determinism": 0.0,
+          "deterministic_replay": 100.0
+        },
+        "gates": {
+          "core_symbols": true,
+          "core_relations": true,
+          "module_assignment": true,
+          "citations": true,
+          "architecture_wiki": true,
+          "deterministic": true
+        },
+        "cases": {
+          "sources": [
+            {
+              "path": "active_help.go",
+              "found": true
+            },
+            {
+              "path": "active_help_test.go",
+              "found": true
+            },
+            {
+              "path": "args.go",
+              "found": true
+            },
+            {
+              "path": "args_test.go",
+              "found": true
+            },
+            {
+              "path": "bash_completions.go",
+              "found": true
+            },
+            {
+              "path": "bash_completionsV2.go",
+              "found": true
+            },
+            {
+              "path": "bash_completionsV2_test.go",
+              "found": true
+            },
+            {
+              "path": "bash_completions_test.go",
+              "found": true
+            },
+            {
+              "path": "cobra.go",
+              "found": true
+            },
+            {
+              "path": "cobra_test.go",
+              "found": true
+            },
+            {
+              "path": "command.go",
+              "found": true
+            },
+            {
+              "path": "command_notwin.go",
+              "found": true
+            },
+            {
+              "path": "command_test.go",
+              "found": true
+            },
+            {
+              "path": "command_win.go",
+              "found": true
+            },
+            {
+              "path": "completions.go",
+              "found": true
+            },
+            {
+              "path": "completions_test.go",
+              "found": true
+            },
+            {
+              "path": "doc/cmd_test.go",
+              "found": true
+            },
+            {
+              "path": "doc/man_docs.go",
+              "found": true
+            },
+            {
+              "path": "doc/man_docs_test.go",
+              "found": true
+            },
+            {
+              "path": "doc/man_examples_test.go",
+              "found": true
+            },
+            {
+              "path": "doc/md_docs.go",
+              "found": true
+            },
+            {
+              "path": "doc/md_docs_test.go",
+              "found": true
+            },
+            {
+              "path": "doc/rest_docs.go",
+              "found": true
+            },
+            {
+              "path": "doc/rest_docs_test.go",
+              "found": true
+            },
+            {
+              "path": "doc/util.go",
+              "found": true
+            },
+            {
+              "path": "doc/yaml_docs.go",
+              "found": true
+            },
+            {
+              "path": "doc/yaml_docs_test.go",
+              "found": true
+            },
+            {
+              "path": "fish_completions.go",
+              "found": true
+            },
+            {
+              "path": "fish_completions_test.go",
+              "found": true
+            },
+            {
+              "path": "flag_groups.go",
+              "found": true
+            },
+            {
+              "path": "flag_groups_test.go",
+              "found": true
+            },
+            {
+              "path": "powershell_completions.go",
+              "found": true
+            },
+            {
+              "path": "powershell_completions_test.go",
+              "found": true
+            },
+            {
+              "path": "shell_completions.go",
+              "found": true
+            },
+            {
+              "path": "zsh_completions.go",
+              "found": true
+            },
+            {
+              "path": "zsh_completions_test.go",
+              "found": true
+            }
+          ],
+          "symbols": [
+            {
+              "qualified_name": "cobra.PositionalArgs",
+              "kind": "type_alias",
+              "found": true
+            },
+            {
+              "qualified_name": "cobra.NoArgs",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "cobra.OnlyValidArgs",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "cobra.NoDuplicateArgs",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "cobra.MinimumNArgs",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "cobra.MaximumNArgs",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "cobra.ExactArgs",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "cobra.RangeArgs",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "cobra.MatchAll",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "cobra.AppendActiveHelp",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "cobra.AddTemplateFunc",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "cobra.CheckErr",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "cobra.WriteStringAndCheck",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "cobra.Group",
+              "kind": "struct",
+              "found": true
+            },
+            {
+              "qualified_name": "cobra.Command",
+              "kind": "struct",
+              "found": true
+            },
+            {
+              "qualified_name": "cobra.Command.execute",
+              "kind": "method",
+              "found": true
+            },
+            {
+              "qualified_name": "cobra.Command.ExecuteC",
+              "kind": "method",
+              "found": true
+            },
+            {
+              "qualified_name": "cobra.Command.ParseFlags",
+              "kind": "method",
+              "found": true
+            },
+            {
+              "qualified_name": "cobra.Command.ValidateArgs",
+              "kind": "method",
+              "found": true
+            },
+            {
+              "qualified_name": "cobra.Command.ValidateRequiredFlags",
+              "kind": "method",
+              "found": true
+            }
+          ],
+          "relations": [
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "cobra.Command.execute",
+              "target": "cobra.Command.FlagErrorFunc",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "cobra.Command.execute",
+              "target": "cobra.Command.preRun",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "cobra.Command.execute",
+              "target": "cobra.Command.Runnable",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "cobra.Command.execute",
+              "target": "cobra.Command.ParseFlags",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "cobra.Command.execute",
+              "target": "cobra.Command.ValidateRequiredFlags",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "cobra.Command.execute",
+              "target": "cobra.Command.postRun",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "cobra.Command.execute",
+              "target": "cobra.Command.Name",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "cobra.Command.execute",
+              "target": "cobra.Command.OutOrStdout",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "cobra.Command.execute",
+              "target": "cobra.Command.InitDefaultVersionFlag",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "cobra.Command.execute",
+              "target": "cobra.Command.ValidateArgs",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "cobra.Command.execute",
+              "target": "cobra.Command.InitDefaultHelpFlag",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "cobra.Command.execute",
+              "target": "cobra.Command.Flags",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "cobra.Command.execute",
+              "target": "cobra.Command.ValidateFlagGroups",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "cobra.Command.ExecuteC",
+              "target": "cobra.Command.Traverse",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "cobra.Command.ExecuteC",
+              "target": "cobra.Command.Find",
+              "found": true
+            }
+          ],
+          "modules": [
+            {
+              "symbol": "cobra.Command",
+              "module_path": "cobra",
+              "found": true
+            },
+            {
+              "symbol": "cobra.Command.ExecuteC",
+              "module_path": "cobra",
+              "found": true
+            },
+            {
+              "symbol": "cobra.NoArgs",
+              "module_path": "cobra",
+              "found": true
+            },
+            {
+              "symbol": "cobra.AppendActiveHelp",
+              "module_path": "cobra",
+              "found": true
+            },
+            {
+              "symbol": "doc.GenMarkdown",
+              "module_path": "doc",
+              "found": true
+            }
+          ]
+        }
+      },
+      "passed": true
+    },
+    {
+      "name": "zod",
+      "remote_url": "https://github.com/colinhacks/zod.git",
+      "commit": "912f0f51b0ced654d0069741e7160834dca742ee",
+      "license": "MIT",
+      "license_sha256": "3f1189b28e3866e0d979968d466b78f813f76827cfdca1fbb124cc0a5c8841f8",
+      "checkout_worktree_dirty": false,
+      "code_paths": [
+        "packages/zod/src/v4/core"
+      ],
+      "suite": {
+        "path": "demo/evaluation/external_code_wiki_zod_v021.json",
+        "sha256": "58fdfb80fffde1682f34e20adc37afb66bd924d17354da50bac6b573df3d29e5",
+        "manual_symbol_labels": 20,
+        "manual_relation_labels": 15,
+        "manual_module_labels": 5
+      },
+      "workflow": {
+        "synced_document_count": 34,
+        "indexed_source_count": 34,
+        "code_wiki_file_count": 40,
+        "lint": {
+          "status": "clean",
+          "checked_pages": 40,
+          "issues": []
+        }
+      },
+      "not_applicable_metrics": [
+        "known_gap_relation_recall"
+      ],
+      "evaluation": {
+        "suite": "MemoryForge v0.2.1 Zod external Code Wiki benchmark",
+        "schema_version": 1,
+        "counts": {
+          "symbols": 1198,
+          "relations": 1322,
+          "modules": 40,
+          "architecture_edges": 64
+        },
+        "metrics": {
+          "expected_source_coverage": 100.0,
+          "symbol_recall": 100.0,
+          "core_relation_recall": 100.0,
+          "known_gap_relation_recall": 0.0,
+          "overall_relation_recall": 100.0,
+          "module_assignment_accuracy": 100.0,
+          "citation_grounding_accuracy": 100.0,
+          "architecture_edge_grounding": 100.0,
+          "mermaid_edge_coverage": 100.0,
+          "architecture_citation_coverage": 100.0,
+          "architecture_mermaid_determinism": 100.0,
+          "deterministic_replay": 100.0
+        },
+        "gates": {
+          "core_symbols": true,
+          "core_relations": true,
+          "module_assignment": true,
+          "citations": true,
+          "architecture_wiki": true,
+          "deterministic": true
+        },
+        "cases": {
+          "sources": [
+            {
+              "path": "packages/zod/src/v4/core/api.ts",
+              "found": true
+            },
+            {
+              "path": "packages/zod/src/v4/core/checks.ts",
+              "found": true
+            },
+            {
+              "path": "packages/zod/src/v4/core/config.ts",
+              "found": true
+            },
+            {
+              "path": "packages/zod/src/v4/core/core.ts",
+              "found": true
+            },
+            {
+              "path": "packages/zod/src/v4/core/doc.ts",
+              "found": true
+            },
+            {
+              "path": "packages/zod/src/v4/core/errors.ts",
+              "found": true
+            },
+            {
+              "path": "packages/zod/src/v4/core/index.ts",
+              "found": true
+            },
+            {
+              "path": "packages/zod/src/v4/core/json-schema-generator.ts",
+              "found": true
+            },
+            {
+              "path": "packages/zod/src/v4/core/json-schema-processors.ts",
+              "found": true
+            },
+            {
+              "path": "packages/zod/src/v4/core/json-schema.ts",
+              "found": true
+            },
+            {
+              "path": "packages/zod/src/v4/core/parse.ts",
+              "found": true
+            },
+            {
+              "path": "packages/zod/src/v4/core/regexes.ts",
+              "found": true
+            },
+            {
+              "path": "packages/zod/src/v4/core/registries.ts",
+              "found": true
+            },
+            {
+              "path": "packages/zod/src/v4/core/schemas.ts",
+              "found": true
+            },
+            {
+              "path": "packages/zod/src/v4/core/standard-schema.ts",
+              "found": true
+            },
+            {
+              "path": "packages/zod/src/v4/core/tests/extend.test.ts",
+              "found": true
+            },
+            {
+              "path": "packages/zod/src/v4/core/tests/index.test.ts",
+              "found": true
+            },
+            {
+              "path": "packages/zod/src/v4/core/tests/locales/be.test.ts",
+              "found": true
+            },
+            {
+              "path": "packages/zod/src/v4/core/tests/locales/el.test.ts",
+              "found": true
+            },
+            {
+              "path": "packages/zod/src/v4/core/tests/locales/en.test.ts",
+              "found": true
+            },
+            {
+              "path": "packages/zod/src/v4/core/tests/locales/es.test.ts",
+              "found": true
+            },
+            {
+              "path": "packages/zod/src/v4/core/tests/locales/fr.test.ts",
+              "found": true
+            },
+            {
+              "path": "packages/zod/src/v4/core/tests/locales/he.test.ts",
+              "found": true
+            },
+            {
+              "path": "packages/zod/src/v4/core/tests/locales/hr.test.ts",
+              "found": true
+            },
+            {
+              "path": "packages/zod/src/v4/core/tests/locales/nl.test.ts",
+              "found": true
+            },
+            {
+              "path": "packages/zod/src/v4/core/tests/locales/ru.test.ts",
+              "found": true
+            },
+            {
+              "path": "packages/zod/src/v4/core/tests/locales/tr.test.ts",
+              "found": true
+            },
+            {
+              "path": "packages/zod/src/v4/core/tests/locales/uz.test.ts",
+              "found": true
+            },
+            {
+              "path": "packages/zod/src/v4/core/tests/record-constructor.test.ts",
+              "found": true
+            },
+            {
+              "path": "packages/zod/src/v4/core/tests/recursive-tuples.test.ts",
+              "found": true
+            },
+            {
+              "path": "packages/zod/src/v4/core/to-json-schema.ts",
+              "found": true
+            },
+            {
+              "path": "packages/zod/src/v4/core/util.ts",
+              "found": true
+            },
+            {
+              "path": "packages/zod/src/v4/core/versions.ts",
+              "found": true
+            },
+            {
+              "path": "packages/zod/src/v4/core/zsf.ts",
+              "found": true
+            }
+          ],
+          "symbols": [
+            {
+              "qualified_name": "packages.zod.src.v4.core.api._string",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "packages.zod.src.v4.core.api._email",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "packages.zod.src.v4.core.api._number",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "packages.zod.src.v4.core.api._positive",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "packages.zod.src.v4.core.api._negative",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "packages.zod.src.v4.core.api._toUpperCase",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "packages.zod.src.v4.core.parse._parse",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "packages.zod.src.v4.core.parse._decode",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "packages.zod.src.v4.core.parse._safeParse",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "packages.zod.src.v4.core.parse._safeDecode",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "packages.zod.src.v4.core.util.assignProp",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "packages.zod.src.v4.core.util.mergeDefs",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "packages.zod.src.v4.core.util.partial",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "packages.zod.src.v4.core.errors.toDotPath",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "packages.zod.src.v4.core.errors.prettifyError",
+              "kind": "function",
+              "found": true
+            },
+            {
+              "qualified_name": "packages.zod.src.v4.core.json-schema-generator.JSONSchemaGenerator",
+              "kind": "class",
+              "found": true
+            },
+            {
+              "qualified_name": "packages.zod.src.v4.core.json-schema-generator.JSONSchemaGenerator.constructor",
+              "kind": "method",
+              "found": true
+            },
+            {
+              "qualified_name": "packages.zod.src.v4.core.json-schema-generator.JSONSchemaGenerator.counter@get",
+              "kind": "method",
+              "found": true
+            },
+            {
+              "qualified_name": "packages.zod.src.v4.core.standard-schema.StandardTypedV1.Props",
+              "kind": "interface",
+              "found": true
+            },
+            {
+              "qualified_name": "packages.zod.src.v4.core.standard-schema.StandardSchemaV1.Props",
+              "kind": "interface",
+              "found": true
+            }
+          ],
+          "relations": [
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "packages.zod.src.v4.core.parse._decode",
+              "target": "packages.zod.src.v4.core.parse._parse",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "packages.zod.src.v4.core.parse._safeDecode",
+              "target": "packages.zod.src.v4.core.parse._safeParse",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "packages.zod.src.v4.core.util.partial",
+              "target": "packages.zod.src.v4.core.util.mergeDefs",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "packages.zod.src.v4.core.util.partial",
+              "target": "packages.zod.src.v4.core.util.Class",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "packages.zod.src.v4.core.util.partial",
+              "target": "packages.zod.src.v4.core.util.clone",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "packages.zod.src.v4.core.util.partial",
+              "target": "packages.zod.src.v4.core.util.assignProp",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "packages.zod.src.v4.core.errors.prettifyError",
+              "target": "packages.zod.src.v4.core.errors.toDotPath",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "packages.zod.src.v4.core.api._toUpperCase",
+              "target": "packages.zod.src.v4.core.api._overwrite",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "packages.zod.src.v4.core.json-schema-generator.JSONSchemaGenerator.constructor",
+              "target": "packages.zod.src.v4.core.to-json-schema.initializeContext",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "packages.zod.src.v4.core.to-json-schema.process",
+              "target": "packages.zod.src.v4.core.to-json-schema.isTransforming",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "packages.zod.src.v4.core.regexes.time",
+              "target": "packages.zod.src.v4.core.regexes.timeSource",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "packages.zod.src.v4.core.api._positive",
+              "target": "packages.zod.src.v4.core.api._gt",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "packages.zod.src.v4.core.api._negative",
+              "target": "packages.zod.src.v4.core.api._lt",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "packages.zod.src.v4.core.util.joinValues",
+              "target": "packages.zod.src.v4.core.util.stringifyPrimitive",
+              "found": true
+            },
+            {
+              "tier": "core",
+              "type": "calls",
+              "source": "packages.zod.src.v4.core.util.uint8ArrayToBase64url",
+              "target": "packages.zod.src.v4.core.util.uint8ArrayToBase64",
+              "found": true
+            }
+          ],
+          "modules": [
+            {
+              "symbol": "packages.zod.src.v4.core.api._positive",
+              "module_path": "packages/zod/src/v4/core/api",
+              "found": true
+            },
+            {
+              "symbol": "packages.zod.src.v4.core.parse._decode",
+              "module_path": "packages/zod/src/v4/core/parse",
+              "found": true
+            },
+            {
+              "symbol": "packages.zod.src.v4.core.util.partial",
+              "module_path": "packages/zod/src/v4/core/util",
+              "found": true
+            },
+            {
+              "symbol": "packages.zod.src.v4.core.errors.prettifyError",
+              "module_path": "packages/zod/src/v4/core/errors",
+              "found": true
+            },
+            {
+              "symbol": "packages.zod.src.v4.core.json-schema-generator.JSONSchemaGenerator",
+              "module_path": "packages/zod/src/v4/core/json-schema-generator",
+              "found": true
+            }
+          ]
+        }
+      },
+      "passed": true
+    }
+  ],
+  "summary": {
+    "repository_count": 3,
+    "expected_source_count": 87,
+    "manual_symbol_labels": 60,
+    "manual_relation_labels": 45,
+    "manual_module_labels": 15,
+    "actual_counts": {
+      "symbols": 2445,
+      "relations": 3718,
+      "modules": 60,
+      "architecture_edges": 64,
+      "code_wiki_files": 60
+    },
+    "metrics": {
+      "expected_source_coverage": 100.0,
+      "symbol_label_match": 100.0,
+      "relation_label_match": 100.0,
+      "module_label_match": 100.0
+    },
+    "passed": true
+  }
+}

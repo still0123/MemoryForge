@@ -82,9 +82,13 @@ Symbol/Relation 召回与 precision 必须完整报告。未达目标时允许�
 
 预期产物：
 
-- `demo/evaluation/external_code_wiki_v021.json`
+- `demo/evaluation/external_code_wiki_{click,cobra,zod}_v021.json`
 - `demo/results/external_code_wiki_v021.json`
 - `docs/EXTERNAL_CODE_WIKI_BENCHMARK.md`
+
+当前状态：人工正样本标签、Runner 和基线 Evidence 已完成。60 个 Symbol、45 条 Relation、
+15 条 Module assignment 均命中；该结果不代表全仓 precision/recall。增量与性能仍由后续阶段
+单独验证。
 
 ## 6. Phase 3：性能决策
 
