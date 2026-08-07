@@ -82,18 +82,17 @@ def _build_snapshot(
     evidence_payload: dict[str, Any] | None,
     include_local: bool,
 ) -> dict[str, Any]:
-    sources, public_source_ids, privacy = _source_snapshot(
+    sources, public_source_versions, privacy = _source_snapshot(
         workspace,
         include_local=include_local,
     )
     pages = _wiki_snapshot(
         workspace,
-        public_source_ids=public_source_ids,
         include_local=include_local,
     )
     query = _query_snapshot(
         evidence_payload,
-        public_source_ids=public_source_ids,
+        public_source_versions=public_source_versions,
         include_local=include_local,
     )
     benchmark = _benchmark_snapshot(evidence_payload)
@@ -105,7 +104,7 @@ def _build_snapshot(
         "wiki": {"pages": pages},
         "changeset": _changeset_snapshot(
             workspace,
-            public_source_ids=public_source_ids,
+            public_source_versions=public_source_versions,
             include_local=include_local,
         ),
         "query": query,
@@ -119,7 +118,7 @@ def _source_snapshot(
     workspace: Workspace,
     *,
     include_local: bool,
-) -> tuple[list[dict[str, Any]], set[str], dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], set[tuple[str, int]], dict[str, Any]]:
     rows = _query_rows(
         workspace,
         """
@@ -140,14 +139,15 @@ def _source_snapshot(
         """,
     )
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    public_source_ids: set[str] = set()
+    public_source_versions: set[tuple[str, int]] = set()
     redacted_source_ids: set[str] = set()
     redacted_version_count = 0
     for row in rows:
         source_id = str(row["source_id"])
+        version_id = int(row["version_id"])
         sensitivity = str(row["sensitivity"])
         if sensitivity == "public":
-            public_source_ids.add(source_id)
+            public_source_versions.add((source_id, version_id))
         elif not include_local:
             redacted_source_ids.add(source_id)
             redacted_version_count += 1
@@ -160,7 +160,7 @@ def _source_snapshot(
             raise ShowcaseBuildError("SourceVersion tags are invalid")
         grouped[source_id].append(
             {
-                "version_id": int(row["version_id"]),
+                "version_id": version_id,
                 "title": str(row["title"]),
                 "category": str(row["category"]),
                 "observed_at": str(row["observed_at"]),
@@ -177,7 +177,7 @@ def _source_snapshot(
     ]
     return (
         sources,
-        public_source_ids,
+        public_source_versions,
         {
             "include_local": include_local,
             "redacted_source_count": 0 if include_local else len(redacted_source_ids),
@@ -189,23 +189,30 @@ def _source_snapshot(
 def _wiki_snapshot(
     workspace: Workspace,
     *,
-    public_source_ids: set[str],
     include_local: bool,
 ) -> list[dict[str, Any]]:
     rows = _query_rows(
         workspace,
         """
-        SELECT page_path, source_id
+        SELECT page_sources.page_path, page_sources.source_id, versions.sensitivity
         FROM page_sources
-        ORDER BY page_path, source_id
+        JOIN applied_source_versions AS applied
+          ON applied.source_id = page_sources.source_id
+        JOIN source_versions AS versions
+          ON versions.id = applied.source_version_id
+        ORDER BY page_sources.page_path, page_sources.source_id
         """,
     )
     owners: dict[str, set[str]] = defaultdict(set)
+    private_pages: set[str] = set()
     for row in rows:
-        owners[str(row["page_path"])].add(str(row["source_id"]))
+        page_path = str(row["page_path"])
+        owners[page_path].add(str(row["source_id"]))
+        if str(row["sensitivity"]) != "public":
+            private_pages.add(page_path)
     pages = []
     for path, source_ids in sorted(owners.items()):
-        if not include_local and (not source_ids or not source_ids <= public_source_ids):
+        if not include_local and (not source_ids or path in private_pages):
             continue
         page = _workspace_file(workspace.root, path)
         content = _read_regular_file(page, max_bytes=_MAX_STAGED_BYTES).decode("utf-8")
@@ -224,7 +231,7 @@ def _wiki_snapshot(
 def _changeset_snapshot(
     workspace: Workspace,
     *,
-    public_source_ids: set[str],
+    public_source_versions: set[tuple[str, int]],
     include_local: bool,
 ) -> dict[str, Any] | None:
     applied_root = workspace.staging_dir / "applied"
@@ -241,7 +248,10 @@ def _changeset_snapshot(
         except ValidationError as exc:
             raise ShowcaseBuildError("Applied ChangeSet metadata is invalid") from exc
         source_ids = set(record.changeset.source_ids)
-        if not include_local and (not source_ids or not source_ids <= public_source_ids):
+        source_versions = set(record.changeset.source_versions.items())
+        if not include_local and (
+            not source_versions or not source_versions <= public_source_versions
+        ):
             continue
         review = _read_optional_hashed_json(entry, "review.json", "review.sha256")
         approval = _read_optional_hashed_json(entry, "approval.json", "approval.sha256")
@@ -299,7 +309,7 @@ def _changeset_snapshot(
 def _query_snapshot(
     evidence: dict[str, Any] | None,
     *,
-    public_source_ids: set[str],
+    public_source_versions: set[tuple[str, int]],
     include_local: bool,
 ) -> dict[str, Any] | None:
     if evidence is None:
@@ -323,9 +333,14 @@ def _query_snapshot(
         if not isinstance(citation, dict):
             raise ShowcaseBuildError("public evidence Citation is invalid")
         source_id = citation.get("source_id")
-        if not isinstance(source_id, str):
+        source_version = citation.get("source_version")
+        if (
+            not isinstance(source_id, str)
+            or isinstance(source_version, bool)
+            or not isinstance(source_version, int)
+        ):
             raise ShowcaseBuildError("public evidence Citation source is invalid")
-        if not include_local and source_id not in public_source_ids:
+        if not include_local and (source_id, source_version) not in public_source_versions:
             raise ShowcaseBuildError("public evidence cites a non-public SourceVersion")
         normalized_citations.append(
             _allowlist(
