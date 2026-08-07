@@ -14,7 +14,8 @@
 - 增加 POSIX `fcntl` / Windows `msvcrt` 锁边界、PowerShell 本地门禁与 Linux clean-room
   Evidence；原生 Windows confirmation 仍冻结为 `not_run`；
 - 增加双隔离 release build、Workspace backup/restore drill、benchmark summary 与本地
-  provenance；retained artifacts 不进入 sdist。
+  provenance；RC 门禁在 macOS 为 574 passed、Linux 为 571 passed / 3 skipped，Wheel/sdist
+  跨平台 SHA256 一致；retained artifacts 不进入 sdist。
 - 强化回答准确率契约，要求关键事实和冻结来源同时命中；AgentSkill-Eval 30 题严格 Answer 为
   96.7%，Citation grounding 为 100%，Source recall@3 为 96.2%；
 - 追加独立 Click 20 题复评；回答准确率 5.0%、来源召回 16.7%，再次确认外部有效性缺口；

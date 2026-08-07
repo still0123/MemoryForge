@@ -519,7 +519,13 @@ REQUIRED_ACCEPTANCE_EVIDENCE = {
             "9779fb4624e21575de8b0de359cc199cecb88589",
         ),
     },
-    "release-candidate-delivery": {},
+    "release-candidate-delivery": {
+        _RESULTS + "release_candidate_development_candidate_1.json": (
+            _RESULTS + "release_candidate_candidate_1_local_gates.json",
+            "94924487672989ea216a1728caf77f94bfeb094cae496c78f832ec2838f65d9b",
+            "3980b47fec0a8abc001c4df740b6924d3f32223a",
+        ),
+    },
 }
 REQUIRED_LINUX_EVIDENCE = {
     "cross-platform-delivery": {
@@ -2428,6 +2434,13 @@ def _validate_acceptance_evidence(
         dict[str, Any],
         json.loads((REPO_ROOT / artifact["path"]).read_text(encoding="utf-8")),
     )
+    if experiment["suite_id"] == "release-candidate-delivery":
+        return _validate_release_candidate_acceptance_evidence(
+            experiment,
+            development_artifact,
+            payload,
+            confirmation,
+        )
     local_gate = payload.get("local_gate", {})
     pytest_result = local_gate.get("pytest", {})
     registry_result = local_gate.get("registry_validation", {})
@@ -2560,6 +2573,157 @@ def _validate_acceptance_evidence(
     if multi_source:
         _validate_multi_source_support_regression(payload.get("regression_evidence"))
         return 2
+    return 1
+
+
+def _validate_release_candidate_acceptance_evidence(
+    experiment: dict[str, Any],
+    development_artifact: dict[str, Any],
+    payload: dict[str, Any],
+    confirmation: dict[str, Any],
+) -> int:
+    holdout = experiment["splits"]["holdout"]
+    commit = str(payload.get("memoryforge_commit"))
+    platforms = payload.get("platforms")
+    contracts = {
+        "macos": {
+            "runtime": {
+                "virtualization": "native",
+                "system": "Darwin",
+                "machine": "arm64",
+                "implementation": "CPython",
+                "python": "3.11.15",
+                "hosted_runner": False,
+            },
+            "pytest": {
+                "passed": 574,
+                "skipped": 0,
+                "failed": 0,
+                "coverage_percent": 88,
+            },
+            "artifacts": {
+                "wheel_sha256": "05e3494a476bc46c1138ba45d9b732132c6f545c428d1a4e7ac47d405675cbe7",
+                "sdist_sha256": "856fa7dc13eb9cd9420504d02145781a6673670162d01de034db13438b680c0e",
+                "provenance_sha256": (
+                    "33929dca45d711f64e6d4b29dfc43f49111643d83f2c1e366b29bd5516aae546"
+                ),
+                "sha256sums_sha256": (
+                    "f3f92e553580bb7e282fee86283c69cb52d0766530c42c4a523461bfb1fd03de"
+                ),
+            },
+        },
+        "linux": {
+            "runtime": {
+                "virtualization": "Lima 2.2.0 local VM",
+                "distribution": "Debian GNU/Linux 12",
+                "kernel": "Linux 6.1.0-50-cloud-arm64",
+                "architecture": "aarch64",
+                "implementation": "CPython",
+                "python": "3.11.2",
+                "hosted_runner": False,
+            },
+            "pytest": {
+                "passed": 571,
+                "skipped": 3,
+                "failed": 0,
+                "coverage_percent": 88,
+            },
+            "artifacts": {
+                "wheel_sha256": "05e3494a476bc46c1138ba45d9b732132c6f545c428d1a4e7ac47d405675cbe7",
+                "sdist_sha256": "856fa7dc13eb9cd9420504d02145781a6673670162d01de034db13438b680c0e",
+                "provenance_sha256": (
+                    "f291b2f3b1eaa6dec209f33796ba893eea77335d9cf1cb10483b969f49f512d8"
+                ),
+                "sha256sums_sha256": (
+                    "821edc4bdc9bfedff5dff08726633aae3af1caea939917c11fbf0273b2a2df20"
+                ),
+            },
+        },
+    }
+    if (
+        set(payload)
+        != {
+            "schema_version",
+            "suite_id",
+            "suite_revision",
+            "memoryforge_commit",
+            "memoryforge_worktree_dirty",
+            "development_evidence",
+            "platforms",
+            "confirmation",
+            "holdout",
+            "passed",
+        }
+        or payload.get("schema_version") != 1
+        or payload.get("suite_id") != experiment["suite_id"]
+        or payload.get("suite_revision") != experiment["suite_revision"]
+        or COMMIT.fullmatch(commit) is None
+        or payload.get("memoryforge_worktree_dirty") is not False
+        or not _git_commit_descends_from(commit, development_artifact["memoryforge_commit"])
+        or payload.get("development_evidence")
+        != {
+            "path": development_artifact["path"],
+            "sha256": development_artifact["sha256"],
+            "memoryforge_commit": development_artifact["memoryforge_commit"],
+            "passed": True,
+        }
+        or not isinstance(platforms, dict)
+        or set(platforms) != set(contracts)
+        or payload.get("confirmation")
+        != {
+            "path": confirmation["path"],
+            "sha256": confirmation["sha256"],
+            "status": "not_run",
+        }
+        or not isinstance(holdout, dict)
+        or payload.get("holdout")
+        != {
+            "path": holdout["path"],
+            "sha256": holdout["sha256"],
+            "status": "not_run",
+        }
+        or payload.get("passed") is not True
+    ):
+        raise ValueError("release-candidate local gate Evidence contract failed")
+
+    expected_gate_keys = LOCAL_GATE_KEYS | {"artifacts", "artifact_files"}
+    expected_registry = {
+        "suite_count": 12,
+        "experiment_count": 8,
+        "evidence_count": 97,
+        "qa_case_count": 121,
+    }
+    for name, contract in contracts.items():
+        platform_payload = platforms[name]
+        local_gate = (
+            platform_payload.get("local_gate") if isinstance(platform_payload, dict) else None
+        )
+        if (
+            not isinstance(platform_payload, dict)
+            or set(platform_payload) != {"runtime", "local_gate"}
+            or not _strict_mapping(platform_payload.get("runtime"), contract["runtime"])
+            or not isinstance(local_gate, dict)
+            or set(local_gate) != expected_gate_keys
+            or local_gate.get("command") != "scripts/check_local.sh"
+            or local_gate.get("ruff_check") != "passed"
+            or local_gate.get("ruff_format") != "passed"
+            or local_gate.get("strict_mypy") != "passed"
+            or not _strict_mapping(local_gate.get("registry_validation"), expected_registry)
+            or local_gate.get("dependency_check") != "passed"
+            or not _strict_mapping(local_gate.get("pytest"), contract["pytest"])
+            or local_gate.get("wheel_clean_room") != "passed"
+            or local_gate.get("sdist_clean_room") != "passed"
+            or local_gate.get("pip_check") != "passed"
+            or local_gate.get("cli_version_smoke") != "passed"
+            or not _strict_mapping(local_gate.get("artifacts"), contract["artifacts"])
+            or not _validate_bound_gate_artifacts(
+                local_gate.get("artifact_files"),
+                local_gate.get("artifacts"),
+                commit,
+                require_clean_sdist=True,
+            )
+        ):
+            raise ValueError(f"release-candidate {name} local gate Evidence changed")
     return 1
 
 

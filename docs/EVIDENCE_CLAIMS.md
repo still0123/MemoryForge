@@ -9,6 +9,7 @@
 | v0.2.1 的完整测试、Ruff、Mypy、四矩阵 CI 通过 | 历史 GitHub Actions `31074527750` | 仅证明已发布的 v0.2.1 Commit |
 | 后续变更使用本地完整门禁 | [`scripts/check_local.sh`](../scripts/check_local.sh) 与本地 SHA256 Evidence | GitHub Actions 已关闭；不得宣称远端 CI |
 | v0.3.0 release-candidate 使用双隔离构建、Workspace drill 和严格 Registry | [`V030_RELEASE_CANDIDATE_SPEC.md`](V030_RELEASE_CANDIDATE_SPEC.md) | 原生 Windows confirmation 与 holdout 通过前不得宣称已发布 |
+| v0.3.0 RC 在 macOS 574 passed，Linux 571 passed / 3 skipped，coverage 88%，Wheel/sdist 跨平台 SHA256 一致 | [`release_candidate_candidate_1_local_gates.json`](../demo/results/release_candidate_candidate_1_local_gates.json) | 固定 Commit `3980b47`；不等于原生 Windows confirmation |
 | 开发与构建依赖可冻结重放 | [`constraints/dev.txt`](../constraints/dev.txt)，SHA256 `48debebcfd2da302201688e0582c676cb571d66e96cd7a2a2e0654f49a544571` | 仅覆盖声明的平台与 Python 版本 |
 | Wheel 和 sdist 可独立安装 | 本地门禁与 [`run_release_check.py`](../demo/run_release_check.py) | 需要在精确 Commit 上重跑 |
 | Release 产物有 SHA256 | 本地 `SHA256SUMS` 与手动回下载校验 | 不再生成 hosted attestation |

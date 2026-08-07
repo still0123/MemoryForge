@@ -101,6 +101,28 @@ Candidate 1 is the only accepted release development result. It authorizes
 final local review and release-candidate freeze; it does not itself authorize
 holdout or claim native Windows success.
 
+## Accepted Local Gates
+
+- Evidence: `demo/results/release_candidate_candidate_1_local_gates.json`
+- Evidence SHA256:
+  `94924487672989ea216a1728caf77f94bfeb094cae496c78f832ec2838f65d9b`
+- Gate Commit:
+  `3980b47fec0a8abc001c4df740b6924d3f32223a`
+- macOS: 574 passed, 0 skipped, coverage 88%
+- Debian 12 / Lima: 571 passed, 3 skipped, coverage 88%
+- Wheel SHA256:
+  `05e3494a476bc46c1138ba45d9b732132c6f545c428d1a4e7ac47d405675cbe7`
+- sdist SHA256:
+  `856fa7dc13eb9cd9420504d02145781a6673670162d01de034db13438b680c0e`
+
+Both platforms passed Ruff, formatting, strict Mypy, dependency checks,
+strict Registry validation, Wheel clean-room, sdist clean-room, `pip check`,
+and CLI version smoke. Actual artifacts, per-platform provenance, and
+SHA256SUMS are retained under
+`demo/results/artifacts/release_candidate_delivery_candidate_1/`.
+GitHub Actions remained disabled. Native Windows confirmation and holdout
+remain `not_run`.
+
 ## Confirmation Components
 
 The release confirmation manifest binds:

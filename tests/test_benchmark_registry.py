@@ -24,7 +24,7 @@ def test_benchmark_registry_binds_all_release_artifacts() -> None:
         "status": "valid",
         "suite_count": 12,
         "experiment_count": 8,
-        "evidence_count": 97,
+        "evidence_count": 98,
         "qa_case_count": 121,
         "qa_case_types_present": [
             "code_behavior",
@@ -296,6 +296,39 @@ def test_benchmark_registry_binds_rejected_release_candidate_cases() -> None:
             artifact,
             payload,
             experiment["splits"]["development"],
+            experiment["splits"]["confirmation"],
+        )
+
+
+def test_benchmark_registry_requires_release_candidate_local_gates(tmp_path: Path) -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "release-candidate-delivery"
+    )
+    experiment["evidence"][1].pop("acceptance_evidence")
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps(registry), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="acceptance Evidence history is incomplete"):
+        validator.validate_registry(path)
+
+
+def test_benchmark_registry_binds_release_candidate_platform_results() -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "release-candidate-delivery"
+    )
+    artifact = experiment["evidence"][1]
+    payload = json.loads(
+        (validator.REPO_ROOT / artifact["acceptance_evidence"]["path"]).read_text(encoding="utf-8")
+    )
+    payload["platforms"]["linux"]["local_gate"]["pytest"]["passed"] = 570
+
+    with pytest.raises(ValueError, match="linux local gate Evidence changed"):
+        validator._validate_release_candidate_acceptance_evidence(
+            experiment,
+            artifact,
+            payload,
             experiment["splits"]["confirmation"],
         )
 

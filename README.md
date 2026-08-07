@@ -55,7 +55,7 @@ Wiki 树、Diff、Citation Trace、Benchmark、保留的失败案例、正确拒
 | learn-claude-code support score development | Answer / selective accuracy **100%**，coverage **90%**，risk **0%** | 10 题；confirmation 未运行 |
 | Click 外部迁移 | development / holdout Answer **10% / 0%** | 真实负结果，未隐藏 |
 | Static Showcase development | **4/4**，本地详情泄漏 **0**，Workspace 变更 **0** | confirmation 未运行 |
-| 跨平台本地门禁 | macOS **559 passed**；Debian **556 passed / 3 skipped** | 原生 Windows confirmation 未运行 |
+| v0.3.0 RC 本地门禁 | macOS **574 passed**；Debian **571 passed / 3 skipped** | coverage 88%；原生 Windows confirmation 未运行 |
 
 ## 它解决了什么问题？
 
