@@ -251,6 +251,21 @@ CREATE TABLE IF NOT EXISTS git_code_modules (
     relative_path TEXT NOT NULL,
     PRIMARY KEY(repository_id, relative_path)
 )""",
+    """
+CREATE TABLE IF NOT EXISTS folder_imports (
+    folder_id TEXT PRIMARY KEY,
+    registered_at TEXT NOT NULL
+)""",
+    """
+CREATE TABLE IF NOT EXISTS folder_source_versions (
+    source_version_id INTEGER PRIMARY KEY REFERENCES source_versions(id),
+    folder_id TEXT NOT NULL REFERENCES folder_imports(folder_id),
+    relative_path TEXT NOT NULL,
+    UNIQUE(folder_id, relative_path, source_version_id)
+)""",
+    """
+CREATE INDEX IF NOT EXISTS idx_folder_source_versions_path
+ON folder_source_versions(folder_id, relative_path)""",
     _SOURCE_FTS_SCHEMA_STATEMENT,
     _WIKI_FACT_FTS_SCHEMA_STATEMENT,
     """
@@ -1256,6 +1271,94 @@ def _reconcile_git_snapshot_sources(
             "UPDATE source_versions SET is_current = 0 WHERE id = ?",
             ((version_id,) for version_id in stale_version_ids),
         )
+
+
+def register_folder_import(workspace: Workspace, folder_id: str) -> None:
+    """Register one opaque local folder identity without persisting its absolute root."""
+    if re.fullmatch(r"[a-f0-9]{64}", folder_id) is None:
+        raise ValueError("folder_id must be a SHA256 digest")
+    with _connect(workspace.index_path) as connection:
+        connection.execute(
+            """
+            INSERT OR IGNORE INTO folder_imports(folder_id, registered_at)
+            VALUES (?, ?)
+            """,
+            (folder_id, _now()),
+        )
+
+
+def record_folder_source_version(
+    workspace: Workspace,
+    *,
+    folder_id: str,
+    source_id: str,
+    relative_path: str,
+) -> None:
+    """Bind one current SourceVersion to its folder snapshot and relative path."""
+    if re.fullmatch(r"[a-f0-9]{64}", folder_id) is None:
+        raise ValueError("folder_id must be a SHA256 digest")
+    path = PurePosixPath(relative_path)
+    if (
+        path.is_absolute()
+        or not path.parts
+        or any(part in {"", ".", ".."} for part in path.parts)
+        or "\\" in relative_path
+    ):
+        raise ValueError("folder source path must be a safe POSIX relative path")
+    with _connect(workspace.index_path) as connection:
+        version_row = connection.execute(
+            """
+            SELECT versions.id
+            FROM source_versions AS versions
+            JOIN sources ON sources.id = versions.source_id
+            WHERE sources.source_id = ? AND versions.is_current = 1
+            """,
+            (source_id,),
+        ).fetchone()
+        if version_row is None:
+            raise WorkspaceIntegrityError("imported folder SourceVersion could not be found")
+        version_id = int(version_row["id"])
+        connection.execute(
+            "DELETE FROM folder_source_versions WHERE source_version_id = ?",
+            (version_id,),
+        )
+        connection.execute(
+            """
+            INSERT INTO folder_source_versions(source_version_id, folder_id, relative_path)
+            VALUES (?, ?, ?)
+            """,
+            (version_id, folder_id, path.as_posix()),
+        )
+
+
+def reconcile_folder_sources(
+    workspace: Workspace,
+    *,
+    folder_id: str,
+    current_paths: set[str],
+) -> int:
+    """Deactivate current folder sources absent from a completed folder snapshot."""
+    if re.fullmatch(r"[a-f0-9]{64}", folder_id) is None:
+        raise ValueError("folder_id must be a SHA256 digest")
+    with _connect(workspace.index_path) as connection:
+        rows = connection.execute(
+            """
+            SELECT versions.id, folder_versions.relative_path
+            FROM folder_source_versions AS folder_versions
+            JOIN source_versions AS versions
+              ON versions.id = folder_versions.source_version_id
+            WHERE folder_versions.folder_id = ? AND versions.is_current = 1
+            """,
+            (folder_id,),
+        ).fetchall()
+        stale_version_ids = [
+            int(row["id"]) for row in rows if str(row["relative_path"]) not in current_paths
+        ]
+        connection.executemany(
+            "UPDATE source_versions SET is_current = 0 WHERE id = ?",
+            ((version_id,) for version_id in stale_version_ids),
+        )
+    return len(stale_version_ids)
 
 
 def _get_git_repository(workspace: Workspace, repository_id: str) -> GitRepositoryRecord:

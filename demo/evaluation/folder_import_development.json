@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "suite_id": "folder-import-lifecycle",
+  "suite_revision": 1,
+  "split": "development",
+  "test_file": "tests/test_folder_import.py",
+  "test_sha256": "b66dc3c314ff7933fc3916b24b8b276acba5b4f143f67fba12ab5534e9dd2fd0",
+  "cases": [
+    {
+      "id": "recursive-formats-ignore-context",
+      "category": "recursive_import",
+      "pytest_node": "tests/test_folder_import.py::test_folder_import_recurses_formats_ignore_and_context",
+      "expected_status": "passed"
+    },
+    {
+      "id": "duplicate-import-idempotency",
+      "category": "duplicate_import",
+      "pytest_node": "tests/test_folder_import.py::test_folder_import_duplicate_sync_is_idempotent",
+      "expected_status": "passed"
+    },
+    {
+      "id": "update-delete-lifecycle",
+      "category": "temporal_update",
+      "pytest_node": "tests/test_folder_import.py::test_folder_import_updates_and_deactivates_deleted_source",
+      "expected_status": "passed"
+    },
+    {
+      "id": "privacy-preflight",
+      "category": "privacy",
+      "pytest_node": "tests/test_folder_import.py::test_folder_import_privacy_failure_has_no_partial_writes",
+      "expected_status": "passed"
+    },
+    {
+      "id": "citation-replay",
+      "category": "citation",
+      "pytest_node": "tests/test_folder_import.py::test_folder_import_preserves_exact_citation_replay",
+      "expected_status": "passed"
+    }
+  ],
+  "expected_metrics": {
+    "pass_rate": 100.0,
+    "failed_cases": 0,
+    "deterministic_replay": true
+  }
+}

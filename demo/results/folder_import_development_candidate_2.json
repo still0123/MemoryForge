@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "suite_id": "folder-import-lifecycle",
+  "suite_revision": 1,
+  "memoryforge_commit": "3d056c9d71a4caf6a625449ac3057f74ff98148c",
+  "memoryforge_worktree_dirty": false,
+  "development": {
+    "path": "demo/evaluation/folder_import_development.json",
+    "sha256": "d818b64079f9fb4136aa53180f7f0f6f49a433b7f658ee5f083f5da6362abbec",
+    "test_file": "tests/test_folder_import.py",
+    "test_sha256": "b66dc3c314ff7933fc3916b24b8b276acba5b4f143f67fba12ab5534e9dd2fd0",
+    "case_count": 5,
+    "evaluation": {
+      "case_count": 5,
+      "metrics": {
+        "pass_rate": 100.0,
+        "failed_cases": 0
+      },
+      "cases": [
+        {
+          "id": "recursive-formats-ignore-context",
+          "category": "recursive_import",
+          "pytest_node": "tests/test_folder_import.py::test_folder_import_recurses_formats_ignore_and_context",
+          "status": "passed",
+          "error_classification": "none"
+        },
+        {
+          "id": "duplicate-import-idempotency",
+          "category": "duplicate_import",
+          "pytest_node": "tests/test_folder_import.py::test_folder_import_duplicate_sync_is_idempotent",
+          "status": "passed",
+          "error_classification": "none"
+        },
+        {
+          "id": "update-delete-lifecycle",
+          "category": "temporal_update",
+          "pytest_node": "tests/test_folder_import.py::test_folder_import_updates_and_deactivates_deleted_source",
+          "status": "passed",
+          "error_classification": "none"
+        },
+        {
+          "id": "privacy-preflight",
+          "category": "privacy",
+          "pytest_node": "tests/test_folder_import.py::test_folder_import_privacy_failure_has_no_partial_writes",
+          "status": "passed",
+          "error_classification": "none"
+        },
+        {
+          "id": "citation-replay",
+          "category": "citation",
+          "pytest_node": "tests/test_folder_import.py::test_folder_import_preserves_exact_citation_replay",
+          "status": "passed",
+          "error_classification": "none"
+        }
+      ]
+    }
+  },
+  "confirmation": {
+    "path": "demo/evaluation/folder_import_confirmation.json",
+    "sha256": "099d8a49892e9f0b2e6203891bbeeb6ccac53042be2e86fea110180c426cf45d",
+    "status": "not_run"
+  },
+  "runs": [
+    {
+      "name": "first",
+      "evaluation_sha256": "cfb38cb602d52af5f46f9ebb3dd820e5cfcc91ca425ccf3583903c45bed2c788"
+    },
+    {
+      "name": "second",
+      "evaluation_sha256": "cfb38cb602d52af5f46f9ebb3dd820e5cfcc91ca425ccf3583903c45bed2c788"
+    }
+  ],
+  "gates": {
+    "pass_rate": true,
+    "failed_cases": true,
+    "deterministic_replay": true,
+    "stable_memoryforge_commit": true,
+    "clean_worktree_after_run": true,
+    "confirmation_not_run": true
+  },
+  "passed": true
+}
