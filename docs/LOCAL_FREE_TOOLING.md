@@ -69,6 +69,8 @@ gh release upload v0.3.0 \
   local-evidence/v0.3.0-release/memoryforge-*.tar.gz \
   local-evidence/v0.3.0-release/release-provenance.json \
   local-evidence/v0.3.0-release/benchmark-summary.json \
+  local-evidence/v0.3.0-release/workspace-drill.json \
+  local-evidence/v0.3.0-release/reproducibility-* \
   local-evidence/v0.3.0-release/SHA256SUMS
 ```
 

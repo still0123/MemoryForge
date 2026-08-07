@@ -82,6 +82,7 @@ def test_release_candidate_privacy_scan_rejects_paths_and_secrets() -> None:
         )
         == 2
     )
+    assert benchmark._private_detail_leaks([{"api_key": "sk-live-private-value"}]) == 2
 
 
 def test_release_document_claims_are_explicit() -> None:
@@ -90,6 +91,9 @@ def test_release_document_claims_are_explicit() -> None:
         assert all(claim in text for claim in claims)
         assert text.count(benchmark.RELEASE_CLAIM_MARKER) == 1
         assert not any(claim in text for claim in benchmark.FORBIDDEN_RELEASE_CLAIMS)
+    texts = {path: path.read_text(encoding="utf-8") for path in benchmark.DOCUMENTS}
+    texts[benchmark.DOCUMENTS[0]] += "\nConfirmation status: `passed`\n"
+    assert not benchmark._document_claims_consistent(texts)
 
 
 def test_release_clean_room_checks_cannot_be_not_run() -> None:
@@ -161,4 +165,8 @@ def _release_artifacts(root: Path) -> dict:
         },
         "builds": builds,
         "reproducible_artifacts": True,
+        "checks": {
+            "wheel_clean_room": dict(benchmark.WHEEL_CLEAN_ROOM_CHECKS),
+            "sdist_clean_room": dict(benchmark.SDIST_CLEAN_ROOM_CHECKS),
+        },
     }

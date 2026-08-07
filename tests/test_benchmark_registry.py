@@ -726,12 +726,14 @@ def test_benchmark_registry_hashes_bound_gate_artifact_bytes(
     provenance.write_text(
         json.dumps(
             {
+                "schema_version": 1,
                 "memoryforge_commit": commit,
                 "memoryforge_worktree_dirty": False,
                 "package": {
                     "version": "0.2.1",
                     "wheel": wheel.name,
                     "wheel_sha256": wheel_sha256,
+                    "import_path": ".venv/site-packages/memoryforge/__init__.py",
                     "import_from_fresh_venv": True,
                     "dependencies": {},
                 },
@@ -746,6 +748,9 @@ def test_benchmark_registry_hashes_bound_gate_artifact_bytes(
                     "code_wiki_benchmark": "passed",
                     "public_demo": "not_run",
                 },
+                "commands": [],
+                "code_wiki": {},
+                "public_demo": {"status": "not_run"},
             }
         ),
         encoding="utf-8",
@@ -857,7 +862,7 @@ def test_benchmark_registry_rejects_private_or_failed_provenance() -> None:
         validator._payload_private_detail_leaks(
             {"credentials": {"api_key": "sk-live-private-value"}}
         )
-        == 1
+        == 2
     )
 
 

@@ -105,6 +105,7 @@ WORKSPACE_CHECKS = {
 WHEEL_CLEAN_ROOM_CHECKS = {
     "pip_check": "passed",
     "cli_help": "passed",
+    "cli_version": "passed",
     "code_wiki_benchmark": "passed",
     "public_demo": "not_run",
 }
@@ -177,6 +178,10 @@ def main(argv: list[str] | None = None) -> None:
             "sha256": HOLDOUT_SHA256,
             "status": "not_run",
         },
+        "release_artifacts": _release_artifact_evidence(
+            release_dir,
+            memoryforge_commit,
+        ),
         "runs": runs,
         "gates": gates,
         "passed": all(gates.values()),
@@ -239,7 +244,14 @@ def _check_versions(release_dir: Path) -> dict[str, object]:
     provenance = _load_json(release_dir / "release-provenance.json")
     package = provenance.get("package")
     artifacts = _artifact_paths(release_dir, package)
-    if not isinstance(package, dict) or artifacts is None:
+    checks = provenance.get("checks")
+    if (
+        not isinstance(package, dict)
+        or artifacts is None
+        or not isinstance(checks, dict)
+        or not _clean_room_passed(checks.get("wheel_clean_room"), WHEEL_CLEAN_ROOM_CHECKS)
+        or not _clean_room_passed(checks.get("sdist_clean_room"), SDIST_CLEAN_ROOM_CHECKS)
+    ):
         return _check(False, "version_mismatch")
     wheel, sdist = artifacts
     versions = {
@@ -359,10 +371,7 @@ def _check_documents(release_dir: Path) -> dict[str, object]:
             all(claim in texts[path] for claim in claims)
             for path, claims in DOCUMENT_CLAIMS.items()
         )
-        and all(text.count(RELEASE_CLAIM_MARKER) == 1 for text in texts.values())
-        and not any(
-            forbidden in text for text in texts.values() for forbidden in FORBIDDEN_RELEASE_CLAIMS
-        )
+        and _document_claims_consistent(texts)
         and isinstance(package, dict)
         and package.get("version") == TARGET_VERSION
         and isinstance(checks, dict)
@@ -397,6 +406,34 @@ def _artifact_paths(
     if not wheel.is_file() or not sdist.is_file():
         return None
     return wheel, sdist
+
+
+def _document_claims_consistent(texts: dict[Path, str]) -> bool:
+    if not all(text.count(RELEASE_CLAIM_MARKER) == 1 for text in texts.values()):
+        return False
+    for text in texts.values():
+        if any(forbidden in text for forbidden in FORBIDDEN_RELEASE_CLAIMS):
+            return False
+        statuses = re.findall(
+            r"(?i)(?:confirmation|holdout)\s+status\s*:\s*`?([a-z_]+)",
+            text,
+        )
+        if any(status != "not_run" for status in statuses):
+            return False
+        if any(
+            int(value) not in {574, 583, 586}
+            for value in re.findall(r"macOS\D{0,12}(\d+)\s+passed", text)
+        ):
+            return False
+        if any(
+            (int(passed), int(skipped)) not in {(571, 3), (580, 3), (583, 3)}
+            for passed, skipped in re.findall(
+                r"(?:Linux|Debian)\D{0,12}(\d+)\s+passed\s*/\s*(\d+)\s+skipped",
+                text,
+            )
+        ):
+            return False
+    return True
 
 
 def _wheel_version(path: Path) -> str:
@@ -454,20 +491,26 @@ def _check_splits_closed(
 def _private_detail_leaks(payloads: list[dict[str, Any]]) -> int:
     prefixes = ("/Users/", "/home/", "/private/var/", "C:\\Users\\")
     secrets = ("api_key", "token=", "password=", "secret=")
+    secret_keys = ("api_key", "token", "password", "secret")
+    secret_values = ("sk-", "ghp_", "bearer ")
     leaks = 0
 
     def visit(value: object) -> None:
         nonlocal leaks
         if isinstance(value, dict):
-            for item in value.values():
+            for key, item in value.items():
+                if any(secret in str(key).casefold() for secret in secret_keys) and item:
+                    leaks += 1
                 visit(item)
         elif isinstance(value, list):
             for item in value:
                 visit(item)
         elif isinstance(value, str):
             lowered = value.casefold()
-            if any(prefix in value for prefix in prefixes) or any(
-                secret in lowered for secret in secrets
+            if (
+                any(prefix in value for prefix in prefixes)
+                or any(secret in lowered for secret in secrets)
+                or any(secret in lowered for secret in secret_values)
             ):
                 leaks += 1
 
@@ -541,6 +584,21 @@ def _source_module_version() -> str:
         text=True,
     )
     return completed.stdout.strip()
+
+
+def _release_artifact_evidence(
+    release_dir: Path,
+    memoryforge_commit: str,
+) -> dict[str, object]:
+    provenance = _load_json(release_dir / "release-provenance.json")
+    return {
+        "package": provenance.get("package"),
+        "builds": provenance.get("builds"),
+        "sha256sums_sha256": _sha256(release_dir / "SHA256SUMS"),
+        "artifact_root": (
+            f"demo/results/artifacts/release_candidate_development/{memoryforge_commit}"
+        ),
+    }
 
 
 def _sha256(path: Path) -> str:

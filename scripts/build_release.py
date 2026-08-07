@@ -62,13 +62,11 @@ def main(argv: list[str] | None = None) -> None:
             shutil.copy2(first_root / wheel_name, wheel)
             shutil.copy2(first_root / sdist_name, sdist)
             for build in builds:
-                retained = staging / "reproducibility" / str(build["name"])
-                retained.mkdir(parents=True)
                 for kind in ("wheel", "sdist"):
                     name = str(build[kind]["path"])
-                    retained_artifact = retained / name
+                    retained_artifact = staging / f"reproducibility-{build['name']}-{name}"
                     shutil.copy2(workdir / str(build["name"]) / "dist" / name, retained_artifact)
-                    build[kind]["retained_path"] = retained_artifact.relative_to(staging).as_posix()
+                    build[kind]["retained_path"] = retained_artifact.name
 
             wheel_check = workdir / "wheel-check.json"
             _run(

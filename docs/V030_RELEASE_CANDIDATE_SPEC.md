@@ -312,6 +312,8 @@ The verified release directory must contain:
 - `SHA256SUMS`;
 - `release-provenance.json`;
 - `benchmark-summary.json`;
+- `workspace-drill.json`;
+- four `reproducibility-{first,second}-*` build artifacts;
 - native Windows confirmation Evidence;
 - release confirmation and holdout Evidence.
 

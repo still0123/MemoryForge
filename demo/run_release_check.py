@@ -78,6 +78,9 @@ def main(argv: list[str] | None = None) -> None:
         raise SystemExit(f"clean-room import escaped the fresh venv: {import_path}")
     probe["import_path"] = import_path.relative_to(workdir).as_posix()
     _run(python, "-m", "memoryforge", "--help", cwd=workdir, env=env)
+    cli_version = _run(python, "-m", "memoryforge", "--version", cwd=workdir, env=env).strip()
+    if cli_version != probe["packages"]["memoryforge"]:
+        raise SystemExit("clean-room CLI version does not match Wheel metadata")
 
     code_output = workdir / "code_wiki_evidence.json"
     _run(
@@ -115,6 +118,7 @@ def main(argv: list[str] | None = None) -> None:
         "python -m pip install <wheel>",
         "python -m pip check",
         "python -m memoryforge --help",
+        "python -m memoryforge --version",
         "python demo/run_code_wiki_benchmark.py",
     ]
     if public_evidence is not None:
@@ -144,6 +148,7 @@ def main(argv: list[str] | None = None) -> None:
         "checks": {
             "pip_check": "passed",
             "cli_help": "passed",
+            "cli_version": "passed",
             "code_wiki_benchmark": "passed",
             "public_demo": "passed" if public_evidence is not None else "not_run",
         },

@@ -1748,11 +1748,14 @@ def _validate_release_candidate_experiment_payload(
     frozen_ids = [case.get("id") for case in frozen.get("cases", [])]
     runs = payload.get("runs")
     gates = payload.get("gates")
+    expected_payload_keys = RELEASE_CANDIDATE_DEVELOPMENT_EVIDENCE_KEYS | (
+        {"release_artifacts"} if artifact["evidence_revision"] >= 5 else set()
+    )
     evaluation_sha256 = hashlib.sha256(
         json.dumps(evaluation, sort_keys=True, ensure_ascii=False).encode("utf-8")
     ).hexdigest()
     if (
-        set(payload) != RELEASE_CANDIDATE_DEVELOPMENT_EVIDENCE_KEYS
+        set(payload) != expected_payload_keys
         or type(payload.get("schema_version")) is not int
         or payload.get("schema_version") != 1
         or payload.get("suite_id") != experiment["suite_id"]
@@ -1852,6 +1855,63 @@ def _validate_release_candidate_experiment_payload(
         or not all(value is True for value in gates.values())
     ):
         raise ValueError("accepted release-candidate Evidence gates failed")
+    if artifact["evidence_revision"] >= 5 and not _validate_release_development_artifacts(
+        payload.get("release_artifacts"),
+        artifact["memoryforge_commit"],
+    ):
+        raise ValueError("release-candidate retained build Evidence changed")
+
+
+def _validate_release_development_artifacts(payload: object, commit: str) -> bool:
+    if not isinstance(payload, dict) or set(payload) != {
+        "package",
+        "builds",
+        "sha256sums_sha256",
+        "artifact_root",
+    }:
+        return False
+    expected_root = f"demo/results/artifacts/release_candidate_development/{commit}"
+    if payload.get("artifact_root") != expected_root:
+        return False
+    root = REPO_ROOT / expected_root
+    package = payload.get("package")
+    builds = payload.get("builds")
+    sums = root / "SHA256SUMS"
+    if (
+        not isinstance(package, dict)
+        or not isinstance(builds, list)
+        or len(builds) != 2
+        or not sums.is_file()
+        or hashlib.sha256(sums.read_bytes()).hexdigest() != payload.get("sha256sums_sha256")
+    ):
+        return False
+    retained: set[str] = set()
+    for index, build in enumerate(builds):
+        if not isinstance(build, dict) or build.get("name") != ("first", "second")[index]:
+            return False
+        for kind in ("wheel", "sdist"):
+            record = build.get(kind)
+            if not isinstance(record, dict):
+                return False
+            relative = record.get("retained_path")
+            if not isinstance(relative, str) or relative in retained:
+                return False
+            path = (root / relative).resolve()
+            if (
+                not path.is_relative_to(root.resolve())
+                or not path.is_file()
+                or hashlib.sha256(path.read_bytes()).hexdigest() != record.get("sha256")
+                or path.stat().st_size != record.get("size")
+            ):
+                return False
+            retained.add(relative)
+    return all(
+        isinstance(package.get(key), str)
+        and (root / str(package[key])).is_file()
+        and hashlib.sha256((root / str(package[key])).read_bytes()).hexdigest()
+        == package.get(f"{key}_sha256")
+        for key in ("wheel", "sdist")
+    )
 
 
 def _validate_pytest_component_experiment_payload(
@@ -2066,6 +2126,7 @@ def _payload_private_detail_leaks(payload: object) -> int:
     prefixes = ("/Users/", "/home/", "/private/var/", "C:\\Users\\")
     secrets = ("api_key", "token=", "password=", "secret=")
     secret_keys = ("api_key", "token", "password", "secret")
+    secret_values = ("sk-", "ghp_", "bearer ")
     leaks = 0
 
     def visit(value: object) -> None:
@@ -2081,8 +2142,10 @@ def _payload_private_detail_leaks(payload: object) -> int:
                 visit(item)
         elif isinstance(value, str):
             lowered = value.casefold()
-            if any(prefix in value for prefix in prefixes) or any(
-                secret in lowered for secret in secrets
+            if (
+                any(prefix in value for prefix in prefixes)
+                or any(secret in lowered for secret in secrets)
+                or any(secret in lowered for secret in secret_values)
             ):
                 leaks += 1
 
@@ -2131,10 +2194,33 @@ def _validate_bound_gate_artifacts(
     package_version = package.get("version") if isinstance(package, dict) else None
     if (
         not isinstance(provenance, dict)
+        or type(provenance.get("schema_version")) is not int
+        or provenance.get("schema_version") != 1
+        or set(provenance)
+        != {
+            "schema_version",
+            "memoryforge_commit",
+            "memoryforge_worktree_dirty",
+            "package",
+            "runtime",
+            "commands",
+            "checks",
+            "code_wiki",
+            "public_demo",
+        }
         or _payload_private_detail_leaks(provenance) != 0
         or provenance.get("memoryforge_commit") != gate_commit
         or provenance.get("memoryforge_worktree_dirty") is not False
         or not isinstance(package, dict)
+        or set(package)
+        != {
+            "version",
+            "wheel",
+            "wheel_sha256",
+            "import_path",
+            "import_from_fresh_venv",
+            "dependencies",
+        }
         or not isinstance(package_version, str)
         or not paths["wheel"].name.startswith(f"memoryforge-{package_version}-")
         or package.get("wheel") != paths["wheel"].name
@@ -2142,11 +2228,19 @@ def _validate_bound_gate_artifacts(
         or package.get("import_from_fresh_venv") is not True
         or not isinstance(package.get("dependencies"), dict)
         or not isinstance(runtime, dict)
+        or set(runtime) != {"implementation", "python", "platform"}
         or not all(
             isinstance(runtime.get(key), str) and runtime[key]
             for key in ("implementation", "python", "platform")
         )
         or not isinstance(checks, dict)
+        or frozenset(checks)
+        not in {
+            frozenset({"pip_check", "cli_help", "code_wiki_benchmark", "public_demo"}),
+            frozenset(
+                {"pip_check", "cli_help", "cli_version", "code_wiki_benchmark", "public_demo"}
+            ),
+        }
         or checks.get("pip_check") != "passed"
         or checks.get("cli_help") != "passed"
         or checks.get("code_wiki_benchmark") != "passed"
@@ -3063,6 +3157,14 @@ def _release_provenance_matches(
     runtime = provenance.get("runtime") if isinstance(provenance, dict) else None
     package = provenance.get("package") if isinstance(provenance, dict) else None
     checks = provenance.get("checks") if isinstance(provenance, dict) else None
+    expected_checks = {
+        "pip_check": "passed",
+        "cli_help": "passed",
+        "code_wiki_benchmark": "passed",
+        "public_demo": "not_run",
+    }
+    if isinstance(checks, dict) and "cli_version" in checks:
+        expected_checks["cli_version"] = "passed"
     platform_name = runtime.get("platform") if isinstance(runtime, dict) else None
     if "system" in expected_runtime:
         platform_valid = (
@@ -3082,15 +3184,7 @@ def _release_provenance_matches(
         and platform_valid
         and isinstance(package, dict)
         and package.get("version") == "0.3.0"
-        and _strict_mapping(
-            checks,
-            {
-                "pip_check": "passed",
-                "cli_help": "passed",
-                "code_wiki_benchmark": "passed",
-                "public_demo": "not_run",
-            },
-        )
+        and _strict_mapping(checks, expected_checks)
     )
 
 
