@@ -40,6 +40,7 @@ from memoryforge.provider import OpenAICompatibleProvider, ProviderConfig
 from memoryforge.query import answer_question
 from memoryforge.refresh import refresh_workspace
 from memoryforge.sessions import SessionStore
+from memoryforge.showcase import build_showcase
 from memoryforge.web_adapter import WebPageError, import_html_file, import_web_page
 from memoryforge.wiki_facts import IndexedWikiFact, parse_page_facts
 from memoryforge.workspace import (
@@ -61,6 +62,8 @@ app = typer.Typer(
     add_completion=False,
     help="Git-backed immutable local knowledge storage and search.",
 )
+showcase_app = typer.Typer(no_args_is_help=True, help="Build a read-only static Showcase.")
+app.add_typer(showcase_app, name="showcase")
 
 WorkspaceOption = Annotated[
     Path,
@@ -87,6 +90,45 @@ def root(
     ] = False,
 ) -> None:
     del version
+
+
+@showcase_app.command("build")
+def showcase_build(
+    output: Annotated[
+        Path,
+        typer.Option("--output", help="Absent, empty, or MemoryForge-owned output directory."),
+    ],
+    workspace: WorkspaceOption = Path("."),
+    evidence: Annotated[
+        Path | None,
+        typer.Option("--evidence", help="Optional public query and benchmark Evidence JSON."),
+    ] = None,
+    include_local: Annotated[
+        bool,
+        typer.Option(
+            "--include-local",
+            help="Explicitly include local_only metadata, pages, and ChangeSets.",
+        ),
+    ] = False,
+) -> None:
+    try:
+        result = build_showcase(
+            workspace,
+            output,
+            evidence=evidence,
+            include_local=include_local,
+        )
+    except (
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 @app.command()
