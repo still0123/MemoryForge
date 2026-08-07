@@ -2,7 +2,7 @@
 
 ## Status
 
-`CANDIDATE_8_REVIEW_REJECTED_CANDIDATE_9_PENDING`
+`CANDIDATE_9_DEVELOPMENT_PASS_FINAL_GATES_PENDING`
 
 ## Base
 
@@ -450,6 +450,23 @@ from sdist inputs, checks archive members in both local gate scripts, and
 translates missing UID identities to `UnsafeLockFileError`.
 
 Native Windows confirmation remains frozen at `not_run` and is not claimed.
+
+## Candidate 9 Development Result
+
+- Development Evidence:
+  `demo/results/cross_platform_delivery_candidate_9.json`
+- Development Evidence SHA256:
+  `425f3047bae7df586a9a529a33024f667f4c98d096bce8edb101676e04135b0c`
+- MemoryForge Commit:
+  `70f76ebfcc7a7bd64f926955e09cfa0a6f45766d`
+- Runtime: CPython 3.11.15 / Darwin arm64
+- Development pass rate: 100.0%
+- Deterministic evaluation SHA256:
+  `03879bd4165a21543fadd0ecd237d5976c6b19330bc0bab7d321a84ee1ec92f1`
+- Focused regression: 72 passed
+- Confirmation status: `not_run`
+
+Final macOS and local Linux gates remain pending.
 
 ## Goal
 

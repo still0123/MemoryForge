@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "suite_id": "cross-platform-delivery",
+  "suite_revision": 1,
+  "memoryforge_commit": "70f76ebfcc7a7bd64f926955e09cfa0a6f45766d",
+  "memoryforge_worktree_dirty": false,
+  "runtime": {
+    "implementation": "CPython",
+    "python": "3.11.15",
+    "system": "Darwin",
+    "machine": "arm64"
+  },
+  "development": {
+    "path": "demo/evaluation/cross_platform_delivery_development.json",
+    "sha256": "0082594121022f6f97b6eae3d4106819794c0b988f531a02e51b9ec2194fb6ff",
+    "test_file": {
+      "path": "tests/test_cross_platform_delivery.py",
+      "sha256": "08601b7effba8271ac318a58a5b0906b934bdeaa4564edcd0ec5738e61618ac3"
+    },
+    "case_count": 7,
+    "evaluation": {
+      "case_count": 7,
+      "metrics": {
+        "pass_rate": 100.0,
+        "failed_cases": 0,
+        "direct_platform_imports": 0,
+        "windows_lock_offset": 0,
+        "windows_lock_bytes": 1,
+        "local_smoke": "passed"
+      },
+      "cases": [
+        {
+          "id": "descriptor-round-trip-contention",
+          "pytest_node": "tests/test_cross_platform_delivery.py::test_descriptor_lock_round_trip_and_contention",
+          "status": "passed",
+          "return_code": 0,
+          "timed_out": false,
+          "error_classification": "none",
+          "diagnostic_sha256": "6b2cbd79a9431dbadd6148f59140bde3b6091554433f4b2d368e86a442a82e85"
+        },
+        {
+          "id": "blocking-wait",
+          "pytest_node": "tests/test_cross_platform_delivery.py::test_descriptor_lock_blocking_waits_for_release",
+          "status": "passed",
+          "return_code": 0,
+          "timed_out": false,
+          "error_classification": "none",
+          "diagnostic_sha256": "6b2cbd79a9431dbadd6148f59140bde3b6091554433f4b2d368e86a442a82e85"
+        },
+        {
+          "id": "windows-byte-zero-contract",
+          "pytest_node": "tests/test_cross_platform_delivery.py::test_windows_backend_locks_byte_zero_and_restores_position",
+          "status": "passed",
+          "return_code": 0,
+          "timed_out": false,
+          "error_classification": "none",
+          "diagnostic_sha256": "6b2cbd79a9431dbadd6148f59140bde3b6091554433f4b2d368e86a442a82e85"
+        },
+        {
+          "id": "safe-stable-lock-file",
+          "pytest_node": "tests/test_cross_platform_delivery.py::test_exclusive_file_lock_preserves_content_and_rejects_symlink",
+          "status": "passed",
+          "return_code": 0,
+          "timed_out": false,
+          "error_classification": "none",
+          "diagnostic_sha256": "6b2cbd79a9431dbadd6148f59140bde3b6091554433f4b2d368e86a442a82e85"
+        },
+        {
+          "id": "single-platform-boundary",
+          "pytest_node": "tests/test_cross_platform_delivery.py::test_workspace_and_changesets_have_no_direct_platform_lock_imports",
+          "status": "passed",
+          "return_code": 0,
+          "timed_out": false,
+          "error_classification": "none",
+          "diagnostic_sha256": "6b2cbd79a9431dbadd6148f59140bde3b6091554433f4b2d368e86a442a82e85"
+        },
+        {
+          "id": "powershell-local-gate",
+          "pytest_node": "tests/test_cross_platform_delivery.py::test_powershell_local_gate_matches_release_contract",
+          "status": "passed",
+          "return_code": 0,
+          "timed_out": false,
+          "error_classification": "none",
+          "diagnostic_sha256": "6b2cbd79a9431dbadd6148f59140bde3b6091554433f4b2d368e86a442a82e85"
+        },
+        {
+          "id": "portable-empty-demo",
+          "pytest_node": "tests/test_cross_platform_delivery.py::test_cross_platform_smoke_runs_cli_workspace_and_unknown_demo",
+          "status": "passed",
+          "return_code": 0,
+          "timed_out": false,
+          "error_classification": "none",
+          "diagnostic_sha256": "6b2cbd79a9431dbadd6148f59140bde3b6091554433f4b2d368e86a442a82e85"
+        }
+      ]
+    }
+  },
+  "confirmation": {
+    "path": "demo/evaluation/cross_platform_delivery_confirmation.json",
+    "sha256": "200074acfb79979bf4663b97ae25e9dd62fa0f94359b8aa0d39c4250256660fc",
+    "status": "not_run"
+  },
+  "runs": [
+    {
+      "name": "first",
+      "evaluation_sha256": "03879bd4165a21543fadd0ecd237d5976c6b19330bc0bab7d321a84ee1ec92f1"
+    },
+    {
+      "name": "second",
+      "evaluation_sha256": "03879bd4165a21543fadd0ecd237d5976c6b19330bc0bab7d321a84ee1ec92f1"
+    }
+  ],
+  "gates": {
+    "pass_rate": true,
+    "failed_cases": true,
+    "direct_platform_imports": true,
+    "windows_lock_offset": true,
+    "windows_lock_bytes": true,
+    "local_smoke": true,
+    "deterministic_replay": true,
+    "stable_memoryforge_commit": true,
+    "clean_worktree_after_run": true,
+    "confirmation_not_run": true
+  },
+  "passed": true
+}
