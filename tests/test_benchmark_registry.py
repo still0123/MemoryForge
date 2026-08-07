@@ -20,7 +20,7 @@ def test_benchmark_registry_binds_all_release_artifacts() -> None:
         "status": "valid",
         "suite_count": 12,
         "experiment_count": 2,
-        "evidence_count": 36,
+        "evidence_count": 38,
         "qa_case_count": 121,
         "qa_case_types_present": [
             "code_behavior",
@@ -97,5 +97,5 @@ def test_benchmark_registry_requires_local_gate_for_acceptance(tmp_path: Path) -
     path = tmp_path / "registry.json"
     path.write_text(json.dumps(registry), encoding="utf-8")
 
-    with pytest.raises(ValueError, match="accepted experiment requires local gate Evidence"):
+    with pytest.raises(ValueError, match="acceptance Evidence history is incomplete"):
         validator.validate_registry(path)

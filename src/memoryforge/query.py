@@ -32,6 +32,12 @@ _EXPLICIT_CODE_IDENTIFIER = re.compile(r"[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$]
 _SYMBOL_FACT_KIND = re.compile(r"^`[^`]+` \((?P<kind>[a-z_]+)\):")
 _REPOSITORY_OVERVIEW_LINK = re.compile(r"^pages/repository-[a-f0-9]{12}\.md$")
 _NEGATION_CUES = ("不", "无", "未", "没", "避免", "拒绝")
+_ENGLISH_NEGATION = re.compile(
+    r"\b(?:cannot|can['’]t|do(?:es)?n['’]t|didn['’]t|isn['’]t|aren['’]t|"
+    r"wasn['’]t|weren['’]t|won['’]t|hasn['’]t|haven['’]t|hadn['’]t|"
+    r"shouldn['’]t|wouldn['’]t|couldn['’]t|mustn['’]t)\b",
+    re.IGNORECASE,
+)
 _STOP_WORDS = {
     "a",
     "an",
@@ -859,8 +865,10 @@ def _support_score(
 
 def _has_support_negation(text: str) -> bool:
     terms = set(re.findall(r"[a-z]+", text.lower()))
-    return bool(terms & {"never", "no", "not", "without"}) or any(
-        cue in text for cue in _NEGATION_CUES
+    return (
+        bool(terms & {"never", "no", "not", "without"})
+        or _ENGLISH_NEGATION.search(text) is not None
+        or any(cue in text for cue in _NEGATION_CUES)
     )
 
 
@@ -1382,10 +1390,13 @@ def _citation_terms(citation: CitationPayload) -> set[str]:
 def answer_is_supported(answer: str, citations: list[CitationPayload]) -> bool:
     """Return whether every meaningful answer term is present in cited Facts."""
     answer_terms = _terms(answer) - {"and", "or"}
-    evidence_terms = _terms(" ".join(citation["quote"] for citation in citations))
+    evidence_text = " ".join(citation["quote"] for citation in citations)
+    evidence_terms = _terms(evidence_text)
     evidence_forms = {form for term in evidence_terms for form in _local_english_forms(term)}
-    return bool(answer_terms) and all(
-        _local_english_forms(term) & evidence_forms for term in answer_terms
+    return (
+        bool(answer_terms)
+        and _has_support_negation(answer) == _has_support_negation(evidence_text)
+        and all(_local_english_forms(term) & evidence_forms for term in answer_terms)
     )
 
 

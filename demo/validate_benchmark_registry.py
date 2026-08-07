@@ -41,6 +41,64 @@ REQUIRED_EXPERIMENT_EVIDENCE_PATHS = {
         "demo/results/support_score_development_candidate_8.json",
     },
 }
+REQUIRED_ACCEPTANCE_EVIDENCE_PATHS = {
+    "exact-symbol-routing.learn-claude-code": {
+        "demo/results/exact_symbol_routing_development_final.json":
+            "demo/results/exact_symbol_routing_candidate_4_local_gate.json",
+    },
+    "support-score.learn-claude-code": {
+        "demo/results/support_score_development_candidate_3.json":
+            "demo/results/support_score_candidate_3_local_gate.json",
+        "demo/results/support_score_development_candidate_4.json":
+            "demo/results/support_score_candidate_4_local_gate.json",
+        "demo/results/support_score_development_candidate_5.json":
+            "demo/results/support_score_candidate_5_local_gate.json",
+        "demo/results/support_score_development_candidate_6.json":
+            "demo/results/support_score_candidate_6_local_gate.json",
+        "demo/results/support_score_development_candidate_7.json":
+            "demo/results/support_score_candidate_7_local_gate.json",
+        "demo/results/support_score_development_candidate_8.json":
+            "demo/results/support_score_candidate_8_local_gate.json",
+    },
+}
+DEVELOPMENT_EVIDENCE_KEYS = {
+    "schema_version",
+    "suite_id",
+    "suite_revision",
+    "memoryforge_commit",
+    "memoryforge_worktree_dirty",
+    "source_manifest",
+    "source_repository",
+    "development",
+    "baseline_evidence",
+    "confirmation",
+    "runs",
+    "gates",
+    "passed",
+}
+LOCAL_GATE_EVIDENCE_KEYS = {
+    "schema_version",
+    "suite_id",
+    "suite_revision",
+    "memoryforge_commit",
+    "memoryforge_worktree_dirty",
+    "development_evidence",
+    "local_gate",
+    "confirmation",
+    "passed",
+}
+REGRESSION_EVIDENCE_KEYS = {
+    "schema_version",
+    "suite_id",
+    "suite_revision",
+    "memoryforge_commit",
+    "memoryforge_worktree_dirty",
+    "development_evidence",
+    "regression",
+    "root_cause",
+    "confirmation",
+    "passed",
+}
 FINAL_EXPERIMENT_GATE_KEYS = {
     "exact-symbol-routing.learn-claude-code": {
         "answer_accuracy_at_least_90",
@@ -319,6 +377,9 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
             raise ValueError(f"invalid required experiment Evidence statuses: {suite_id}")
         revisions: set[int] = set()
         statuses: set[str] = set()
+        required_acceptance = REQUIRED_ACCEPTANCE_EVIDENCE_PATHS.get(suite_id)
+        if required_acceptance is None:
+            raise ValueError(f"experiment acceptance Evidence history is missing: {suite_id}")
         for artifact in evidence:
             _validate_artifact(artifact, suite_id)
             evidence_revision = artifact.get("evidence_revision")
@@ -333,6 +394,18 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
             status = str(artifact.get("status"))
             if status not in allowed_statuses:
                 raise ValueError(f"invalid experiment evidence status: {suite_id}")
+            expected_acceptance_path = required_acceptance.get(str(artifact.get("path")))
+            acceptance_evidence = artifact.get("acceptance_evidence")
+            if expected_acceptance_path is None:
+                if acceptance_evidence is not None:
+                    raise ValueError(f"unexpected experiment acceptance Evidence: {suite_id}")
+            elif (
+                not isinstance(acceptance_evidence, dict)
+                or acceptance_evidence.get("path") != expected_acceptance_path
+            ):
+                raise ValueError(
+                    f"experiment acceptance Evidence history is incomplete: {suite_id}"
+                )
             statuses.add(status)
             commit = str(artifact.get("memoryforge_commit"))
             if COMMIT.fullmatch(commit) is None:
@@ -354,9 +427,7 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
                     artifact,
                     confirmation,
                 )
-            if status == "accepted_development" or (
-                status == "accepted_development_superseded" and "acceptance_evidence" in artifact
-            ):
+            if expected_acceptance_path is not None:
                 evidence_count += _validate_acceptance_evidence(
                     experiment,
                     artifact,
@@ -377,7 +448,9 @@ def _validate_experiment_payload(
 ) -> None:
     repository = experiment["repositories"][0]
     if (
-        payload.get("suite_id") != experiment["suite_id"]
+        payload.get("schema_version") != 1
+        or set(payload) != DEVELOPMENT_EVIDENCE_KEYS
+        or payload.get("suite_id") != experiment["suite_id"]
         or payload.get("suite_revision") != experiment["suite_revision"]
         or payload.get("memoryforge_commit") != artifact["memoryforge_commit"]
         or payload.get("memoryforge_worktree_dirty") is not False
@@ -453,7 +526,9 @@ def _validate_regression_evidence(
     )
     pytest_result = payload.get("regression", {}).get("pytest", {})
     if (
-        payload.get("suite_id") != experiment["suite_id"]
+        payload.get("schema_version") != 1
+        or set(payload) != REGRESSION_EVIDENCE_KEYS
+        or payload.get("suite_id") != experiment["suite_id"]
         or payload.get("suite_revision") != experiment["suite_revision"]
         or payload.get("memoryforge_commit") != commit
         or payload.get("memoryforge_worktree_dirty") is not False
@@ -498,7 +573,9 @@ def _validate_acceptance_evidence(
     requires_artifacts = experiment["suite_id"] == "support-score.learn-claude-code"
     expected_local_gate_keys = LOCAL_GATE_KEYS | ({"artifacts"} if requires_artifacts else set())
     if (
-        payload.get("suite_id") != experiment["suite_id"]
+        payload.get("schema_version") != 1
+        or set(payload) != LOCAL_GATE_EVIDENCE_KEYS
+        or payload.get("suite_id") != experiment["suite_id"]
         or payload.get("suite_revision") != experiment["suite_revision"]
         or payload.get("memoryforge_commit") != commit
         or payload.get("memoryforge_worktree_dirty") is not False
