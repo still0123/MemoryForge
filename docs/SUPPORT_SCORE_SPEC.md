@@ -2,7 +2,7 @@
 
 ## Status
 
-`DEVELOPMENT_PASSED_REGRESSION_PENDING`
+`DEVELOPMENT_PASSED_REGRESSION_FAILED`
 
 ## Frozen Inputs
 
@@ -142,6 +142,26 @@ The unsupported vector-database case scores 55.0 against threshold 75.0 and
 returns `unknown`. All answerable cases score from 85.0 to 91.2.
 
 Confirmation remains `not_run`.
+
+## Regression Result
+
+Candidate 1 failed the full local gate at Commit
+`e41bb48a63d40e9bcecab74c25a8a7061f2464a5`:
+
+- 457 tests passed and one failed;
+- failed node:
+  `tests/test_git_sync.py::test_code_symbol_queries_answer_methods_and_struct_fields`;
+- the valid `FileSystem` field answer scored 72.8 against threshold 75.0 and
+  returned `unknown`;
+- Wheel and sdist checks did not run after the pytest failure.
+
+Regression Evidence:
+`demo/results/support_score_candidate_1_regression_rejected.json`.
+
+The root cause is generic support accounting, not the frozen threshold:
+expanded field-kind synonyms and Chinese query scaffolding dilute the
+identifier's page-local support. Candidate 1 is rejected. Confirmation remains
+`not_run`.
 
 ## Forbidden
 
