@@ -933,6 +933,15 @@
             "passed": true
           },
           "passed": true
+        },
+        {
+          "split": "development",
+          "evidence_revision": 7,
+          "status": "accepted_development_superseded",
+          "path": "demo/results/cross_platform_delivery_candidate_6.json",
+          "sha256": "17bdad1bb9ce7b1cfeff779e4c096d5c981248326493088a2bbee43898fbb706",
+          "memoryforge_commit": "b3dab407db3f3103456dcbe79d704e4a72c6b656",
+          "passed": true
         }
       ]
     }

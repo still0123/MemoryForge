@@ -2,7 +2,7 @@
 
 ## Status
 
-`CANDIDATE_6_CROSS_GROUP_FIX_PENDING`
+`CANDIDATE_6_DEVELOPMENT_PASS_FINAL_GATES_PENDING`
 
 ## Base
 
@@ -236,6 +236,25 @@ POSIX lock and `scripts/check_local.sh` could import the source checkout during
 its sdist probe. Candidate 6 locks the parent namespace and isolates the POSIX
 sdist import. Native Windows confirmation remains frozen at `not_run` and is
 not claimed.
+
+## Candidate 6 Development Result
+
+- Development Evidence:
+  `demo/results/cross_platform_delivery_candidate_6.json`
+- Development Evidence SHA256:
+  `17bdad1bb9ce7b1cfeff779e4c096d5c981248326493088a2bbee43898fbb706`
+- MemoryForge Commit:
+  `b3dab407db3f3103456dcbe79d704e4a72c6b656`
+- Runtime: CPython 3.11.15 / Darwin arm64
+- Development pass rate: 100.0%
+- Deterministic evaluation SHA256:
+  `03879bd4165a21543fadd0ecd237d5976c6b19330bc0bab7d321a84ee1ec92f1`
+- Full pytest: 547 passed
+- Confirmation status: `not_run`
+
+Candidate 6 closes the two cross-group findings while preserving the frozen
+7-case development and 3-case confirmation inputs. Final macOS and local Linux
+gates remain pending; this Evidence is not yet the accepted development result.
 
 ## Goal
 

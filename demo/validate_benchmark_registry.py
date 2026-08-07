@@ -284,6 +284,12 @@ REQUIRED_EXPERIMENT_EVIDENCE = {
             "4f1cb0fcad903e7e525670d9efde02148b2cdf2a9bef532210997f9ca8102106",
             "cba84d7a6b01d20abfb353e85ae2733210bde98b",
         ),
+        _RESULTS + "cross_platform_delivery_candidate_6.json": (
+            7,
+            "accepted_development_superseded",
+            "17bdad1bb9ce7b1cfeff779e4c096d5c981248326493088a2bbee43898fbb706",
+            "b3dab407db3f3103456dcbe79d704e4a72c6b656",
+        ),
     },
 }
 STATIC_SHOWCASE_REJECTED_CONTRACTS = {
@@ -635,6 +641,12 @@ CROSS_PLATFORM_DEVELOPMENT_RUNTIME_CONTRACTS = {
         "machine": "arm64",
     },
     _RESULTS + "cross_platform_delivery_candidate_5.json": {
+        "implementation": "CPython",
+        "python": "3.11.15",
+        "system": "Darwin",
+        "machine": "arm64",
+    },
+    _RESULTS + "cross_platform_delivery_candidate_6.json": {
         "implementation": "CPython",
         "python": "3.11.15",
         "system": "Darwin",
