@@ -1,6 +1,6 @@
 # Static Showcase Specification
 
-Status: DEVELOPMENT_REVISION_3_FROZEN
+Status: ACCEPTED_DEVELOPMENT_BROWSER_PENDING
 
 ## Goal
 
@@ -135,3 +135,48 @@ Frozen revision 3 identities:
   Workspace and evidence file.
 
 No confirmation input may be executed or changed during development.
+
+## Candidate Results
+
+Candidate 1:
+
+- MemoryForge Commit:
+  `649f1ca35cf363f6eda9e4cd563c2ba6e29fecff`;
+- Evidence:
+  `demo/results/static_showcase_development_candidate_1.json`;
+- result: 4/4 development cases passed;
+- deterministic evaluation SHA256:
+  `8aa4853a0642d91f0756ca02679995e7f85836789a28c28cf53606913b4f40ad`;
+- status: superseded by exact SourceVersion privacy and receipt hardening.
+
+Candidate 2:
+
+- MemoryForge Commit:
+  `1962f19a399ba0805a9c107fd14741fdfcb34759`;
+- Evidence:
+  `demo/results/static_showcase_development_candidate_2.json`;
+- result: 4/4 development cases passed;
+- exact SourceVersion privacy, receipt binding, no-follow reads, and
+  failure-safe output replacement added.
+
+Candidate 3:
+
+- MemoryForge Commit:
+  `c07d2d275caa4449ffc6cc20f3a709ebf4c59b0b`;
+- Evidence:
+  `demo/results/static_showcase_development_candidate_3.json`;
+- Evidence SHA256:
+  `3cb6113516a5d6b3e0b5e2c357bde6470350c0a8be0aecfaa563253135ed7da7`;
+- result: 4/4 development cases passed;
+- required sections: 8/8;
+- local-only detail leaks: 0;
+- Workspace mutations: 0;
+- deterministic evaluation SHA256:
+  `8aa4853a0642d91f0756ca02679995e7f85836789a28c28cf53606913b4f40ad`;
+- confirmation status: `not_run`.
+
+The zero-key public command `demo/run_showcase_demo.py` was also run from a
+clean Candidate 3 worktree. Browser inspection found all eight navigation
+sections, a rendered SVG architecture, no console errors, and no script or
+stylesheet references in generated HTML. The browser harness injected one
+failed `/@vite/client` request; that path is absent from the generated files.
