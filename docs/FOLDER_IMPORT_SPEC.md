@@ -2,7 +2,7 @@
 
 ## Status
 
-`CANDIDATE_1_DEVELOPMENT_PASS_REGRESSION_PENDING`
+`CANDIDATE_2_DEVELOPMENT_PASS_REGRESSION_PENDING`
 
 ## Base
 
@@ -58,12 +58,33 @@ models, and folder membership schema do not exist at the baseline Commit.
   `3990df2bd69988793629bcb6985cf013049c90ab`
 - Evidence SHA256:
   `9fe364c14008054f670c8ca5db6cf4489f582367db1cc55a51d7e66afb6eb435`
+- Result: `DEVELOPMENT_PASS_SUPERSEDED`
+- Development pass rate: 100.0%
+- Failed cases: 0
+- Deterministic evaluation SHA256:
+  `cfb38cb602d52af5f46f9ebb3dd820e5cfcc91ca425ccf3583903c45bed2c788`
+- Confirmation status: `not_run`
+
+Candidate 1 proved the connector contract but did not serialize the multi-step
+folder write and deletion-reconciliation sequence with the Workspace lock.
+
+## Candidate 2 Result
+
+- Evidence:
+  `demo/results/folder_import_development_candidate_2.json`
+- MemoryForge Commit:
+  `3d056c9d71a4caf6a625449ac3057f74ff98148c`
+- Evidence SHA256:
+  `d6a2c7ee8d9d74f75eea88b276db09c9dd2846e143702a3e30ee0ca858f2780d`
 - Result: `DEVELOPMENT_PASS_REGRESSION_PENDING`
 - Development pass rate: 100.0%
 - Failed cases: 0
 - Deterministic evaluation SHA256:
   `cfb38cb602d52af5f46f9ebb3dd820e5cfcc91ca425ccf3583903c45bed2c788`
 - Confirmation status: `not_run`
+
+Candidate 2 preserves Candidate 1 output while serializing folder membership
+writes and deletion reconciliation under the existing Workspace lock.
 
 ## Goal
 
