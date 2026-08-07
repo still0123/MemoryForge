@@ -2,7 +2,7 @@
 
 ## Status
 
-`PREREGISTERED_BASELINE_PENDING`
+`BASELINE_RECORDED_DEVELOPMENT_OPEN`
 
 ## Base
 
@@ -32,6 +32,23 @@
 
 The development test and both suite files are frozen before production code
 changes. Confirmation must not run during development.
+
+## Baseline Result
+
+- Evidence:
+  `demo/results/github_thread_import_baseline_rejected.json`
+- MemoryForge Commit:
+  `271ec3490aa6cd14120913e7fa93f259bd9999fa`
+- Evidence SHA256:
+  `028d1d71db3e92b4b183a0fa3147d6eb581bb1274679a4d2c669d3e1f46b7255`
+- Result: `REJECTED`
+- Development pass rate: 0.0%
+- Failed cases: 5
+- Deterministic replay: passed
+- Confirmation status: `not_run`
+
+All cases fail because the preregistered connector, commands, JSON contract,
+and explicit deletion path do not exist at the baseline Commit.
 
 ## Goal
 
