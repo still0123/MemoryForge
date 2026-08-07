@@ -19,8 +19,8 @@ def test_benchmark_registry_binds_all_release_artifacts() -> None:
     assert summary == {
         "status": "valid",
         "suite_count": 12,
-        "experiment_count": 3,
-        "evidence_count": 53,
+        "experiment_count": 4,
+        "evidence_count": 57,
         "qa_case_count": 121,
         "qa_case_types_present": [
             "code_behavior",
@@ -104,6 +104,34 @@ def test_benchmark_registry_pins_multi_source_repository_commit(tmp_path: Path) 
         item
         for item in registry["experiments"]
         if item["suite_id"] == "multi-source-coverage-selection"
+    )
+    experiment["repositories"][0]["commit"] = "0" * 40
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps(registry), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="metadata changed"):
+        validator.validate_registry(path)
+
+
+def test_benchmark_registry_cannot_drop_folder_import_baseline(tmp_path: Path) -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "folder-import-lifecycle"
+    )
+    experiment["evidence"] = [
+        artifact for artifact in experiment["evidence"] if artifact["status"] != "rejected"
+    ]
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps(registry), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="experiment Evidence history is incomplete"):
+        validator.validate_registry(path)
+
+
+def test_benchmark_registry_pins_folder_import_repository_commit(tmp_path: Path) -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "folder-import-lifecycle"
     )
     experiment["repositories"][0]["commit"] = "0" * 40
     path = tmp_path / "registry.json"

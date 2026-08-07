@@ -2,7 +2,7 @@
 
 ## Status
 
-`CANDIDATE_2_DEVELOPMENT_PASS_REGRESSION_PENDING`
+`ACCEPTED_DEVELOPMENT_AND_LOCAL_REGRESSION`
 
 ## Base
 
@@ -85,6 +85,30 @@ folder write and deletion-reconciliation sequence with the Workspace lock.
 
 Candidate 2 preserves Candidate 1 output while serializing folder membership
 writes and deletion reconciliation under the existing Workspace lock.
+
+## Candidate 2 Full Local Gate
+
+- Gate Commit:
+  `63e34ec0b22c6aee7e7a17426b984ffb205b4188`
+- Acceptance Evidence:
+  `demo/results/folder_import_candidate_2_local_gate.json`
+- Acceptance Evidence SHA256:
+  `e4fa0230d4d84d4a428dc95e6732e0e0e3ce6c6823884274a70bc65b761f8997`
+- Ruff check and format: passed
+- Strict Mypy: passed
+- Registry validation: passed
+- Dependency check: passed
+- Pytest: 492 passed
+- Coverage: 89%
+- Wheel clean-room: passed
+- sdist clean-room: passed
+- `pip check`: passed
+- CLI version smoke: passed
+- Confirmation status: `not_run`
+
+Candidate 2 is accepted for development and local regression. Confirmation
+remains closed until the release-candidate confirmation gate is explicitly
+opened.
 
 ## Goal
 
