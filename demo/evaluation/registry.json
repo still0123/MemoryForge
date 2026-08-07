@@ -1029,7 +1029,8 @@
       "model_judge": false,
       "max_wiki_pages": 3,
       "required_evidence_statuses": [
-        "rejected"
+        "rejected",
+        "accepted_development"
       ],
       "repositories": [
         {
@@ -1084,6 +1085,15 @@
           "sha256": "2e2674ce071489f92d4a480b4f0c0018e0b416764e9a2df1a7ff8a2fc7640740",
           "memoryforge_commit": "4d834679ec61355e285fb36a0cceef8f489a9083",
           "passed": false
+        },
+        {
+          "split": "development",
+          "evidence_revision": 2,
+          "status": "accepted_development",
+          "path": "demo/results/release_candidate_development_candidate_1.json",
+          "sha256": "9c9a40dcd491613ca55f54e7b25ba78993be0eef0ee7fff4dbccf6f65fca3695",
+          "memoryforge_commit": "b51a90d9603c2558ae72817bfbc8f291c3933812",
+          "passed": true
         }
       ]
     }

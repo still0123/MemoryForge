@@ -31,6 +31,10 @@ def test_benchmark_summary_reports_macro_per_suite_and_negatives() -> None:
 
     assert summary["registry"]["qa_case_count"] == 121
     assert len(summary["suites"]) == 12
+    assert any(
+        experiment["suite_id"] == "release-candidate-delivery" and experiment["accepted_evidence"]
+        for experiment in summary["experiments"]
+    )
     assert summary["macro"]["citation_grounding_accuracy"] > 90
     assert any(
         result["suite_id"] == "doc-wiki-qa.click" and result["status"] == "retained_metric_gap"

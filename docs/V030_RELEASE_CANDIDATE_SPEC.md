@@ -2,7 +2,7 @@
 
 ## Status
 
-`BASELINE_REJECTED_IMPLEMENTATION_PENDING`
+`DEVELOPMENT_ACCEPTED_CONFIRMATION_PENDING`
 
 ## Base
 
@@ -81,6 +81,25 @@ Failures are retained with deterministic classifications:
 - `artifact_missing`;
 - `workspace_drill_failure`;
 - `release_document_mismatch`.
+
+## Accepted Development Result
+
+- Evidence: `demo/results/release_candidate_development_candidate_1.json`
+- Evidence SHA256:
+  `9c9a40dcd491613ca55f54e7b25ba78993be0eef0ee7fff4dbccf6f65fca3695`
+- MemoryForge Commit:
+  `b51a90d9603c2558ae72817bfbc8f291c3933812`
+- Result: `ACCEPTED_DEVELOPMENT`
+- Development pass rate: 100.0%
+- Failed cases: 0
+- Reproducible Wheel/sdist: true
+- Private detail leaks: 0
+- Confirmation status: `not_run`
+- Holdout status: `not_run`
+
+Candidate 1 is the only accepted release development result. It authorizes
+final local review and release-candidate freeze; it does not itself authorize
+holdout or claim native Windows success.
 
 ## Confirmation Components
 
