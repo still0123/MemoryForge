@@ -41,24 +41,18 @@ REQUIRED_EXPERIMENT_EVIDENCE_PATHS = {
         "demo/results/support_score_development_candidate_8.json",
     },
 }
+_RESULTS = "demo/results/"
 REQUIRED_ACCEPTANCE_EVIDENCE_PATHS = {
     "exact-symbol-routing.learn-claude-code": {
-        "demo/results/exact_symbol_routing_development_final.json":
-            "demo/results/exact_symbol_routing_candidate_4_local_gate.json",
+        _RESULTS + "exact_symbol_routing_development_final.json": (
+            _RESULTS + "exact_symbol_routing_candidate_4_local_gate.json"
+        ),
     },
     "support-score.learn-claude-code": {
-        "demo/results/support_score_development_candidate_3.json":
-            "demo/results/support_score_candidate_3_local_gate.json",
-        "demo/results/support_score_development_candidate_4.json":
-            "demo/results/support_score_candidate_4_local_gate.json",
-        "demo/results/support_score_development_candidate_5.json":
-            "demo/results/support_score_candidate_5_local_gate.json",
-        "demo/results/support_score_development_candidate_6.json":
-            "demo/results/support_score_candidate_6_local_gate.json",
-        "demo/results/support_score_development_candidate_7.json":
-            "demo/results/support_score_candidate_7_local_gate.json",
-        "demo/results/support_score_development_candidate_8.json":
-            "demo/results/support_score_candidate_8_local_gate.json",
+        _RESULTS + f"support_score_development_candidate_{revision}.json": (
+            _RESULTS + f"support_score_candidate_{revision}_local_gate.json"
+        )
+        for revision in (3, 4, 5, 6, 7, 8)
     },
 }
 DEVELOPMENT_EVIDENCE_KEYS = {
