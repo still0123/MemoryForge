@@ -22,7 +22,7 @@ workdir="$(mktemp -d "${TMPDIR:-/tmp}/memoryforge-local-check.XXXXXX")"
 trap 'rm -rf "$workdir"' EXIT
 mkdir -p "$output/dist"
 
-"$python" -m ruff check .
+"$python" -m ruff check --no-cache .
 "$python" -m ruff format --check .
 "$python" -m mypy
 "$python" demo/validate_benchmark_registry.py

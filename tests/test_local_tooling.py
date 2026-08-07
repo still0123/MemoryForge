@@ -27,7 +27,7 @@ def test_local_check_keeps_the_quality_and_artifact_contract() -> None:
     script = (root / "scripts/check_local.sh").read_text(encoding="utf-8")
 
     for required in (
-        "ruff check .",
+        "ruff check --no-cache .",
         "ruff format --check .",
         "mypy",
         "demo/validate_benchmark_registry.py",

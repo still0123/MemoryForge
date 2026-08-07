@@ -110,6 +110,16 @@ Candidate 2 is accepted for development and local regression. Confirmation
 remains closed until the release-candidate confirmation gate is explicitly
 opened.
 
+## Frozen Test Lint Exception
+
+The preregistered development test SHA256 fixes an import grouping produced
+before `memoryforge.folder_adapter` existed. Once the module existed, a clean
+Ruff cache classified that import as first-party and reported formatter-only
+`I001`. The test file remains byte-immutable. `pyproject.toml` exempts only
+`I001` for that frozen file, while `scripts/check_local.sh` now uses
+`ruff check --no-cache .` so future module additions cannot reuse stale import
+classification.
+
 ## Goal
 
 Import a local folder as one deterministic snapshot of Markdown, TXT, and
