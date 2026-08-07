@@ -184,10 +184,29 @@ Candidate 3 keeps Relation questions on Relation evidence. Its two clean
 development runs retain Candidate 2's accepted development metrics and
 evaluation SHA256 while the focused Relation regression test passes.
 
+### Candidate 4: Accepted
+
+- Commit:
+  `5308078614e83ad90e3eae9ccdd490bb156f9948`;
+- Evidence:
+  `demo/results/exact_symbol_routing_development_final.json`;
+- Evidence SHA256:
+  `a72494d69964a1c93b228fb73ffa1d8608bf714153cc54efa1096984addc0fc7`.
+
+Static review added three contract edge cases without changing development
+metrics:
+
+- repeated identifiers no longer consume the bounded identifier budget;
+- TypeScript `$` identifiers are valid exact Symbols;
+- a requested function kind accepts parser-derived methods.
+
+Candidate 4 preserves the deterministic development evaluation SHA256
+`58583d94b3cd97d90b62e38ed50e6c16b6b558be0fb0db07f6c07dc8ba732588`.
+
 ## Full Local Gate
 
 - Gate Commit:
-  `9f0b370b1a9599885c04eb818306076cf622c4ea`;
+  `5308078614e83ad90e3eae9ccdd490bb156f9948`;
 - Ruff check and format: passed;
 - strict Mypy: passed;
 - registry: 12 release suites, one experiment, 20 Evidence artifacts, and 121
@@ -202,11 +221,11 @@ evaluation SHA256 while the focused Relation regression test passes.
 Local artifact SHA256 values:
 
 - Wheel:
-  `3911fa9605431a430ae9fd07c0d4f20739113630d19e5e461095c0386747679c`;
+  `e73fe02b9197e2b71bd9c631355748da1c3bf8b615cbc7f42f98d0c7cb145c47`;
 - sdist:
-  `871f5dbcd70abca0b0d32f45bfce5075b0a8cda6a79f59a8cd5dce4bffa27b31`;
+  `160bb25de00f938ce2195f9e51c9f4b42ef69b3b7589fedf66b381915ee47004`;
 - release provenance:
-  `7da0cf89c5084a4efeece1c2ab86f0d3b3bdb6b4ef7690abecc062f5f7dfb523`.
+  `11beb8ceee5bdda170099ad9c8501c9e007fb1fa065a1aaf51fe9e5b1939031b`.
 
 These are local phase-gate artifacts for package 0.2.1, not the final v0.3.0
 release assets.

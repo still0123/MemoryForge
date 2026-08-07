@@ -239,6 +239,7 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
             if status not in {
                 "rejected",
                 "development_passed_regression_failed",
+                "accepted_development_superseded",
                 "accepted_development",
             }:
                 raise ValueError(f"invalid experiment evidence status: {suite_id}")
@@ -267,6 +268,7 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
         if statuses != {
             "rejected",
             "development_passed_regression_failed",
+            "accepted_development_superseded",
             "accepted_development",
         }:
             raise ValueError(f"experiment must retain rejected and accepted Evidence: {suite_id}")

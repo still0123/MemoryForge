@@ -115,10 +115,19 @@
         {
           "split": "development",
           "evidence_revision": 3,
-          "status": "accepted_development",
+          "status": "accepted_development_superseded",
           "path": "demo/results/exact_symbol_routing_development_accepted.json",
           "sha256": "748e9fd7bf76c7ca1a7a3e5d4416db8f357fe363efd77df86c1894e5f53c9145",
           "memoryforge_commit": "8e95ddb8aa7b29b97a5c6aa884f715c3b2006051",
+          "passed": true
+        },
+        {
+          "split": "development",
+          "evidence_revision": 4,
+          "status": "accepted_development",
+          "path": "demo/results/exact_symbol_routing_development_final.json",
+          "sha256": "a72494d69964a1c93b228fb73ffa1d8608bf714153cc54efa1096984addc0fc7",
+          "memoryforge_commit": "5308078614e83ad90e3eae9ccdd490bb156f9948",
           "passed": true
         }
       ]
