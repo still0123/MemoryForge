@@ -1,0 +1,157 @@
+{
+  "schema_version": 1,
+  "suite_id": "multi-source-coverage-selection",
+  "suite_revision": 1,
+  "split": "confirmation",
+  "status": "not_run",
+  "cases": [
+    {
+      "id": "confirmation-distinct-source-over-rank",
+      "question_terms": ["parser", "serializer", "schema"],
+      "max_citations": 2,
+      "required_source_count": 2,
+      "candidates": [
+        {
+          "rank": [10, 10, 10],
+          "page_path": "wiki/pages/parser.md",
+          "source_id": "1111111111111111111111111111111111111111111111111111111111111111",
+          "source_version": 1,
+          "locator": "chars:0-20",
+          "quote": "parser schema"
+        },
+        {
+          "rank": [9, 9, 9],
+          "page_path": "wiki/pages/parser-serializer.md",
+          "source_id": "1111111111111111111111111111111111111111111111111111111111111111",
+          "source_version": 1,
+          "locator": "chars:21-50",
+          "quote": "serializer schema"
+        },
+        {
+          "rank": [2, 2, 2],
+          "page_path": "wiki/pages/serializer.md",
+          "source_id": "2222222222222222222222222222222222222222222222222222222222222222",
+          "source_version": 1,
+          "locator": "chars:0-20",
+          "quote": "serializer"
+        }
+      ],
+      "expected_source_versions": [
+        ["1111111111111111111111111111111111111111111111111111111111111111", 1],
+        ["2222222222222222222222222222222222222222222222222222222222222222", 1]
+      ],
+      "expected_terms": ["parser", "serializer"]
+    },
+    {
+      "id": "confirmation-three-source-quota",
+      "question_terms": ["read", "write", "delete"],
+      "max_citations": 3,
+      "required_source_count": 3,
+      "candidates": [
+        {
+          "rank": [10, 10, 10],
+          "page_path": "wiki/pages/read.md",
+          "source_id": "1111111111111111111111111111111111111111111111111111111111111111",
+          "source_version": 1,
+          "locator": "chars:0-20",
+          "quote": "read"
+        },
+        {
+          "rank": [9, 9, 9],
+          "page_path": "wiki/pages/read-copy.md",
+          "source_id": "1111111111111111111111111111111111111111111111111111111111111111",
+          "source_version": 1,
+          "locator": "chars:21-40",
+          "quote": "write delete"
+        },
+        {
+          "rank": [4, 4, 4],
+          "page_path": "wiki/pages/write.md",
+          "source_id": "2222222222222222222222222222222222222222222222222222222222222222",
+          "source_version": 1,
+          "locator": "chars:0-20",
+          "quote": "write"
+        },
+        {
+          "rank": [3, 3, 3],
+          "page_path": "wiki/pages/delete.md",
+          "source_id": "3333333333333333333333333333333333333333333333333333333333333333",
+          "source_version": 1,
+          "locator": "chars:0-20",
+          "quote": "delete"
+        }
+      ],
+      "expected_source_versions": [
+        ["1111111111111111111111111111111111111111111111111111111111111111", 1],
+        ["2222222222222222222222222222222222222222222222222222222222222222", 1],
+        ["3333333333333333333333333333333333333333333333333333333333333333", 1]
+      ],
+      "expected_terms": ["read", "write", "delete"]
+    },
+    {
+      "id": "confirmation-source-version-identity",
+      "question_terms": ["old", "current"],
+      "max_citations": 2,
+      "required_source_count": 2,
+      "candidates": [
+        {
+          "rank": [10, 10, 10],
+          "page_path": "wiki/pages/config-old.md",
+          "source_id": "4444444444444444444444444444444444444444444444444444444444444444",
+          "source_version": 3,
+          "locator": "chars:0-20",
+          "quote": "old"
+        },
+        {
+          "rank": [9, 9, 9],
+          "page_path": "wiki/pages/config-copy.md",
+          "source_id": "4444444444444444444444444444444444444444444444444444444444444444",
+          "source_version": 3,
+          "locator": "chars:21-40",
+          "quote": "current"
+        },
+        {
+          "rank": [5, 5, 5],
+          "page_path": "wiki/pages/config-current.md",
+          "source_id": "4444444444444444444444444444444444444444444444444444444444444444",
+          "source_version": 4,
+          "locator": "chars:0-20",
+          "quote": "current"
+        }
+      ],
+      "expected_source_versions": [
+        ["4444444444444444444444444444444444444444444444444444444444444444", 3],
+        ["4444444444444444444444444444444444444444444444444444444444444444", 4]
+      ],
+      "expected_terms": ["old", "current"]
+    },
+    {
+      "id": "confirmation-single-source-rank",
+      "question_terms": ["primary", "secondary"],
+      "max_citations": 1,
+      "required_source_count": 1,
+      "candidates": [
+        {
+          "rank": [10, 10, 10],
+          "page_path": "wiki/pages/primary.md",
+          "source_id": "5555555555555555555555555555555555555555555555555555555555555555",
+          "source_version": 1,
+          "locator": "chars:0-20",
+          "quote": "primary"
+        },
+        {
+          "rank": [9, 9, 9],
+          "page_path": "wiki/pages/secondary.md",
+          "source_id": "6666666666666666666666666666666666666666666666666666666666666666",
+          "source_version": 1,
+          "locator": "chars:0-20",
+          "quote": "primary secondary"
+        }
+      ],
+      "expected_source_versions": [
+        ["5555555555555555555555555555555555555555555555555555555555555555", 1]
+      ],
+      "expected_terms": ["primary"]
+    }
+  ]
+}

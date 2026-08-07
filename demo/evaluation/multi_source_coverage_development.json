@@ -1,0 +1,230 @@
+{
+  "schema_version": 1,
+  "suite_id": "multi-source-coverage-selection",
+  "suite_revision": 1,
+  "split": "development",
+  "cases": [
+    {
+      "id": "new-source-wins-rank-tie",
+      "question_terms": ["cache", "expires", "deployment", "friday"],
+      "max_citations": 2,
+      "required_source_count": 2,
+      "candidates": [
+        {
+          "rank": [9, 9, 9],
+          "page_path": "wiki/pages/cache.md",
+          "source_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_version": 1,
+          "locator": "chars:0-20",
+          "quote": "cache expires"
+        },
+        {
+          "rank": [8, 8, 8],
+          "page_path": "wiki/pages/cache-deploy.md",
+          "source_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_version": 1,
+          "locator": "chars:21-50",
+          "quote": "deployment Friday"
+        },
+        {
+          "rank": [8, 8, 8],
+          "page_path": "wiki/pages/deploy.md",
+          "source_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "source_version": 1,
+          "locator": "chars:0-30",
+          "quote": "deployment Friday"
+        }
+      ],
+      "expected_source_versions": [
+        ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 1],
+        ["bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", 1]
+      ],
+      "expected_terms": ["cache", "deployment"]
+    },
+    {
+      "id": "source-quota-precedes-extra-terms",
+      "question_terms": ["cache", "expiry", "deployment", "friday", "rollback"],
+      "max_citations": 2,
+      "required_source_count": 2,
+      "candidates": [
+        {
+          "rank": [9, 9, 9],
+          "page_path": "wiki/pages/cache.md",
+          "source_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_version": 1,
+          "locator": "chars:0-20",
+          "quote": "cache expiry"
+        },
+        {
+          "rank": [8, 8, 8],
+          "page_path": "wiki/pages/cache-operations.md",
+          "source_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_version": 1,
+          "locator": "chars:21-60",
+          "quote": "deployment Friday rollback"
+        },
+        {
+          "rank": [1, 1, 1],
+          "page_path": "wiki/pages/deploy.md",
+          "source_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "source_version": 1,
+          "locator": "chars:0-20",
+          "quote": "deployment"
+        }
+      ],
+      "expected_source_versions": [
+        ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 1],
+        ["bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", 1]
+      ],
+      "expected_terms": ["cache", "deployment"]
+    },
+    {
+      "id": "three-source-quota",
+      "question_terms": ["cache", "deploy", "audit"],
+      "max_citations": 3,
+      "required_source_count": 3,
+      "candidates": [
+        {
+          "rank": [9, 9, 9],
+          "page_path": "wiki/pages/cache.md",
+          "source_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_version": 1,
+          "locator": "chars:0-20",
+          "quote": "cache"
+        },
+        {
+          "rank": [8, 8, 8],
+          "page_path": "wiki/pages/cache-extra.md",
+          "source_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_version": 1,
+          "locator": "chars:21-40",
+          "quote": "deploy audit"
+        },
+        {
+          "rank": [4, 4, 4],
+          "page_path": "wiki/pages/deploy.md",
+          "source_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "source_version": 1,
+          "locator": "chars:0-20",
+          "quote": "deploy"
+        },
+        {
+          "rank": [3, 3, 3],
+          "page_path": "wiki/pages/audit.md",
+          "source_id": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "source_version": 1,
+          "locator": "chars:0-20",
+          "quote": "audit"
+        }
+      ],
+      "expected_source_versions": [
+        ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 1],
+        ["bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", 1],
+        ["cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc", 1]
+      ],
+      "expected_terms": ["cache", "deploy", "audit"]
+    },
+    {
+      "id": "single-source-preserves-rank",
+      "question_terms": ["cache", "deploy"],
+      "max_citations": 1,
+      "required_source_count": 1,
+      "candidates": [
+        {
+          "rank": [9, 9, 9],
+          "page_path": "wiki/pages/cache.md",
+          "source_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_version": 1,
+          "locator": "chars:0-20",
+          "quote": "cache"
+        },
+        {
+          "rank": [8, 8, 8],
+          "page_path": "wiki/pages/deploy.md",
+          "source_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "source_version": 1,
+          "locator": "chars:0-20",
+          "quote": "cache deploy"
+        }
+      ],
+      "expected_source_versions": [
+        ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 1]
+      ],
+      "expected_terms": ["cache"]
+    },
+    {
+      "id": "source-version-is-part-of-identity",
+      "question_terms": ["before", "after"],
+      "max_citations": 2,
+      "required_source_count": 2,
+      "candidates": [
+        {
+          "rank": [9, 9, 9],
+          "page_path": "wiki/pages/history.md",
+          "source_id": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "source_version": 1,
+          "locator": "chars:0-20",
+          "quote": "before"
+        },
+        {
+          "rank": [8, 8, 8],
+          "page_path": "wiki/pages/history-copy.md",
+          "source_id": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "source_version": 1,
+          "locator": "chars:21-40",
+          "quote": "after"
+        },
+        {
+          "rank": [7, 7, 7],
+          "page_path": "wiki/pages/history-v2.md",
+          "source_id": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "source_version": 2,
+          "locator": "chars:0-20",
+          "quote": "after"
+        }
+      ],
+      "expected_source_versions": [
+        ["dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", 1],
+        ["dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd", 2]
+      ],
+      "expected_terms": ["before", "after"]
+    },
+    {
+      "id": "duplicate-citation-does-not-consume-budget",
+      "question_terms": ["cache", "deploy"],
+      "max_citations": 2,
+      "required_source_count": 2,
+      "candidates": [
+        {
+          "rank": [9, 9, 9],
+          "page_path": "wiki/pages/cache.md",
+          "source_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_version": 1,
+          "locator": "chars:0-20",
+          "quote": "cache"
+        },
+        {
+          "rank": [8, 8, 8],
+          "page_path": "wiki/pages/cache-alias.md",
+          "source_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_version": 1,
+          "locator": "chars:0-20",
+          "quote": "cache"
+        },
+        {
+          "rank": [7, 7, 7],
+          "page_path": "wiki/pages/deploy.md",
+          "source_id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "source_version": 1,
+          "locator": "chars:0-20",
+          "quote": "deploy"
+        }
+      ],
+      "expected_source_versions": [
+        ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 1],
+        ["bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", 1]
+      ],
+      "expected_terms": ["cache", "deploy"]
+    }
+  ]
+}
