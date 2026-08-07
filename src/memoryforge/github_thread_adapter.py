@@ -21,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 
 from memoryforge.errors import MemoryForgeError
 from memoryforge.importer import (
+    MAX_SOURCE_BYTES,
     import_local_document,
     read_local_text_file,
     validate_local_document,
@@ -142,13 +143,17 @@ class _GitHubRedirectHandler(HTTPRedirectHandler):
 def parse_github_thread_url(value: str) -> GitHubThreadIdentity:
     """Parse one exact public GitHub Issue or Pull Request URL."""
     parsed = urlsplit(value.strip())
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise GitHubThreadError("GitHub thread URL has an invalid port") from exc
     if (
         parsed.scheme.lower() != "https"
         or parsed.hostname is None
         or parsed.hostname.casefold() != "github.com"
         or parsed.username is not None
         or parsed.password is not None
-        or parsed.port is not None
+        or port is not None
         or parsed.query
         or parsed.fragment
     ):
@@ -361,13 +366,17 @@ def _request_json_page(url: str) -> tuple[object, str | None]:
 
 def _validate_api_url(value: str, *, expected_path: str) -> str:
     parsed = urlsplit(value)
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise GitHubThreadError("GitHub API URL has an invalid port") from exc
     if (
         parsed.scheme.lower() != "https"
         or parsed.hostname is None
         or parsed.hostname.casefold() != "api.github.com"
         or parsed.username is not None
         or parsed.password is not None
-        or parsed.port is not None
+        or port is not None
         or parsed.path != expected_path
         or parsed.fragment
     ):
@@ -476,6 +485,10 @@ def _contribution_sort_key(
 
 def _is_contribution_locator(value: str, source_url: str) -> bool:
     parsed = urlsplit(value)
+    try:
+        port = parsed.port
+    except ValueError:
+        return False
     base = urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
     return (
         parsed.scheme == "https"
@@ -483,7 +496,7 @@ def _is_contribution_locator(value: str, source_url: str) -> bool:
         and parsed.hostname.casefold() == "github.com"
         and parsed.username is None
         and parsed.password is None
-        and parsed.port is None
+        and port is None
         and not parsed.query
         and bool(parsed.fragment)
         and base.casefold() == source_url
@@ -506,6 +519,10 @@ def _import_snapshot(
         raise GitHubThreadError(f"category must be one of: {allowed}") from exc
     identity = parse_github_thread_url(snapshot.source_url)
     source_id = _source_id(identity.url)
+    snapshot_bytes = _snapshot_bytes(snapshot)
+    content = _render_snapshot(snapshot)
+    if len(snapshot_bytes) > MAX_SOURCE_BYTES or len(content.encode("utf-8")) > MAX_SOURCE_BYTES:
+        raise GitHubThreadError("GitHub thread exceeds the 5 MiB replay limit")
     document = LocalDocument(
         source_uri=f"mf://source/{source_id}",
         source_path=_source_path(identity),
@@ -513,7 +530,7 @@ def _import_snapshot(
         category=normalized_category,
         suffix=".md",
         title=snapshot.resource.title,
-        content=_render_snapshot(snapshot),
+        content=content,
         sensitivity=sensitivity,
         tags=tuple(
             sorted(
@@ -528,7 +545,7 @@ def _import_snapshot(
     )
     validate_local_document(document)
     if save_json is not None:
-        _write_saved_snapshot(save_json, snapshot)
+        _write_saved_snapshot(save_json, snapshot_bytes)
     return import_local_document(workspace, document, source_id=source_id)
 
 
@@ -589,7 +606,19 @@ def _source_path(identity: GitHubThreadIdentity) -> str:
     )
 
 
-def _write_saved_snapshot(path: Path, snapshot: GitHubThreadSnapshot) -> None:
+def _snapshot_bytes(snapshot: GitHubThreadSnapshot) -> bytes:
+    return (
+        json.dumps(
+            snapshot.model_dump(mode="json"),
+            indent=2,
+            sort_keys=True,
+            ensure_ascii=False,
+        )
+        + "\n"
+    ).encode("utf-8")
+
+
+def _write_saved_snapshot(path: Path, rendered: bytes) -> None:
     candidate = path.expanduser()
     if candidate.suffix.lower() != ".json" or candidate.is_symlink():
         raise GitHubThreadError("saved GitHub thread path must be a real .json file")
@@ -604,15 +633,6 @@ def _write_saved_snapshot(path: Path, snapshot: GitHubThreadSnapshot) -> None:
         metadata = os.lstat(destination)
         if not stat.S_ISREG(metadata.st_mode) or stat.S_ISLNK(metadata.st_mode):
             raise GitHubThreadError("saved GitHub thread destination is unsafe")
-    rendered = (
-        json.dumps(
-            snapshot.model_dump(mode="json"),
-            indent=2,
-            sort_keys=True,
-            ensure_ascii=False,
-        )
-        + "\n"
-    ).encode("utf-8")
     temporary = parent / f".{candidate.name}.tmp-{uuid.uuid4().hex}"
     descriptor = -1
     directory_fd = -1
