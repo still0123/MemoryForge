@@ -2,7 +2,7 @@
 
 ## Status
 
-`CANDIDATE_3_DEVELOPMENT_PASS_REGRESSION_PENDING`
+`ACCEPTED_DEVELOPMENT_AND_LOCAL_REGRESSION`
 
 ## Base
 
@@ -107,6 +107,30 @@ thread but to a different comment or review ID.
 
 Candidate 3 binds each contribution kind and ID to its exact GitHub fragment:
 `issuecomment-<id>`, `pullrequestreview-<id>`, or `discussion_r<id>`.
+
+## Candidate 3 Full Local Gate
+
+- Gate Commit:
+  `9acfd27d1ff6181308b39310efacfd3cd7b55da3`
+- Acceptance Evidence:
+  `demo/results/github_thread_import_candidate_3_local_gate.json`
+- Acceptance Evidence SHA256:
+  `3ac62bce930b487822beb7d399d54d20108d147cd8f7bd6a6cab51abebb43ef0`
+- Ruff check without cache and format: passed
+- Strict Mypy: passed
+- Registry validation: passed
+- Dependency check: passed
+- Pytest: 503 passed
+- Coverage: 88%
+- Wheel clean-room: passed
+- sdist clean-room: passed
+- `pip check`: passed
+- CLI version smoke: passed
+- Confirmation status: `not_run`
+
+Candidate 3 is accepted for development and local regression. Confirmation
+remains closed until the release-candidate confirmation gate is explicitly
+opened.
 
 ## Frozen Test Lint Exception
 

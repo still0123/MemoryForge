@@ -569,6 +569,98 @@
           "passed": true
         }
       ]
+    },
+    {
+      "suite_id": "github-thread-import-lifecycle",
+      "suite_revision": 1,
+      "suite_type": "source_lifecycle",
+      "evaluator": "demo.run_github_thread_import_benchmark",
+      "model_judge": false,
+      "max_wiki_pages": 3,
+      "required_evidence_statuses": [
+        "rejected",
+        "accepted_development_superseded",
+        "accepted_development"
+      ],
+      "repositories": [
+        {
+          "repository": "still0123/MemoryForge",
+          "remote_url": "https://github.com/still0123/MemoryForge.git",
+          "commit": "271ec3490aa6cd14120913e7fa93f259bd9999fa",
+          "license": "MIT",
+          "source_paths": [
+            "tests/test_github_thread_import.py",
+            "demo/evaluation/github_thread_import_development.json",
+            "demo/evaluation/github_thread_import_confirmation.json"
+          ]
+        }
+      ],
+      "splits": {
+        "development": {
+          "path": "demo/evaluation/github_thread_import_development.json",
+          "sha256": "b4a8f3269b6c99b9a7d5c3a122621f9186c966bad9170501c49749ce2de0f4ff",
+          "test_file": "tests/test_github_thread_import.py",
+          "test_sha256": "70be6edefcb388a05bb59a6f604c17722d6b335ff5b75d7e54aad912d4d0228e",
+          "case_count": 5
+        },
+        "confirmation": {
+          "path": "demo/evaluation/github_thread_import_confirmation.json",
+          "sha256": "45de8d774b8d02b0112571ceb8c3b4d43db589cb0a68dbb96579aa2327ad24b0",
+          "case_count": 3,
+          "status": "not_run"
+        },
+        "holdout": null
+      },
+      "expected_metrics": {
+        "development": {
+          "pass_rate": 100.0,
+          "failed_cases": 0
+        }
+      },
+      "evidence": [
+        {
+          "split": "development",
+          "evidence_revision": 1,
+          "status": "rejected",
+          "path": "demo/results/github_thread_import_baseline_rejected.json",
+          "sha256": "028d1d71db3e92b4b183a0fa3147d6eb581bb1274679a4d2c669d3e1f46b7255",
+          "memoryforge_commit": "271ec3490aa6cd14120913e7fa93f259bd9999fa",
+          "passed": false
+        },
+        {
+          "split": "development",
+          "evidence_revision": 2,
+          "status": "accepted_development_superseded",
+          "path": "demo/results/github_thread_import_development_candidate_1.json",
+          "sha256": "0b3e8304467d6ee38cd826d225e6c19a69a40cf1c1ed5fd6f89884920fc84ee5",
+          "memoryforge_commit": "8be9a05da49e4da1efe742dd8406f2f4706cb3f0",
+          "passed": true
+        },
+        {
+          "split": "development",
+          "evidence_revision": 3,
+          "status": "accepted_development_superseded",
+          "path": "demo/results/github_thread_import_development_candidate_2.json",
+          "sha256": "51963aab72b7462454544d4379ad46f44d9ae6c76924e68ffde9c155dfdce1fc",
+          "memoryforge_commit": "fc1504488cc7735c2bfbf03f030ce6de0c946ddb",
+          "passed": true
+        },
+        {
+          "split": "development",
+          "evidence_revision": 4,
+          "status": "accepted_development",
+          "path": "demo/results/github_thread_import_development_candidate_3.json",
+          "sha256": "3c32675802191dbeec6c8477e0b1abcb618b115120575abc0e6509f8dc565b2c",
+          "memoryforge_commit": "c6f329152dac002ecead2f8d8bebcb002865aff6",
+          "acceptance_evidence": {
+            "path": "demo/results/github_thread_import_candidate_3_local_gate.json",
+            "sha256": "3ac62bce930b487822beb7d399d54d20108d147cd8f7bd6a6cab51abebb43ef0",
+            "memoryforge_commit": "9acfd27d1ff6181308b39310efacfd3cd7b55da3",
+            "passed": true
+          },
+          "passed": true
+        }
+      ]
     }
   ],
   "suites": [
