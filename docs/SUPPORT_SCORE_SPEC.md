@@ -2,7 +2,7 @@
 
 ## Status
 
-`CANDIDATE_3_DEVELOPMENT_PASSED_REGRESSION_PENDING`
+`CANDIDATE_4_DEVELOPMENT_PASSED_REGRESSION_PENDING`
 
 ## Frozen Inputs
 
@@ -218,6 +218,41 @@ page-expansion loop. It performs no support-specific page read.
 
 Candidate 3 retains all accepted development metrics and passes both focused
 regression tests. Confirmation remains `not_run`.
+
+Candidate 3 also passed the full local gate at Commit
+`14618ac3a626dc925375fb600727bca83b46cc0a`: 458 tests, 88% coverage,
+Ruff, strict Mypy, registry validation, dependency checks, Wheel, and sdist all
+passed. Static review then found seven P1 contract defects:
+
+- distinct locators from one SourceVersion could satisfy multi-source support;
+- conditional co-location only counted matching terms;
+- explicit identifiers without a Symbol match received full coverage;
+- Code Wiki pages were reread during support scoring;
+- dirty worktrees could generate passed Evidence;
+- per-case Support schema validation accepted incomplete objects;
+- registry status requirements could self-delete negative Evidence.
+
+Candidate 3 is retained as `accepted_development_superseded`.
+
+## Candidate 4 Development Result
+
+Candidate 4 fixes all seven review findings without changing the frozen
+threshold, weights, suite, expected sources, required terms, or confirmation
+input. A correct no-candidate rejection may expose `support: null`; selected
+evidence must expose the complete Support contract.
+
+- Candidate Commit:
+  `80ac72c0fbfbf393c137aa1c25e5a44c91ae5325`;
+- Evidence:
+  `demo/results/support_score_development_candidate_4.json`;
+- Evidence SHA256:
+  `c4fab97ed96cdc35d61540052b49b5ab18764fd0d98e641ae3a11f3deb2c258e`;
+- deterministic evaluation SHA256:
+  `1403431c27d6e1928699b868a285a932ed3a3ee84961c83f1f5e1ff8016eaa96`.
+
+Candidate 4 retains all accepted development metrics. The unsupported case
+scores 35.0 and returns `unknown`; answerable cases remain 85.0-91.2. Both
+clean runs are deterministic. Confirmation remains `not_run`.
 
 ## Forbidden
 
