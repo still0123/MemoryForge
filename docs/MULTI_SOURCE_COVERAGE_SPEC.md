@@ -2,7 +2,7 @@
 
 ## Status
 
-`CANDIDATE_1_DEVELOPMENT_PASS_REGRESSION_PENDING`
+`CANDIDATE_1_REGRESSION_PASS_LOCAL_GATE_PENDING`
 
 ## Frozen Inputs
 
@@ -59,6 +59,27 @@ The baseline failed four source-quota cases:
 - Duplicate source rate: 0.0%
 - Deterministic replay: passed
 - Confirmation status: `not_run`
+
+## Support-Score Regression
+
+- Evidence:
+  `demo/results/support_score_multi_source_coverage_regression.json`
+- MemoryForge Commit:
+  `1fb2a1263f82ac9720b49543d177345567505c6d`
+- Evidence SHA256:
+  `631d6aace75de30fa7c68badd8f040163f8480db7b7a40a1eb60eae5fabc0b88`
+- Evaluation SHA256:
+  `1403431c27d6e1928699b868a285a932ed3a3ee84961c83f1f5e1ff8016eaa96`
+- Accepted Candidate 14 evaluation SHA256:
+  `1403431c27d6e1928699b868a285a932ed3a3ee84961c83f1f5e1ff8016eaa96`
+- Answer accuracy: 100.0%
+- Citation grounding accuracy: 100.0%
+- Multi-source coverage: 100.0%
+- Selective accuracy: 100.0%
+- Coverage: 90.0%
+- Risk: 0.0%
+- Support-score confirmation status: `not_run`
+- Multi-source confirmation status: `not_run`
 
 ## Problem
 
