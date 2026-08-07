@@ -2,7 +2,7 @@
 
 ## Status
 
-`ACCEPTED_DEVELOPMENT_AND_LOCAL_REGRESSION`
+`CANDIDATE_8_DEVELOPMENT_PASSED_REGRESSION_PENDING`
 
 ## Frozen Inputs
 
@@ -387,6 +387,38 @@ of 35.0. Both clean runs are deterministic. Confirmation remains `not_run`.
 
 Candidate 7 is the accepted development and local-regression result.
 Confirmation remains `not_run`.
+
+Final release review found four P1 gaps after Candidate 7:
+
+- conditional co-location also required a page-level identifier in the same
+  Citation;
+- support validation silently ignored identifiers after the routing limit of
+  eight;
+- Agent final answers were not revalidated against the original question and
+  selected Citation Facts;
+- accepted Evidence could self-declare a threshold different from the frozen
+  source manifest.
+
+Candidate 7 is superseded.
+
+## Candidate 8 Development Result
+
+Candidate 8 separates page-level identifier support from conditional
+co-location, validates all explicit identifiers, checks Agent final answers
+against original-question Citations and Fact terms, and reads the frozen
+threshold from the validated source manifest.
+
+- Candidate Commit:
+  `9667b0585a865ba6af9ef13f5eafb674b0c52026`;
+- Evidence:
+  `demo/results/support_score_development_candidate_8.json`;
+- Evidence SHA256:
+  `e8c3da42d39ab2ce3ff471761cd32a06f79a5e0ad330589c97da509cc8457ed7`;
+- deterministic evaluation SHA256:
+  `1403431c27d6e1928699b868a285a932ed3a3ee84961c83f1f5e1ff8016eaa96`.
+
+Candidate 8 retains all accepted development metrics and the unsupported score
+of 35.0. Both clean runs are deterministic. Confirmation remains `not_run`.
 
 ## Forbidden
 
