@@ -1,6 +1,6 @@
 # Static Showcase Specification
 
-Status: ACCEPTED_DEVELOPMENT_BROWSER_PENDING
+Status: ACCEPTED_DEVELOPMENT_AND_BROWSER_REGRESSION
 
 ## Goal
 
@@ -180,3 +180,34 @@ clean Candidate 3 worktree. Browser inspection found all eight navigation
 sections, a rendered SVG architecture, no console errors, and no script or
 stylesheet references in generated HTML. The browser harness injected one
 failed `/@vite/client` request; that path is absent from the generated files.
+
+Candidate 4:
+
+- MemoryForge Commit:
+  `77b9026c1b88fbfa1138dd74c9efb3f9abf23d90`;
+- Evidence:
+  `demo/results/static_showcase_development_candidate_4.json`;
+- result: 4/4 development cases passed;
+- resolved review findings for fixed-Commit reads, exact Fact SourceVersions,
+  lifecycle receipt binding, output races, pytest environment control, and
+  per-case metrics;
+- status: superseded by stable public Demo repository identity.
+
+Candidate 5:
+
+- MemoryForge Commit:
+  `12d0ecadb4d8d310e2fa3b22f71dbfe770bd2567`;
+- Evidence:
+  `demo/results/static_showcase_development_candidate_5.json`;
+- Evidence SHA256:
+  `5e644b467738bcb8121a0a224a7e7ca31b11b37d4ee6962b7b5659b72544101e`;
+- result: 4/4 development cases passed;
+- required sections: 8/8;
+- local-only detail leaks: 0;
+- Workspace mutations: 0;
+- deterministic evaluation SHA256:
+  `8aa4853a0642d91f0756ca02679995e7f85836789a28c28cf53606913b4f40ad`;
+- two independent public Demo workdirs produced identical Query, Citation,
+  Trace, architecture, and HTML;
+- bits-code-guard: 10 P1 findings fixed, no unresolved P0-P2;
+- confirmation status: `not_run`.
