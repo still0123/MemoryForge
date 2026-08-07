@@ -197,6 +197,7 @@ def answer_question(
     page_ranks: dict[str, int] = {}
     local_morphology_pages: set[str] = set()
     code_page_paths: set[str] = set()
+    code_page_fact_terms: dict[str, set[str]] = {}
 
     for page_rank, page in enumerate(
         _candidate_pages(
@@ -222,6 +223,7 @@ def answer_question(
         )
         if code_page and _is_code_file_page(page):
             code_page_paths.add(page_path)
+            code_page_fact_terms[page_path] = _terms(_code_fact_text(content))
         if not any(_CJK.fullmatch(term) for term in question_terms) and not code_page:
             local_morphology_pages.add(page_path)
         trace.append({"level": "L1", "artifact": page_path})
@@ -362,6 +364,7 @@ def answer_question(
         exact_symbol_fact_keys=exact_symbol_fact_keys,
         required_citations=max_citations,
         code_page_paths=code_page_paths,
+        code_page_fact_terms=code_page_fact_terms,
     )
     if not support["sufficient"]:
         return _unknown_payload(debug, trace, support=support)
@@ -709,6 +712,7 @@ def _support_score(
     exact_symbol_fact_keys: set[tuple[str, str, int, str, str]],
     required_citations: int,
     code_page_paths: set[str],
+    code_page_fact_terms: dict[str, set[str]] | None = None,
 ) -> SupportPayload:
     core_terms = (
         question_terms - _SUPPORT_CODE_KIND_TERMS - _RANKING_STOP_WORDS - _QUESTION_NOISE_TERMS
@@ -727,13 +731,9 @@ def _support_score(
         term for identifier in _explicit_code_identifiers(question) for term in _terms(identifier)
     }
     for page_path in dict.fromkeys(page_path for page_path, _ in selected):
-        page = _safe_wiki_page(workspace_root, workspace_root / page_path)
-        if page is not None:
-            covered_terms.update(
-                core_terms
-                & identifier_terms
-                & _terms(_code_fact_text(page.read_text(encoding="utf-8")))
-            )
+        covered_terms.update(
+            core_terms & identifier_terms & (code_page_fact_terms or {}).get(page_path, set())
+        )
     core_coverage = len(covered_terms) / len(core_terms) if core_terms else 1.0
 
     exact_identifier_coverage = (
