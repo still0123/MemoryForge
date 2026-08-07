@@ -2,7 +2,7 @@
 
 ## Status
 
-`CANDIDATE_4_DEVELOPMENT_PASS_GATE_PENDING`
+`CANDIDATE_5_DEVELOPMENT_PASS_GATE_PENDING`
 
 ## Base
 
@@ -48,9 +48,10 @@ changes. Confirmation must not run during development.
 - Deterministic replay: passed
 - Confirmation status: `not_run`
 
-All seven cases fail during collection because
-`memoryforge.platform_lock` does not exist. The exact root error is
-`ModuleNotFoundError: No module named 'memoryforge.platform_lock'`.
+The retained Evidence proves seven deterministic generic `pytest_failure`
+results before `memoryforge.platform_lock` existed. The interactive command
+log showed `ModuleNotFoundError`, but that diagnostic was not included in the
+frozen JSON; therefore the exact exception is not a public Evidence claim.
 
 ## Candidate 1 Result
 
@@ -173,7 +174,25 @@ stable diagnostic classification digest. Native Windows confirmation remains
 - PowerShell 7.6 parser: passed
 - Confirmation status: `not_run`
 
-Candidate 4 is pending the full host artifact gate and final review recheck.
+Candidate 4 became superseded after final review found collection
+`SyntaxError` was still grouped with interrupts.
+
+## Candidate 5 Development Result
+
+- Development Evidence:
+  `demo/results/cross_platform_delivery_candidate_5.json`
+- Development Evidence SHA256:
+  `4f1cb0fcad903e7e525670d9efde02148b2cdf2a9bef532210997f9ca8102106`
+- MemoryForge Commit:
+  `cba84d7a6b01d20abfb353e85ae2733210bde98b`
+- Runtime: CPython 3.11.15 / Darwin arm64
+- Development pass rate: 100.0%
+- Deterministic evaluation SHA256:
+  `03879bd4165a21543fadd0ecd237d5976c6b19330bc0bab7d321a84ee1ec92f1`
+- Confirmation status: `not_run`
+
+Candidate 5 adds exact collection syntax classification. It is pending the
+final host and Linux artifact gates plus final static-review recheck.
 
 ## Goal
 

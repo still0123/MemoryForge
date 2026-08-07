@@ -278,6 +278,12 @@ REQUIRED_EXPERIMENT_EVIDENCE = {
             "198c3654291ba762b591891f894f87c3ebc41764faa8e7e24cfc5c484a4c39cb",
             "2bb3505ce2c5b32ec1ce6e2b4dcd1a12638cc93f",
         ),
+        _RESULTS + "cross_platform_delivery_candidate_5.json": (
+            6,
+            "accepted_development_superseded",
+            "4f1cb0fcad903e7e525670d9efde02148b2cdf2a9bef532210997f9ca8102106",
+            "cba84d7a6b01d20abfb353e85ae2733210bde98b",
+        ),
     },
 }
 STATIC_SHOWCASE_REJECTED_CONTRACTS = {
@@ -582,6 +588,26 @@ MULTI_SOURCE_DEVELOPMENT_EVIDENCE_KEYS = {
     "passed",
 }
 CROSS_PLATFORM_DEVELOPMENT_EVIDENCE_KEYS = MULTI_SOURCE_DEVELOPMENT_EVIDENCE_KEYS | {"runtime"}
+CROSS_PLATFORM_DEVELOPMENT_RUNTIME_CONTRACTS = {
+    _RESULTS + "cross_platform_delivery_candidate_3.json": {
+        "implementation": "CPython",
+        "python": "3.11.15",
+        "system": "Darwin",
+        "machine": "arm64",
+    },
+    _RESULTS + "cross_platform_delivery_candidate_4.json": {
+        "implementation": "CPython",
+        "python": "3.11.15",
+        "system": "Darwin",
+        "machine": "arm64",
+    },
+    _RESULTS + "cross_platform_delivery_candidate_5.json": {
+        "implementation": "CPython",
+        "python": "3.11.15",
+        "system": "Darwin",
+        "machine": "arm64",
+    },
+}
 LOCAL_GATE_EVIDENCE_KEYS = {
     "schema_version",
     "suite_id",
@@ -707,6 +733,13 @@ LOCAL_GATE_KEYS = {
     "sdist_clean_room",
     "pip_check",
     "cli_version_smoke",
+}
+CROSS_PLATFORM_MAC_RUNTIME = {
+    "system": "Darwin",
+    "machine": "arm64",
+    "implementation": "CPython",
+    "python": "3.11.15",
+    "hosted_runner": False,
 }
 MULTI_SOURCE_SUPPORT_REGRESSION = (
     _RESULTS + "support_score_multi_source_coverage_regression.json",
@@ -1348,16 +1381,9 @@ def _validate_pytest_component_experiment_payload(
         else MULTI_SOURCE_DEVELOPMENT_EVIDENCE_KEYS
     )
     runtime = payload.get("runtime")
+    runtime_contract = CROSS_PLATFORM_DEVELOPMENT_RUNTIME_CONTRACTS.get(str(artifact.get("path")))
     runtime_valid = not runtime_cross_platform or (
-        isinstance(runtime, dict)
-        and set(runtime) == {"implementation", "python", "system", "machine"}
-        and runtime.get("implementation") == "CPython"
-        and isinstance(runtime.get("python"), str)
-        and re.fullmatch(r"3\.11\.\d+", runtime["python"]) is not None
-        and isinstance(runtime.get("system"), str)
-        and bool(runtime["system"])
-        and isinstance(runtime.get("machine"), str)
-        and bool(runtime["machine"])
+        runtime_contract is not None and _strict_mapping(runtime, runtime_contract)
     )
     if (
         type(payload.get("schema_version")) is not int
@@ -1810,6 +1836,10 @@ def _validate_acceptance_evidence(
     registry_result = local_gate.get("registry_validation", {})
     artifacts = local_gate.get("artifacts")
     multi_source = experiment["suite_id"] == "multi-source-coverage-selection"
+    cross_platform_mac = (
+        experiment["suite_id"] == "cross-platform-delivery"
+        and development_artifact["evidence_revision"] >= 6
+    )
     requires_artifacts = experiment["suite_id"] in {
         "support-score.learn-claude-code",
         "multi-source-coverage-selection",
@@ -1821,6 +1851,8 @@ def _validate_acceptance_evidence(
     expected_payload_keys = LOCAL_GATE_EVIDENCE_KEYS | (
         {"regression_evidence"} if multi_source else set()
     )
+    if cross_platform_mac:
+        expected_payload_keys.add("runtime")
     expected_local_gate_keys = LOCAL_GATE_KEYS | ({"artifacts"} if requires_artifacts else set())
     if (
         type(payload.get("schema_version")) is not int
@@ -1831,6 +1863,10 @@ def _validate_acceptance_evidence(
         or payload.get("suite_revision") != experiment["suite_revision"]
         or payload.get("memoryforge_commit") != commit
         or payload.get("memoryforge_worktree_dirty") is not False
+        or (
+            cross_platform_mac
+            and not _strict_mapping(payload.get("runtime"), CROSS_PLATFORM_MAC_RUNTIME)
+        )
         or payload.get("development_evidence", {}).get("path") != development_artifact["path"]
         or payload.get("development_evidence", {}).get("sha256") != development_artifact["sha256"]
         or payload.get("development_evidence", {}).get("memoryforge_commit")
