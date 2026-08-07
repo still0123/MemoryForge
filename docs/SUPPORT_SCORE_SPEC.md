@@ -2,7 +2,7 @@
 
 ## Status
 
-`CANDIDATE_11_IMPLEMENTED_DEVELOPMENT_PENDING`
+`CANDIDATE_11_DEVELOPMENT_PASSED_REGRESSION_PENDING`
 
 ## Frozen Inputs
 
@@ -547,7 +547,33 @@ the correctly selected `Task` class Fact.
 Candidate 10 is rejected and retained. Candidate 11 excludes identifiers used
 as explicit `in ...` or Chinese `... 中/内` routing context from the exact
 answer-identifier hard gate. The identifier remains available to routing and
-core-term scoring. Candidate 11 development is pending. Confirmation remains
+core-term scoring.
+
+## Candidate 11 Development Result
+
+- Candidate Commit:
+  `c1cbd94d0a92e3b346afeb32895a4901cb249951`;
+- Evidence:
+  `demo/results/support_score_development_candidate_11.json`;
+- Evidence SHA256:
+  `aa4f6625025038e6aac097a510fb7ef1773cdf8168c3ade03870423b1806fe44`;
+- structural SHA256:
+  `a611b3559bc3f08f5a9b270eb7e377e0b06612b324586e2380a59cef20d8cfe7`;
+- deterministic evaluation SHA256:
+  `1403431c27d6e1928699b868a285a932ed3a3ee84961c83f1f5e1ff8016eaa96`.
+
+Candidate 11 restores all accepted development metrics:
+
+- Answer accuracy: 100.0%;
+- selective accuracy: 100.0%;
+- coverage: 90.0%;
+- risk: 0.0%;
+- abstention accuracy: 100.0%;
+- route, Source, fact, Citation, multi-source, and repository-isolation
+  metrics: 100.0%.
+
+Both structural and evaluation payloads are deterministic across the two clean
+runs. Candidate 11 full local regression is pending. Confirmation remains
 `not_run`.
 
 ## Forbidden
