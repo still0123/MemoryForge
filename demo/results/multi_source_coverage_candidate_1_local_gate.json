@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "suite_id": "multi-source-coverage-selection",
+  "suite_revision": 1,
+  "memoryforge_commit": "73fa41087d222833b5025f5406ea3089b3f4519a",
+  "memoryforge_worktree_dirty": false,
+  "development_evidence": {
+    "path": "demo/results/multi_source_coverage_development_candidate_1.json",
+    "sha256": "ef584ff97687ff4a09644f203b9b8d135c420918e4a19e27a8f7354a3e9b5197",
+    "memoryforge_commit": "4303c159caac6c8bded2eeb9e0e3cba625f61dc2",
+    "passed": true
+  },
+  "regression_evidence": {
+    "path": "demo/results/support_score_multi_source_coverage_regression.json",
+    "sha256": "631d6aace75de30fa7c68badd8f040163f8480db7b7a40a1eb60eae5fabc0b88",
+    "memoryforge_commit": "1fb2a1263f82ac9720b49543d177345567505c6d",
+    "evaluation_sha256": "1403431c27d6e1928699b868a285a932ed3a3ee84961c83f1f5e1ff8016eaa96",
+    "passed": true
+  },
+  "local_gate": {
+    "command": "scripts/check_local.sh",
+    "ruff_check": "passed",
+    "ruff_format": "passed",
+    "strict_mypy": "passed",
+    "registry_validation": {
+      "suite_count": 12,
+      "experiment_count": 2,
+      "evidence_count": 49,
+      "qa_case_count": 121
+    },
+    "dependency_check": "passed",
+    "pytest": {
+      "passed": 485,
+      "failed": 0,
+      "coverage_percent": 88
+    },
+    "wheel_clean_room": "passed",
+    "sdist_clean_room": "passed",
+    "pip_check": "passed",
+    "cli_version_smoke": "passed",
+    "artifacts": {
+      "wheel_sha256": "d92620d26503de212ac00d3e8eacce2f21a332145cdedfd8dfe1acfdf5a22cc4",
+      "sdist_sha256": "99be36708c24ed70a83caea2dfba3c84653b25a2ef877a3cef8e1e25ce09035f",
+      "provenance_sha256": "5f6ef1a050698730d3fcd2c9d67dc93e8a080836f5f14f8b175e5276b9242198",
+      "sha256sums_sha256": "fef3d6010a54a46fd228b0c3da8420eee87b6b0ae7f37d39b7733eb98412a9a4"
+    }
+  },
+  "confirmation": {
+    "path": "demo/evaluation/multi_source_coverage_confirmation.json",
+    "sha256": "2759e7f3cc34e97b575e59a128a21e7c56e07d5d3afe08d8c80d02f4dc5a5a1a",
+    "status": "not_run"
+  },
+  "passed": true
+}

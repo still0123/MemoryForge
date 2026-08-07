@@ -1,0 +1,184 @@
+{
+  "schema_version": 1,
+  "suite_id": "multi-source-coverage-selection",
+  "suite_revision": 1,
+  "memoryforge_commit": "4303c159caac6c8bded2eeb9e0e3cba625f61dc2",
+  "memoryforge_worktree_dirty": false,
+  "development": {
+    "path": "demo/evaluation/multi_source_coverage_development.json",
+    "sha256": "0815f3a2230fbc2b094310f03ce23dd7bf1bf51f362707dd32cd0ae0cd04fb73",
+    "case_count": 6,
+    "evaluation": {
+      "case_count": 6,
+      "metrics": {
+        "selection_accuracy": 100.0,
+        "source_coverage_accuracy": 100.0,
+        "term_coverage_accuracy": 100.0,
+        "single_source_rank_preservation": 100.0,
+        "duplicate_source_rate": 0.0
+      },
+      "cases": [
+        {
+          "id": "new-source-wins-rank-tie",
+          "required_source_count": 2,
+          "selected_source_versions": [
+            [
+              "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              1
+            ],
+            [
+              "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              1
+            ]
+          ],
+          "selected_quotes": [
+            "cache expires",
+            "deployment Friday"
+          ],
+          "distinct_source_count": 2,
+          "source_coverage_correct": true,
+          "term_coverage_correct": true,
+          "selection_correct": true
+        },
+        {
+          "id": "source-quota-precedes-extra-terms",
+          "required_source_count": 2,
+          "selected_source_versions": [
+            [
+              "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              1
+            ],
+            [
+              "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              1
+            ]
+          ],
+          "selected_quotes": [
+            "cache expiry",
+            "deployment"
+          ],
+          "distinct_source_count": 2,
+          "source_coverage_correct": true,
+          "term_coverage_correct": true,
+          "selection_correct": true
+        },
+        {
+          "id": "three-source-quota",
+          "required_source_count": 3,
+          "selected_source_versions": [
+            [
+              "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              1
+            ],
+            [
+              "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              1
+            ],
+            [
+              "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+              1
+            ]
+          ],
+          "selected_quotes": [
+            "cache",
+            "deploy",
+            "audit"
+          ],
+          "distinct_source_count": 3,
+          "source_coverage_correct": true,
+          "term_coverage_correct": true,
+          "selection_correct": true
+        },
+        {
+          "id": "single-source-preserves-rank",
+          "required_source_count": 1,
+          "selected_source_versions": [
+            [
+              "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              1
+            ]
+          ],
+          "selected_quotes": [
+            "cache"
+          ],
+          "distinct_source_count": 1,
+          "source_coverage_correct": true,
+          "term_coverage_correct": true,
+          "selection_correct": true
+        },
+        {
+          "id": "source-version-is-part-of-identity",
+          "required_source_count": 2,
+          "selected_source_versions": [
+            [
+              "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+              1
+            ],
+            [
+              "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+              2
+            ]
+          ],
+          "selected_quotes": [
+            "before",
+            "after"
+          ],
+          "distinct_source_count": 2,
+          "source_coverage_correct": true,
+          "term_coverage_correct": true,
+          "selection_correct": true
+        },
+        {
+          "id": "duplicate-citation-does-not-consume-budget",
+          "required_source_count": 2,
+          "selected_source_versions": [
+            [
+              "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              1
+            ],
+            [
+              "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              1
+            ]
+          ],
+          "selected_quotes": [
+            "cache",
+            "deploy"
+          ],
+          "distinct_source_count": 2,
+          "source_coverage_correct": true,
+          "term_coverage_correct": true,
+          "selection_correct": true
+        }
+      ]
+    }
+  },
+  "confirmation": {
+    "path": "demo/evaluation/multi_source_coverage_confirmation.json",
+    "sha256": "2759e7f3cc34e97b575e59a128a21e7c56e07d5d3afe08d8c80d02f4dc5a5a1a",
+    "status": "not_run"
+  },
+  "runs": [
+    {
+      "name": "first",
+      "evaluation_sha256": "7e5efb1e2aab51302cf342bf382d028803bd49f3fb933951a53544fa3cbe9c90"
+    },
+    {
+      "name": "second",
+      "evaluation_sha256": "7e5efb1e2aab51302cf342bf382d028803bd49f3fb933951a53544fa3cbe9c90"
+    }
+  ],
+  "gates": {
+    "selection_accuracy": true,
+    "source_coverage_accuracy": true,
+    "term_coverage_accuracy": true,
+    "single_source_rank_preservation": true,
+    "duplicate_source_rate": true,
+    "deterministic_replay": true,
+    "selector_supports_required_sources": true,
+    "stable_memoryforge_commit": true,
+    "clean_worktree_after_run": true,
+    "confirmation_not_run": true
+  },
+  "passed": true
+}

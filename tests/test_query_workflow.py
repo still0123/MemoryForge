@@ -1065,10 +1065,20 @@ def test_ask_can_return_multiple_citations_when_requested(tmp_path: Path, monkey
         workspace,
         "Cache expires sixty seconds and deployment Friday",
         max_citations=2,
+        min_source_count=2,
     )
 
     assert result["status"] == "answered"
     assert len(result["citations"]) == 2
+    assert (
+        len(
+            {
+                (citation["source_id"], citation["source_version"])
+                for citation in result["citations"]
+            }
+        )
+        == 2
+    )
     assert "sixty seconds" in result["answer"]
     assert "Friday" in result["answer"]
 
