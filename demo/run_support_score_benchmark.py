@@ -43,6 +43,7 @@ def main(argv: list[str] | None = None) -> None:
         raise SystemExit("source worktree must be clean")
     workdir = args.workdir.resolve()
     output = args.output.resolve()
+    _require_external_output(output, REPO_ROOT, source)
     if workdir.exists() and any(workdir.iterdir()):
         raise SystemExit(f"--workdir must be absent or empty: {workdir}")
 
@@ -62,6 +63,7 @@ def main(argv: list[str] | None = None) -> None:
             {
                 "name": name,
                 "structural_passed": structural["summary"]["passed"],
+                "structural_sha256": _payload_sha256(structural),
                 "evaluation_sha256": _payload_sha256(evaluation),
                 "metrics": evaluation["memoryforge"],
             }
@@ -104,7 +106,7 @@ def main(argv: list[str] | None = None) -> None:
             and unsupported["memoryforge"]["support"]["score"] < threshold
         ),
         "no_failed_cases": not failures,
-        "deterministic_replay": runs[0]["evaluation_sha256"] == runs[1]["evaluation_sha256"],
+        "deterministic_replay": _deterministic_replay(runs),
         "stable_memoryforge_commit": _git("rev-parse", "HEAD") == memoryforge_commit,
         "clean_worktree_after_run": not bool(_git("status", "--porcelain")),
         "stable_source_commit": _git_at(source, "rev-parse", "HEAD") == source_commit,
@@ -155,6 +157,15 @@ def _payload_sha256(payload: object) -> str:
     return hashlib.sha256(
         json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")
     ).hexdigest()
+
+
+def _require_external_output(output: Path, *repositories: Path) -> None:
+    if any(output.is_relative_to(repository) for repository in repositories):
+        raise SystemExit("--output must be outside MemoryForge and source repositories")
+
+
+def _deterministic_replay(runs: list[dict[str, Any]]) -> bool:
+    return all(runs[0][key] == runs[1][key] for key in ("structural_sha256", "evaluation_sha256"))
 
 
 def _validate_artifact(artifact: dict[str, Any]) -> None:

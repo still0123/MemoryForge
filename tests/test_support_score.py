@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+from types import ModuleType
+
+import pytest
 
 from memoryforge import query as query_module
-from memoryforge.wiki_facts import CitationPayload
+from memoryforge.wiki_facts import AppliedCodeSymbolMatch, CitationPayload
 
 
 def test_code_support_rejects_topic_only_evidence(tmp_path: Path) -> None:
@@ -118,26 +121,45 @@ def test_conditional_support_requires_one_fact_to_cover_both_clauses(tmp_path: P
     assert "condition_not_co_located" in support["failed_hard_gates"]
 
 
-def test_conditional_support_accepts_identifier_from_the_selected_page(tmp_path: Path) -> None:
+def test_field_support_accepts_container_identifier_from_the_selected_page(
+    tmp_path: Path,
+) -> None:
     page_path = "wiki/pages/code/repository/cache.md"
-    question = "When CacheManager expires entries, are sessions revoked?"
+    question = "Which CacheManager fields?"
 
     support = query_module._support_score(
         tmp_path,
         question,
         query_module._terms(question),
-        [(page_path, _citation("When cache expires entries, sessions are revoked."))],
-        symbol_matches=(),
+        [(page_path, _citation("Field entries dict[str, str]"))],
+        symbol_matches=(_symbol_match(page_path, "CacheManager"),),
         exact_symbol_fact_keys=set(),
         required_sources=1,
         code_page_paths={page_path},
-        code_page_fact_terms={page_path: query_module._terms("CacheManager")},
         code_page_identifiers={page_path: {"CacheManager"}},
     )
 
     assert support["components"]["exact_identifier_coverage"] == 1.0
-    assert support["components"]["fact_co_location"] == 1.0
     assert support["sufficient"]
+
+
+def test_page_identifier_does_not_support_an_unrelated_selected_fact(tmp_path: Path) -> None:
+    page_path = "wiki/pages/code/repository/cache.md"
+    question = "What does DangerousFunction return?"
+
+    support = query_module._support_score(
+        tmp_path,
+        question,
+        query_module._terms(question),
+        [(page_path, _citation("SafeFunction returns a cached value."))],
+        symbol_matches=(_symbol_match(page_path, "DangerousFunction"),),
+        exact_symbol_fact_keys=set(),
+        required_sources=1,
+        code_page_paths={page_path},
+    )
+
+    assert support["components"]["exact_identifier_coverage"] == 0.0
+    assert "exact_identifier_not_covered" in support["failed_hard_gates"]
 
 
 def test_explicit_identifier_requires_symbol_or_page_fact_coverage(tmp_path: Path) -> None:
@@ -152,7 +174,7 @@ def test_explicit_identifier_requires_symbol_or_page_fact_coverage(tmp_path: Pat
         exact_symbol_fact_keys=set(),
         required_sources=1,
         code_page_paths={page_path},
-        code_page_fact_terms={page_path: query_module._terms("real.CacheManager")},
+        code_page_identifiers={page_path: {"CacheManager"}},
     )
 
     assert support["components"]["exact_identifier_coverage"] == 0.0
@@ -307,6 +329,46 @@ def test_support_benchmark_validates_complete_and_optional_unknown_payloads() ->
     )
 
 
+def test_agent_answer_requires_each_clause_in_one_citation() -> None:
+    citations = [
+        _citation("Cache entries expire after sixty seconds."),
+        {
+            **_citation("Administrators revoke active sessions."),
+            "locator": "chars:11-20",
+        },
+    ]
+
+    assert not query_module.answer_is_supported(
+        "Cache entries revoke active sessions after sixty seconds.",
+        citations,
+    )
+    assert query_module.answer_is_supported(
+        "Cache entries expire after sixty seconds. Administrators revoke active sessions.",
+        citations,
+    )
+
+
+def test_support_benchmark_requires_an_external_output_path(tmp_path: Path) -> None:
+    runner = _support_runner()
+    repository = tmp_path / "repository"
+    repository.mkdir()
+
+    with pytest.raises(SystemExit, match="outside MemoryForge"):
+        runner._require_external_output(repository / "evidence.json", repository)
+
+    runner._require_external_output(tmp_path / "evidence.json", repository)
+
+
+def test_support_benchmark_replay_includes_structural_evidence() -> None:
+    runner = _support_runner()
+    runs = [
+        {"structural_sha256": "a", "evaluation_sha256": "b"},
+        {"structural_sha256": "c", "evaluation_sha256": "b"},
+    ]
+
+    assert not runner._deterministic_replay(runs)
+
+
 def _citation(quote: str) -> CitationPayload:
     return {
         "source_id": "a" * 64,
@@ -314,3 +376,30 @@ def _citation(quote: str) -> CitationPayload:
         "locator": "chars:0-10",
         "quote": quote,
     }
+
+
+def _symbol_match(page_path: str, identifier: str) -> AppliedCodeSymbolMatch:
+    return AppliedCodeSymbolMatch(
+        fact_id="b" * 64,
+        page_path=page_path,
+        repository_id="c" * 64,
+        source_id="a" * 64,
+        source_version=1,
+        locator="chars:21-30",
+        section_path="Code: cache.py",
+        quote=f"`cache.{identifier}` (class): `class {identifier}:`",
+        routing_text="",
+        symbol=f"cache.{identifier}",
+        relation_type=None,
+        identifier=identifier,
+        match_kind="display_name",
+    )
+
+
+def _support_runner() -> ModuleType:
+    script = Path(__file__).resolve().parent.parent / "demo/run_support_score_benchmark.py"
+    spec = importlib.util.spec_from_file_location("run_support_score_benchmark_test", script)
+    assert spec and spec.loader
+    runner = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(runner)
+    return runner

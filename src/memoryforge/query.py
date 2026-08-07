@@ -205,7 +205,6 @@ def answer_question(
     page_ranks: dict[str, int] = {}
     local_morphology_pages: set[str] = set()
     code_page_paths: set[str] = set()
-    code_page_fact_terms: dict[str, set[str]] = {}
     code_page_identifiers: dict[str, set[str]] = {}
 
     for page_rank, page in enumerate(
@@ -232,9 +231,7 @@ def answer_question(
         )
         if code_page and _is_code_file_content(content):
             code_page_paths.add(page_path)
-            code_fact_text = _code_fact_text(content)
-            code_page_fact_terms[page_path] = _terms(code_fact_text)
-            code_page_identifiers[page_path] = _code_identifier_tokens(code_fact_text)
+            code_page_identifiers[page_path] = _code_identifier_tokens(_code_fact_text(content))
         if not any(_CJK.fullmatch(term) for term in question_terms) and not code_page:
             local_morphology_pages.add(page_path)
         trace.append({"level": "L1", "artifact": page_path})
@@ -375,7 +372,6 @@ def answer_question(
         exact_symbol_fact_keys=exact_symbol_fact_keys,
         required_sources=min_source_count,
         code_page_paths=code_page_paths,
-        code_page_fact_terms=code_page_fact_terms,
         code_page_identifiers=code_page_identifiers,
     )
     if not support["sufficient"]:
@@ -728,24 +724,36 @@ def _support_score(
     exact_symbol_fact_keys: set[tuple[str, str, int, str, str]],
     required_sources: int,
     code_page_paths: set[str],
-    code_page_fact_terms: dict[str, set[str]] | None = None,
     code_page_identifiers: dict[str, set[str]] | None = None,
 ) -> SupportPayload:
     core_terms = (
         question_terms - _SUPPORT_CODE_KIND_TERMS - _RANKING_STOP_WORDS - _QUESTION_NOISE_TERMS
     )
     explicit_identifiers = _all_explicit_code_identifiers(question)
+    selected_page_paths = {page_path for page_path, _ in selected}
+    selected_are_fields = bool(selected) and all(
+        citation["quote"].startswith("Field ") for _, citation in selected
+    )
+    page_symbol_identifiers = (
+        {match.identifier for match in symbol_matches if match.page_path in selected_page_paths}
+        | {
+            identifier
+            for page_path in selected_page_paths
+            for identifier in (code_page_identifiers or {}).get(page_path, set())
+        }
+        if selected_are_fields
+        else set()
+    )
     covered_terms: set[str] = set()
     selected_identifiers: set[str] = set()
     per_fact_matches: list[set[str]] = []
-    for page_path, citation in selected:
+    for _page_path, citation in selected:
         selected_identifiers.update(
             _code_identifier_tokens(
                 f"{citation.get('section_path', '')} "
                 f"{citation.get('routing_text', '')} {citation['quote']}"
             )
         )
-        selected_identifiers.update((code_page_identifiers or {}).get(page_path, set()))
         matching = _local_english_matching_terms(
             core_terms,
             citation,
@@ -754,12 +762,10 @@ def _support_score(
         covered_terms.update(matching)
         per_fact_matches.append(matching)
     identifier_terms = {term for identifier in explicit_identifiers for term in _terms(identifier)}
-    selected_page_fact_terms: set[str] = set()
-    for page_path in dict.fromkeys(page_path for page_path, _ in selected):
-        selected_page_fact_terms.update((code_page_fact_terms or {}).get(page_path, set()))
-        covered_terms.update(
-            core_terms & identifier_terms & (code_page_fact_terms or {}).get(page_path, set())
-        )
+    page_symbol_terms = {
+        term for identifier in page_symbol_identifiers for term in _terms(identifier)
+    }
+    covered_terms.update(core_terms & identifier_terms & page_symbol_terms)
     core_coverage = len(covered_terms) / len(core_terms) if core_terms else 1.0
 
     selected_fact_keys = {
@@ -770,6 +776,7 @@ def _support_score(
         for match in symbol_matches
         if _citation_fact_key(match.page_path, match) in selected_fact_keys
     )
+    selected_identifiers.update(page_symbol_identifiers)
     covered_identifier_count = sum(
         any(
             identifier == candidate or identifier in candidate.split(".")
@@ -1388,14 +1395,29 @@ def _citation_terms(citation: CitationPayload) -> set[str]:
 
 
 def answer_is_supported(answer: str, citations: list[CitationPayload]) -> bool:
-    """Return whether every meaningful answer term is present in cited Facts."""
-    answer_terms = _terms(answer) - {"and", "or"}
-    evidence_text = " ".join(citation["quote"] for citation in citations)
-    evidence_terms = _terms(evidence_text)
+    """Return whether every answer clause is supported by one cited Fact."""
+    clauses = [
+        clause.strip()
+        for clause in re.split(
+            r"[.!?。！？;\n]+|\b(?:and|or)\b|以及|并且",
+            answer,
+            flags=re.IGNORECASE,
+        )
+        if clause.strip()
+    ]
+    return bool(clauses) and all(
+        any(_answer_clause_is_supported(clause, citation["quote"]) for citation in citations)
+        for clause in clauses
+    )
+
+
+def _answer_clause_is_supported(clause: str, evidence: str) -> bool:
+    answer_terms = _terms(clause) - {"and", "or"}
+    evidence_terms = _terms(evidence)
     evidence_forms = {form for term in evidence_terms for form in _local_english_forms(term)}
     return (
         bool(answer_terms)
-        and _has_support_negation(answer) == _has_support_negation(evidence_text)
+        and _has_support_negation(clause) == _has_support_negation(evidence)
         and all(_local_english_forms(term) & evidence_forms for term in answer_terms)
     )
 

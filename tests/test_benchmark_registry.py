@@ -99,3 +99,75 @@ def test_benchmark_registry_requires_local_gate_for_acceptance(tmp_path: Path) -
 
     with pytest.raises(ValueError, match="acceptance Evidence history is incomplete"):
         validator.validate_registry(path)
+
+
+def test_benchmark_registry_rejects_reassigned_acceptance_status(tmp_path: Path) -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item
+        for item in registry["experiments"]
+        if item["suite_id"] == "support-score.learn-claude-code"
+    )
+    experiment["evidence"][4]["status"] = "accepted_development"
+    experiment["evidence"][8]["status"] = "accepted_development_superseded"
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps(registry), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Evidence identity changed"):
+        validator.validate_registry(path)
+
+
+def test_benchmark_registry_rejects_substituted_regression_evidence(tmp_path: Path) -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item
+        for item in registry["experiments"]
+        if item["suite_id"] == "support-score.learn-claude-code"
+    )
+    experiment["evidence"][0]["regression_evidence"] = experiment["evidence"][1][
+        "regression_evidence"
+    ]
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps(registry), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="regression Evidence history is incomplete"):
+        validator.validate_registry(path)
+
+
+def test_benchmark_registry_pins_local_gate_identity(tmp_path: Path) -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item
+        for item in registry["experiments"]
+        if item["suite_id"] == "support-score.learn-claude-code"
+    )
+    experiment["evidence"][-1]["acceptance_evidence"]["sha256"] = "0" * 64
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps(registry), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="acceptance Evidence history is incomplete"):
+        validator.validate_registry(path)
+
+
+def test_benchmark_registry_rejects_duplicate_support_case_identities() -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item
+        for item in registry["experiments"]
+        if item["suite_id"] == "support-score.learn-claude-code"
+    )
+    evidence = json.loads(
+        (validator.REPO_ROOT / "demo/results/support_score_development_candidate_9.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    cases = evidence["development"]["evaluation"]["cases"]
+
+    assert validator._support_case_identities_match(
+        cases,
+        experiment["splits"]["development"],
+    )
+    assert not validator._support_case_identities_match(
+        [cases[0] for _ in cases],
+        experiment["splits"]["development"],
+    )

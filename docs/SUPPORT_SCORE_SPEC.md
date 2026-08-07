@@ -2,7 +2,7 @@
 
 ## Status
 
-`ACCEPTED_DEVELOPMENT_AND_LOCAL_REGRESSION`
+`CANDIDATE_10_IMPLEMENTED_DEVELOPMENT_PENDING`
 
 ## Frozen Inputs
 
@@ -490,6 +490,36 @@ of 35.0. Both clean runs are deterministic. Confirmation remains `not_run`.
 
 Candidate 9 is the accepted development and local-regression result.
 Confirmation remains `not_run`.
+
+## Candidate 10 Audit Fixes
+
+The final Candidate 9 static review found eight additional P1 contract gaps:
+
+- a page-level identifier could support an unrelated selected Fact;
+- Agent final answers could combine terms from separate Citations into an
+  unsupported relationship;
+- benchmark output inside either repository invalidated the recorded clean
+  worktree claim after the claim was computed;
+- deterministic replay covered evaluation output but not structural output;
+- accepted Evidence did not bind the frozen development case identities;
+- accepted and superseded statuses could be reassigned between revisions;
+- regression Evidence paths could be replaced while retaining equivalent
+  payloads;
+- Evidence Commits, local-gate outer SHA256 values, and their contained
+  artifact SHA256 values were not pinned outside the mutable registry.
+
+Candidate 10 restricts page-level identifier fallback to field Facts, requires
+each final-answer clause to be supported by one Citation, requires external
+benchmark output, hashes both structural and evaluation runs, validates frozen
+case identities, and pins all experiment, regression, and local-gate Evidence
+identities in the validator.
+
+The review warning about Code Wiki module-overview pages was rejected: the
+frozen contract deliberately enforces refusal only on Code Wiki file pages in
+this focused candidate.
+
+Candidate 10 development and full local regression are pending. Confirmation
+remains `not_run`.
 
 ## Forbidden
 
