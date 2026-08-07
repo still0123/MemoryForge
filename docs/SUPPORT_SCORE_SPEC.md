@@ -2,7 +2,7 @@
 
 ## Status
 
-`CANDIDATE_4_DEVELOPMENT_PASSED_REGRESSION_PENDING`
+`CANDIDATE_5_DEVELOPMENT_PASSED_REGRESSION_PENDING`
 
 ## Frozen Inputs
 
@@ -253,6 +253,40 @@ evidence must expose the complete Support contract.
 Candidate 4 retains all accepted development metrics. The unsupported case
 scores 35.0 and returns `unknown`; answerable cases remain 85.0-91.2. Both
 clean runs are deterministic. Confirmation remains `not_run`.
+
+Candidate 4 passed the full local gate at Commit
+`e86d23ef34260608e1dbca46047a812c479454f1`: 463 tests, 88% coverage,
+Ruff, strict Mypy, registry validation, dependency checks, Wheel, and sdist all
+passed. Follow-up static review found four remaining P1 contract defects:
+
+- CamelCase suffixes could satisfy an exact identifier;
+- dirty source checkouts could generate passed Evidence;
+- Support schema validation did not recompute scores or enforce semantic
+  consistency;
+- status-set validation could not preserve every individual negative Evidence.
+
+Candidate 4's full local gate is retained in
+`demo/results/support_score_candidate_4_local_gate.json`. Candidate 4 is
+superseded.
+
+## Candidate 5 Development Result
+
+Candidate 5 uses full identifier tokens and requires every explicit identifier
+to be covered. It rejects dirty or moving source checkouts, recomputes Support
+scores from the frozen components, validates status semantics, and binds each
+experiment to its complete Evidence history.
+
+- Candidate Commit:
+  `655df04b1b90a0892c1a815a503548014d10d8ee`;
+- Evidence:
+  `demo/results/support_score_development_candidate_5.json`;
+- Evidence SHA256:
+  `618f856f02ab077f63e3ca31cc6fb614f4c1b985ae0eecaee1f9d54c8060c42f`;
+- deterministic evaluation SHA256:
+  `1403431c27d6e1928699b868a285a932ed3a3ee84961c83f1f5e1ff8016eaa96`.
+
+Candidate 5 retains all accepted development metrics and the unsupported score
+of 35.0. Both clean runs are deterministic. Confirmation remains `not_run`.
 
 ## Forbidden
 
