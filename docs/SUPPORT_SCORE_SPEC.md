@@ -2,7 +2,7 @@
 
 ## Status
 
-`ACCEPTED_DEVELOPMENT_AND_LOCAL_REGRESSION`
+`CANDIDATE_9_DEVELOPMENT_PASSED_REGRESSION_PENDING`
 
 ## Frozen Inputs
 
@@ -441,6 +441,33 @@ of 35.0. Both clean runs are deterministic. Confirmation remains `not_run`.
 
 Candidate 8 is the accepted development and local-regression result.
 Confirmation remains `not_run`.
+
+Last static review found four P1 gaps after Candidate 8:
+
+- final-answer support could drop a negation and invert the conclusion;
+- common English negation contractions did not trigger the hard gate;
+- superseded local-gate Evidence could be removed from registry history;
+- development and local-gate Evidence lacked enforced top-level schemas.
+
+Candidate 8 is superseded.
+
+## Candidate 9 Development Result
+
+Candidate 9 aligns final-answer negation polarity, recognizes common English
+negation contractions, binds every recorded local gate, and validates exact
+Evidence schemas.
+
+- Candidate Commit:
+  `63972b0eee534c258a4054f40876de4da7f54880`;
+- Evidence:
+  `demo/results/support_score_development_candidate_9.json`;
+- Evidence SHA256:
+  `e3eb0f0568b5688442be314abe3b81b3d9a69f48787c78afea92f61fd993640a`;
+- deterministic evaluation SHA256:
+  `1403431c27d6e1928699b868a285a932ed3a3ee84961c83f1f5e1ff8016eaa96`.
+
+Candidate 9 retains all accepted development metrics and the unsupported score
+of 35.0. Both clean runs are deterministic. Confirmation remains `not_run`.
 
 ## Forbidden
 
