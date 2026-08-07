@@ -146,7 +146,8 @@
       "model_judge": false,
       "max_wiki_pages": 3,
       "required_evidence_statuses": [
-        "development_passed_regression_failed"
+        "development_passed_regression_failed",
+        "accepted_development"
       ],
       "source_manifest": {
         "path": "demo/evaluation/support_score_sources.json",
@@ -226,6 +227,15 @@
             "memoryforge_commit": "dd7ac2df2af8da205f46044dd39cc4d2e1e41604",
             "passed": false
           },
+          "passed": true
+        },
+        {
+          "split": "development",
+          "evidence_revision": 3,
+          "status": "accepted_development",
+          "path": "demo/results/support_score_development_candidate_3.json",
+          "sha256": "a04876a4565cc3fe715dcfa3a479a1b662b3c2050dc81186deedbbea58ca43c0",
+          "memoryforge_commit": "ec83a05c46bef6882658b314fd3aedf8ab2cc161",
           "passed": true
         }
       ]

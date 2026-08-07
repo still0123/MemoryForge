@@ -2,7 +2,7 @@
 
 ## Status
 
-`CANDIDATE_2_DEVELOPMENT_PASSED_REGRESSION_FAILED`
+`CANDIDATE_3_DEVELOPMENT_PASSED_REGRESSION_PENDING`
 
 ## Frozen Inputs
 
@@ -201,6 +201,23 @@ Regression Evidence:
 Candidate 2 is rejected. Candidate 3 must reuse code-page Fact terms collected
 during the bounded expansion loop and perform no additional page read.
 Confirmation remains `not_run`.
+
+## Candidate 3 Development Result
+
+Candidate 3 reuses code-page Fact terms collected during the existing bounded
+page-expansion loop. It performs no support-specific page read.
+
+- Candidate Commit:
+  `ec83a05c46bef6882658b314fd3aedf8ab2cc161`;
+- Evidence:
+  `demo/results/support_score_development_candidate_3.json`;
+- Evidence SHA256:
+  `a04876a4565cc3fe715dcfa3a479a1b662b3c2050dc81186deedbbea58ca43c0`;
+- deterministic evaluation SHA256:
+  `a6c1fd8685dc4877a4f828da4eafba32344ee8cb3833a28434467da816e0e2ef`.
+
+Candidate 3 retains all accepted development metrics and passes both focused
+regression tests. Confirmation remains `not_run`.
 
 ## Forbidden
 
