@@ -2,7 +2,7 @@
 
 ## Status
 
-`CANDIDATE_3_DEVELOPMENT_AND_LINUX_PASS`
+`CANDIDATE_4_REVIEW_FIX_PENDING`
 
 ## Base
 
@@ -146,8 +146,15 @@ Linux Evidence:
 - Wheel and sdist clean-room: passed
 - Hosted runner: false
 
-Candidate 3 remains pending the final host artifact gate and static-review
-recheck. Native Windows confirmation remains `not_run`.
+Candidate 3 passed the final host artifact gate, then became superseded when
+review recheck found that the POSIX Workspace compatibility lock file could
+still be replaced, `PYTEST_PLUGINS` could explicitly inject hooks, timeout and
+SIGHUP shared one sentinel, and failure diagnostics remained too broad.
+
+Candidate 4 locks the Workspace root namespace plus the compatibility file,
+removes explicit pytest plugins, records a distinct timeout flag, and binds a
+stable diagnostic classification digest. Native Windows confirmation remains
+`not_run`.
 
 ## Goal
 
@@ -176,7 +183,9 @@ local PowerShell and native smoke entry points.
 
 ## Integration Contract
 
-- `Workspace.exclusive_lock` delegates to `exclusive_file_lock`;
+- `Workspace.exclusive_lock` locks the Workspace root directory descriptor on
+  POSIX plus the compatibility lock file, and delegates to the lock file on
+  Windows;
 - `ChangeSetStore` serializes mutations by locking its opened staging
   directory through the platform descriptor API;
 - `workspace.py` and `changesets.py` contain no direct platform lock imports;

@@ -29,7 +29,7 @@ from memoryforge.models import (
     SourceCategory,
     SourceVersionManifest,
 )
-from memoryforge.platform_lock import UnsafeLockFileError, exclusive_file_lock
+from memoryforge.platform_lock import UnsafeLockFileError, exclusive_workspace_lock
 from memoryforge.version_store import GitVersionStore
 from memoryforge.wiki_facts import (
     AppliedCodeSymbolMatch,
@@ -784,7 +784,10 @@ class Workspace:
     def exclusive_lock(self) -> Iterator[None]:
         self.validate_internal_directory(self.internal_dir)
         try:
-            with exclusive_file_lock(self.internal_dir / "workspace.lock"):
+            with exclusive_workspace_lock(
+                self.root,
+                self.internal_dir / "workspace.lock",
+            ):
                 yield
         except UnsafeLockFileError as exc:
             raise WorkspaceSecurityError("workspace lock is unsafe") from exc

@@ -25,7 +25,7 @@ _WINDOWS_CONTENTION = frozenset({13, 16, 33, 36})
 
 
 class UnsafeLockFileError(OSError):
-    """The opened lock descriptor does not identify a stable regular file."""
+    """The opened lock descriptor does not identify the expected resource."""
 
 
 def try_lock_descriptor(descriptor: int) -> bool:
@@ -66,6 +66,38 @@ def exclusive_file_lock(path: Path) -> Iterator[None]:
         locked = True
         _require_same_regular_file(path, descriptor)
         yield
+    finally:
+        try:
+            if locked:
+                unlock_descriptor(descriptor)
+        finally:
+            os.close(descriptor)
+
+
+@contextmanager
+def exclusive_workspace_lock(root: Path, lock_path: Path) -> Iterator[None]:
+    """Lock one Workspace namespace with the native platform primitive."""
+    if sys.platform == "win32":
+        with exclusive_file_lock(lock_path):
+            yield
+        return
+
+    directory_flag = getattr(os, "O_DIRECTORY", None)
+    no_follow_flag = getattr(os, "O_NOFOLLOW", None)
+    if directory_flag is None or no_follow_flag is None:
+        raise UnsafeLockFileError("Workspace directory locking is unsupported")
+    try:
+        descriptor = os.open(root, os.O_RDONLY | directory_flag | no_follow_flag)
+    except OSError as exc:
+        raise UnsafeLockFileError("Workspace directory could not be opened safely") from exc
+    locked = False
+    try:
+        _require_same_directory(root, descriptor)
+        lock_descriptor(descriptor)
+        locked = True
+        _require_same_directory(root, descriptor)
+        with exclusive_file_lock(lock_path):
+            yield
     finally:
         try:
             if locked:
@@ -135,3 +167,17 @@ def _require_same_regular_file(path: Path, descriptor: int) -> None:
         or (path_stat.st_dev, path_stat.st_ino) != (descriptor_stat.st_dev, descriptor_stat.st_ino)
     ):
         raise UnsafeLockFileError("lock path must identify the opened regular file")
+
+
+def _require_same_directory(path: Path, descriptor: int) -> None:
+    try:
+        path_stat = path.stat(follow_symlinks=False)
+        descriptor_stat = os.fstat(descriptor)
+    except OSError as exc:
+        raise UnsafeLockFileError("Workspace directory identity could not be verified") from exc
+    if (
+        not stat.S_ISDIR(path_stat.st_mode)
+        or not stat.S_ISDIR(descriptor_stat.st_mode)
+        or (path_stat.st_dev, path_stat.st_ino) != (descriptor_stat.st_dev, descriptor_stat.st_ino)
+    ):
+        raise UnsafeLockFileError("Workspace path must identify the opened directory")

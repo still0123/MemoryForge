@@ -435,6 +435,11 @@ REQUIRED_ACCEPTANCE_EVIDENCE = {
             "6318d9bf999163917441c65e8085bce3548424b6a7183b4c284e7f9c43b9b2d7",
             "7d0a296ffbbb73863b63ec732608a6e3c0bab35b",
         ),
+        _RESULTS + "cross_platform_delivery_candidate_3.json": (
+            _RESULTS + "cross_platform_delivery_candidate_3_local_gate.json",
+            "a8ce5385fecdbef45660dc809ae8a4a20ed197aec6aa96ab1464877dd66b018d",
+            "31f51cd121559654f4e129b96921f2d81e991e6e",
+        ),
     },
 }
 REQUIRED_LINUX_EVIDENCE = {
@@ -486,7 +491,7 @@ FINAL_ACCEPTANCE_REGISTRY_COUNTS = {
     "cross-platform-delivery": {
         "suite_count": 12,
         "experiment_count": 7,
-        "evidence_count": 73,
+        "evidence_count": 77,
         "qa_case_count": 121,
     },
 }
@@ -1248,7 +1253,8 @@ def _validate_pytest_component_experiment_payload(
     confirmation: dict[str, Any],
 ) -> None:
     cross_platform = experiment["suite_id"] == "cross-platform-delivery"
-    modern_cross_platform = cross_platform and artifact["evidence_revision"] >= 4
+    runtime_cross_platform = cross_platform and artifact["evidence_revision"] >= 4
+    diagnostic_cross_platform = cross_platform and artifact["evidence_revision"] >= 5
     evaluation = payload.get("development", {}).get("evaluation", {})
     cases = evaluation.get("cases", {}) if isinstance(evaluation, dict) else {}
     frozen = json.loads((REPO_ROOT / development["path"]).read_text(encoding="utf-8"))
@@ -1279,11 +1285,11 @@ def _validate_pytest_component_experiment_payload(
         )
     expected_payload_keys = (
         CROSS_PLATFORM_DEVELOPMENT_EVIDENCE_KEYS
-        if modern_cross_platform
+        if runtime_cross_platform
         else MULTI_SOURCE_DEVELOPMENT_EVIDENCE_KEYS
     )
     runtime = payload.get("runtime")
-    runtime_valid = not modern_cross_platform or (
+    runtime_valid = not runtime_cross_platform or (
         isinstance(runtime, dict)
         and set(runtime) == {"implementation", "python", "system", "machine"}
         and runtime.get("implementation") == "CPython"
@@ -1349,7 +1355,15 @@ def _validate_pytest_component_experiment_payload(
                 "id": case["id"],
                 "pytest_node": (f"tests/test_cross_platform_delivery.py::{case['test']}"),
                 "status": expected_status,
-                **({"return_code": 0} if modern_cross_platform else {}),
+                **({"return_code": 0} if runtime_cross_platform else {}),
+                **(
+                    {
+                        "timed_out": False,
+                        "diagnostic_sha256": hashlib.sha256(b"0:none:False").hexdigest(),
+                    }
+                    if diagnostic_cross_platform
+                    else {}
+                ),
                 "error_classification": expected_classification,
             }
             for case in frozen["cases"]
@@ -1612,9 +1626,11 @@ def _validate_regression_evidence(
     )
     pytest_result = payload.get("regression", {}).get("pytest", {})
     if (
-        payload.get("schema_version") != 1
+        type(payload.get("schema_version")) is not int
+        or payload.get("schema_version") != 1
         or set(payload) != REGRESSION_EVIDENCE_KEYS
         or payload.get("suite_id") != experiment["suite_id"]
+        or type(payload.get("suite_revision")) is not int
         or payload.get("suite_revision") != experiment["suite_revision"]
         or payload.get("memoryforge_commit") != commit
         or payload.get("memoryforge_worktree_dirty") is not False
@@ -1770,9 +1786,11 @@ def _validate_acceptance_evidence(
     )
     expected_local_gate_keys = LOCAL_GATE_KEYS | ({"artifacts"} if requires_artifacts else set())
     if (
-        payload.get("schema_version") != 1
+        type(payload.get("schema_version")) is not int
+        or payload.get("schema_version") != 1
         or set(payload) != expected_payload_keys
         or payload.get("suite_id") != experiment["suite_id"]
+        or type(payload.get("suite_revision")) is not int
         or payload.get("suite_revision") != experiment["suite_revision"]
         or payload.get("memoryforge_commit") != commit
         or payload.get("memoryforge_worktree_dirty") is not False

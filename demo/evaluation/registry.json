@@ -890,6 +890,12 @@
             "memoryforge_commit": "79188650e953c6c183b631fd41432e795bde0eaa",
             "passed": true
           },
+          "acceptance_evidence": {
+            "path": "demo/results/cross_platform_delivery_candidate_3_local_gate.json",
+            "sha256": "a8ce5385fecdbef45660dc809ae8a4a20ed197aec6aa96ab1464877dd66b018d",
+            "memoryforge_commit": "31f51cd121559654f4e129b96921f2d81e991e6e",
+            "passed": true
+          },
           "passed": true
         }
       ]

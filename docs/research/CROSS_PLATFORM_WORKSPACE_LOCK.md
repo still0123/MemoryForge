@@ -104,7 +104,12 @@ exclusive_file_lock(path)
 - The caller keeps descriptor ownership.
 - `exclusive_file_lock` opens one regular file, verifies path/descriptor
   identity, acquires, yields, unlocks, and closes.
-- `Workspace.exclusive_lock` uses the path-level helper.
+- `Workspace.exclusive_lock` locks the Workspace root directory descriptor on
+  POSIX before locking the compatibility `workspace.lock` file, so replacing
+  that file cannot split new writers across inodes and older writers still
+  contend on the file.
+- Windows uses the path-level regular-file helper because `msvcrt` locks byte
+  ranges, not directories, and the open handle prevents pathname deletion.
 - `ChangeSetStore` uses the same descriptor API on its already-open staging
   directory, preserving the existing POSIX inode/namespace serialization.
 - ChangeSet directory operations remain outside the native Windows claim;

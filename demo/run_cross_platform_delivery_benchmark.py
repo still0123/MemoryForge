@@ -127,6 +127,7 @@ def _run_case(case: dict[str, str]) -> dict[str, object]:
     environment = dict(os.environ)
     environment.pop("PYTHONPATH", None)
     environment.pop("PYTEST_ADDOPTS", None)
+    environment.pop("PYTEST_PLUGINS", None)
     environment["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
     node = f"tests/test_cross_platform_delivery.py::{case['test']}"
     with tempfile.TemporaryDirectory(prefix="memoryforge-frozen-pytest-") as isolated:
@@ -145,25 +146,29 @@ def _run_case(case: dict[str, str]) -> dict[str, object]:
             f"sys.path.insert(0,{str(REPO_ROOT / 'src')!r});"
             f"raise SystemExit(pytest.main({pytest_arguments!r}))"
         )
-        return_code, output = _run_isolated_pytest(
+        return_code, output, timed_out = _run_isolated_pytest(
             [sys.executable, "-I", "-c", bootstrap],
             cwd=Path(isolated),
             environment=environment,
         )
     status = "passed" if return_code == 0 and "1 passed" in output else "failed"
-    classification = (
-        "none"
-        if status == "passed"
-        else _PYTEST_FAILURE_CLASSIFICATIONS.get(return_code, "pytest_process_error")
+    classification = _classify_pytest_result(
+        return_code,
+        output,
+        status,
+        timed_out=timed_out,
     )
-    if return_code == -1:
-        classification = "pytest_timeout"
+    diagnostic_sha256 = hashlib.sha256(
+        f"{return_code}:{classification}:{timed_out}".encode("ascii")
+    ).hexdigest()
     return {
         "id": case["id"],
         "pytest_node": node,
         "status": status,
         "return_code": return_code,
+        "timed_out": timed_out,
         "error_classification": classification,
+        "diagnostic_sha256": diagnostic_sha256,
     }
 
 
@@ -172,7 +177,7 @@ def _run_isolated_pytest(
     *,
     cwd: Path,
     environment: dict[str, str],
-) -> tuple[int, str]:
+) -> tuple[int, str, bool]:
     process = subprocess.Popen(
         command,
         cwd=cwd,
@@ -190,8 +195,8 @@ def _run_isolated_pytest(
     except subprocess.TimeoutExpired:
         _terminate_process_tree(process)
         process.communicate()
-        return -1, ""
-    return process.returncode, output
+        return -1, "", True
+    return process.returncode, output, False
 
 
 def _terminate_process_tree(process: subprocess.Popen[str]) -> None:
@@ -203,6 +208,26 @@ def _terminate_process_tree(process: subprocess.Popen[str]) -> None:
         )
     else:
         os.killpg(process.pid, signal.SIGKILL)
+
+
+def _classify_pytest_result(
+    return_code: int,
+    output: str,
+    status: str,
+    *,
+    timed_out: bool,
+) -> str:
+    if status == "passed":
+        return "none"
+    if timed_out:
+        return "pytest_timeout"
+    if "ModuleNotFoundError" in output:
+        return "pytest_collection_module_not_found"
+    if "ImportError while importing test module" in output:
+        return "pytest_collection_import_error"
+    if "AssertionError" in output or " failed" in output.lower():
+        return "pytest_assertion_failure"
+    return _PYTEST_FAILURE_CLASSIFICATIONS.get(return_code, "pytest_process_error")
 
 
 def _direct_platform_import_count() -> int:
