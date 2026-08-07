@@ -5,6 +5,7 @@ import importlib.util
 import io
 import json
 import os
+import shutil
 import tarfile
 from pathlib import Path
 
@@ -431,6 +432,65 @@ def test_benchmark_registry_rejects_boolean_release_acceptance_identities() -> N
             payload,
             experiment["splits"]["confirmation"],
         )
+
+
+def test_benchmark_registry_binds_release_acceptance_commit() -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "release-candidate-delivery"
+    )
+    artifact = experiment["evidence"][-1]
+    payload = json.loads(
+        (validator.REPO_ROOT / artifact["acceptance_evidence"]["path"]).read_text(encoding="utf-8")
+    )
+
+    with pytest.raises(ValueError, match="local gate Evidence contract failed"):
+        validator._validate_release_candidate_acceptance_evidence(
+            experiment,
+            artifact,
+            payload,
+            experiment["splits"]["confirmation"],
+            acceptance_commit="0" * 40,
+        )
+    payload["development_evidence"]["passed"] = 1
+    with pytest.raises(ValueError, match="local gate Evidence contract failed"):
+        validator._validate_release_candidate_acceptance_evidence(
+            experiment,
+            artifact,
+            payload,
+            experiment["splits"]["confirmation"],
+        )
+
+
+def test_benchmark_registry_closes_release_development_artifacts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "release-candidate-delivery"
+    )
+    artifact = experiment["evidence"][-1]
+    evidence = json.loads((validator.REPO_ROOT / artifact["path"]).read_text(encoding="utf-8"))[
+        "release_artifacts"
+    ]
+    source = validator.REPO_ROOT / evidence["artifact_root"]
+    destination = tmp_path / evidence["artifact_root"]
+    destination.parent.mkdir(parents=True)
+    shutil.copytree(source, destination)
+    monkeypatch.setattr(validator, "REPO_ROOT", tmp_path)
+
+    assert validator._validate_release_development_artifacts(
+        evidence,
+        artifact["memoryforge_commit"],
+        evidence_revision=artifact["evidence_revision"],
+    )
+    (destination / "benchmark-summary.json").unlink()
+    assert not validator._validate_release_development_artifacts(
+        evidence,
+        artifact["memoryforge_commit"],
+        evidence_revision=artifact["evidence_revision"],
+    )
 
 
 def test_benchmark_registry_rejects_contradictory_cross_platform_case_evidence() -> None:

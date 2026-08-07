@@ -91,6 +91,14 @@ FORBIDDEN_RELEASE_CLAIMS = (
     "Windows confirmation passed",
     "v0.3.0 holdout 已完成",
 )
+FORBIDDEN_COMPLETION_PATTERN = re.compile(
+    r"(?i)(?:"
+    r"v0\.3\.0[^\n]{0,120}(?:confirmation|holdout)[^\n]{0,80}"
+    r"(?:passed|succeeded|completed)"
+    r"|(?:confirmation|holdout)[^\n]{0,80}(?:passed|succeeded|completed)"
+    r"[^\n]{0,120}v0\.3\.0"
+    r")"
+)
 WORKSPACE_CHECKS = {
     "refresh",
     "review",
@@ -125,6 +133,15 @@ if _REGISTRY_SPEC is None or _REGISTRY_SPEC.loader is None:
     raise RuntimeError("could not load benchmark registry validator")
 registry_validator = importlib.util.module_from_spec(_REGISTRY_SPEC)
 _REGISTRY_SPEC.loader.exec_module(registry_validator)
+_SUMMARY_SCRIPT = REPO_ROOT / "demo/build_benchmark_summary.py"
+_SUMMARY_SPEC = importlib.util.spec_from_file_location(
+    "build_benchmark_summary",
+    _SUMMARY_SCRIPT,
+)
+if _SUMMARY_SPEC is None or _SUMMARY_SPEC.loader is None:
+    raise RuntimeError("could not load benchmark summary builder")
+summary_builder = importlib.util.module_from_spec(_SUMMARY_SPEC)
+_SUMMARY_SPEC.loader.exec_module(summary_builder)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -247,7 +264,8 @@ def _check_versions(release_dir: Path) -> dict[str, object]:
     artifacts = _artifact_paths(release_dir, package)
     checks = provenance.get("checks")
     if (
-        not isinstance(package, dict)
+        not _release_provenance_valid(provenance)
+        or not isinstance(package, dict)
         or artifacts is None
         or not isinstance(checks, dict)
         or not _clean_room_passed(checks.get("wheel_clean_room"), WHEEL_CLEAN_ROOM_CHECKS)
@@ -255,29 +273,26 @@ def _check_versions(release_dir: Path) -> dict[str, object]:
     ):
         return _check(False, "version_mismatch")
     wheel, sdist = artifacts
+    wheel_name, wheel_version = _wheel_metadata(wheel)
+    sdist_name, sdist_version = _sdist_metadata(sdist)
     versions = {
         str(project.get("project", {}).get("version", "")),
         _source_module_version(),
         _cli_version(),
         str(package.get("version", "")),
-        _wheel_version(wheel),
-        _sdist_version(sdist),
+        wheel_version,
+        sdist_version,
     }
-    passed = versions == {TARGET_VERSION}
+    passed = versions == {TARGET_VERSION} and wheel_name == sdist_name == "memoryforge"
     return _check(passed, "none" if passed else "version_mismatch")
 
 
 def _check_benchmark_summary(release_dir: Path) -> dict[str, object]:
     summary = _load_json(release_dir / "benchmark-summary.json")
-    expected_registry = registry_validator.validate_registry()
-    passed = (
-        summary.get("schema_version") == 1
-        and summary.get("package_version") == TARGET_VERSION
-        and summary.get("memoryforge_commit") == _git("rev-parse", "HEAD")
-        and summary.get("registry") == expected_registry
-        and isinstance(summary.get("suites"), list)
-        and isinstance(summary.get("negative_results"), list)
+    expected = summary_builder.build_summary(
+        memoryforge_commit=_git("rev-parse", "HEAD"),
     )
+    passed = summary == expected
     return _check(passed, "none" if passed else "benchmark_summary_mismatch")
 
 
@@ -288,6 +303,16 @@ def _check_reproducible_artifacts(release_dir: Path) -> dict[str, object]:
     artifacts = _artifact_paths(release_dir, package)
     if artifacts is None:
         return _check(False, "artifact_missing")
+    if not _release_provenance_valid(provenance):
+        return _check(False, "artifact_contract_invalid")
+    sums = _read_sha256sums(release_dir)
+    if sums is None:
+        classification = (
+            "artifact_missing"
+            if not (release_dir / "SHA256SUMS").is_file()
+            else "artifact_contract_invalid"
+        )
+        return _check(False, classification)
     if not isinstance(builds, list) or len(builds) != 2:
         return _check(False, "artifact_contract_invalid")
     wheel_path, sdist_path = artifacts
@@ -304,7 +329,7 @@ def _check_reproducible_artifacts(release_dir: Path) -> dict[str, object]:
         },
     }
     identities = []
-    retained_paths: set[str] = set()
+    retained_paths: set[Path] = set()
     for index, build in enumerate(builds):
         if not isinstance(build, dict) or build.get("name") != ("first", "second")[index]:
             return _check(False, "artifact_contract_invalid")
@@ -319,20 +344,34 @@ def _check_reproducible_artifacts(release_dir: Path) -> dict[str, object]:
             ):
                 return _check(False, "artifact_reproducibility_failure")
             retained_name = record.get("retained_path")
-            if not isinstance(retained_name, str) or retained_name in retained_paths:
+            if not isinstance(retained_name, str):
                 return _check(False, "artifact_contract_invalid")
             retained = (release_dir / retained_name).resolve()
             if (
                 not retained.is_relative_to(release_dir.resolve())
+                or retained in retained_paths
                 or not retained.is_file()
                 or _sha256(retained) != record["sha256"]
                 or retained.stat().st_size != record["size"]
             ):
                 return _check(False, "artifact_reproducibility_failure")
-            retained_paths.add(retained_name)
+            retained_paths.add(retained)
         identities.append((wheel.get("sha256"), sdist.get("sha256")))
+    expected_files = {
+        "benchmark-summary.json",
+        "release-provenance.json",
+        "workspace-drill.json",
+        wheel_path.name,
+        sdist_path.name,
+        *(
+            str(record["retained_path"])
+            for build in builds
+            for record in (build["wheel"], build["sdist"])
+        ),
+    }
     passed = (
         identities[0] == identities[1]
+        and set(sums) == expected_files
         and all(SHA256.fullmatch(str(value)) is not None for value in identities[0])
         and isinstance(package, dict)
         and package.get("version") == TARGET_VERSION
@@ -373,6 +412,7 @@ def _check_documents(release_dir: Path) -> dict[str, object]:
             for path, claims in DOCUMENT_CLAIMS.items()
         )
         and _document_claims_consistent(texts)
+        and _release_provenance_valid(provenance)
         and isinstance(package, dict)
         and package.get("version") == TARGET_VERSION
         and isinstance(checks, dict)
@@ -400,7 +440,10 @@ def _artifact_paths(
     if not isinstance(package, dict):
         return None
     names = (package.get("wheel"), package.get("sdist"))
-    if any(not isinstance(name, str) or not name or Path(name).name != name for name in names):
+    if names != (
+        f"memoryforge-{TARGET_VERSION}-py3-none-any.whl",
+        f"memoryforge-{TARGET_VERSION}.tar.gz",
+    ):
         return None
     wheel = release_dir / str(names[0])
     sdist = release_dir / str(names[1])
@@ -415,6 +458,8 @@ def _document_claims_consistent(texts: dict[Path, str]) -> bool:
     for text in texts.values():
         if any(forbidden in text for forbidden in FORBIDDEN_RELEASE_CLAIMS):
             return False
+        if FORBIDDEN_COMPLETION_PATTERN.search(text):
+            return False
         statuses = re.findall(
             r"(?i)(?:confirmation|holdout)\s+status\s*:\s*`?([a-z_]+)",
             text,
@@ -424,35 +469,155 @@ def _document_claims_consistent(texts: dict[Path, str]) -> bool:
     return True
 
 
-def _wheel_version(path: Path) -> str:
+def _wheel_metadata(path: Path) -> tuple[str, str]:
     try:
         with zipfile.ZipFile(path) as archive:
-            names = [name for name in archive.namelist() if name.endswith(".dist-info/METADATA")]
-            if len(names) != 1:
-                return ""
-            metadata = BytesParser(policy=default).parsebytes(archive.read(names[0]))
+            expected = f"memoryforge-{TARGET_VERSION}.dist-info/METADATA"
+            if archive.namelist().count(expected) != 1:
+                return "", ""
+            metadata = BytesParser(policy=default).parsebytes(archive.read(expected))
     except (OSError, KeyError, zipfile.BadZipFile):
-        return ""
-    return str(metadata.get("Version", ""))
+        return "", ""
+    return str(metadata.get("Name", "")).casefold(), str(metadata.get("Version", ""))
 
 
-def _sdist_version(path: Path) -> str:
+def _sdist_metadata(path: Path) -> tuple[str, str]:
     try:
         with tarfile.open(path, "r:gz") as archive:
-            members = [
-                member
-                for member in archive.getmembers()
-                if member.isfile() and member.name.endswith("/PKG-INFO")
-            ]
+            expected = f"memoryforge-{TARGET_VERSION}/PKG-INFO"
+            members = [member for member in archive.getmembers() if member.name == expected]
             if len(members) != 1:
-                return ""
+                return "", ""
             extracted = archive.extractfile(members[0])
             if extracted is None:
-                return ""
+                return "", ""
             metadata = BytesParser(policy=default).parsebytes(extracted.read())
     except (OSError, tarfile.TarError):
-        return ""
-    return str(metadata.get("Version", ""))
+        return "", ""
+    return str(metadata.get("Name", "")).casefold(), str(metadata.get("Version", ""))
+
+
+def _release_provenance_valid(provenance: object) -> bool:
+    if not isinstance(provenance, dict):
+        return False
+    package = provenance.get("package")
+    builds = provenance.get("builds")
+    runtime = provenance.get("runtime")
+    checks = provenance.get("checks")
+    dependencies = provenance.get("dependencies")
+    if (
+        set(provenance)
+        != {
+            "schema_version",
+            "memoryforge_commit",
+            "memoryforge_worktree_dirty",
+            "package",
+            "builds",
+            "reproducible_artifacts",
+            "runtime",
+            "checks",
+            "dependencies",
+            "confirmation",
+            "holdout",
+        }
+        or type(provenance.get("schema_version")) is not int
+        or provenance.get("schema_version") != 1
+        or provenance.get("memoryforge_commit") != _git("rev-parse", "HEAD")
+        or provenance.get("memoryforge_worktree_dirty") is not False
+        or provenance.get("reproducible_artifacts") is not True
+        or not isinstance(package, dict)
+        or set(package)
+        != {
+            "version",
+            "wheel",
+            "wheel_sha256",
+            "sdist",
+            "sdist_sha256",
+        }
+        or package.get("version") != TARGET_VERSION
+        or package.get("wheel") != f"memoryforge-{TARGET_VERSION}-py3-none-any.whl"
+        or package.get("sdist") != f"memoryforge-{TARGET_VERSION}.tar.gz"
+        or SHA256.fullmatch(str(package.get("wheel_sha256"))) is None
+        or SHA256.fullmatch(str(package.get("sdist_sha256"))) is None
+        or not isinstance(builds, list)
+        or len(builds) != 2
+        or not isinstance(runtime, dict)
+        or set(runtime) != {"implementation", "python", "system", "machine"}
+        or runtime.get("implementation") != "CPython"
+        or not str(runtime.get("python", "")).startswith("3.11.")
+        or not all(
+            isinstance(runtime.get(key), str) and runtime[key] for key in ("system", "machine")
+        )
+        or not isinstance(checks, dict)
+        or set(checks)
+        != {
+            "wheel_clean_room",
+            "sdist_clean_room",
+            "workspace_drill",
+            "benchmark_summary",
+            "sdist_members",
+        }
+        or not _clean_room_passed(checks.get("wheel_clean_room"), WHEEL_CLEAN_ROOM_CHECKS)
+        or not _clean_room_passed(checks.get("sdist_clean_room"), SDIST_CLEAN_ROOM_CHECKS)
+        or any(
+            checks.get(key) != "passed"
+            for key in ("workspace_drill", "benchmark_summary", "sdist_members")
+        )
+        or not isinstance(dependencies, dict)
+        or not dependencies
+        or any(
+            not isinstance(key, str) or not isinstance(value, str)
+            for key, value in dependencies.items()
+        )
+        or provenance.get("confirmation") != {"status": "not_run"}
+        or provenance.get("holdout") != {"status": "not_run"}
+    ):
+        return False
+    for index, build in enumerate(builds):
+        if not isinstance(build, dict) or set(build) != {"name", "wheel", "sdist"}:
+            return False
+        if build.get("name") != ("first", "second")[index]:
+            return False
+        for kind in ("wheel", "sdist"):
+            record = build.get(kind)
+            if (
+                not isinstance(record, dict)
+                or set(record) != {"path", "sha256", "size", "retained_path"}
+                or record.get("path") != package.get(kind)
+                or SHA256.fullmatch(str(record.get("sha256"))) is None
+                or type(record.get("size")) is not int
+                or record["size"] < 1
+                or not isinstance(record.get("retained_path"), str)
+            ):
+                return False
+    return True
+
+
+def _read_sha256sums(root: Path) -> dict[str, str] | None:
+    path = root / "SHA256SUMS"
+    if not path.is_file():
+        return None
+    try:
+        lines = path.read_text(encoding="ascii").splitlines()
+    except (OSError, UnicodeError):
+        return None
+    sums: dict[str, str] = {}
+    for line in lines:
+        parts = line.split("  ", 1)
+        if len(parts) != 2:
+            return None
+        digest, relative = parts
+        artifact = (root / relative).resolve()
+        if (
+            SHA256.fullmatch(digest) is None
+            or relative in sums
+            or not artifact.is_relative_to(root.resolve())
+            or not artifact.is_file()
+            or _sha256(artifact) != digest
+        ):
+            return None
+        sums[relative] = digest
+    return sums
 
 
 def _clean_room_passed(value: object, expected: dict[str, str]) -> bool:
@@ -582,11 +747,18 @@ def _release_artifact_evidence(
     return {
         "package": provenance.get("package"),
         "builds": provenance.get("builds"),
-        "sha256sums_sha256": _sha256(release_dir / "SHA256SUMS"),
+        "sha256sums_sha256": _sha256_if_file(release_dir / "SHA256SUMS"),
+        "provenance_sha256": _sha256_if_file(release_dir / "release-provenance.json"),
+        "benchmark_summary_sha256": _sha256_if_file(release_dir / "benchmark-summary.json"),
+        "workspace_drill_sha256": _sha256_if_file(release_dir / "workspace-drill.json"),
         "artifact_root": (
             f"demo/results/artifacts/release_candidate_development/{memoryforge_commit}"
         ),
     }
+
+
+def _sha256_if_file(path: Path) -> str:
+    return _sha256(path) if path.is_file() else ""
 
 
 def _sha256(path: Path) -> str:

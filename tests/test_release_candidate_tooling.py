@@ -35,17 +35,11 @@ def test_release_candidate_reproducibility_requires_two_matching_builds(
     tmp_path: Path,
 ) -> None:
     provenance = _release_artifacts(tmp_path)
-    (tmp_path / "release-provenance.json").write_text(
-        json.dumps(provenance),
-        encoding="utf-8",
-    )
+    _write_release_artifacts(tmp_path, provenance)
 
     assert benchmark._check_reproducible_artifacts(tmp_path)["passed"] is True
     provenance["builds"][1]["sdist"]["sha256"] = "3" * 64
-    (tmp_path / "release-provenance.json").write_text(
-        json.dumps(provenance),
-        encoding="utf-8",
-    )
+    _write_release_artifacts(tmp_path, provenance)
     assert benchmark._check_reproducible_artifacts(tmp_path) == {
         "passed": False,
         "error_classification": "artifact_reproducibility_failure",
@@ -60,7 +54,7 @@ def test_release_candidate_reproducibility_requires_two_matching_builds(
 def test_release_candidate_versions_read_both_artifact_metadata(tmp_path: Path) -> None:
     provenance = _release_artifacts(tmp_path)
     path = tmp_path / "release-provenance.json"
-    path.write_text(json.dumps(provenance), encoding="utf-8")
+    _write_release_artifacts(tmp_path, provenance)
 
     assert benchmark._check_versions(tmp_path)["passed"] is True
     provenance["package"] = []
@@ -69,6 +63,68 @@ def test_release_candidate_versions_read_both_artifact_metadata(tmp_path: Path) 
         "passed": False,
         "error_classification": "version_mismatch",
     }
+
+
+def test_release_candidate_rejects_incomplete_release_contract(tmp_path: Path) -> None:
+    provenance = _release_artifacts(tmp_path)
+    _write_release_artifacts(tmp_path, provenance)
+    (tmp_path / "SHA256SUMS").write_text("0" * 64 + "  ignored\n", encoding="ascii")
+
+    assert benchmark._check_reproducible_artifacts(tmp_path) == {
+        "passed": False,
+        "error_classification": "artifact_contract_invalid",
+    }
+    assert benchmark._release_artifact_evidence(tmp_path, "1" * 40)["sha256sums_sha256"]
+    (tmp_path / "SHA256SUMS").unlink()
+    assert benchmark._release_artifact_evidence(tmp_path, "1" * 40)["sha256sums_sha256"] == ""
+
+
+def test_release_candidate_rejects_retained_path_alias(tmp_path: Path) -> None:
+    provenance = _release_artifacts(tmp_path)
+    provenance["builds"][1]["wheel"]["retained_path"] = (
+        "reproducibility/second/../first/memoryforge-0.3.0-py3-none-any.whl"
+    )
+    _write_release_artifacts(tmp_path, provenance)
+
+    assert benchmark._check_reproducible_artifacts(tmp_path)["passed"] is False
+
+
+def test_release_candidate_rejects_wrong_package_name(tmp_path: Path) -> None:
+    provenance = _release_artifacts(tmp_path)
+    _write_release_artifacts(tmp_path, provenance)
+    wheel = tmp_path / provenance["package"]["wheel"]
+    with zipfile.ZipFile(wheel, "w") as archive:
+        archive.writestr(
+            "memoryforge-0.3.0.dist-info/METADATA",
+            "Metadata-Version: 2.3\nName: other\nVersion: 0.3.0\n",
+        )
+
+    assert benchmark._check_versions(tmp_path)["passed"] is False
+
+
+def test_release_candidate_rejects_incomplete_provenance_schema(tmp_path: Path) -> None:
+    provenance = _release_artifacts(tmp_path)
+    provenance.pop("runtime")
+    _write_release_artifacts(tmp_path, provenance)
+
+    assert benchmark._check_versions(tmp_path)["passed"] is False
+
+
+def test_release_candidate_summary_requires_all_registered_content(tmp_path: Path) -> None:
+    summary = benchmark.summary_builder.build_summary(
+        memoryforge_commit=benchmark._git("rev-parse", "HEAD"),
+    )
+    (tmp_path / "benchmark-summary.json").write_text(
+        json.dumps(summary),
+        encoding="utf-8",
+    )
+    assert benchmark._check_benchmark_summary(tmp_path)["passed"] is True
+    summary["negative_results"] = []
+    (tmp_path / "benchmark-summary.json").write_text(
+        json.dumps(summary),
+        encoding="utf-8",
+    )
+    assert benchmark._check_benchmark_summary(tmp_path)["passed"] is False
 
 
 def test_release_candidate_privacy_scan_rejects_paths_and_secrets() -> None:
@@ -96,6 +152,9 @@ def test_release_document_claims_are_explicit() -> None:
         "\nHistorical gate: macOS 559 passed, Linux 556 passed / 3 skipped.\n"
     )
     assert benchmark._document_claims_consistent(texts)
+    texts[benchmark.DOCUMENTS[0]] += "\nv0.3.0 confirmation succeeded.\n"
+    assert not benchmark._document_claims_consistent(texts)
+    texts[benchmark.DOCUMENTS[0]] = benchmark.DOCUMENTS[0].read_text(encoding="utf-8")
     texts[benchmark.DOCUMENTS[0]] += "\nConfirmation status: `passed`\n"
     assert not benchmark._document_claims_consistent(texts)
 
@@ -158,6 +217,7 @@ def _release_artifacts(root: Path) -> dict:
             }
         )
     return {
+        "schema_version": 1,
         "memoryforge_commit": benchmark._git("rev-parse", "HEAD"),
         "memoryforge_worktree_dirty": False,
         "package": {
@@ -169,8 +229,38 @@ def _release_artifacts(root: Path) -> dict:
         },
         "builds": builds,
         "reproducible_artifacts": True,
+        "runtime": {
+            "implementation": "CPython",
+            "python": "3.11.15",
+            "system": "Darwin",
+            "machine": "arm64",
+        },
         "checks": {
             "wheel_clean_room": dict(benchmark.WHEEL_CLEAN_ROOM_CHECKS),
             "sdist_clean_room": dict(benchmark.SDIST_CLEAN_ROOM_CHECKS),
+            "workspace_drill": "passed",
+            "benchmark_summary": "passed",
+            "sdist_members": "passed",
         },
+        "dependencies": {"pydantic": "2.13.4"},
+        "confirmation": {"status": "not_run"},
+        "holdout": {"status": "not_run"},
     }
+
+
+def _write_release_artifacts(root: Path, provenance: dict) -> None:
+    (root / "release-provenance.json").write_text(
+        json.dumps(provenance),
+        encoding="utf-8",
+    )
+    (root / "benchmark-summary.json").write_text("{}\n", encoding="utf-8")
+    (root / "workspace-drill.json").write_text("{}\n", encoding="utf-8")
+    paths = sorted(path for path in root.rglob("*") if path.is_file() and path.name != "SHA256SUMS")
+    (root / "SHA256SUMS").write_text(
+        "".join(
+            f"{hashlib.sha256(path.read_bytes()).hexdigest()}  "
+            f"{path.relative_to(root).as_posix()}\n"
+            for path in paths
+        ),
+        encoding="ascii",
+    )

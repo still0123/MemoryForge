@@ -104,6 +104,17 @@ def test_workspace_release_drill_rejects_dirty_source(
         workspace_drill.run_drill(tmp_path)
 
 
+def test_workspace_release_drill_measures_showcase_privacy(tmp_path: Path) -> None:
+    showcase = tmp_path / "showcase"
+    showcase.mkdir()
+    (showcase / "index.html").write_text(
+        "<p>/Users/private/workspace</p><p>token=private</p>",
+        encoding="utf-8",
+    )
+
+    assert workspace_drill._showcase_private_detail_leaks(showcase) == 2
+
+
 def test_release_builder_rejects_nested_artifacts(tmp_path: Path) -> None:
     clean = tmp_path / "clean.tar.gz"
     dirty = tmp_path / "dirty.tar.gz"

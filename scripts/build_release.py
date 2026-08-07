@@ -37,116 +37,157 @@ def main(argv: list[str] | None = None) -> None:
     commit = _git("rev-parse", "HEAD")
     if _git("status", "--porcelain"):
         raise SystemExit("MemoryForge worktree must be clean")
-    _require_version()
 
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(
-        prefix=f".{output.name}-",
+        prefix=f".{output.name}-snapshot-",
         dir=output.parent,
-    ) as staging_parent:
-        staging = Path(staging_parent) / "release"
-        staging.mkdir()
-        with tempfile.TemporaryDirectory(prefix="memoryforge-release-build-") as temporary:
-            workdir = Path(temporary)
-            builds = [_isolated_build(workdir / name, name=name) for name in ("first", "second")]
-            if builds[0]["wheel"]["sha256"] != builds[1]["wheel"]["sha256"]:
-                raise SystemExit("Wheel builds are not byte-identical")
-            if builds[0]["sdist"]["sha256"] != builds[1]["sdist"]["sha256"]:
-                raise SystemExit("sdist builds are not byte-identical")
-
-            first_root = workdir / "first/dist"
-            wheel_name = str(builds[0]["wheel"]["path"])
-            sdist_name = str(builds[0]["sdist"]["path"])
-            wheel = staging / wheel_name
-            sdist = staging / sdist_name
-            shutil.copy2(first_root / wheel_name, wheel)
-            shutil.copy2(first_root / sdist_name, sdist)
-            for build in builds:
-                for kind in ("wheel", "sdist"):
-                    name = str(build[kind]["path"])
-                    retained_artifact = staging / f"reproducibility-{build['name']}-{name}"
-                    shutil.copy2(workdir / str(build["name"]) / "dist" / name, retained_artifact)
-                    build[kind]["retained_path"] = retained_artifact.name
-
-            wheel_check = workdir / "wheel-check.json"
-            _run(
-                [
-                    sys.executable,
-                    str(REPO_ROOT / "demo/run_release_check.py"),
-                    "--wheel",
-                    str(wheel),
-                    "--workdir",
-                    str(workdir / "wheel-check"),
-                    "--output",
-                    str(wheel_check),
-                ],
-                environment={**os.environ, "PIP_CONSTRAINT": str(CONSTRAINTS)},
-            )
-            wheel_check_payload = _read_json(wheel_check)
-            sdist_check = _check_sdist_clean_room(sdist, workdir / "sdist-check")
-
-            _run(
-                [
-                    sys.executable,
-                    str(REPO_ROOT / "demo/build_benchmark_summary.py"),
-                    "--output",
-                    str(staging / "benchmark-summary.json"),
-                ]
-            )
-            _run(
-                [
-                    sys.executable,
-                    str(REPO_ROOT / "demo/run_release_workspace_drill.py"),
-                    "--workdir",
-                    str(workdir / "workspace-drill"),
-                    "--output",
-                    str(staging / "workspace-drill.json"),
-                ]
-            )
-
-            provenance = {
-                "schema_version": 1,
-                "memoryforge_commit": commit,
-                "memoryforge_worktree_dirty": False,
-                "package": {
-                    "version": TARGET_VERSION,
-                    "wheel": wheel.name,
-                    "wheel_sha256": _sha256(wheel),
-                    "sdist": sdist.name,
-                    "sdist_sha256": _sha256(sdist),
-                },
-                "builds": builds,
-                "reproducible_artifacts": True,
-                "runtime": {
-                    "implementation": platform.python_implementation(),
-                    "python": platform.python_version(),
-                    "system": platform.system(),
-                    "machine": platform.machine(),
-                },
-                "checks": {
-                    "wheel_clean_room": wheel_check_payload["checks"],
-                    "sdist_clean_room": sdist_check,
-                    "workspace_drill": "passed",
-                    "benchmark_summary": "passed",
-                    "sdist_members": "passed",
-                },
-                "dependencies": wheel_check_payload["package"]["dependencies"],
-                "confirmation": {"status": "not_run"},
-                "holdout": {"status": "not_run"},
-            }
-            (staging / "release-provenance.json").write_text(
-                json.dumps(provenance, indent=2, sort_keys=True) + "\n",
-                encoding="utf-8",
-            )
-            _write_sha256sums(staging)
-
+    ) as snapshot_parent:
+        parent = Path(snapshot_parent)
+        snapshot = parent / "source"
+        staging = parent / "release"
+        _git("worktree", "add", "--detach", str(snapshot), commit)
+        try:
+            _build_release(staging, repo_root=snapshot, commit=commit)
+        finally:
+            _git("worktree", "remove", "--force", str(snapshot))
         if _git("rev-parse", "HEAD") != commit or _git("status", "--porcelain"):
             raise SystemExit("release build changed the source Commit or worktree")
         staging.replace(output)
     print(f"Release artifacts built at {output}")
 
 
-def _isolated_build(root: Path, *, name: str) -> dict[str, Any]:
+def _build_release(staging: Path, *, repo_root: Path, commit: str) -> None:
+    constraints = repo_root / "constraints/dev.txt"
+    source_root = repo_root / "src"
+    if _git("rev-parse", "HEAD", root=repo_root) != commit or _git(
+        "status", "--porcelain", root=repo_root
+    ):
+        raise SystemExit("release source snapshot is not clean at the requested Commit")
+    _require_version(repo_root, source_root)
+    staging.mkdir()
+    with tempfile.TemporaryDirectory(prefix="memoryforge-release-build-") as temporary:
+        workdir = Path(temporary)
+        builds = [
+            _isolated_build(
+                workdir / name,
+                name=name,
+                repo_root=repo_root,
+                constraints=constraints,
+            )
+            for name in ("first", "second")
+        ]
+        if builds[0]["wheel"]["sha256"] != builds[1]["wheel"]["sha256"]:
+            raise SystemExit("Wheel builds are not byte-identical")
+        if builds[0]["sdist"]["sha256"] != builds[1]["sdist"]["sha256"]:
+            raise SystemExit("sdist builds are not byte-identical")
+
+        first_root = workdir / "first/dist"
+        wheel_name = str(builds[0]["wheel"]["path"])
+        sdist_name = str(builds[0]["sdist"]["path"])
+        wheel = staging / wheel_name
+        sdist = staging / sdist_name
+        shutil.copy2(first_root / wheel_name, wheel)
+        shutil.copy2(first_root / sdist_name, sdist)
+        for build in builds:
+            for kind in ("wheel", "sdist"):
+                name = str(build[kind]["path"])
+                retained_artifact = staging / f"reproducibility-{build['name']}-{name}"
+                shutil.copy2(workdir / str(build["name"]) / "dist" / name, retained_artifact)
+                build[kind]["retained_path"] = retained_artifact.name
+
+        wheel_check = workdir / "wheel-check.json"
+        _run(
+            [
+                sys.executable,
+                str(repo_root / "demo/run_release_check.py"),
+                "--wheel",
+                str(wheel),
+                "--workdir",
+                str(workdir / "wheel-check"),
+                "--output",
+                str(wheel_check),
+            ],
+            cwd=repo_root,
+            environment={**os.environ, "PIP_CONSTRAINT": str(constraints)},
+        )
+        wheel_check_payload = _read_json(wheel_check)
+        sdist_check = _check_sdist_clean_room(
+            sdist,
+            workdir / "sdist-check",
+            constraints=constraints,
+            cwd=repo_root,
+        )
+
+        _run(
+            [
+                sys.executable,
+                str(repo_root / "demo/build_benchmark_summary.py"),
+                "--output",
+                str(staging / "benchmark-summary.json"),
+            ],
+            cwd=repo_root,
+        )
+        _run(
+            [
+                sys.executable,
+                str(repo_root / "demo/run_release_workspace_drill.py"),
+                "--workdir",
+                str(workdir / "workspace-drill"),
+                "--output",
+                str(staging / "workspace-drill.json"),
+            ],
+            cwd=repo_root,
+        )
+
+        provenance = {
+            "schema_version": 1,
+            "memoryforge_commit": commit,
+            "memoryforge_worktree_dirty": False,
+            "package": {
+                "version": TARGET_VERSION,
+                "wheel": wheel.name,
+                "wheel_sha256": _sha256(wheel),
+                "sdist": sdist.name,
+                "sdist_sha256": _sha256(sdist),
+            },
+            "builds": builds,
+            "reproducible_artifacts": True,
+            "runtime": {
+                "implementation": platform.python_implementation(),
+                "python": platform.python_version(),
+                "system": platform.system(),
+                "machine": platform.machine(),
+            },
+            "checks": {
+                "wheel_clean_room": wheel_check_payload["checks"],
+                "sdist_clean_room": sdist_check,
+                "workspace_drill": "passed",
+                "benchmark_summary": "passed",
+                "sdist_members": "passed",
+            },
+            "dependencies": wheel_check_payload["package"]["dependencies"],
+            "confirmation": {"status": "not_run"},
+            "holdout": {"status": "not_run"},
+        }
+        (staging / "release-provenance.json").write_text(
+            json.dumps(provenance, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        _write_sha256sums(staging)
+    if _git("rev-parse", "HEAD", root=repo_root) != commit or _git(
+        "status", "--porcelain", root=repo_root
+    ):
+        raise SystemExit("release build changed the source snapshot")
+
+
+def _isolated_build(
+    root: Path,
+    *,
+    name: str,
+    repo_root: Path = REPO_ROOT,
+    constraints: Path = CONSTRAINTS,
+) -> dict[str, Any]:
     environment = root / "environment"
     destination = root / "dist"
     venv.EnvBuilder(with_pip=True).create(environment)
@@ -161,10 +202,11 @@ def _isolated_build(root: Path, *, name: str) -> dict[str, Any]:
                 "--python",
                 str(python),
                 "-c",
-                str(CONSTRAINTS),
+                str(constraints),
                 "build",
                 "hatchling",
-            ]
+            ],
+            cwd=repo_root,
         )
     else:
         _run(
@@ -174,10 +216,11 @@ def _isolated_build(root: Path, *, name: str) -> dict[str, Any]:
                 "pip",
                 "install",
                 "-c",
-                str(CONSTRAINTS),
+                str(constraints),
                 "build",
                 "hatchling",
-            ]
+            ],
+            cwd=repo_root,
         )
     _run(
         [
@@ -189,7 +232,8 @@ def _isolated_build(root: Path, *, name: str) -> dict[str, Any]:
             "--no-isolation",
             "--outdir",
             str(destination),
-        ]
+        ],
+        cwd=repo_root,
     )
     wheel = _single(destination, "memoryforge-*.whl")
     sdist = _single(destination, "memoryforge-*.tar.gz")
@@ -225,14 +269,20 @@ def _validate_sdist(path: Path) -> None:
         raise SystemExit(f"sdist contains retained or nested artifacts: {forbidden[:3]}")
 
 
-def _check_sdist_clean_room(sdist: Path, root: Path) -> dict[str, str]:
+def _check_sdist_clean_room(
+    sdist: Path,
+    root: Path,
+    *,
+    constraints: Path = CONSTRAINTS,
+    cwd: Path = REPO_ROOT,
+) -> dict[str, str]:
     environment = (root / "environment").resolve()
     venv.EnvBuilder(with_pip=True).create(environment)
     python = environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     clean_environment = {
         key: value for key, value in os.environ.items() if key not in {"PYTHONPATH", "PYTHONHOME"}
     }
-    clean_environment["PIP_CONSTRAINT"] = str(CONSTRAINTS)
+    clean_environment["PIP_CONSTRAINT"] = str(constraints)
     clean_environment["PYTHONNOUSERSITE"] = "1"
     _run(
         [
@@ -243,6 +293,7 @@ def _check_sdist_clean_room(sdist: Path, root: Path) -> dict[str, str]:
             "--disable-pip-version-check",
             "hatchling",
         ],
+        cwd=cwd,
         environment=clean_environment,
     )
     _run(
@@ -255,10 +306,12 @@ def _check_sdist_clean_room(sdist: Path, root: Path) -> dict[str, str]:
             "--no-build-isolation",
             str(sdist),
         ],
+        cwd=cwd,
         environment=clean_environment,
     )
     _run(
         [str(python), "-I", "-m", "pip", "check"],
+        cwd=cwd,
         environment=clean_environment,
     )
     probe = json.loads(
@@ -273,6 +326,7 @@ def _check_sdist_clean_room(sdist: Path, root: Path) -> dict[str, str]:
                     "'import_path':memoryforge.__file__}))"
                 ),
             ],
+            cwd=cwd,
             environment=clean_environment,
         )
     )
@@ -285,6 +339,7 @@ def _check_sdist_clean_room(sdist: Path, root: Path) -> dict[str, str]:
     if (
         _run(
             [str(python), "-I", "-m", "memoryforge", "--version"],
+            cwd=cwd,
             environment=clean_environment,
         ).strip()
         != TARGET_VERSION
@@ -298,21 +353,27 @@ def _check_sdist_clean_room(sdist: Path, root: Path) -> dict[str, str]:
     }
 
 
-def _require_version() -> None:
-    project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+def _require_version(
+    repo_root: Path = REPO_ROOT,
+    source_root: Path = SOURCE_ROOT,
+) -> None:
+    project = tomllib.loads((repo_root / "pyproject.toml").read_text(encoding="utf-8"))
     versions = {
         str(project["project"]["version"]),
-        _source_cli_version(),
+        _source_cli_version(repo_root, source_root),
     }
     if versions != {TARGET_VERSION}:
         raise SystemExit(f"release version must be {TARGET_VERSION}: {sorted(versions)}")
 
 
-def _source_cli_version() -> str:
-    environment = {**os.environ, "PYTHONPATH": str(SOURCE_ROOT)}
+def _source_cli_version(
+    repo_root: Path = REPO_ROOT,
+    source_root: Path = SOURCE_ROOT,
+) -> str:
+    environment = {**os.environ, "PYTHONPATH": str(source_root)}
     return subprocess.run(
         [sys.executable, "-m", "memoryforge", "--version"],
-        cwd=REPO_ROOT,
+        cwd=repo_root,
         env=environment,
         check=True,
         capture_output=True,
@@ -344,10 +405,15 @@ def _read_json(path: Path) -> dict[str, Any]:
     return payload
 
 
-def _run(command: list[str], *, environment: dict[str, str] | None = None) -> str:
+def _run(
+    command: list[str],
+    *,
+    cwd: Path = REPO_ROOT,
+    environment: dict[str, str] | None = None,
+) -> str:
     completed = subprocess.run(
         command,
-        cwd=REPO_ROOT,
+        cwd=cwd,
         env=environment,
         capture_output=True,
         text=True,
@@ -368,10 +434,10 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _git(*args: str) -> str:
+def _git(*args: str, root: Path = REPO_ROOT) -> str:
     return subprocess.run(
         ["git", *args],
-        cwd=REPO_ROOT,
+        cwd=root,
         check=True,
         capture_output=True,
         text=True,

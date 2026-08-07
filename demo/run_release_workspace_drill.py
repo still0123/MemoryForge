@@ -129,10 +129,15 @@ def run_drill(workdir: Path) -> dict[str, Any]:
         + "\n",
         encoding="utf-8",
     )
+    showcase_root = workdir / "showcase"
     showcase = build_showcase(
         workspace,
-        workdir / "showcase",
+        showcase_root,
         evidence=showcase_evidence,
+    )
+    private_detail_leaks = _showcase_private_detail_leaks(
+        showcase_root,
+        forbidden_paths=(str(workdir.resolve()),),
     )
 
     workspace_commit = _git_output(workspace, "rev-parse", "HEAD")
@@ -174,7 +179,9 @@ def run_drill(workdir: Path) -> dict[str, Any]:
         ),
         "showcase": (
             "passed"
-            if showcase["status"] == "built" and (workdir / "showcase/index.html").is_file()
+            if showcase["status"] == "built"
+            and (showcase_root / "index.html").is_file()
+            and private_detail_leaks == 0
             else "failed"
         ),
     }
@@ -188,9 +195,27 @@ def run_drill(workdir: Path) -> dict[str, Any]:
         "schema_version": 1,
         "memoryforge_commit": source_commit,
         "checks": checks,
-        "private_detail_leaks": 0,
+        "private_detail_leaks": private_detail_leaks,
         "passed": passed,
     }
+
+
+def _showcase_private_detail_leaks(
+    root: Path,
+    *,
+    forbidden_paths: tuple[str, ...] = (),
+) -> int:
+    prefixes = ("/Users/", "/home/", "/private/var/", "C:\\Users\\", *forbidden_paths)
+    secrets = ("api_key=", "token=", "password=", "secret=", "sk-", "ghp_", "bearer ")
+    leaks = 0
+    for path in root.rglob("*"):
+        if not path.is_file():
+            continue
+        text = path.read_bytes().decode("utf-8", errors="replace")
+        lowered = text.casefold()
+        leaks += sum(prefix in text for prefix in prefixes if prefix)
+        leaks += sum(secret in lowered for secret in secrets)
+    return leaks
 
 
 def _cli(*args: str) -> str:

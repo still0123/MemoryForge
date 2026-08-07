@@ -1841,6 +1841,7 @@ def _validate_release_candidate_experiment_payload(
     if artifact["evidence_revision"] >= 5 and not _validate_release_development_artifacts(
         payload.get("release_artifacts"),
         artifact["memoryforge_commit"],
+        evidence_revision=artifact["evidence_revision"],
     ):
         raise ValueError("release-candidate retained build Evidence changed")
 
@@ -1907,56 +1908,173 @@ def _validate_release_candidate_experiment_payload(
         raise ValueError("accepted release-candidate Evidence gates failed")
 
 
-def _validate_release_development_artifacts(payload: object, commit: str) -> bool:
-    if not isinstance(payload, dict) or set(payload) != {
+def _validate_release_development_artifacts(
+    payload: object,
+    commit: str,
+    *,
+    evidence_revision: int = 5,
+) -> bool:
+    base_keys = {
         "package",
         "builds",
         "sha256sums_sha256",
         "artifact_root",
-    }:
+    }
+    support_digest_keys = {
+        "provenance_sha256",
+        "benchmark_summary_sha256",
+        "workspace_drill_sha256",
+    }
+    payload_keys = frozenset(payload) if isinstance(payload, dict) else frozenset()
+    if (
+        not isinstance(payload, dict)
+        or payload_keys not in {frozenset(base_keys), frozenset(base_keys | support_digest_keys)}
+        or (evidence_revision >= 7 and set(payload) != base_keys | support_digest_keys)
+    ):
         return False
     expected_root = f"demo/results/artifacts/release_candidate_development/{commit}"
     if payload.get("artifact_root") != expected_root:
         return False
-    root = REPO_ROOT / expected_root
+    root = (REPO_ROOT / expected_root).resolve()
+    if not root.is_relative_to(REPO_ROOT.resolve()) or not root.is_dir():
+        return False
     package = payload.get("package")
     builds = payload.get("builds")
     sums = root / "SHA256SUMS"
     if (
         not isinstance(package, dict)
+        or set(package)
+        != {
+            "version",
+            "wheel",
+            "wheel_sha256",
+            "sdist",
+            "sdist_sha256",
+        }
+        or package.get("version") != "0.3.0"
+        or package.get("wheel") != "memoryforge-0.3.0-py3-none-any.whl"
+        or package.get("sdist") != "memoryforge-0.3.0.tar.gz"
+        or any(
+            SHA256.fullmatch(str(package.get(f"{kind}_sha256"))) is None
+            for kind in ("wheel", "sdist")
+        )
         or not isinstance(builds, list)
         or len(builds) != 2
         or not sums.is_file()
         or hashlib.sha256(sums.read_bytes()).hexdigest() != payload.get("sha256sums_sha256")
     ):
         return False
-    retained: set[str] = set()
+    registered_sums = _read_registered_sha256sums(root)
+    if registered_sums is None:
+        return False
+    retained: set[Path] = set()
     for index, build in enumerate(builds):
-        if not isinstance(build, dict) or build.get("name") != ("first", "second")[index]:
+        name = ("first", "second")[index]
+        if (
+            not isinstance(build, dict)
+            or set(build) != {"name", "wheel", "sdist"}
+            or build.get("name") != name
+        ):
             return False
         for kind in ("wheel", "sdist"):
             record = build.get(kind)
-            if not isinstance(record, dict):
+            if (
+                not isinstance(record, dict)
+                or set(record) != {"path", "sha256", "size", "retained_path"}
+                or record.get("path") != package.get(kind)
+                or record.get("sha256") != package.get(f"{kind}_sha256")
+                or type(record.get("size")) is not int
+                or record["size"] < 1
+            ):
                 return False
             relative = record.get("retained_path")
-            if not isinstance(relative, str) or relative in retained:
+            if (
+                not isinstance(relative, str)
+                or Path(relative).name != relative
+                or relative != f"reproducibility-{name}-{package[kind]}"
+            ):
                 return False
             path = (root / relative).resolve()
             if (
                 not path.is_relative_to(root.resolve())
+                or path in retained
                 or not path.is_file()
                 or hashlib.sha256(path.read_bytes()).hexdigest() != record.get("sha256")
                 or path.stat().st_size != record.get("size")
             ):
                 return False
-            retained.add(relative)
-    return all(
-        isinstance(package.get(key), str)
-        and (root / str(package[key])).is_file()
-        and hashlib.sha256((root / str(package[key])).read_bytes()).hexdigest()
-        == package.get(f"{key}_sha256")
-        for key in ("wheel", "sdist")
+            retained.add(path)
+    for kind in ("wheel", "sdist"):
+        path = (root / str(package[kind])).resolve()
+        if (
+            not path.is_relative_to(root)
+            or not path.is_file()
+            or hashlib.sha256(path.read_bytes()).hexdigest() != package[f"{kind}_sha256"]
+        ):
+            return False
+    expected_files = {
+        path.relative_to(root).as_posix()
+        for path in root.rglob("*")
+        if path.is_file() and path.name != "SHA256SUMS"
+    }
+    if set(registered_sums) != expected_files:
+        return False
+    support = {
+        "provenance_sha256": root / "release-provenance.json",
+        "benchmark_summary_sha256": root / "benchmark-summary.json",
+        "workspace_drill_sha256": root / "workspace-drill.json",
+    }
+    if any(not path.is_file() for path in support.values()):
+        return False
+    if evidence_revision >= 7 and any(
+        hashlib.sha256(path.read_bytes()).hexdigest() != payload.get(key)
+        for key, path in support.items()
+    ):
+        return False
+    try:
+        provenance = json.loads(support["provenance_sha256"].read_text(encoding="utf-8"))
+        summary = json.loads(support["benchmark_summary_sha256"].read_text(encoding="utf-8"))
+        drill = json.loads(support["workspace_drill_sha256"].read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    return (
+        isinstance(provenance, dict)
+        and provenance.get("memoryforge_commit") == commit
+        and provenance.get("memoryforge_worktree_dirty") is False
+        and _strict_mapping(provenance.get("package"), package)
+        and _strict_json_value(provenance.get("builds"), builds)
+        and isinstance(summary, dict)
+        and summary.get("schema_version") == 1
+        and summary.get("memoryforge_commit") == commit
+        and isinstance(drill, dict)
+        and drill.get("schema_version") == 1
+        and drill.get("memoryforge_commit") == commit
+        and drill.get("passed") is True
     )
+
+
+def _read_registered_sha256sums(root: Path) -> dict[str, str] | None:
+    try:
+        lines = (root / "SHA256SUMS").read_text(encoding="ascii").splitlines()
+    except (OSError, UnicodeError):
+        return None
+    sums: dict[str, str] = {}
+    for line in lines:
+        parts = line.split("  ", 1)
+        if len(parts) != 2:
+            return None
+        digest, relative = parts
+        path = (root / relative).resolve()
+        if (
+            SHA256.fullmatch(digest) is None
+            or relative in sums
+            or not path.is_relative_to(root)
+            or not path.is_file()
+            or hashlib.sha256(path.read_bytes()).hexdigest() != digest
+        ):
+            return None
+        sums[relative] = digest
+    return sums
 
 
 def _validate_pytest_component_experiment_payload(
@@ -2546,11 +2664,15 @@ def _validate_regression_evidence(
         or payload.get("suite_revision") != experiment["suite_revision"]
         or payload.get("memoryforge_commit") != commit
         or payload.get("memoryforge_worktree_dirty") is not False
-        or payload.get("development_evidence", {}).get("path") != development_artifact["path"]
-        or payload.get("development_evidence", {}).get("sha256") != development_artifact["sha256"]
-        or payload.get("development_evidence", {}).get("memoryforge_commit")
-        != development_artifact["memoryforge_commit"]
-        or payload.get("development_evidence", {}).get("passed") is not True
+        or not _strict_mapping(
+            payload.get("development_evidence"),
+            {
+                "path": development_artifact["path"],
+                "sha256": development_artifact["sha256"],
+                "memoryforge_commit": development_artifact["memoryforge_commit"],
+                "passed": True,
+            },
+        )
         or not isinstance(pytest_result.get("failed"), int)
         or pytest_result["failed"] < 1
         or payload.get("confirmation", {}).get("path") != confirmation["path"]
@@ -2607,27 +2729,31 @@ def _validate_release_sdist_regression(
         or payload.get("memoryforge_worktree_dirty") is not False
         or not _git_commit_descends_from(development_artifact["memoryforge_commit"], commit)
         or payload.get("candidate") != "release-development-candidate-2-preflight"
-        or payload.get("release_build")
-        != {
-            "command": "python scripts/build_release.py --output <external-release-directory>",
-            "status": "failed",
-            "classification": "sdist_clean_room_path_alias",
-            "error": "sdist clean-room import escaped or reported the wrong version",
-            "output_created": False,
-            "confirmation_executed": False,
-            "holdout_executed": False,
-        }
-        or payload.get("root_cause")
-        != {
-            "summary": (
-                "The macOS /var to /private/var alias made equivalent environment and import "
-                "paths compare as different paths."
-            ),
-            "fix": (
-                "Resolve the clean-room environment path before checking import ownership; "
-                "keep the strict ownership check."
-            ),
-        }
+        or not _strict_mapping(
+            payload.get("release_build"),
+            {
+                "command": "python scripts/build_release.py --output <external-release-directory>",
+                "status": "failed",
+                "classification": "sdist_clean_room_path_alias",
+                "error": "sdist clean-room import escaped or reported the wrong version",
+                "output_created": False,
+                "confirmation_executed": False,
+                "holdout_executed": False,
+            },
+        )
+        or not _strict_mapping(
+            payload.get("root_cause"),
+            {
+                "summary": (
+                    "The macOS /var to /private/var alias made equivalent environment and import "
+                    "paths compare as different paths."
+                ),
+                "fix": (
+                    "Resolve the clean-room environment path before checking import ownership; "
+                    "keep the strict ownership check."
+                ),
+            },
+        )
         or payload.get("confirmation")
         != {
             "path": confirmation["path"],
@@ -2915,6 +3041,7 @@ def _validate_acceptance_evidence(
             development_artifact,
             payload,
             confirmation,
+            acceptance_commit=commit,
         )
     local_gate = payload.get("local_gate", {})
     pytest_result = local_gate.get("pytest", {})
@@ -3056,6 +3183,8 @@ def _validate_release_candidate_acceptance_evidence(
     development_artifact: dict[str, Any],
     payload: dict[str, Any],
     confirmation: dict[str, Any],
+    *,
+    acceptance_commit: str | None = None,
 ) -> int:
     holdout = experiment["splits"]["holdout"]
     commit = str(payload.get("memoryforge_commit"))
@@ -3214,30 +3343,37 @@ def _validate_release_candidate_acceptance_evidence(
         or type(payload.get("suite_revision")) is not int
         or payload.get("suite_revision") != experiment["suite_revision"]
         or COMMIT.fullmatch(commit) is None
+        or (acceptance_commit is not None and commit != acceptance_commit)
         or payload.get("memoryforge_worktree_dirty") is not False
         or not _git_commit_descends_from(commit, development_artifact["memoryforge_commit"])
-        or payload.get("development_evidence")
-        != {
-            "path": development_artifact["path"],
-            "sha256": development_artifact["sha256"],
-            "memoryforge_commit": development_artifact["memoryforge_commit"],
-            "passed": True,
-        }
+        or not _strict_mapping(
+            payload.get("development_evidence"),
+            {
+                "path": development_artifact["path"],
+                "sha256": development_artifact["sha256"],
+                "memoryforge_commit": development_artifact["memoryforge_commit"],
+                "passed": True,
+            },
+        )
         or not isinstance(platforms, dict)
         or set(platforms) != set(contracts)
-        or payload.get("confirmation")
-        != {
-            "path": confirmation["path"],
-            "sha256": confirmation["sha256"],
-            "status": "not_run",
-        }
+        or not _strict_mapping(
+            payload.get("confirmation"),
+            {
+                "path": confirmation["path"],
+                "sha256": confirmation["sha256"],
+                "status": "not_run",
+            },
+        )
         or not isinstance(holdout, dict)
-        or payload.get("holdout")
-        != {
-            "path": holdout["path"],
-            "sha256": holdout["sha256"],
-            "status": "not_run",
-        }
+        or not _strict_mapping(
+            payload.get("holdout"),
+            {
+                "path": holdout["path"],
+                "sha256": holdout["sha256"],
+                "status": "not_run",
+            },
+        )
         or payload.get("passed") is not True
     ):
         raise ValueError("release-candidate local gate Evidence contract failed")
