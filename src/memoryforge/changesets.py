@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import fcntl
 import hashlib
 import json
 import os
@@ -10,8 +9,8 @@ import re
 import shutil
 import stat
 import uuid
-from collections.abc import Mapping, Sequence
-from contextlib import suppress
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
@@ -28,6 +27,7 @@ from memoryforge.models import (
     StagedChangeSet,
     StagedWikiFile,
 )
+from memoryforge.platform_lock import exclusive_file_lock
 from memoryforge.workspace import Workspace, WorkspaceIntegrityError
 
 CHANGESET_ID_PATTERN = re.compile(r"^chg_[A-Za-z0-9_-]+$")
@@ -66,58 +66,59 @@ class ChangeSetStore:
     ) -> StoredChangeSet:
         if changeset.status is not ChangeSetStatus.PROPOSED:
             raise ChangeSetStoreError("New ChangeSets must start in PROPOSED state")
-        self.workspace.validate_internal_directory(self.staging_dir)
-        staging_fd = self._open_staging()
         temp_name = f".{changeset.changeset_id}.{uuid.uuid4().hex}.tmp"
         try:
-            fcntl.flock(staging_fd, fcntl.LOCK_EX)
-            current_commit = self.workspace.current_commit()
-            if changeset.base_commit != current_commit:
-                raise ChangeSetStoreError(
-                    "ChangeSet base_commit does not match the current workspace revision: "
-                    f"expected {current_commit}, received {changeset.base_commit}"
-                )
-            if _entry_exists(staging_fd, changeset.changeset_id):
-                return self._require_idempotent(changeset.changeset_id, changeset, candidate_files)
-            try:
-                self.workspace.validate_changeset_evidence(changeset)
-            except (WorkspaceError, WorkspaceIntegrityError, ValueError) as exc:
-                raise ChangeSetStoreError(
-                    f"ChangeSet source or citation evidence is invalid: {exc}"
-                ) from exc
-
-            record = self._build_record(changeset, candidate_files)
-            os.mkdir(temp_name, 0o700, dir_fd=staging_fd)
-            temp_fd = os.open(
-                temp_name,
-                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
-                dir_fd=staging_fd,
-            )
-            try:
-                self._write_record(temp_fd, record, candidate_files)
-                os.fsync(temp_fd)
-            finally:
-                os.close(temp_fd)
-            try:
+            with self._locked_staging() as staging_fd:
                 current_commit = self.workspace.current_commit()
                 if changeset.base_commit != current_commit:
                     raise ChangeSetStoreError(
-                        "ChangeSet base_commit changed before publish: "
+                        "ChangeSet base_commit does not match the current workspace revision: "
                         f"expected {current_commit}, received {changeset.base_commit}"
                     )
-                os.rename(
+                if _entry_exists(staging_fd, changeset.changeset_id):
+                    return self._require_idempotent(
+                        changeset.changeset_id, changeset, candidate_files
+                    )
+                try:
+                    self.workspace.validate_changeset_evidence(changeset)
+                except (WorkspaceError, WorkspaceIntegrityError, ValueError) as exc:
+                    raise ChangeSetStoreError(
+                        f"ChangeSet source or citation evidence is invalid: {exc}"
+                    ) from exc
+
+                record = self._build_record(changeset, candidate_files)
+                os.mkdir(temp_name, 0o700, dir_fd=staging_fd)
+                temp_fd = os.open(
                     temp_name,
-                    changeset.changeset_id,
-                    src_dir_fd=staging_fd,
-                    dst_dir_fd=staging_fd,
+                    os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                    dir_fd=staging_fd,
                 )
-                os.fsync(staging_fd)
-            except FileExistsError:
-                return self._require_idempotent(changeset.changeset_id, changeset, candidate_files)
+                try:
+                    self._write_record(temp_fd, record, candidate_files)
+                    os.fsync(temp_fd)
+                finally:
+                    os.close(temp_fd)
+                try:
+                    current_commit = self.workspace.current_commit()
+                    if changeset.base_commit != current_commit:
+                        raise ChangeSetStoreError(
+                            "ChangeSet base_commit changed before publish: "
+                            f"expected {current_commit}, received {changeset.base_commit}"
+                        )
+                    os.rename(
+                        temp_name,
+                        changeset.changeset_id,
+                        src_dir_fd=staging_fd,
+                        dst_dir_fd=staging_fd,
+                    )
+                    os.fsync(staging_fd)
+                except FileExistsError:
+                    return self._require_idempotent(
+                        changeset.changeset_id, changeset, candidate_files
+                    )
         except OSError as exc:
             raise ChangeSetStoreError("ChangeSet could not be published safely") from exc
         finally:
-            os.close(staging_fd)
             temporary_path = self.staging_dir / temp_name
             if temporary_path.exists() and not temporary_path.is_symlink():
                 shutil.rmtree(temporary_path)
@@ -245,82 +246,74 @@ class ChangeSetStore:
 
     def archive_applied(self, stored: StoredChangeSet, *, commit: str) -> Path:
         """Move an applied proposal out of the pending staging namespace."""
-        self.workspace.validate_internal_directory(self.staging_dir)
-        staging_fd = self._open_staging()
         try:
-            fcntl.flock(staging_fd, fcntl.LOCK_EX)
-            with suppress(FileExistsError):
-                os.mkdir("applied", 0o700, dir_fd=staging_fd)
-            applied_fd = os.open(
-                "applied",
-                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
-                dir_fd=staging_fd,
-            )
-            try:
-                os.rename(
-                    stored.changeset.changeset_id,
-                    stored.changeset.changeset_id,
-                    src_dir_fd=staging_fd,
-                    dst_dir_fd=applied_fd,
-                )
-                archived_fd = os.open(
-                    stored.changeset.changeset_id,
+            with self._locked_staging() as staging_fd:
+                with suppress(FileExistsError):
+                    os.mkdir("applied", 0o700, dir_fd=staging_fd)
+                applied_fd = os.open(
+                    "applied",
                     os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
-                    dir_fd=applied_fd,
+                    dir_fd=staging_fd,
                 )
                 try:
-                    receipt = {
-                        "status": "APPLIED",
-                        "commit": commit,
-                        "applied_at": datetime.now(UTC).isoformat(),
-                        "changeset_id": stored.changeset.changeset_id,
-                    }
-                    receipt_payload = (
-                        json.dumps(receipt, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
-                    ).encode()
-                    _write_new_file(archived_fd, "receipt.json", receipt_payload)
-                    if json.loads(_read_regular_file(archived_fd, "receipt.json")) != receipt:
-                        raise ChangeSetStoreError("Applied ChangeSet receipt is invalid")
+                    os.rename(
+                        stored.changeset.changeset_id,
+                        stored.changeset.changeset_id,
+                        src_dir_fd=staging_fd,
+                        dst_dir_fd=applied_fd,
+                    )
+                    archived_fd = os.open(
+                        stored.changeset.changeset_id,
+                        os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                        dir_fd=applied_fd,
+                    )
+                    try:
+                        receipt = {
+                            "status": "APPLIED",
+                            "commit": commit,
+                            "applied_at": datetime.now(UTC).isoformat(),
+                            "changeset_id": stored.changeset.changeset_id,
+                        }
+                        receipt_payload = (
+                            json.dumps(receipt, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+                        ).encode()
+                        _write_new_file(archived_fd, "receipt.json", receipt_payload)
+                        if json.loads(_read_regular_file(archived_fd, "receipt.json")) != receipt:
+                            raise ChangeSetStoreError("Applied ChangeSet receipt is invalid")
+                    finally:
+                        os.close(archived_fd)
+                    os.fsync(applied_fd)
+                    os.fsync(staging_fd)
                 finally:
-                    os.close(archived_fd)
-                os.fsync(applied_fd)
-                os.fsync(staging_fd)
-            finally:
-                os.close(applied_fd)
+                    os.close(applied_fd)
         except OSError as exc:
             raise ChangeSetStoreError("Applied ChangeSet could not be archived") from exc
-        finally:
-            os.close(staging_fd)
         return self.staging_dir / "applied" / stored.changeset.changeset_id
 
     def archive_rejected(self, stored: StoredChangeSet) -> Path:
         """Move a rejected proposal out of the pending staging namespace."""
-        self.workspace.validate_internal_directory(self.staging_dir)
-        staging_fd = self._open_staging()
         try:
-            fcntl.flock(staging_fd, fcntl.LOCK_EX)
-            with suppress(FileExistsError):
-                os.mkdir("rejected", 0o700, dir_fd=staging_fd)
-            rejected_fd = os.open(
-                "rejected",
-                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
-                dir_fd=staging_fd,
-            )
-            try:
-                os.rename(
-                    stored.changeset.changeset_id,
-                    stored.changeset.changeset_id,
-                    src_dir_fd=staging_fd,
-                    dst_dir_fd=rejected_fd,
+            with self._locked_staging() as staging_fd:
+                with suppress(FileExistsError):
+                    os.mkdir("rejected", 0o700, dir_fd=staging_fd)
+                rejected_fd = os.open(
+                    "rejected",
+                    os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                    dir_fd=staging_fd,
                 )
-                os.fsync(rejected_fd)
-                os.fsync(staging_fd)
-            finally:
-                os.close(rejected_fd)
+                try:
+                    os.rename(
+                        stored.changeset.changeset_id,
+                        stored.changeset.changeset_id,
+                        src_dir_fd=staging_fd,
+                        dst_dir_fd=rejected_fd,
+                    )
+                    os.fsync(rejected_fd)
+                    os.fsync(staging_fd)
+                finally:
+                    os.close(rejected_fd)
         except OSError as exc:
             raise ChangeSetStoreError("Rejected ChangeSet could not be archived") from exc
-        finally:
-            os.close(staging_fd)
         return self.staging_dir / "rejected" / stored.changeset.changeset_id
 
     def _require_current_base(self, changeset: ChangeSet) -> None:
@@ -436,36 +429,32 @@ class ChangeSetStore:
         digest_filename: str,
         payload: bytes,
     ) -> None:
-        self.workspace.validate_internal_directory(self.staging_dir)
-        staging_fd = self._open_staging()
         try:
-            fcntl.flock(staging_fd, fcntl.LOCK_EX)
-            directory_fd = os.open(
-                stored.changeset.changeset_id,
-                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
-                dir_fd=staging_fd,
-            )
-            try:
-                metadata = _read_regular_file(directory_fd, CHANGESET_FILENAME)
-                if hashlib.sha256(metadata).hexdigest() != stored.proposal_sha256:
-                    raise ChangeSetStoreError(
-                        "Lifecycle receipt cannot bind to modified proposal metadata"
-                    )
-                _write_new_file(directory_fd, filename, payload)
-                _write_new_file(
-                    directory_fd,
-                    digest_filename,
-                    (hashlib.sha256(payload).hexdigest() + "\n").encode("ascii"),
+            with self._locked_staging() as staging_fd:
+                directory_fd = os.open(
+                    stored.changeset.changeset_id,
+                    os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                    dir_fd=staging_fd,
                 )
-                os.fsync(directory_fd)
-            finally:
-                os.close(directory_fd)
+                try:
+                    metadata = _read_regular_file(directory_fd, CHANGESET_FILENAME)
+                    if hashlib.sha256(metadata).hexdigest() != stored.proposal_sha256:
+                        raise ChangeSetStoreError(
+                            "Lifecycle receipt cannot bind to modified proposal metadata"
+                        )
+                    _write_new_file(directory_fd, filename, payload)
+                    _write_new_file(
+                        directory_fd,
+                        digest_filename,
+                        (hashlib.sha256(payload).hexdigest() + "\n").encode("ascii"),
+                    )
+                    os.fsync(directory_fd)
+                finally:
+                    os.close(directory_fd)
         except FileExistsError:
             return
         except OSError as exc:
             raise ChangeSetStoreError("Lifecycle receipt could not be written safely") from exc
-        finally:
-            os.close(staging_fd)
 
     def _read_candidates(
         self,
@@ -569,6 +558,17 @@ class ChangeSetStore:
             )
         except OSError as exc:
             raise ChangeSetStoreError("ChangeSet staging directory is unsafe") from exc
+
+    @contextmanager
+    def _locked_staging(self) -> Iterator[int]:
+        self.workspace.validate_internal_directory(self.staging_dir)
+        lock_path = self.workspace.internal_dir / "index.sqlite.changesets.lock"
+        with exclusive_file_lock(lock_path):
+            descriptor = self._open_staging()
+            try:
+                yield descriptor
+            finally:
+                os.close(descriptor)
 
 
 def _candidate_parts(wiki_path: str) -> tuple[str, ...]:

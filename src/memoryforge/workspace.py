@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import fcntl
 import hashlib
 import json
 import os
@@ -30,6 +29,7 @@ from memoryforge.models import (
     SourceCategory,
     SourceVersionManifest,
 )
+from memoryforge.platform_lock import UnsafeLockFileError, exclusive_file_lock
 from memoryforge.version_store import GitVersionStore
 from memoryforge.wiki_facts import (
     AppliedCodeSymbolMatch,
@@ -784,20 +784,10 @@ class Workspace:
     def exclusive_lock(self) -> Iterator[None]:
         self.validate_internal_directory(self.internal_dir)
         try:
-            descriptor = os.open(
-                self.internal_dir / "workspace.lock",
-                os.O_RDWR | os.O_CREAT | _no_follow_flag(),
-                0o600,
-            )
-        except OSError as exc:
+            with exclusive_file_lock(self.internal_dir / "workspace.lock"):
+                yield
+        except UnsafeLockFileError as exc:
             raise WorkspaceSecurityError("workspace lock is unsafe") from exc
-        try:
-            if not stat.S_ISREG(os.fstat(descriptor).st_mode):
-                raise WorkspaceSecurityError("workspace lock must be a regular file")
-            fcntl.flock(descriptor, fcntl.LOCK_EX)
-            yield
-        finally:
-            os.close(descriptor)
 
     @classmethod
     def initialize(cls, root: Path) -> Workspace:

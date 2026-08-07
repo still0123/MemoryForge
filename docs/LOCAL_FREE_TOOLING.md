@@ -13,14 +13,23 @@ python3 -m venv .venv
 
 ## Full Local Gate
 
+POSIX:
+
 ```bash
 ./scripts/check_local.sh
+```
+
+Windows PowerShell:
+
+```powershell
+.\scripts\check_local.ps1
 ```
 
 The script runs:
 
 ```text
-Ruff -> format check -> strict Mypy -> pytest + coverage
+Ruff -> format check -> strict Mypy -> registry -> dependency check
+-> platform smoke -> pytest + coverage
 -> Wheel/sdist build -> Wheel clean-room -> sdist clean-room
 -> SHA256SUMS
 ```
@@ -35,8 +44,13 @@ directory. Pass an explicit output path when preparing a named release:
 The directory contains:
 
 - Wheel and sdist;
+- `platform-smoke.json` when using the PowerShell gate;
 - `release-provenance.json`;
 - `SHA256SUMS`.
+
+The PowerShell entry point is not evidence of native Windows confirmation by
+itself. Native Windows confirmation remains a separate frozen release-candidate
+gate and must record its exact runtime and Wheel SHA256.
 
 ## Manual Release
 

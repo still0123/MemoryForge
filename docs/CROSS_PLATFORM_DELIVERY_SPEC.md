@@ -81,7 +81,7 @@ local PowerShell and native smoke entry points.
 
 - `Workspace.exclusive_lock` delegates to `exclusive_file_lock`;
 - `ChangeSetStore` serializes mutations through
-  `.memoryforge/staging/.changesets.lock`;
+  `.memoryforge/index.sqlite.changesets.lock`;
 - `workspace.py` and `changesets.py` contain no direct platform lock imports;
 - existing Workspace security errors stay fail-closed;
 - no database, SourceVersion, Citation, ChangeSet, or public payload schema
