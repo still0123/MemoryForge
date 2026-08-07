@@ -905,6 +905,12 @@
           "path": "demo/results/cross_platform_delivery_candidate_4.json",
           "sha256": "198c3654291ba762b591891f894f87c3ebc41764faa8e7e24cfc5c484a4c39cb",
           "memoryforge_commit": "2bb3505ce2c5b32ec1ce6e2b4dcd1a12638cc93f",
+          "linux_evidence": {
+            "path": "demo/results/cross_platform_delivery_candidate_4_linux_gate.json",
+            "sha256": "f09affaa4dd7633e10cd37752f9ce1ed7e7258a12bc747cda2bc20c805beadc1",
+            "memoryforge_commit": "1ed10462e0585be8fdafa34e6c42de6e2a0ba784",
+            "passed": true
+          },
           "passed": true
         }
       ]

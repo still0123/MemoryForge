@@ -455,6 +455,59 @@ REQUIRED_LINUX_EVIDENCE = {
             "efd898c2a3c9eb4807b0610bf5c2979ccc5a86b48fd81735f4b72a6ce6360824",
             "79188650e953c6c183b631fd41432e795bde0eaa",
         ),
+        _RESULTS + "cross_platform_delivery_candidate_4.json": (
+            _RESULTS + "cross_platform_delivery_candidate_4_linux_gate.json",
+            "f09affaa4dd7633e10cd37752f9ce1ed7e7258a12bc747cda2bc20c805beadc1",
+            "1ed10462e0585be8fdafa34e6c42de6e2a0ba784",
+        ),
+    },
+}
+LINUX_EVIDENCE_CONTRACTS = {
+    _RESULTS + "cross_platform_delivery_candidate_3_linux_gate.json": {
+        "runtime": {
+            "virtualization": "Lima 2.2.0 local VM",
+            "distribution": "Debian GNU/Linux 12",
+            "kernel": "Linux 6.1.0-50-cloud-arm64",
+            "architecture": "aarch64",
+            "implementation": "CPython",
+            "python": "3.11.2",
+            "hosted_runner": False,
+        },
+        "registry_validation": {
+            "suite_count": 12,
+            "experiment_count": 7,
+            "evidence_count": 75,
+            "qa_case_count": 121,
+        },
+        "pytest": {
+            "passed": 536,
+            "skipped": 2,
+            "failed": 0,
+            "coverage_percent": 88,
+        },
+    },
+    _RESULTS + "cross_platform_delivery_candidate_4_linux_gate.json": {
+        "runtime": {
+            "virtualization": "Lima 2.2.0 local VM",
+            "distribution": "Debian GNU/Linux 12",
+            "kernel": "Linux 6.1.0-50-cloud-arm64",
+            "architecture": "aarch64",
+            "implementation": "CPython",
+            "python": "3.11.2",
+            "hosted_runner": False,
+        },
+        "registry_validation": {
+            "suite_count": 12,
+            "experiment_count": 7,
+            "evidence_count": 79,
+            "qa_case_count": 121,
+        },
+        "pytest": {
+            "passed": 542,
+            "skipped": 2,
+            "failed": 0,
+            "coverage_percent": 88,
+        },
     },
 }
 FINAL_ACCEPTANCE_REGISTRY_COUNTS = {
@@ -1674,10 +1727,12 @@ def _validate_linux_evidence(
         dict[str, Any],
         json.loads((REPO_ROOT / artifact["path"]).read_text(encoding="utf-8")),
     )
+    contract = LINUX_EVIDENCE_CONTRACTS.get(str(artifact["path"]))
     local_gate = payload.get("local_gate")
     runtime = payload.get("runtime")
     if (
-        type(payload.get("schema_version")) is not int
+        contract is None
+        or type(payload.get("schema_version")) is not int
         or payload.get("schema_version") != 1
         or set(payload)
         != {
@@ -1696,18 +1751,7 @@ def _validate_linux_evidence(
         or payload.get("suite_revision") != experiment["suite_revision"]
         or payload.get("memoryforge_commit") != commit
         or payload.get("memoryforge_worktree_dirty") is not False
-        or not _strict_mapping(
-            runtime,
-            {
-                "virtualization": "Lima 2.2.0 local VM",
-                "distribution": "Debian GNU/Linux 12",
-                "kernel": "Linux 6.1.0-50-cloud-arm64",
-                "architecture": "aarch64",
-                "implementation": "CPython",
-                "python": "3.11.2",
-                "hosted_runner": False,
-            },
-        )
+        or not _strict_mapping(runtime, contract["runtime"])
         or not isinstance(local_gate, dict)
         or set(local_gate) != LOCAL_GATE_KEYS | {"artifacts"}
         or local_gate.get("command") != "scripts/check_local.sh"
@@ -1716,23 +1760,10 @@ def _validate_linux_evidence(
         or local_gate.get("strict_mypy") != "passed"
         or not _strict_mapping(
             local_gate.get("registry_validation"),
-            {
-                "suite_count": 12,
-                "experiment_count": 7,
-                "evidence_count": 75,
-                "qa_case_count": 121,
-            },
+            contract["registry_validation"],
         )
         or local_gate.get("dependency_check") != "passed"
-        or not _strict_mapping(
-            local_gate.get("pytest"),
-            {
-                "passed": 536,
-                "skipped": 2,
-                "failed": 0,
-                "coverage_percent": 88,
-            },
-        )
+        or not _strict_mapping(local_gate.get("pytest"), contract["pytest"])
         or local_gate.get("wheel_clean_room") != "passed"
         or local_gate.get("sdist_clean_room") != "passed"
         or local_gate.get("pip_check") != "passed"
