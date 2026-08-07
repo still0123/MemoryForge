@@ -134,6 +134,12 @@
           "path": "demo/results/exact_symbol_routing_development_final.json",
           "sha256": "a72494d69964a1c93b228fb73ffa1d8608bf714153cc54efa1096984addc0fc7",
           "memoryforge_commit": "5308078614e83ad90e3eae9ccdd490bb156f9948",
+          "acceptance_evidence": {
+            "path": "demo/results/exact_symbol_routing_candidate_4_local_gate.json",
+            "sha256": "9a5d749e32816253c1412c78fdea436a012067e524afc888273738f38d4a2194",
+            "memoryforge_commit": "5308078614e83ad90e3eae9ccdd490bb156f9948",
+            "passed": true
+          },
           "passed": true
         }
       ]
@@ -246,6 +252,12 @@
           "path": "demo/results/support_score_development_candidate_4.json",
           "sha256": "c4fab97ed96cdc35d61540052b49b5ab18764fd0d98e641ae3a11f3deb2c258e",
           "memoryforge_commit": "80ac72c0fbfbf393c137aa1c25e5a44c91ae5325",
+          "acceptance_evidence": {
+            "path": "demo/results/support_score_candidate_4_local_gate.json",
+            "sha256": "1b9db95d3950150dc83abfafea4b4e226d7a4b02d50852b3f04c1103a15cd085",
+            "memoryforge_commit": "e86d23ef34260608e1dbca46047a812c479454f1",
+            "passed": true
+          },
           "passed": true
         }
       ]

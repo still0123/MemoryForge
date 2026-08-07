@@ -137,6 +137,42 @@ def test_explicit_identifier_requires_symbol_or_page_fact_coverage(tmp_path: Pat
     assert "exact_identifier_not_covered" in support["failed_hard_gates"]
 
 
+def test_explicit_identifier_does_not_match_a_camel_case_suffix(tmp_path: Path) -> None:
+    page_path = "wiki/pages/code/repository/runner.md"
+
+    support = query_module._support_score(
+        tmp_path,
+        "Which RunnerAdapter runs production?",
+        query_module._terms("Which RunnerAdapter runs production?"),
+        [(page_path, _citation("SkillUpRunnerAdapter runs production."))],
+        symbol_matches=(),
+        exact_symbol_fact_keys=set(),
+        required_citations=1,
+        code_page_paths={page_path},
+    )
+
+    assert support["components"]["exact_identifier_coverage"] == 0.0
+    assert "exact_identifier_not_covered" in support["failed_hard_gates"]
+
+
+def test_all_explicit_identifiers_require_coverage(tmp_path: Path) -> None:
+    page_path = "wiki/pages/code/repository/runner.md"
+
+    support = query_module._support_score(
+        tmp_path,
+        "Which RunnerAdapter and CacheAdapter run production?",
+        query_module._terms("Which RunnerAdapter and CacheAdapter run production?"),
+        [(page_path, _citation("RunnerAdapter runs production."))],
+        symbol_matches=(),
+        exact_symbol_fact_keys=set(),
+        required_citations=1,
+        code_page_paths={page_path},
+    )
+
+    assert support["components"]["exact_identifier_coverage"] == 0.5
+    assert "exact_identifier_not_covered" in support["failed_hard_gates"]
+
+
 def test_support_benchmark_validates_complete_and_optional_unknown_payloads() -> None:
     script = Path(__file__).resolve().parent.parent / "demo/run_support_score_benchmark.py"
     spec = importlib.util.spec_from_file_location("run_support_score_benchmark", script)
@@ -156,6 +192,14 @@ def test_support_benchmark_validates_complete_and_optional_unknown_payloads() ->
 
     assert runner._valid_support_payload(support, 75.0)
     assert not runner._valid_support_payload({}, 75.0)
+    contradictory = {
+        **support,
+        "score": 100.0,
+        "components": {key: 0.0 for key in support["components"]},
+        "sufficient": True,
+        "failed_hard_gates": [],
+    }
+    assert not runner._valid_support_payload(contradictory, 75.0)
     assert runner._valid_case_support(
         {"memoryforge": {"answer_status": "unknown", "support": None}},
         75.0,

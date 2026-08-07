@@ -20,7 +20,7 @@ def test_benchmark_registry_binds_all_release_artifacts() -> None:
         "status": "valid",
         "suite_count": 12,
         "experiment_count": 2,
-        "evidence_count": 27,
+        "evidence_count": 29,
         "qa_case_count": 121,
         "qa_case_types_present": [
             "code_behavior",
@@ -77,5 +77,25 @@ def test_benchmark_registry_cannot_self_drop_negative_evidence(tmp_path: Path) -
     path = tmp_path / "registry.json"
     path.write_text(json.dumps(registry), encoding="utf-8")
 
-    with pytest.raises(ValueError, match="invalid required experiment Evidence statuses"):
+    with pytest.raises(ValueError, match="experiment Evidence history is incomplete"):
+        validator.validate_registry(path)
+
+
+def test_benchmark_registry_requires_local_gate_for_acceptance(tmp_path: Path) -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item
+        for item in registry["experiments"]
+        if item["suite_id"] == "support-score.learn-claude-code"
+    )
+    accepted = next(
+        artifact
+        for artifact in experiment["evidence"]
+        if artifact["status"] == "accepted_development"
+    )
+    del accepted["acceptance_evidence"]
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps(registry), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="accepted experiment requires local gate Evidence"):
         validator.validate_registry(path)

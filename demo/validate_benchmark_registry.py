@@ -22,6 +22,20 @@ SUITE_TYPES = {
     "code_wiki_qa",
     "source_lifecycle",
 }
+REQUIRED_EXPERIMENT_EVIDENCE_PATHS = {
+    "exact-symbol-routing.learn-claude-code": {
+        "demo/results/exact_symbol_routing_candidate_1_rejected.json",
+        "demo/results/exact_symbol_routing_development.json",
+        "demo/results/exact_symbol_routing_development_accepted.json",
+        "demo/results/exact_symbol_routing_development_final.json",
+    },
+    "support-score.learn-claude-code": {
+        "demo/results/support_score_development.json",
+        "demo/results/support_score_development_final.json",
+        "demo/results/support_score_development_candidate_3.json",
+        "demo/results/support_score_development_candidate_4.json",
+    },
+}
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -222,6 +236,14 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
         evidence = experiment.get("evidence")
         if not isinstance(evidence, list) or not evidence:
             raise ValueError(f"experiment requires generated evidence: {suite_id}")
+        required_evidence_paths = REQUIRED_EXPERIMENT_EVIDENCE_PATHS.get(suite_id)
+        evidence_paths = [artifact.get("path") for artifact in evidence]
+        if (
+            required_evidence_paths is None
+            or len(evidence_paths) != len(set(evidence_paths))
+            or set(evidence_paths) != required_evidence_paths
+        ):
+            raise ValueError(f"experiment Evidence history is incomplete: {suite_id}")
         required_statuses = experiment.get("required_evidence_statuses")
         allowed_statuses = {
             "rejected",
@@ -271,6 +293,12 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
             )
             if status == "development_passed_regression_failed":
                 evidence_count += _validate_regression_evidence(
+                    experiment,
+                    artifact,
+                    confirmation,
+                )
+            if status == "accepted_development":
+                evidence_count += _validate_acceptance_evidence(
                     experiment,
                     artifact,
                     confirmation,
@@ -354,6 +382,58 @@ def _validate_regression_evidence(
     ):
         raise ValueError(
             f"experiment regression Evidence contract failed: {experiment['suite_id']}"
+        )
+    return 1
+
+
+def _validate_acceptance_evidence(
+    experiment: dict[str, Any],
+    development_artifact: dict[str, Any],
+    confirmation: dict[str, Any],
+) -> int:
+    artifact = development_artifact.get("acceptance_evidence")
+    if not isinstance(artifact, dict):
+        raise ValueError("accepted experiment requires local gate Evidence")
+    _validate_artifact(artifact, str(experiment["suite_id"]))
+    commit = str(artifact.get("memoryforge_commit"))
+    if COMMIT.fullmatch(commit) is None or artifact.get("passed") is not True:
+        raise ValueError("invalid experiment acceptance Evidence identity")
+    payload = cast(
+        dict[str, Any],
+        json.loads((REPO_ROOT / artifact["path"]).read_text(encoding="utf-8")),
+    )
+    local_gate = payload.get("local_gate", {})
+    pytest_result = local_gate.get("pytest", {})
+    if (
+        payload.get("suite_id") != experiment["suite_id"]
+        or payload.get("suite_revision") != experiment["suite_revision"]
+        or payload.get("memoryforge_commit") != commit
+        or payload.get("memoryforge_worktree_dirty") is not False
+        or payload.get("development_evidence", {}).get("path") != development_artifact["path"]
+        or payload.get("development_evidence", {}).get("sha256") != development_artifact["sha256"]
+        or payload.get("development_evidence", {}).get("memoryforge_commit")
+        != development_artifact["memoryforge_commit"]
+        or payload.get("development_evidence", {}).get("passed") is not True
+        or local_gate.get("command") != "scripts/check_local.sh"
+        or local_gate.get("ruff_check") != "passed"
+        or local_gate.get("ruff_format") != "passed"
+        or local_gate.get("strict_mypy") != "passed"
+        or local_gate.get("dependency_check") != "passed"
+        or not isinstance(pytest_result.get("passed"), int)
+        or pytest_result["passed"] < 1
+        or pytest_result.get("failed") != 0
+        or not isinstance(pytest_result.get("coverage_percent"), int)
+        or local_gate.get("wheel_clean_room") != "passed"
+        or local_gate.get("sdist_clean_room") != "passed"
+        or local_gate.get("pip_check") != "passed"
+        or local_gate.get("cli_version_smoke") != "passed"
+        or payload.get("confirmation", {}).get("path") != confirmation["path"]
+        or payload.get("confirmation", {}).get("sha256") != confirmation["sha256"]
+        or payload.get("confirmation", {}).get("status") != "not_run"
+        or payload.get("passed") is not True
+    ):
+        raise ValueError(
+            f"experiment acceptance Evidence contract failed: {experiment['suite_id']}"
         )
     return 1
 

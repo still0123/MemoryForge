@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "suite_id": "exact-symbol-routing.learn-claude-code",
+  "suite_revision": 1,
+  "memoryforge_commit": "5308078614e83ad90e3eae9ccdd490bb156f9948",
+  "memoryforge_worktree_dirty": false,
+  "development_evidence": {
+    "path": "demo/results/exact_symbol_routing_development_final.json",
+    "sha256": "a72494d69964a1c93b228fb73ffa1d8608bf714153cc54efa1096984addc0fc7",
+    "memoryforge_commit": "5308078614e83ad90e3eae9ccdd490bb156f9948",
+    "passed": true
+  },
+  "local_gate": {
+    "command": "scripts/check_local.sh",
+    "ruff_check": "passed",
+    "ruff_format": "passed",
+    "strict_mypy": "passed",
+    "registry_validation": {
+      "suite_count": 12,
+      "experiment_count": 1,
+      "evidence_count": 20,
+      "qa_case_count": 121
+    },
+    "dependency_check": "passed",
+    "pytest": {
+      "passed": 455,
+      "failed": 0,
+      "coverage_percent": 88
+    },
+    "wheel_clean_room": "passed",
+    "sdist_clean_room": "passed",
+    "pip_check": "passed",
+    "cli_version_smoke": "passed"
+  },
+  "confirmation": {
+    "path": "demo/evaluation/learn_claude_code_qa_confirm_v031.json",
+    "sha256": "b86fe1f7999c09af9bf7c6bed4951c1c4c565318c39192bea1831d942466c117",
+    "status": "not_run"
+  },
+  "passed": true
+}

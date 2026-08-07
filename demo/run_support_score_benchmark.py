@@ -33,6 +33,9 @@ def main(argv: list[str] | None = None) -> None:
         _validate_artifact(cast(dict[str, Any], manifest[key]))
     repository = cast(dict[str, Any], manifest["repositories"][0])
     source = args.source_repo.resolve()
+    source_commit = _git_at(source, "rev-parse", "HEAD")
+    if _git_at(source, "status", "--porcelain"):
+        raise SystemExit("source worktree must be clean")
     workdir = args.workdir.resolve()
     output = args.output.resolve()
     if workdir.exists() and any(workdir.iterdir()):
@@ -99,6 +102,8 @@ def main(argv: list[str] | None = None) -> None:
         "deterministic_replay": runs[0]["evaluation_sha256"] == runs[1]["evaluation_sha256"],
         "stable_memoryforge_commit": _git("rev-parse", "HEAD") == memoryforge_commit,
         "clean_worktree_after_run": not bool(_git("status", "--porcelain")),
+        "stable_source_commit": _git_at(source, "rev-parse", "HEAD") == source_commit,
+        "clean_source_worktree_after_run": not bool(_git_at(source, "status", "--porcelain")),
         "confirmation_not_run": manifest["confirmation"]["status"] == "not_run",
     }
     evidence = {
@@ -114,7 +119,7 @@ def main(argv: list[str] | None = None) -> None:
         "source_repository": {
             "repository": repository["repository"],
             "remote_url": _git_at(source, "remote", "get-url", "origin"),
-            "commit": _git_at(source, "rev-parse", "HEAD"),
+            "commit": source_commit,
             "license": repository["license"],
             "license_sha256": repository["license_sha256"],
             "source_paths": repository["code_paths"],
@@ -166,14 +171,20 @@ def _valid_support_payload(payload: object, threshold: float) -> bool:
     score = payload["score"]
     components = payload["components"]
     failed_hard_gates = payload["failed_hard_gates"]
-    return (
-        isinstance(score, (int, float))
-        and not isinstance(score, bool)
-        and 0 <= score <= 100
-        and payload["threshold"] == threshold
-        and isinstance(payload["sufficient"], bool)
-        and isinstance(payload["enforced"], bool)
-        and isinstance(components, dict)
+    expected_score = (
+        round(
+            100
+            * (
+                0.20 * components["exact_identifier_coverage"]
+                + 0.35 * components["core_term_coverage"]
+                + 0.15 * components["fact_co_location"]
+                + 0.10 * components["negation_alignment"]
+                + 0.10 * components["multi_source_coverage"]
+                + 0.10 * components["current_source_versions"]
+            ),
+            1,
+        )
+        if isinstance(components, dict)
         and set(components)
         == {
             "exact_identifier_coverage",
@@ -187,9 +198,21 @@ def _valid_support_payload(payload: object, threshold: float) -> bool:
             isinstance(value, (int, float)) and not isinstance(value, bool) and 0 <= value <= 1
             for value in components.values()
         )
+        else None
+    )
+    return (
+        isinstance(score, (int, float))
+        and not isinstance(score, bool)
+        and 0 <= score <= 100
+        and score == expected_score
+        and payload["threshold"] == threshold
+        and isinstance(payload["sufficient"], bool)
+        and isinstance(payload["enforced"], bool)
         and isinstance(failed_hard_gates, list)
         and all(isinstance(gate, str) and gate for gate in failed_hard_gates)
         and len(failed_hard_gates) == len(set(failed_hard_gates))
+        and payload["sufficient"] is (not failed_hard_gates)
+        and (payload["enforced"] or (payload["sufficient"] is True and not failed_hard_gates))
     )
 
 
@@ -198,9 +221,11 @@ def _valid_case_support(case: dict[str, Any], threshold: float) -> bool:
     if not isinstance(memoryforge, dict):
         return False
     support = memoryforge.get("support")
-    return (
-        support is None and memoryforge.get("answer_status") == "unknown"
-    ) or _valid_support_payload(support, threshold)
+    return (support is None and memoryforge.get("answer_status") == "unknown") or (
+        _valid_support_payload(support, threshold)
+        and support["enforced"] is True
+        and support["sufficient"] is (memoryforge.get("answer_status") == "answered")
+    )
 
 
 def _git(*args: str) -> str:
