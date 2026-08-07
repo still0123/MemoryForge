@@ -785,8 +785,8 @@
           "memoryforge_commit": "12d0ecadb4d8d310e2fa3b22f71dbfe770bd2567",
           "acceptance_evidence": {
             "path": "demo/results/static_showcase_candidate_5_local_gate.json",
-            "sha256": "e81c7c8c95c34507588c9af1270153dea57657d5c05a59ce7b3eab39f0d0f7a6",
-            "memoryforge_commit": "80e7ed72abe47684614928e5070a3390c9ff4bf0",
+            "sha256": "c17d2ebe838ac9d43e58825bd90c07d504cea5850f0d51995718b7827aafd9df",
+            "memoryforge_commit": "5c719c387addc6a415658727597400cfd1af7846",
             "passed": true
           },
           "passed": true

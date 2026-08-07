@@ -215,16 +215,16 @@ Candidate 5:
 ## Candidate 5 Post-Registry Local Gate
 
 - Gate Commit:
-  `80e7ed72abe47684614928e5070a3390c9ff4bf0`;
+  `5c719c387addc6a415658727597400cfd1af7846`;
 - Acceptance Evidence:
   `demo/results/static_showcase_candidate_5_local_gate.json`;
 - Acceptance Evidence SHA256:
-  `e81c7c8c95c34507588c9af1270153dea57657d5c05a59ce7b3eab39f0d0f7a6`;
+  `c17d2ebe838ac9d43e58825bd90c07d504cea5850f0d51995718b7827aafd9df`;
 - registry: 12 suites, 6 experiments, 71 Evidence, 121 QA cases;
 - Ruff without cache and format: passed;
 - strict Mypy: passed;
 - dependency check: passed;
-- pytest: 516 passed;
+- pytest: 519 passed;
 - coverage: 88%;
 - Wheel and sdist clean-room installs: passed;
 - `pip check` and CLI version smoke: passed;

@@ -398,8 +398,8 @@ REQUIRED_ACCEPTANCE_EVIDENCE = {
     "static-showcase": {
         _RESULTS + "static_showcase_development_candidate_5.json": (
             _RESULTS + "static_showcase_candidate_5_local_gate.json",
-            "e81c7c8c95c34507588c9af1270153dea57657d5c05a59ce7b3eab39f0d0f7a6",
-            "80e7ed72abe47684614928e5070a3390c9ff4bf0",
+            "c17d2ebe838ac9d43e58825bd90c07d504cea5850f0d51995718b7827aafd9df",
+            "5c719c387addc6a415658727597400cfd1af7846",
         ),
     },
 }
