@@ -2,7 +2,7 @@
 
 ## Status
 
-`PREREGISTERED_BASELINE_PENDING`
+`BASELINE_RECORDED_DEVELOPMENT_OPEN`
 
 ## Frozen Inputs
 
@@ -21,6 +21,27 @@
 - Confirmation status: `not_run`
 
 The confirmation split must not run during development.
+
+## Baseline Result
+
+- Evidence:
+  `demo/results/multi_source_coverage_baseline_rejected.json`
+- MemoryForge Commit:
+  `79c41bc5fdb08de18351546f7869b8083da3a1b2`
+- Evidence SHA256:
+  `6fa99baefed3cfa2b50bb044b3293c24ee90e697f0ff1a7f6636e91b3c548f81`
+- Result: `REJECTED`
+- Selection accuracy: 33.3%
+- Source coverage accuracy: 33.3%
+- Term coverage accuracy: 100.0%
+- Single-source rank preservation: 100.0%
+- Duplicate source rate: 33.3%
+- Deterministic replay: passed
+- Confirmation status: `not_run`
+
+The baseline failed four source-quota cases:
+`new-source-wins-rank-tie`, `source-quota-precedes-extra-terms`,
+`three-source-quota`, and `source-version-is-part-of-identity`.
 
 ## Problem
 
