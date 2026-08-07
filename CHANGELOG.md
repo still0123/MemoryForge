@@ -1,6 +1,6 @@
 # Changelog
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=3; platform_gate_candidate=3; platform_gate_status=accepted; macos_passed=586; linux_passed=583; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=5; platform_gate_candidate=3; platform_gate_status=accepted; macos_passed=586; linux_passed=583; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 ## v0.3.0 — Release Candidate
 
@@ -22,6 +22,7 @@
   atomic publish；保留 macOS 路径 alias 导致的 preflight 失败。
 - 保留 Candidate 4 文档门禁负结果；修复当前 RC claim 校验误扫历史平台 Evidence 的问题，
   不删除或改写旧的 macOS/Linux 计数。
+- Candidate 5 development 6/6，双隔离 Wheel/sdist 构建可复现；其 macOS/Linux 本地门禁尚未运行。
 - 强化回答准确率契约，要求关键事实和冻结来源同时命中；AgentSkill-Eval 30 题严格 Answer 为
   96.7%，Citation grounding 为 100%，Source recall@3 为 96.2%；
 - 追加独立 Click 20 题复评；回答准确率 5.0%、来源召回 16.7%，再次确认外部有效性缺口；

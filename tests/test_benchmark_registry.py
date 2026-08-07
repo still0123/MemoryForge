@@ -24,7 +24,7 @@ def test_benchmark_registry_binds_all_release_artifacts() -> None:
         "status": "valid",
         "suite_count": 12,
         "experiment_count": 8,
-        "evidence_count": 105,
+        "evidence_count": 106,
         "qa_case_count": 121,
         "qa_case_types_present": [
             "code_behavior",

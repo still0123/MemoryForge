@@ -1,10 +1,10 @@
 # v0.3.0 Release Candidate Specification
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=3; platform_gate_candidate=3; platform_gate_status=accepted; macos_passed=586; linux_passed=583; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=5; platform_gate_candidate=3; platform_gate_status=accepted; macos_passed=586; linux_passed=583; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 ## Status
 
-`LOCAL_GATES_ACCEPTED_FINAL_REVIEW_PENDING`
+`DEVELOPMENT_ACCEPTED_LOCAL_GATES_PENDING`
 
 ## Base
 
@@ -259,6 +259,27 @@ incorrectly treated retained historical platform counts as contradictory
 current release claims. The failed Evidence and both build byte sets remain
 registered; the shared document validator must distinguish the canonical
 release marker from historical Evidence before another candidate runs.
+
+## Accepted Development Candidate 5
+
+- Evidence: `demo/results/release_candidate_development_candidate_5.json`
+- Evidence SHA256:
+  `a64d26d8103c5bc7c0e2f61627fe978f57920a31d4be5252866cbbe354e6d861`
+- MemoryForge Commit:
+  `b42d6a887053464f138f87dd45922d22dc58baa0`
+- Result: `ACCEPTED_DEVELOPMENT`
+- Development pass rate: 100.0%
+- Failed cases: 0
+- Reproducible Wheel/sdist: true
+- Private detail leaks: 0
+- Confirmation status: `not_run`
+- Holdout status: `not_run`
+
+Candidate 5 limits current-claim validation to the canonical release marker
+and required current claims while retaining all historical platform Evidence.
+Both isolated build byte sets are registered. macOS and Linux local gates
+must run on a later clean Commit before final review can authorize
+confirmation.
 
 ## Confirmation Components
 
