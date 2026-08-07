@@ -2,7 +2,7 @@
 
 ## Status
 
-`CANDIDATE_6_DEVELOPMENT_PASSED_REGRESSION_PENDING`
+`CANDIDATE_7_DEVELOPMENT_PASSED_REGRESSION_PENDING`
 
 ## Frozen Inputs
 
@@ -334,6 +334,36 @@ preserves identifier case during exact support checks.
   `1403431c27d6e1928699b868a285a932ed3a3ee84961c83f1f5e1ff8016eaa96`.
 
 Candidate 6 retains all accepted development metrics and the unsupported score
+of 35.0. Both clean runs are deterministic. Confirmation remains `not_run`.
+
+Candidate 6 passed the full local gate at Commit
+`350fc0883c4b818fa9d57f3acbeb07e23920fdf5`: 467 tests, 88% coverage,
+Ruff, strict Mypy, registry validation, dependency checks, Wheel, and sdist all
+passed. Evidence review then found three remaining validator gaps:
+
+- per-case validation did not reconstruct expected hard gates;
+- accepted development validation trusted recorded gates without checking
+  their complete true state and per-case payloads;
+- local-gate validation did not require the complete registry, pytest, and
+  artifact schema.
+
+Candidate 6 is superseded.
+
+## Candidate 7 Development Result
+
+Candidate 7 reconstructs hard gates from each case and validates exact
+development and local-gate schemas, including retained artifact hashes.
+
+- Candidate Commit:
+  `e8c4c6587051ee83e8c42be0604281814cbcc6d6`;
+- Evidence:
+  `demo/results/support_score_development_candidate_7.json`;
+- Evidence SHA256:
+  `49b789f110684b9f0e6331fe74b2cb186c1394c16e0d970ca750b5b6d04497b0`;
+- deterministic evaluation SHA256:
+  `1403431c27d6e1928699b868a285a932ed3a3ee84961c83f1f5e1ff8016eaa96`.
+
+Candidate 7 retains all accepted development metrics and the unsupported score
 of 35.0. Both clean runs are deterministic. Confirmation remains `not_run`.
 
 ## Forbidden
