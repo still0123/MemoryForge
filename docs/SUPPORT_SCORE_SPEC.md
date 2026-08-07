@@ -2,7 +2,7 @@
 
 ## Status
 
-`DEVELOPMENT_PASSED_REGRESSION_FAILED`
+`CANDIDATE_2_DEVELOPMENT_PASSED_REGRESSION_PENDING`
 
 ## Frozen Inputs
 
@@ -113,7 +113,7 @@ Accept only if:
 
 Any failed gate rejects production integration and retains its Evidence.
 
-## Development Result
+## Candidate 1 Development Result
 
 - Candidate Commit:
   `99d20a259350693292ada852f3b18ab98aa1c172`;
@@ -162,6 +162,26 @@ The root cause is generic support accounting, not the frozen threshold:
 expanded field-kind synonyms and Chinese query scaffolding dilute the
 identifier's page-local support. Candidate 1 is rejected. Confirmation remains
 `not_run`.
+
+## Candidate 2 Development Result
+
+Candidate 2 counts an explicit identifier as core support when it appears in
+the selected Code Wiki page's verified Facts. Predicate and condition terms
+still require selected Citation coverage. No threshold, weight, route, frozen
+suite, or confirmation input changed.
+
+- Candidate Commit:
+  `807e8e76e0b787b7c7eae08f405afbeca6c9a783`;
+- Evidence:
+  `demo/results/support_score_development_final.json`;
+- Evidence SHA256:
+  `4592fb565ae53596dd69b7ca80a4870f2b7430b03f9a3a2e5d9fa4660902aa29`;
+- deterministic evaluation SHA256:
+  `a6c1fd8685dc4877a4f828da4eafba32344ee8cb3833a28434467da816e0e2ef`.
+
+Candidate 2 retains all Candidate 1 development metrics. Both clean runs are
+byte-deterministic at the evaluation layer. The unsupported case remains 55.0
+and returns `unknown`. Confirmation remains `not_run`.
 
 ## Forbidden
 
