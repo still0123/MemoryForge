@@ -34,6 +34,7 @@ REQUIRED_EXPERIMENT_EVIDENCE_PATHS = {
         "demo/results/support_score_development_final.json",
         "demo/results/support_score_development_candidate_3.json",
         "demo/results/support_score_development_candidate_4.json",
+        "demo/results/support_score_development_candidate_5.json",
     },
 }
 
@@ -297,7 +298,10 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
                     artifact,
                     confirmation,
                 )
-            if status == "accepted_development":
+            if status == "accepted_development" or (
+                status == "accepted_development_superseded"
+                and "acceptance_evidence" in artifact
+            ):
                 evidence_count += _validate_acceptance_evidence(
                     experiment,
                     artifact,

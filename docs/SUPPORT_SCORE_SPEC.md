@@ -2,7 +2,7 @@
 
 ## Status
 
-`CANDIDATE_5_DEVELOPMENT_PASSED_REGRESSION_PENDING`
+`ACCEPTED_DEVELOPMENT_AND_LOCAL_REGRESSION`
 
 ## Frozen Inputs
 
@@ -287,6 +287,28 @@ experiment to its complete Evidence history.
 
 Candidate 5 retains all accepted development metrics and the unsupported score
 of 35.0. Both clean runs are deterministic. Confirmation remains `not_run`.
+
+## Full Local Gate
+
+- Gate Commit:
+  `e13b3515189a8428344399fc36c0df7622e4a7f0`;
+- acceptance Evidence:
+  `demo/results/support_score_candidate_5_local_gate.json`;
+- acceptance Evidence SHA256:
+  `94ec66a56ae56ebd9c60b2cc30a9784f899b04cb4b7e983bc1a3ac7f321a4123`;
+- Ruff check and format: passed;
+- strict Mypy: passed;
+- registry: 12 release suites, two experiments, 29 Evidence artifacts, and 121
+  QA cases;
+- dependency check: passed;
+- pytest: 466 passed;
+- coverage: 88%;
+- Wheel clean-room: passed;
+- sdist clean-room: passed;
+- `pip check` and CLI version smoke test: passed.
+
+The registry now requires machine-readable local-gate Evidence for each final
+`accepted_development` artifact. Confirmation remains `not_run`.
 
 ## Forbidden
 
