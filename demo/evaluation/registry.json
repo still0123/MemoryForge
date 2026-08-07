@@ -1115,6 +1115,12 @@
             "memoryforge_commit": "94b136e0ddda947c14e4ab0297b6505e00b9c63f",
             "passed": false
           },
+          "acceptance_evidence": {
+            "path": "demo/results/release_candidate_candidate_2_local_gates.json",
+            "sha256": "fd6c6f2475848b79cf7c89a212d0f5ba2e0c52846cec7e572cc406dd3d8de092",
+            "memoryforge_commit": "926832e28503b69d83c2ca760d3ad0065615b5a8",
+            "passed": true
+          },
           "passed": true
         }
       ]

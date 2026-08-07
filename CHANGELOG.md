@@ -14,7 +14,7 @@
 - 增加 POSIX `fcntl` / Windows `msvcrt` 锁边界、PowerShell 本地门禁与 Linux clean-room
   Evidence；原生 Windows confirmation 仍冻结为 `not_run`；
 - 增加双隔离 release build、Workspace backup/restore drill、benchmark summary 与本地
-  provenance；RC 门禁在 macOS 为 574 passed、Linux 为 571 passed / 3 skipped，Wheel/sdist
+  provenance；RC 门禁在 macOS 为 583 passed、Linux 为 580 passed / 3 skipped，Wheel/sdist
   跨平台 SHA256 一致；retained artifacts 不进入 sdist。
 - 强化 release gate：核验实际 Wheel/sdist metadata 和 bytes，增加独立 sdist clean-room 与
   atomic publish；保留 macOS 路径 alias 导致的 preflight 失败。

@@ -2,7 +2,7 @@
 
 ## Status
 
-`DEVELOPMENT_ACCEPTED_LOCAL_GATES_PENDING`
+`LOCAL_GATES_ACCEPTED_FINAL_REVIEW_PENDING`
 
 ## Base
 
@@ -160,8 +160,26 @@ ownership check; it does not weaken the gate.
 Candidate 2 validates actual Wheel and sdist metadata and bytes, exact source
 Commit binding, independent sdist clean-room installation, deterministic
 malformed-artifact classification, structured document boundaries, and atomic
-release publication. Final macOS/Linux gates and static review must pass again
-before confirmation authorization.
+release publication.
+
+## Accepted Candidate 2 Local Gates
+
+- Evidence: `demo/results/release_candidate_candidate_2_local_gates.json`
+- Evidence SHA256:
+  `fd6c6f2475848b79cf7c89a212d0f5ba2e0c52846cec7e572cc406dd3d8de092`
+- Gate Commit:
+  `926832e28503b69d83c2ca760d3ad0065615b5a8`
+- macOS: 583 passed, 0 skipped, coverage 88%
+- Debian 12 / Lima: 580 passed, 3 skipped, coverage 88%
+- Wheel SHA256:
+  `b6f6cc6f869c9bcfbb83a162d5b1bb622a44f0b86855b6db9a183c21845fb803`
+- sdist SHA256:
+  `f908bc5431d2486cc380c5abb30d255004a14ee9faf9c4040835c5f4539fc4d2`
+
+Both platforms passed the complete local gate. Actual artifacts and
+per-platform provenance are retained under
+`demo/results/artifacts/release_candidate_delivery_candidate_2/`.
+Final static review must pass before confirmation authorization.
 
 ## Confirmation Components
 
