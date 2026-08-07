@@ -321,7 +321,12 @@ def answer_question(
 
     model_status: Literal["used", "fallback"] | None = None
     if provider is None:
-        selected = _top_matches(matches, answer_citation_limit, question_terms=question_terms)
+        selected = _top_matches(
+            matches,
+            answer_citation_limit,
+            question_terms=question_terms,
+            required_sources=min_source_count,
+        )
         answer = (
             _fallback_answer(question, selected)
             if "方法" in question
@@ -354,6 +359,7 @@ def answer_question(
                 fallback_matches,
                 answer_citation_limit,
                 question_terms=question_terms,
+                required_sources=min_source_count,
             )
             answer = _fallback_answer(question, selected)
             model_status = "fallback"
@@ -1184,11 +1190,23 @@ def _top_matches(
     max_citations: int,
     *,
     question_terms: set[str],
+    required_sources: int = 1,
 ) -> list[tuple[str, CitationPayload]]:
     # ponytail: greedy page-level coverage is O(n²), sufficient for the 6-citation budget.
     selected: list[tuple[str, CitationPayload]] = []
-    seen: set[tuple[str, int, str]] = set()
-    remaining = sorted(matches, key=lambda match: match[0], reverse=True)
+    selected_sources: set[tuple[str, int]] = set()
+    remaining: list[tuple[tuple[int, ...], str, CitationPayload]] = []
+    seen_citations: set[tuple[str, int, str]] = set()
+    for match in sorted(matches, key=lambda candidate: candidate[0], reverse=True):
+        citation = match[2]
+        citation_key = (
+            citation["source_id"],
+            citation["source_version"],
+            citation["locator"],
+        )
+        if citation_key not in seen_citations:
+            seen_citations.add(citation_key)
+            remaining.append(match)
     covered_terms: set[str] = set()
     while remaining and len(selected) < max_citations:
         if not selected:
@@ -1197,17 +1215,21 @@ def _top_matches(
             selected_index = max(
                 range(len(remaining)),
                 key=lambda index: (
+                    int(
+                        len(selected_sources) < required_sources
+                        and (
+                            remaining[index][2]["source_id"],
+                            remaining[index][2]["source_version"],
+                        )
+                        not in selected_sources
+                    ),
                     len(_matching_terms(question_terms, remaining[index][2]) - covered_terms),
-                    remaining[index][0][0],
-                    remaining[index][0][1],
+                    remaining[index][0],
                 ),
             )
         _, page_path, citation = remaining.pop(selected_index)
-        key = (citation["source_id"], citation["source_version"], citation["locator"])
-        if key in seen:
-            continue
-        seen.add(key)
         selected.append((page_path, citation))
+        selected_sources.add((citation["source_id"], citation["source_version"]))
         covered_terms.update(_matching_terms(question_terms, citation))
     return selected
 

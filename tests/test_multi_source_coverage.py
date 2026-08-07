@@ -26,6 +26,18 @@ def test_frozen_suites_have_exact_schemas() -> None:
     benchmark._validate_suite(_suite("confirmation"), expected_split="confirmation")
 
 
+def test_development_selector_meets_preregistered_gates() -> None:
+    evaluation = benchmark._run_suite(_suite("development"))
+
+    assert evaluation["metrics"] == {
+        "selection_accuracy": 100.0,
+        "source_coverage_accuracy": 100.0,
+        "term_coverage_accuracy": 100.0,
+        "single_source_rank_preservation": 100.0,
+        "duplicate_source_rate": 0.0,
+    }
+
+
 def test_suite_rejects_duplicate_case_ids() -> None:
     suite = copy.deepcopy(_suite("development"))
     suite["cases"][1]["id"] = suite["cases"][0]["id"]
