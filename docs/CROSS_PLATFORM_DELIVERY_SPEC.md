@@ -2,7 +2,7 @@
 
 ## Status
 
-`CANDIDATE_7_LOCAL_GATES_PASS_REVIEW_PENDING`
+`CANDIDATE_7_REVIEW_REJECTED_CANDIDATE_8_PENDING`
 
 ## Base
 
@@ -370,9 +370,20 @@ artifacts:
   `demo/results/artifacts/cross_platform_delivery_candidate_7/`
 
 The registry hashes the retained Wheel, sdist, per-platform provenance, and
-SHA256SUMS bytes and verifies their internal links. Candidate 7 is the accepted
-development result pending final static review. Native Windows confirmation
-remains frozen at `not_run` and is not claimed.
+SHA256SUMS bytes and verifies their internal links.
+
+## Candidate 7 Final Review
+
+- Result: `REJECTED`
+- Actionable findings: 1 P1
+- Confirmation status: `not_run`
+
+Candidate 7 remains retained but is superseded. Its predictable
+`/tmp/.memoryforge-locks-<uid>` directory could be pre-created by another local
+user, denying every POSIX Workspace and ChangeSet lock for the victim UID.
+Candidate 8 moves this directory under the `pwd`-resolved, owner-controlled
+home directory. Native Windows confirmation remains frozen at `not_run` and is
+not claimed.
 
 ## Goal
 
@@ -492,6 +503,11 @@ import, SourceManifest publication, ChangeSet directory-descriptor operations,
 or static Showcase publication. Those paths use POSIX `dir_fd`,
 `O_DIRECTORY`, and `O_NOFOLLOW` security semantics and require a separate,
 evidence-backed portability design before such a claim is allowed.
+
+The development gate can prove that no registered confirmation result or
+hosted workflow exists in the repository. It cannot cryptographically prove
+that no external operator ever ran the frozen cases and discarded the output;
+that remains a pre-registered process trust boundary.
 
 ## Forbidden
 

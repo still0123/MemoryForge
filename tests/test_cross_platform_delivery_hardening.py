@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+import memoryforge.platform_lock as platform_lock
 from memoryforge.workspace import Workspace
 
 _SCRIPT = (
@@ -267,3 +268,15 @@ def test_workspace_lock_allows_fixed_macos_system_alias(tmp_path: Path) -> None:
 
     with workspace.exclusive_lock():
         pass
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX namespace lock")
+def test_namespace_lock_root_is_owner_controlled_home(tmp_path: Path) -> None:
+    assert platform_lock._pwd is not None
+    lock_path = platform_lock._posix_namespace_lock_path(tmp_path)
+    home = Path(platform_lock._pwd.getpwuid(os.geteuid()).pw_dir).resolve()
+
+    assert lock_path.parent == home / ".memoryforge-locks"
+    metadata = lock_path.parent.stat(follow_symlinks=False)
+    assert metadata.st_uid == os.geteuid()
+    assert metadata.st_mode & 0o077 == 0

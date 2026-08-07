@@ -16,10 +16,12 @@ from types import ModuleType
 
 _fcntl: ModuleType | None = None
 _msvcrt: ModuleType | None = None
+_pwd: ModuleType | None = None
 if sys.platform == "win32":
     import msvcrt as _msvcrt
 else:
     import fcntl as _fcntl
+    import pwd as _pwd
 
 _POSIX_CONTENTION = frozenset({errno.EACCES, errno.EAGAIN, errno.EWOULDBLOCK})
 _WINDOWS_CONTENTION = frozenset({13, 16, 33, 36})
@@ -114,11 +116,19 @@ def exclusive_posix_directory_lock(path: Path) -> Iterator[int]:
 
 def _posix_namespace_lock_path(path: Path) -> Path:
     get_effective_user = getattr(os, "geteuid", None)
-    if get_effective_user is None:
+    if get_effective_user is None or _pwd is None:
         raise UnsafeLockFileError("effective user identity is unavailable")
     user_id = get_effective_user()
     try:
-        lock_root = Path("/tmp").resolve(strict=True) / f".memoryforge-locks-{user_id}"
+        home = Path(_pwd.getpwuid(user_id).pw_dir).resolve(strict=True)
+        home_metadata = home.stat(follow_symlinks=False)
+        if (
+            not stat.S_ISDIR(home_metadata.st_mode)
+            or home_metadata.st_uid != user_id
+            or stat.S_IMODE(home_metadata.st_mode) & 0o022
+        ):
+            raise UnsafeLockFileError("user home must be owner-controlled")
+        lock_root = home / ".memoryforge-locks"
         lock_root.mkdir(mode=0o700, exist_ok=True)
         metadata = lock_root.stat(follow_symlinks=False)
     except OSError as exc:
