@@ -102,6 +102,15 @@ def test_pytest_failure_classification_preserves_collection_cause() -> None:
         )
         == "pytest_assertion_failure"
     )
+    assert (
+        benchmark._classify_pytest_result(
+            2,
+            "ERROR collecting tests/test_x.py\nSyntaxError: invalid syntax",
+            "failed",
+            timed_out=False,
+        )
+        == "pytest_collection_syntax_error"
+    )
 
 
 def test_run_case_removes_explicit_pytest_plugins(

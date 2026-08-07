@@ -225,6 +225,10 @@ def _classify_pytest_result(
         return "pytest_collection_module_not_found"
     if "ImportError while importing test module" in output:
         return "pytest_collection_import_error"
+    if "SyntaxError" in output and "ERROR collecting" in output:
+        return "pytest_collection_syntax_error"
+    if "ERROR collecting" in output:
+        return "pytest_collection_error"
     if "AssertionError" in output or " failed" in output.lower():
         return "pytest_assertion_failure"
     return _PYTEST_FAILURE_CLASSIFICATIONS.get(return_code, "pytest_process_error")
