@@ -2,7 +2,7 @@
 
 ## Status
 
-`CANDIDATE_14_IMPLEMENTED_DEVELOPMENT_PENDING`
+`CANDIDATE_14_DEVELOPMENT_PASSED_REGRESSION_PENDING`
 
 ## Frozen Inputs
 
@@ -725,7 +725,24 @@ Candidate 14 removes heuristic paraphrase entailment. An Agent answer clause is
 accepted only when its normalized text equals one complete Citation sentence or
 coordination segment with matching negation polarity. This deliberately trades
 free paraphrasing for deterministic, local, auditable final-answer grounding.
-Candidate 14 development is pending. Confirmation remains `not_run`.
+
+## Candidate 14 Development Result
+
+- Candidate Commit:
+  `4f2f15ddc06882612a547aaad81d4b67b4ffbf8b`;
+- Evidence:
+  `demo/results/support_score_development_candidate_14.json`;
+- Evidence SHA256:
+  `7159992bf66e87e4cfd4e6fde70e65fa50d169002276d444bd6255223a93254a`;
+- structural SHA256:
+  `84aff8ba7c4012847522e04de42d599fa65a02526646065b41c038079a4ff24e`;
+- deterministic evaluation SHA256:
+  `1403431c27d6e1928699b868a285a932ed3a3ee84961c83f1f5e1ff8016eaa96`.
+
+Candidate 14 retains all accepted development metrics: 100.0% Answer,
+selective, route, Source, fact, Citation, multi-source, abstention, and
+repository-isolation metrics; coverage remains 90.0% and risk remains 0.0%.
+Full local regression is pending. Confirmation remains `not_run`.
 
 ## Forbidden
 
