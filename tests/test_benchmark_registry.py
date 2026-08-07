@@ -22,7 +22,7 @@ def test_benchmark_registry_binds_all_release_artifacts() -> None:
         "status": "valid",
         "suite_count": 12,
         "experiment_count": 7,
-        "evidence_count": 87,
+        "evidence_count": 89,
         "qa_case_count": 121,
         "qa_case_types_present": [
             "code_behavior",
@@ -393,7 +393,7 @@ def test_benchmark_registry_cannot_drop_cross_platform_linux_evidence(
     experiment = next(
         item for item in registry["experiments"] if item["suite_id"] == "cross-platform-delivery"
     )
-    candidate = next(item for item in experiment["evidence"] if item["evidence_revision"] == 7)
+    candidate = next(item for item in experiment["evidence"] if item["evidence_revision"] == 8)
     del candidate["linux_evidence"]
     path = tmp_path / "registry.json"
     path.write_text(json.dumps(registry), encoding="utf-8")
@@ -407,7 +407,7 @@ def test_benchmark_registry_binds_linux_runtime(monkeypatch: pytest.MonkeyPatch)
     experiment = next(
         item for item in registry["experiments"] if item["suite_id"] == "cross-platform-delivery"
     )
-    candidate = next(item for item in experiment["evidence"] if item["evidence_revision"] == 7)
+    candidate = next(item for item in experiment["evidence"] if item["evidence_revision"] == 8)
     linux = candidate["linux_evidence"]
     payload = json.loads((validator.REPO_ROOT / linux["path"]).read_text(encoding="utf-8"))
     payload["runtime"]["hosted_runner"] = True
@@ -447,7 +447,7 @@ def test_benchmark_registry_binds_final_macos_gate_runtime(
     experiment = next(
         item for item in registry["experiments"] if item["suite_id"] == "cross-platform-delivery"
     )
-    candidate = next(item for item in experiment["evidence"] if item["evidence_revision"] == 7)
+    candidate = next(item for item in experiment["evidence"] if item["evidence_revision"] == 8)
     acceptance = candidate["acceptance_evidence"]
     payload = json.loads((validator.REPO_ROOT / acceptance["path"]).read_text(encoding="utf-8"))
     payload["runtime"]["hosted_runner"] = True
@@ -468,7 +468,7 @@ def test_benchmark_registry_binds_final_macos_gate_counts(
     experiment = next(
         item for item in registry["experiments"] if item["suite_id"] == "cross-platform-delivery"
     )
-    candidate = next(item for item in experiment["evidence"] if item["evidence_revision"] == 7)
+    candidate = next(item for item in experiment["evidence"] if item["evidence_revision"] == 8)
     acceptance = candidate["acceptance_evidence"]
     payload = json.loads((validator.REPO_ROOT / acceptance["path"]).read_text(encoding="utf-8"))
     payload["local_gate"]["pytest"] = {
@@ -493,7 +493,7 @@ def test_benchmark_registry_requires_cross_platform_gate_ancestry(
     experiment = next(
         item for item in registry["experiments"] if item["suite_id"] == "cross-platform-delivery"
     )
-    candidate = next(item for item in experiment["evidence"] if item["evidence_revision"] == 7)
+    candidate = next(item for item in experiment["evidence"] if item["evidence_revision"] == 8)
     monkeypatch.setattr(validator, "_git_commit_descends_from", lambda _commit, _ancestor: False)
 
     with pytest.raises(ValueError, match="acceptance Evidence contract failed"):

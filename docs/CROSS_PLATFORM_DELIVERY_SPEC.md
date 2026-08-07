@@ -2,7 +2,7 @@
 
 ## Status
 
-`CANDIDATE_7_DEVELOPMENT_PASS_FINAL_GATES_PENDING`
+`CANDIDATE_7_LOCAL_GATES_PASS_REVIEW_PENDING`
 
 ## Base
 
@@ -331,7 +331,48 @@ claimed.
 - Confirmation status: `not_run`
 
 Candidate 7 retains the frozen development and confirmation inputs. Final
-macOS and local Linux gates remain pending.
+macOS and local Linux gates are recorded below.
+
+## Candidate 7 Final Local Gates
+
+macOS acceptance:
+
+- Gate Commit:
+  `569451d7f56d5606e8b000f15e34e04b87cb62a4`
+- Acceptance Evidence:
+  `demo/results/cross_platform_delivery_candidate_7_local_gate.json`
+- Acceptance Evidence SHA256:
+  `7d047d5d3a360450c046adf90fcd3165c6bab4a5417c7e2a71ff70b06dba9ed1`
+- Runtime: Darwin arm64, CPython 3.11.15, hosted runner false
+- Pytest: 557 passed
+- Coverage: 88%
+- Registry at gate: 12 suites / 7 experiments / 87 Evidence / 121 QA
+
+Linux acceptance:
+
+- Evidence:
+  `demo/results/cross_platform_delivery_candidate_7_linux_gate.json`
+- Evidence SHA256:
+  `263ff1e5ec752d5bb2f18372ee70c6dd3e1f5a6d80ee7719cc15d5ab092a5bc6`
+- Runtime: local Lima 2.2.0 VM, Debian 12 aarch64, CPython 3.11.2
+- Pytest: 554 passed, 3 platform-specific cases skipped, 0 failed
+- Coverage: 88%
+- Registry at gate: 12 suites / 7 experiments / 87 Evidence / 121 QA
+
+Both gates executed the isolated CLI version smoke and produced byte-identical
+artifacts:
+
+- Wheel SHA256:
+  `6a9225a6d4391adad38460b1044b5ebf8e94e5235cadba0a4907eb9056f6dfeb`
+- sdist SHA256:
+  `61867d47fff6d2f0188fc4a1a8a769edca65e654784d8f6e10ecd702d2dd7e94`
+- Retained artifact directory:
+  `demo/results/artifacts/cross_platform_delivery_candidate_7/`
+
+The registry hashes the retained Wheel, sdist, per-platform provenance, and
+SHA256SUMS bytes and verifies their internal links. Candidate 7 is the accepted
+development result pending final static review. Native Windows confirmation
+remains frozen at `not_run` and is not claimed.
 
 ## Goal
 
