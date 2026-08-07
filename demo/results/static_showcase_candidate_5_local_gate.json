@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "suite_id": "static-showcase",
+  "suite_revision": 3,
+  "memoryforge_commit": "782345ffec7fe2a10e3058b30845b48e09f6487d",
+  "memoryforge_worktree_dirty": false,
+  "development_evidence": {
+    "path": "demo/results/static_showcase_development_candidate_5.json",
+    "sha256": "5e644b467738bcb8121a0a224a7e7ca31b11b37d4ee6962b7b5659b72544101e",
+    "memoryforge_commit": "12d0ecadb4d8d310e2fa3b22f71dbfe770bd2567",
+    "passed": true
+  },
+  "local_gate": {
+    "command": "scripts/check_local.sh",
+    "ruff_check": "passed",
+    "ruff_format": "passed",
+    "strict_mypy": "passed",
+    "registry_validation": {
+      "suite_count": 12,
+      "experiment_count": 5,
+      "evidence_count": 62,
+      "qa_case_count": 121
+    },
+    "dependency_check": "passed",
+    "pytest": {
+      "passed": 514,
+      "failed": 0,
+      "coverage_percent": 88
+    },
+    "wheel_clean_room": "passed",
+    "sdist_clean_room": "passed",
+    "pip_check": "passed",
+    "cli_version_smoke": "passed",
+    "artifacts": {
+      "wheel_sha256": "18d6ac2e0deebe65dc718393f5faed2068eea1cbef266c2c18bbd6e1aaaf50a0",
+      "sdist_sha256": "6c5938fd2cef7c77f1cddd5d72ee6dd89c8fa9218486aa5b57a100807bf1ef23",
+      "provenance_sha256": "00cd3b0476ccbb7f2b26d0cfef4495b00b84e8086c7021c19e0f04cde95e75e5",
+      "sha256sums_sha256": "a05ca8b6a48bed96e82a443553aa4f5e349d54857c55b9a82e0c6dc78ab18bf4"
+    }
+  },
+  "confirmation": {
+    "path": "demo/evaluation/static_showcase_confirmation.json",
+    "sha256": "4c64d073a2a1af46a068219af158ed77bc1e99a1b4de6601e01634d63140166e",
+    "status": "not_run"
+  },
+  "passed": true
+}

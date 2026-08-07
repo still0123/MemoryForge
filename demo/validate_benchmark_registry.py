@@ -197,6 +197,56 @@ REQUIRED_EXPERIMENT_EVIDENCE = {
             "c6f329152dac002ecead2f8d8bebcb002865aff6",
         ),
     },
+    "static-showcase": {
+        _RESULTS + "static_showcase_baseline_rejected.json": (
+            1,
+            "rejected",
+            "c8448999fad2f5ee50cd249688981498eb30fd9b52d8d4f8dde27c72fafb4952",
+            "cf8a47eb2e62b0aff7bf5e056efd848902df3e06",
+        ),
+        _RESULTS + "static_showcase_candidate_0_fixture_rejected.json": (
+            2,
+            "rejected",
+            "5afefb3f7312007c9ca3c1f3c2ab08cc369df79a025b55112f9ecd3e28f60f5d",
+            "bec8c0edea1fa7a126fa15db8078065bb45e2eae",
+        ),
+        _RESULTS + "static_showcase_candidate_1_fixture_rejected.json": (
+            3,
+            "rejected",
+            "5f7841001452563bb5963c71f605f35ef587b56a868d40febbb0236026635e8b",
+            "a84f777f3e701aa5f67175445c20a3b656bcac0a",
+        ),
+        _RESULTS + "static_showcase_development_candidate_1.json": (
+            4,
+            "accepted_development_superseded",
+            "22f58560b5597dfc4f643656c918a466ee62e1d9e19ac2ec1f2d92740b5057c0",
+            "649f1ca35cf363f6eda9e4cd563c2ba6e29fecff",
+        ),
+        _RESULTS + "static_showcase_development_candidate_2.json": (
+            5,
+            "accepted_development_superseded",
+            "0ae35723c8f6f30c4edcfabae89c3a078b965a2d89563e3006b08eaee17573eb",
+            "1962f19a399ba0805a9c107fd14741fdfcb34759",
+        ),
+        _RESULTS + "static_showcase_development_candidate_3.json": (
+            6,
+            "accepted_development_superseded",
+            "3cb6113516a5d6b3e0b5e2c357bde6470350c0a8be0aecfaa563253135ed7da7",
+            "c07d2d275caa4449ffc6cc20f3a709ebf4c59b0b",
+        ),
+        _RESULTS + "static_showcase_development_candidate_4.json": (
+            7,
+            "accepted_development_superseded",
+            "2340e3ecd313a85fdcdb2384ea5c936dd564b4ca8c0e6e1440af2a49c5661234",
+            "77b9026c1b88fbfa1138dd74c9efb3f9abf23d90",
+        ),
+        _RESULTS + "static_showcase_development_candidate_5.json": (
+            8,
+            "accepted_development",
+            "5e644b467738bcb8121a0a224a7e7ca31b11b37d4ee6962b7b5659b72544101e",
+            "12d0ecadb4d8d310e2fa3b22f71dbfe770bd2567",
+        ),
+    },
 }
 REQUIRED_REGRESSION_EVIDENCE = {
     "exact-symbol-routing.learn-claude-code": {
@@ -221,6 +271,7 @@ REQUIRED_REGRESSION_EVIDENCE = {
     "multi-source-coverage-selection": {},
     "folder-import-lifecycle": {},
     "github-thread-import-lifecycle": {},
+    "static-showcase": {},
 }
 REQUIRED_ACCEPTANCE_EVIDENCE = {
     "exact-symbol-routing.learn-claude-code": {
@@ -308,6 +359,13 @@ REQUIRED_ACCEPTANCE_EVIDENCE = {
             "73242bc085e6a170d459b10324dabc57aed4bc50",
         ),
     },
+    "static-showcase": {
+        _RESULTS + "static_showcase_development_candidate_5.json": (
+            _RESULTS + "static_showcase_candidate_5_local_gate.json",
+            "cb892f55b100ff51cd6805933ab3f3c4ff39b5d0c676ad4cc7168aef55c0eada",
+            "782345ffec7fe2a10e3058b30845b48e09f6487d",
+        ),
+    },
 }
 FINAL_ACCEPTANCE_REGISTRY_COUNTS = {
     "exact-symbol-routing.learn-claude-code": {
@@ -335,6 +393,12 @@ FINAL_ACCEPTANCE_REGISTRY_COUNTS = {
         "qa_case_count": 121,
     },
     "github-thread-import-lifecycle": {
+        "suite_count": 12,
+        "experiment_count": 5,
+        "evidence_count": 62,
+        "qa_case_count": 121,
+    },
+    "static-showcase": {
         "suite_count": 12,
         "experiment_count": 5,
         "evidence_count": 62,
@@ -457,6 +521,17 @@ FINAL_EXPERIMENT_GATE_KEYS = {
         "clean_worktree_after_run",
         "confirmation_not_run",
     },
+    "static-showcase": {
+        "pass_rate",
+        "failed_cases",
+        "required_sections",
+        "local_detail_leaks",
+        "workspace_mutations",
+        "deterministic_replay",
+        "stable_memoryforge_commit",
+        "clean_worktree_after_run",
+        "confirmation_not_run",
+    },
 }
 LOCAL_GATE_KEYS = {
     "command",
@@ -508,6 +583,17 @@ GITHUB_THREAD_IMPORT_REPOSITORY = {
         "tests/test_github_thread_import.py",
         "demo/evaluation/github_thread_import_development.json",
         "demo/evaluation/github_thread_import_confirmation.json",
+    ],
+}
+STATIC_SHOWCASE_REPOSITORY = {
+    "repository": "still0123/MemoryForge",
+    "remote_url": "https://github.com/still0123/MemoryForge.git",
+    "commit": "cf8a47eb2e62b0aff7bf5e056efd848902df3e06",
+    "license": "MIT",
+    "source_paths": [
+        "tests/test_showcase.py",
+        "demo/evaluation/static_showcase_development.json",
+        "demo/evaluation/static_showcase_confirmation.json",
     ],
 }
 
@@ -678,6 +764,8 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
             _validate_folder_import_experiment_metadata(experiment)
         elif suite_id == "github-thread-import-lifecycle":
             _validate_github_thread_experiment_metadata(experiment)
+        elif suite_id == "static-showcase":
+            _validate_static_showcase_experiment_metadata(experiment)
 
         repositories = experiment.get("repositories")
         if not isinstance(repositories, list) or not repositories:
@@ -689,6 +777,7 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
             "multi-source-coverage-selection",
             "folder-import-lifecycle",
             "github-thread-import-lifecycle",
+            "static-showcase",
         }:
             if "source_manifest" in experiment:
                 raise ValueError(f"component experiment cannot declare source manifest: {suite_id}")
@@ -864,6 +953,15 @@ def _validate_experiment_payload(
         "github-thread-import-lifecycle",
     }:
         _validate_pytest_component_experiment_payload(
+            experiment,
+            artifact,
+            payload,
+            development,
+            confirmation,
+        )
+        return
+    if experiment["suite_id"] == "static-showcase":
+        _validate_static_showcase_experiment_payload(
             experiment,
             artifact,
             payload,
@@ -1085,6 +1183,100 @@ def _validate_pytest_component_experiment_payload(
             raise ValueError(f"pytest component experiment metric mismatch: {metric}")
 
 
+def _validate_static_showcase_experiment_payload(
+    experiment: dict[str, Any],
+    artifact: dict[str, Any],
+    payload: dict[str, Any],
+    development: dict[str, Any],
+    confirmation: dict[str, Any],
+) -> None:
+    if (
+        payload.get("schema_version") != 1
+        or payload.get("suite_id") != "static-showcase"
+        or payload.get("memoryforge_commit") != artifact["memoryforge_commit"]
+        or payload.get("memoryforge_worktree_dirty") is not False
+        or payload.get("passed") is not artifact["passed"]
+        or payload.get("confirmation", {}).get("status") != "not_run"
+    ):
+        raise ValueError("static-Showcase experiment Evidence contract failed")
+    if artifact["status"] == "rejected":
+        pytest_result = payload.get("development", {}).get("pytest", {})
+        failures = payload.get("development", {}).get("failures")
+        if (
+            set(payload)
+            != {
+                "schema_version",
+                "suite_id",
+                "suite_revision",
+                "memoryforge_commit",
+                "memoryforge_worktree_dirty",
+                "development",
+                "confirmation",
+                "passed",
+            }
+            or payload.get("suite_revision") not in {1, 2}
+            or artifact["passed"] is not False
+            or not isinstance(pytest_result, dict)
+            or pytest_result.get("exit_code") not in {1, 2}
+            or not isinstance(failures, list)
+            or not failures
+            or any(
+                not isinstance(failure, dict)
+                or not isinstance(failure.get("classification"), str)
+                or not failure["classification"]
+                for failure in failures
+            )
+        ):
+            raise ValueError("rejected static-Showcase Evidence must retain failures")
+        return
+
+    evaluation = payload.get("development", {}).get("evaluation")
+    runs = payload.get("runs")
+    gates = payload.get("gates")
+    frozen = json.loads((REPO_ROOT / development["path"]).read_text(encoding="utf-8"))
+    frozen_ids = [case.get("id") for case in frozen.get("cases", [])]
+    evaluation_sha256 = hashlib.sha256(
+        json.dumps(evaluation, sort_keys=True, ensure_ascii=False).encode("utf-8")
+    ).hexdigest()
+    if (
+        set(payload) != MULTI_SOURCE_DEVELOPMENT_EVIDENCE_KEYS
+        or payload.get("suite_revision") != experiment["suite_revision"]
+        or payload.get("development", {}).get("path") != development["path"]
+        or payload.get("development", {}).get("sha256") != development["sha256"]
+        or payload.get("development", {}).get("test_file")
+        != {"path": development["test_file"], "sha256": development["test_sha256"]}
+        or payload.get("development", {}).get("case_count") != development["case_count"]
+        or not isinstance(evaluation, dict)
+        or set(evaluation) != {"case_count", "metrics", "cases"}
+        or evaluation.get("case_count") != development["case_count"]
+        or not isinstance(evaluation.get("cases"), list)
+        or [case.get("id") for case in evaluation["cases"]] != frozen_ids
+        or len(set(frozen_ids)) != len(frozen_ids)
+        or not isinstance(runs, list)
+        or [run.get("name") for run in runs if isinstance(run, dict)] != ["first", "second"]
+        or any(
+            not isinstance(run, dict)
+            or set(run) != {"name", "evaluation_sha256"}
+            or run.get("evaluation_sha256") != evaluation_sha256
+            for run in runs
+        )
+        or payload.get("confirmation", {}).get("path") != confirmation["path"]
+        or payload.get("confirmation", {}).get("sha256") != confirmation["sha256"]
+        or not isinstance(gates, dict)
+        or set(gates) != FINAL_EXPERIMENT_GATE_KEYS["static-showcase"]
+        or not all(value is True for value in gates.values())
+        or artifact["status"] not in {"accepted_development", "accepted_development_superseded"}
+        or artifact["passed"] is not True
+    ):
+        raise ValueError("accepted static-Showcase Evidence contract failed")
+    metrics = evaluation.get("metrics")
+    if not isinstance(metrics, dict):
+        raise ValueError("static-Showcase metrics are missing")
+    for metric, expected in experiment["expected_metrics"]["development"].items():
+        if metrics.get(metric) != expected:
+            raise ValueError(f"static-Showcase metric mismatch: {metric}")
+
+
 def _validate_multi_source_experiment_metadata(experiment: dict[str, Any]) -> None:
     if (
         experiment.get("evaluator") != "demo.run_multi_source_coverage_benchmark"
@@ -1112,6 +1304,17 @@ def _validate_github_thread_experiment_metadata(experiment: dict[str, Any]) -> N
         or experiment.get("repositories") != [GITHUB_THREAD_IMPORT_REPOSITORY]
     ):
         raise ValueError("GitHub thread-import experiment metadata changed")
+
+
+def _validate_static_showcase_experiment_metadata(experiment: dict[str, Any]) -> None:
+    if (
+        experiment.get("suite_revision") != 3
+        or experiment.get("suite_type") != "source_lifecycle"
+        or experiment.get("evaluator") != "demo.run_static_showcase_benchmark"
+        or experiment.get("max_wiki_pages") != 3
+        or experiment.get("repositories") != [STATIC_SHOWCASE_REPOSITORY]
+    ):
+        raise ValueError("static-Showcase experiment metadata changed")
 
 
 def _validate_regression_evidence(
@@ -1182,6 +1385,7 @@ def _validate_acceptance_evidence(
         "multi-source-coverage-selection",
         "folder-import-lifecycle",
         "github-thread-import-lifecycle",
+        "static-showcase",
     }
     expected_payload_keys = LOCAL_GATE_EVIDENCE_KEYS | (
         {"regression_evidence"} if multi_source else set()
