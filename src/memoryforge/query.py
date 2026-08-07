@@ -10,9 +10,10 @@ from pathlib import Path, PurePosixPath
 from typing import Literal, NotRequired, TypedDict
 
 from memoryforge.provider import OpenAICompatibleProvider, ProviderUnavailableError
-from memoryforge.wiki_facts import CitationPayload
+from memoryforge.wiki_facts import AppliedCodeSymbolMatch, CitationPayload
 from memoryforge.wiki_facts import parse_page_citations as _page_citations
 from memoryforge.workspace import (
+    find_applied_code_symbol_facts,
     find_applied_page_paths,
     is_public_source_version,
     read_source_excerpt,
@@ -26,6 +27,8 @@ _INDEX_ENTRY = re.compile(
 _WORDS = re.compile(r"[a-z0-9]+|[\u4e00-\u9fff]+", re.IGNORECASE)
 _CAMEL_CASE_PARTS = re.compile(r"[A-Z]+(?=[A-Z][a-z]|$)|[A-Z]?[a-z]+")
 _CJK = re.compile(r"^[\u4e00-\u9fff]+$")
+_EXPLICIT_CODE_IDENTIFIER = re.compile(r"[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*")
+_SYMBOL_FACT_KIND = re.compile(r"^`[^`]+` \((?P<kind>[a-z_]+)\):")
 _REPOSITORY_OVERVIEW_LINK = re.compile(r"^pages/repository-[a-f0-9]{12}\.md$")
 _NEGATION_CUES = ("不", "无", "未", "没", "避免", "拒绝")
 _STOP_WORDS = {
@@ -137,6 +140,25 @@ def answer_question(
     trace: list[TraceStep] = []
     if not question_terms:
         return _unknown_payload(debug, trace)
+    symbol_matches = _applied_code_symbol_matches(
+        workspace_root,
+        question,
+        repository_id=repository_id,
+    )
+    exact_symbol_fact_keys = {
+        _citation_fact_key(match.page_path, match) for match in symbol_matches
+    }
+    exact_symbol_page_paths = tuple(dict.fromkeys(match.page_path for match in symbol_matches))
+    if symbol_matches:
+        trace.append(
+            {
+                "level": "L0",
+                "artifact": (
+                    "Applied Code Index Symbol projection: "
+                    + ", ".join(dict.fromkeys(match.identifier for match in symbol_matches))
+                ),
+            }
+        )
 
     raw_matches: list[tuple[frozenset[str], bool, str, CitationPayload]] = []
     raw_candidate_matches: list[tuple[frozenset[str], bool, str, CitationPayload]] = []
@@ -152,6 +174,7 @@ def answer_question(
             trace=trace,
             repository_id=repository_id,
             prefer_index_routes=max_citations > 1 or _has_many_index_routes(workspace_root),
+            exact_symbol_page_paths=exact_symbol_page_paths,
         )
     ):
         content = page.read_text(encoding="utf-8")
@@ -208,6 +231,8 @@ def answer_question(
                 )
             ):
                 sufficient_match = False
+            if _citation_fact_key(page_path, citation) in exact_symbol_fact_keys:
+                sufficient_match = True
             if sufficient_match:
                 raw_matches.append((frozenset(overlap), is_summary, page_path, citation))
 
@@ -228,6 +253,7 @@ def answer_question(
         prefer_environment_assignments=prefer_environment_assignments,
         prefer_failure_facts=prefer_failure_facts,
         prefer_code_modules=prefer_code_modules,
+        exact_symbol_fact_keys=exact_symbol_fact_keys,
     )
     candidate_matches = _rank_matches(
         raw_candidate_matches,
@@ -239,6 +265,7 @@ def answer_question(
         prefer_environment_assignments=prefer_environment_assignments,
         prefer_failure_facts=prefer_failure_facts,
         prefer_code_modules=prefer_code_modules,
+        exact_symbol_fact_keys=exact_symbol_fact_keys,
     )
     model_candidates = [
         match for match in candidate_matches if _has_direct_evidence(question_terms, match[2])
@@ -480,6 +507,142 @@ def _unknown_payload(debug: bool, trace: list[TraceStep]) -> AskPayload:
     return result
 
 
+def _applied_code_symbol_matches(
+    workspace_root: Path,
+    question: str,
+    *,
+    repository_id: str | None,
+) -> tuple[AppliedCodeSymbolMatch, ...]:
+    identifiers = _explicit_code_identifiers(question)
+    index_path = workspace_root / ".memoryforge" / "index.sqlite"
+    if (
+        not identifiers
+        or _is_code_relation_question(question)
+        or not (workspace_root / "raw").is_dir()
+        or not index_path.is_file()
+        or index_path.is_symlink()
+    ):
+        return ()
+    matches = find_applied_code_symbol_facts(
+        workspace_root,
+        identifiers,
+        repository_id=repository_id,
+    )
+    requested_kinds = _requested_symbol_kinds(question)
+    if requested_kinds:
+        matches = tuple(
+            match
+            for match in matches
+            if (kind_match := _SYMBOL_FACT_KIND.match(match.quote)) is not None
+            and kind_match["kind"] in requested_kinds
+        )
+    repository_ids_by_identifier: dict[str, set[str | None]] = {}
+    for match in matches:
+        repository_ids_by_identifier.setdefault(match.identifier, set()).add(match.repository_id)
+    unambiguous = tuple(
+        match for match in matches if len(repository_ids_by_identifier[match.identifier]) == 1
+    )
+    contextualized: list[AppliedCodeSymbolMatch] = []
+    for identifier in dict.fromkeys(match.identifier for match in unambiguous):
+        group = [match for match in unambiguous if match.identifier == identifier]
+        context_identifiers = [candidate for candidate in identifiers if candidate != identifier]
+        contextual = [
+            match
+            for match in group
+            if any(context in (match.symbol or "").split(".") for context in context_identifiers)
+        ]
+        contextualized.extend(contextual or group)
+    return tuple(contextualized)
+
+
+def _explicit_code_identifiers(question: str) -> tuple[str, ...]:
+    backticked = {
+        match.group("identifier")
+        for match in re.finditer(
+            r"`(?P<identifier>[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*)`",
+            question,
+        )
+    }
+    identifiers = []
+    for match in _EXPLICIT_CODE_IDENTIFIER.finditer(question):
+        identifier = match.group()
+        if (
+            identifier in backticked
+            or "." in identifier
+            or "_" in identifier
+            or "$" in identifier
+            or (
+                any(character.islower() for character in identifier)
+                and any(character.isupper() for character in identifier[1:])
+            )
+        ):
+            identifiers.append(identifier)
+    return tuple(dict.fromkeys(identifiers))[:8]
+
+
+def _requested_symbol_kinds(question: str) -> set[str]:
+    lowered = question.lower()
+    english_terms = set(re.findall(r"[a-z_]+", lowered))
+    kinds = {
+        kind
+        for marker, kind in (
+            ("class", "class"),
+            ("interface", "interface"),
+            ("method", "method"),
+            ("function", "function"),
+            ("struct", "struct"),
+        )
+        if marker in english_terms
+    }
+    if "type alias" in lowered:
+        kinds.add("type_alias")
+    for marker, kind in (
+        ("类", "class"),
+        ("接口", "interface"),
+        ("方法", "method"),
+        ("函数", "function"),
+        ("结构体", "struct"),
+    ):
+        if marker in question:
+            kinds.add(kind)
+    if kinds & {"function", "method"}:
+        kinds.update({"function", "method"})
+    return kinds
+
+
+def _is_code_relation_question(question: str) -> bool:
+    english_terms = set(re.findall(r"[a-z_]+", question.lower()))
+    return bool(
+        english_terms
+        & {
+            "call",
+            "calls",
+            "depend",
+            "dependency",
+            "dependencies",
+            "extend",
+            "extends",
+            "implement",
+            "implements",
+            "import",
+            "imports",
+        }
+    ) or any(marker in question for marker in ("依赖", "导入", "调用", "继承", "实现"))
+
+
+def _citation_fact_key(
+    page_path: str,
+    citation: CitationPayload | AppliedCodeSymbolMatch,
+) -> tuple[str, str, int, str, str]:
+    return (
+        page_path,
+        citation["source_id"] if isinstance(citation, dict) else citation.source_id,
+        citation["source_version"] if isinstance(citation, dict) else citation.source_version,
+        citation["locator"] if isinstance(citation, dict) else citation.locator,
+        citation["quote"] if isinstance(citation, dict) else citation.quote,
+    )
+
+
 def _candidate_pages(
     workspace_root: Path,
     question: str,
@@ -489,6 +652,7 @@ def _candidate_pages(
     trace: list[TraceStep],
     repository_id: str | None,
     prefer_index_routes: bool = False,
+    exact_symbol_page_paths: tuple[str, ...] = (),
 ) -> list[Path]:
     wiki_root = workspace_root / "wiki"
     index = wiki_root / "INDEX.md"
@@ -573,6 +737,11 @@ def _candidate_pages(
         for path in relaxed_fts_paths
         if (page := _safe_wiki_page(workspace_root, workspace_root / path)) is not None
     ]
+    exact_symbol_pages = [
+        page
+        for path in exact_symbol_page_paths
+        if (page := _safe_wiki_page(workspace_root, workspace_root / path)) is not None
+    ]
     ordered_pages = (*module_pages, *strict_pages)
     exact_code_pages = _exact_code_pages(
         workspace_root,
@@ -580,9 +749,11 @@ def _candidate_pages(
         max_pages=max_pages,
         repository_id=repository_id,
     )
-    ordered_pages = (*exact_code_pages, *ordered_pages)
-    if exact_code_pages and any(marker in question for marker in ("方法", "字段", "属性", "函数")):
-        return list(exact_code_pages[:max_pages])
+    ordered_pages = (*exact_symbol_pages, *exact_code_pages, *ordered_pages)
+    if (exact_symbol_pages or exact_code_pages) and any(
+        marker in question for marker in ("方法", "字段", "属性", "函数")
+    ):
+        return list(dict.fromkeys((*exact_symbol_pages, *exact_code_pages)))[:max_pages]
     if prefer_index_routes and not any(_CJK.fullmatch(term) for term in question_terms):
         ordered_pages += tuple(
             _document_frequency_pages(
@@ -778,10 +949,12 @@ def _rank_matches(
     prefer_environment_assignments: bool = False,
     prefer_failure_facts: bool = False,
     prefer_code_modules: bool = False,
+    exact_symbol_fact_keys: set[tuple[str, str, int, str, str]] | None = None,
 ) -> list[tuple[tuple[int, ...], str, CitationPayload]]:
     page_ranks = page_ranks or {}
     local_morphology_pages = local_morphology_pages or set()
     focus_terms = focus_terms or set()
+    exact_symbol_fact_keys = exact_symbol_fact_keys or set()
     page_aware = bool(page_ranks) and not any(_CJK.fullmatch(term) for term in question_terms)
     frequencies = Counter(
         term
@@ -816,6 +989,7 @@ def _rank_matches(
             len(set(module_path.split("/")) - question_identifiers) if module_path else 0
         )
         score = (
+            int(_citation_fact_key(page_path, citation) in exact_symbol_fact_keys),
             int(prefer_code_modules and module_path is not None),
             -extra_module_parts if prefer_code_modules and module_path is not None else 0,
             module_section_score if prefer_code_modules else 0,

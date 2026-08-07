@@ -32,6 +32,7 @@ from memoryforge.models import (
 )
 from memoryforge.version_store import GitVersionStore
 from memoryforge.wiki_facts import (
+    AppliedCodeSymbolMatch,
     IndexedWikiFact,
     WikiFact,
     WikiFactSearchResult,
@@ -56,6 +57,7 @@ _CJK_RUN = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]+")
 _SEARCH_RUN = re.compile(r"[A-Za-z0-9_]+|[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]+")
 _CHAR_LOCATOR = re.compile(r"^chars:(?P<start>\d+)-(?P<end>\d+)$")
 _CONTENT_SHA256 = re.compile(r"^[a-f0-9]{64}$")
+_CODE_IDENTIFIER = re.compile(r"^[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*$")
 _ORIGIN_MAIN_SOURCE_ID = re.compile(r"^src_[a-f0-9]{16}$")
 _FEISHU_SOURCE_PATH = re.compile(r"^feishu/(?P<document_id>[A-Za-z0-9_-]{8,})\.md$")
 _BLOB_ROOT = Path("raw/blobs")
@@ -213,6 +215,10 @@ ON wiki_facts(source_id, source_version)""",
     """
 CREATE INDEX IF NOT EXISTS idx_wiki_facts_repository
 ON wiki_facts(repository_id, page_path)""",
+    """
+CREATE INDEX IF NOT EXISTS idx_wiki_facts_symbol
+ON wiki_facts(symbol, repository_id, page_path)
+WHERE symbol IS NOT NULL""",
     """
 CREATE TABLE IF NOT EXISTS git_repositories (
     repository_id TEXT PRIMARY KEY,
@@ -1775,6 +1781,122 @@ def find_applied_page_paths(
         if len(paths) == limit:
             break
     return tuple(paths)
+
+
+def find_applied_code_symbol_facts(
+    workspace: Path,
+    identifiers: Iterable[str],
+    *,
+    limit: int = 100,
+    repository_id: str | None = None,
+) -> tuple[AppliedCodeSymbolMatch, ...]:
+    """Find exact parser-derived Symbols from the applied Code Index projection."""
+    normalized = tuple(dict.fromkeys(identifier.strip() for identifier in identifiers))
+    if not normalized or any(not identifier for identifier in normalized):
+        raise ValueError("code Symbol lookup requires at least one identifier")
+    if any(_CODE_IDENTIFIER.fullmatch(identifier) is None for identifier in normalized):
+        raise ValueError("code Symbol identifiers must be dotted programming identifiers")
+    if limit < 1 or limit > 100:
+        raise ValueError("code Symbol result limit must be between 1 and 100")
+
+    unqualified = tuple(identifier for identifier in normalized if "." not in identifier)
+    exact_placeholders = ", ".join("?" for _ in normalized)
+    conditions = [f"facts.symbol IN ({exact_placeholders})"]
+    parameters: list[object] = list(normalized)
+    for identifier in unqualified:
+        conditions.append("substr(facts.symbol, -(length(?) + 1)) = '.' || ?")
+        parameters.extend((identifier, identifier))
+
+    repository_filter = ""
+    opened = Workspace.open_readonly(workspace)
+    with _connect_readonly(opened.index_path) as connection:
+        if (
+            connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'wiki_facts'"
+            ).fetchone()
+            is None
+        ):
+            return ()
+        if repository_id is not None:
+            _validate_repository_scope(connection, repository_id)
+            repository_filter = "AND facts.repository_id = ?"
+            parameters.append(repository_id)
+        rows = connection.execute(
+            f"""
+            SELECT
+                facts.fact_id,
+                facts.page_path,
+                facts.repository_id,
+                facts.source_id,
+                facts.source_version,
+                facts.locator,
+                facts.section_path,
+                facts.quote,
+                facts.routing_text,
+                facts.symbol,
+                facts.relation_type
+            FROM wiki_facts AS facts
+            JOIN applied_source_versions AS applied
+              ON applied.source_id = facts.source_id
+             AND applied.source_version_id = facts.source_version
+            WHERE facts.symbol IS NOT NULL
+              AND ({" OR ".join(conditions)})
+              {repository_filter}
+            ORDER BY facts.symbol, facts.page_path, facts.id
+            """,
+            tuple(parameters),
+        ).fetchall()
+
+    matches: list[AppliedCodeSymbolMatch] = []
+    for row in rows:
+        symbol = str(row["symbol"])
+        exact_identifier = next(
+            (identifier for identifier in normalized if "." in identifier and symbol == identifier),
+            None,
+        )
+        matched_identifier = exact_identifier or next(
+            (
+                candidate
+                for candidate in unqualified
+                if symbol == candidate or symbol.endswith(f".{candidate}")
+            ),
+            None,
+        )
+        if matched_identifier is None:
+            continue
+        matches.append(
+            AppliedCodeSymbolMatch(
+                fact_id=str(row["fact_id"]),
+                page_path=str(row["page_path"]),
+                repository_id=(
+                    str(row["repository_id"]) if row["repository_id"] is not None else None
+                ),
+                source_id=str(row["source_id"]),
+                source_version=int(row["source_version"]),
+                locator=str(row["locator"]),
+                section_path=str(row["section_path"]),
+                quote=str(row["quote"]),
+                routing_text=str(row["routing_text"]),
+                symbol=symbol,
+                relation_type=(
+                    str(row["relation_type"]) if row["relation_type"] is not None else None
+                ),
+                identifier=matched_identifier,
+                match_kind=("qualified_name" if exact_identifier is not None else "display_name"),
+            )
+        )
+    return tuple(
+        sorted(
+            matches,
+            key=lambda match: (
+                match.match_kind != "qualified_name",
+                match.identifier,
+                match.symbol or "",
+                match.page_path,
+                match.fact_id,
+            ),
+        )[:limit]
+    )
 
 
 def search_wiki_facts(

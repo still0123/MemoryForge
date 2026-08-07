@@ -39,8 +39,13 @@ def validate_registry(path: Path = DEFAULT_REGISTRY) -> dict[str, object]:
     suites = registry.get("suites")
     if not isinstance(suites, list) or not suites:
         raise ValueError("benchmark registry requires suites")
+    experiments = registry.get("experiments")
+    if not isinstance(experiments, list) or not experiments:
+        raise ValueError("benchmark registry requires experiments")
 
-    suite_ids = [suite.get("suite_id") for suite in suites]
+    suite_ids = [
+        artifact.get("suite_id") for collection in (suites, experiments) for artifact in collection
+    ]
     if len(suite_ids) != len(set(suite_ids)):
         raise ValueError("benchmark suite IDs must be unique")
 
@@ -66,7 +71,8 @@ def validate_registry(path: Path = DEFAULT_REGISTRY) -> dict[str, object]:
     qa_case_types: set[str] = set()
     registered_cases: dict[tuple[str, str], set[str]] = {}
     suite_types: set[str] = set()
-    evidence_count = 1
+    experiment_evidence_count = _validate_experiments(experiments)
+    evidence_count = 1 + experiment_evidence_count
     for suite in suites:
         suite_id = suite.get("suite_id")
         if not isinstance(suite_id, str) or SUITE_ID.fullmatch(suite_id) is None:
@@ -157,11 +163,193 @@ def validate_registry(path: Path = DEFAULT_REGISTRY) -> dict[str, object]:
     return {
         "status": "valid",
         "suite_count": len(suites),
+        "experiment_count": len(experiments),
         "evidence_count": evidence_count,
         "qa_case_count": qa_case_count,
         "qa_case_types_present": sorted(qa_case_types),
         "suite_types": sorted(suite_types),
     }
+
+
+def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
+    evidence_count = 0
+    for experiment in experiments:
+        suite_id = str(experiment.get("suite_id"))
+        if SUITE_ID.fullmatch(suite_id) is None or re.search(r"(?:^|[._-])v\d", suite_id):
+            raise ValueError(f"invalid experiment suite_id: {suite_id}")
+        revision = experiment.get("suite_revision")
+        if isinstance(revision, bool) or not isinstance(revision, int) or revision < 1:
+            raise ValueError(f"invalid experiment suite_revision: {suite_id}")
+        if experiment.get("suite_type") not in SUITE_TYPES:
+            raise ValueError(f"invalid experiment suite_type: {suite_id}")
+        if experiment.get("model_judge") is not False:
+            raise ValueError(f"experiment model judge must be disabled: {suite_id}")
+
+        repositories = experiment.get("repositories")
+        if not isinstance(repositories, list) or not repositories:
+            raise ValueError(f"experiment requires repositories: {suite_id}")
+        for repository in repositories:
+            _validate_repository(suite_id, repository)
+        source_manifest = experiment.get("source_manifest")
+        if not isinstance(source_manifest, dict):
+            raise ValueError(f"experiment requires a source manifest: {suite_id}")
+        _validate_artifact(source_manifest, suite_id)
+
+        splits = experiment.get("splits")
+        if not isinstance(splits, dict) or set(splits) != SPLITS:
+            raise ValueError(f"experiment must declare all split keys: {suite_id}")
+        development = splits["development"]
+        confirmation = splits["confirmation"]
+        if not isinstance(development, dict) or not isinstance(confirmation, dict):
+            raise ValueError(f"experiment requires frozen development and confirmation: {suite_id}")
+        _validate_artifact(development, suite_id)
+        _validate_artifact(confirmation, suite_id)
+        development_count, _, _ = _suite_cases(development)
+        confirmation_count, _, _ = _suite_cases(confirmation)
+        if (
+            development_count != development.get("case_count")
+            or confirmation_count != confirmation.get("case_count")
+            or confirmation.get("status") != "not_run"
+            or splits["holdout"] is not None
+        ):
+            raise ValueError(f"experiment split contract failed: {suite_id}")
+
+        expected_metrics = experiment.get("expected_metrics")
+        if not isinstance(expected_metrics, dict) or not isinstance(
+            expected_metrics.get("development"), dict
+        ):
+            raise ValueError(f"experiment expected metrics missing: {suite_id}")
+        evidence = experiment.get("evidence")
+        if not isinstance(evidence, list) or not evidence:
+            raise ValueError(f"experiment requires generated evidence: {suite_id}")
+        revisions: set[int] = set()
+        statuses: set[str] = set()
+        for artifact in evidence:
+            _validate_artifact(artifact, suite_id)
+            evidence_revision = artifact.get("evidence_revision")
+            if (
+                isinstance(evidence_revision, bool)
+                or not isinstance(evidence_revision, int)
+                or evidence_revision < 1
+                or evidence_revision in revisions
+            ):
+                raise ValueError(f"invalid experiment evidence revision: {suite_id}")
+            revisions.add(evidence_revision)
+            status = str(artifact.get("status"))
+            if status not in {
+                "rejected",
+                "development_passed_regression_failed",
+                "accepted_development_superseded",
+                "accepted_development",
+            }:
+                raise ValueError(f"invalid experiment evidence status: {suite_id}")
+            statuses.add(status)
+            commit = str(artifact.get("memoryforge_commit"))
+            if COMMIT.fullmatch(commit) is None:
+                raise ValueError(f"invalid experiment Evidence Commit: {suite_id}")
+            payload = cast(
+                dict[str, Any],
+                json.loads((REPO_ROOT / artifact["path"]).read_text(encoding="utf-8")),
+            )
+            _validate_experiment_payload(
+                experiment,
+                artifact,
+                payload,
+                development,
+                confirmation,
+            )
+            if status == "development_passed_regression_failed":
+                evidence_count += _validate_regression_evidence(
+                    experiment,
+                    artifact,
+                    confirmation,
+                )
+            evidence_count += 1
+        if statuses != {
+            "rejected",
+            "development_passed_regression_failed",
+            "accepted_development_superseded",
+            "accepted_development",
+        }:
+            raise ValueError(f"experiment must retain rejected and accepted Evidence: {suite_id}")
+    return evidence_count
+
+
+def _validate_experiment_payload(
+    experiment: dict[str, Any],
+    artifact: dict[str, Any],
+    payload: dict[str, Any],
+    development: dict[str, Any],
+    confirmation: dict[str, Any],
+) -> None:
+    repository = experiment["repositories"][0]
+    if (
+        payload.get("suite_id") != experiment["suite_id"]
+        or payload.get("suite_revision") != experiment["suite_revision"]
+        or payload.get("memoryforge_commit") != artifact["memoryforge_commit"]
+        or payload.get("memoryforge_worktree_dirty") is not False
+        or payload.get("passed") is not artifact["passed"]
+        or payload.get("source_manifest") != experiment["source_manifest"]
+        or payload.get("source_repository", {}).get("commit") != repository["commit"]
+        or payload.get("development", {}).get("path") != development["path"]
+        or payload.get("development", {}).get("sha256") != development["sha256"]
+        or payload.get("confirmation", {}).get("path") != confirmation["path"]
+        or payload.get("confirmation", {}).get("sha256") != confirmation["sha256"]
+        or payload.get("confirmation", {}).get("status") != "not_run"
+    ):
+        raise ValueError(f"experiment Evidence contract failed: {experiment['suite_id']}")
+    if artifact["status"] == "rejected":
+        if artifact["passed"] is not False:
+            raise ValueError("rejected experiment Evidence must fail")
+        return
+    if artifact["passed"] is not True:
+        raise ValueError("accepted experiment Evidence must pass")
+    actual = payload["development"]["metrics"]
+    for metric, expected in experiment["expected_metrics"]["development"].items():
+        if actual.get(metric) != expected:
+            raise ValueError(
+                f"experiment metric mismatch: {experiment['suite_id']}/development/{metric}"
+            )
+
+
+def _validate_regression_evidence(
+    experiment: dict[str, Any],
+    development_artifact: dict[str, Any],
+    confirmation: dict[str, Any],
+) -> int:
+    artifact = development_artifact.get("regression_evidence")
+    if not isinstance(artifact, dict):
+        raise ValueError("regression-rejected experiment requires regression Evidence")
+    _validate_artifact(artifact, str(experiment["suite_id"]))
+    commit = str(artifact.get("memoryforge_commit"))
+    if COMMIT.fullmatch(commit) is None or artifact.get("passed") is not False:
+        raise ValueError("invalid experiment regression Evidence identity")
+    payload = cast(
+        dict[str, Any],
+        json.loads((REPO_ROOT / artifact["path"]).read_text(encoding="utf-8")),
+    )
+    pytest_result = payload.get("regression", {}).get("pytest", {})
+    if (
+        payload.get("suite_id") != experiment["suite_id"]
+        or payload.get("suite_revision") != experiment["suite_revision"]
+        or payload.get("memoryforge_commit") != commit
+        or payload.get("memoryforge_worktree_dirty") is not False
+        or payload.get("development_evidence", {}).get("path") != development_artifact["path"]
+        or payload.get("development_evidence", {}).get("sha256") != development_artifact["sha256"]
+        or payload.get("development_evidence", {}).get("memoryforge_commit")
+        != development_artifact["memoryforge_commit"]
+        or payload.get("development_evidence", {}).get("passed") is not True
+        or not isinstance(pytest_result.get("failed"), int)
+        or pytest_result["failed"] < 1
+        or payload.get("confirmation", {}).get("path") != confirmation["path"]
+        or payload.get("confirmation", {}).get("sha256") != confirmation["sha256"]
+        or payload.get("confirmation", {}).get("status") != "not_run"
+        or payload.get("passed") is not False
+    ):
+        raise ValueError(
+            f"experiment regression Evidence contract failed: {experiment['suite_id']}"
+        )
+    return 1
 
 
 def _validate_repository(suite_id: str, repository: dict[str, Any]) -> None:

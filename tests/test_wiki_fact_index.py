@@ -11,9 +11,11 @@ from memoryforge.cli import app
 from memoryforge.errors import WorkspaceError
 from memoryforge.linting import lint_workspace
 from memoryforge.models import Sensitivity
+from memoryforge.query import answer_question
 from memoryforge.version_store import GitVersionStore
 from memoryforge.workspace import (
     Workspace,
+    find_applied_code_symbol_facts,
     init_workspace,
     register_git_checkout,
     search_wiki_facts,
@@ -276,6 +278,46 @@ def test_code_wiki_fact_index_round_trips_symbol_and_relation_metadata(
     assert any(result.symbol == "src.service.run" for result in symbols)
     assert any(result.relation_type == "calls" for result in relations)
     assert all(result.source_version > 0 for result in (*symbols, *relations))
+
+    qualified = find_applied_code_symbol_facts(
+        workspace,
+        ("src.service.run",),
+        repository_id=repository.repository_id,
+    )
+    display_name = find_applied_code_symbol_facts(
+        workspace,
+        ("run",),
+        repository_id=repository.repository_id,
+    )
+    assert (
+        find_applied_code_symbol_facts(
+            workspace,
+            ("$fetch",),
+            repository_id=repository.repository_id,
+        )
+        == ()
+    )
+    answer = answer_question(
+        workspace,
+        "What is the signature of src.service.run?",
+        repository_id=repository.repository_id,
+        debug=True,
+    )
+
+    assert [(match.symbol, match.match_kind) for match in qualified] == [
+        ("src.service.run", "qualified_name")
+    ]
+    assert [(match.symbol, match.match_kind) for match in display_name] == [
+        ("src.service.run", "display_name")
+    ]
+    assert answer["status"] == "answered"
+    assert "def run() -> str:" in answer["answer"]
+    assert answer["quote"] == "`src.service.run` (function): `def run() -> str:`"
+    assert answer["wiki_pages"] == [qualified[0].page_path]
+    assert answer["trace"][0] == {
+        "level": "L0",
+        "artifact": "Applied Code Index Symbol projection: src.service.run",
+    }
 
 
 def _import_and_apply(runner: CliRunner, workspace: Path, source: Path) -> None:

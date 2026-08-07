@@ -7,7 +7,7 @@ import json
 import re
 from dataclasses import dataclass
 from pathlib import PurePosixPath
-from typing import NotRequired, TypedDict
+from typing import Literal, NotRequired, TypedDict
 
 _FACT = re.compile(r"^- (?P<quote>.+?) \[\^(?P<footnote>[^\]]+)\]$", re.MULTILINE)
 _RELATION_FACT = re.compile(
@@ -70,6 +70,12 @@ class IndexedWikiFact:
 @dataclass(frozen=True)
 class WikiFactSearchResult(IndexedWikiFact):
     rank: float
+
+
+@dataclass(frozen=True)
+class AppliedCodeSymbolMatch(IndexedWikiFact):
+    identifier: str
+    match_kind: Literal["qualified_name", "display_name"]
 
 
 def parse_page_citations(content: str) -> list[CitationPayload]:
