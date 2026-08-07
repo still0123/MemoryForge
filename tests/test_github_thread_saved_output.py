@@ -87,3 +87,39 @@ def test_github_thread_never_saves_json_that_offline_import_would_reject(
         import_github_thread(workspace, source_url, save_json=saved)
 
     assert not saved.exists()
+
+
+def test_github_thread_rejects_locator_reassigned_to_another_comment() -> None:
+    source_url = "https://github.com/octo/demo/issues/7"
+
+    with pytest.raises(ValueError, match="contribution metadata"):
+        GitHubThreadSnapshot.model_validate(
+            {
+                "schema_version": 1,
+                "source_url": source_url,
+                "resource": {
+                    "kind": "issue",
+                    "owner": "octo",
+                    "repository": "demo",
+                    "number": 7,
+                    "title": "Cache rollout",
+                    "body": "Stable body.",
+                    "state": "open",
+                    "author": "author",
+                    "created_at": "2025-01-01T00:00:00Z",
+                    "updated_at": "2025-01-01T00:00:00Z",
+                    "html_url": source_url,
+                },
+                "contributions": [
+                    {
+                        "kind": "issue_comment",
+                        "id": "11",
+                        "author": "commenter",
+                        "body": "A comment.",
+                        "created_at": "2025-01-02T00:00:00Z",
+                        "updated_at": "2025-01-02T00:00:00Z",
+                        "html_url": f"{source_url}#issuecomment-12",
+                    }
+                ],
+            }
+        )

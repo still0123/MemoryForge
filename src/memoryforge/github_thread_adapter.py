@@ -111,7 +111,12 @@ class GitHubThreadSnapshot(BaseModel):
             if (
                 contribution.created_at.tzinfo is None
                 or contribution.updated_at.tzinfo is None
-                or not _is_contribution_locator(contribution.html_url, identity.url)
+                or not _is_contribution_locator(
+                    contribution.html_url,
+                    identity.url,
+                    contribution.kind,
+                    contribution.id,
+                )
             ):
                 raise ValueError("GitHub thread contribution metadata is invalid")
         return self
@@ -483,13 +488,23 @@ def _contribution_sort_key(
     return contribution.created_at, contribution.kind, contribution.id
 
 
-def _is_contribution_locator(value: str, source_url: str) -> bool:
+def _is_contribution_locator(
+    value: str,
+    source_url: str,
+    kind: Literal["issue_comment", "review", "review_comment"],
+    identifier: str,
+) -> bool:
     parsed = urlsplit(value)
     try:
         port = parsed.port
     except ValueError:
         return False
     base = urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
+    expected_fragment = {
+        "issue_comment": f"issuecomment-{identifier}",
+        "review": f"pullrequestreview-{identifier}",
+        "review_comment": f"discussion_r{identifier}",
+    }[kind]
     return (
         parsed.scheme == "https"
         and parsed.hostname is not None
@@ -498,7 +513,7 @@ def _is_contribution_locator(value: str, source_url: str) -> bool:
         and parsed.password is None
         and port is None
         and not parsed.query
-        and bool(parsed.fragment)
+        and parsed.fragment == expected_fragment
         and base.casefold() == source_url
     )
 
@@ -657,6 +672,7 @@ def _write_saved_snapshot(path: Path, rendered: bytes) -> None:
             dst_dir_fd=directory_fd,
         )
         os.chmod(destination.name, 0o600, dir_fd=directory_fd, follow_symlinks=False)
+        os.fsync(directory_fd)
     except OSError as exc:
         raise GitHubThreadError("saved GitHub thread could not be written safely") from exc
     finally:
