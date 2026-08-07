@@ -2,7 +2,7 @@
 
 ## Status
 
-`CANDIDATE_12_IMPLEMENTED_DEVELOPMENT_PENDING`
+`CANDIDATE_12_DEVELOPMENT_PASSED_REGRESSION_PENDING`
 
 ## Frozen Inputs
 
@@ -625,7 +625,24 @@ conservative: without a deterministic local translation proof, the Agent must
 quote or paraphrase in the Citation language instead of bypassing the evidence
 gate.
 
-Candidate 12 development is pending. Confirmation remains `not_run`.
+## Candidate 12 Development Result
+
+- Candidate Commit:
+  `3b7065856de66b9cf1c74b8f99637a07bfca387f`;
+- Evidence:
+  `demo/results/support_score_development_candidate_12.json`;
+- Evidence SHA256:
+  `9f0aa5793ad9cc846795b838922a1c0c9fe91ccce3a856adc4057f4ab38313c6`;
+- structural SHA256:
+  `b41a7727c82f6115345bd028bd34bc375f20119f11fcef3016917db897c6c21b`;
+- deterministic evaluation SHA256:
+  `1403431c27d6e1928699b868a285a932ed3a3ee84961c83f1f5e1ff8016eaa96`.
+
+Candidate 12 retains 100.0% Answer, route, Source, fact, Citation,
+multi-source, abstention, selective, and repository-isolation metrics with
+90.0% coverage and 0.0% risk. Both structural and evaluation payloads are
+deterministic across clean runs. Full local regression is pending.
+Confirmation remains `not_run`.
 
 ## Forbidden
 
