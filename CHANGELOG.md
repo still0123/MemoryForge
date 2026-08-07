@@ -1,6 +1,6 @@
 # Changelog
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=3; platform_gate_candidate=2; platform_gate_status=superseded; macos_passed=583; linux_passed=580; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=3; platform_gate_candidate=3; platform_gate_status=accepted; macos_passed=586; linux_passed=583; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 ## v0.3.0 — Release Candidate
 
@@ -16,9 +16,8 @@
 - 增加 POSIX `fcntl` / Windows `msvcrt` 锁边界、PowerShell 本地门禁与 Linux clean-room
   Evidence；原生 Windows confirmation 仍冻结为 `not_run`；
 - 增加双隔离 release build、Workspace backup/restore drill、benchmark summary 与本地
-  provenance；已 superseded 的 Candidate 2 门禁在 macOS 为 583 passed、Linux 为
-  580 passed / 3 skipped，Wheel/sdist 跨平台 SHA256 一致；Candidate 3 门禁待运行；
-  retained artifacts 不进入 sdist。
+  provenance；Candidate 3 门禁在 macOS 为 586 passed、Linux 为 583 passed / 3 skipped，
+  Wheel/sdist 跨平台 SHA256 一致；retained artifacts 不进入 sdist。
 - 强化 release gate：核验实际 Wheel/sdist metadata 和 bytes，增加独立 sdist clean-room 与
   atomic publish；保留 macOS 路径 alias 导致的 preflight 失败。
 - 强化回答准确率契约，要求关键事实和冻结来源同时命中；AgentSkill-Eval 30 题严格 Answer 为

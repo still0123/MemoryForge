@@ -44,43 +44,43 @@ DOCUMENT_CLAIMS = {
     DOCUMENTS[0]: (
         "v0.3.0",
         "10% / 0%",
-        "583 passed",
-        "580 passed / 3 skipped",
+        "586 passed",
+        "583 passed / 3 skipped",
         "原生 Windows confirmation 未运行",
     ),
     DOCUMENTS[1]: (
         "v0.3.0 — Release Candidate",
-        "583 passed",
-        "580 passed / 3 skipped",
+        "586 passed",
+        "583 passed / 3 skipped",
         "原生 Windows confirmation",
         "单次 holdout",
     ),
     DOCUMENTS[2]: (
         "v0.3.0 RC",
         "10%/0%",
-        "583 passed",
-        "580 passed / 3 skipped",
+        "586 passed",
+        "583 passed / 3 skipped",
         "不等于原生 Windows confirmation",
     ),
     DOCUMENTS[3]: (
         "release candidate",
         "10%/0%",
-        "583 passed",
-        "580 passed / 3 skipped",
+        "586 passed",
+        "583 passed / 3 skipped",
         "原生 Windows confirmation",
     ),
     DOCUMENTS[4]: (
-        "DEVELOPMENT_ACCEPTED_LOCAL_GATES_PENDING",
-        "583 passed",
-        "580 passed, 3 skipped",
+        "LOCAL_GATES_ACCEPTED_FINAL_REVIEW_PENDING",
+        "586 passed",
+        "583 passed, 3 skipped",
         "Confirmation status: `not_run`",
         "Holdout status: `not_run`",
     ),
 }
 RELEASE_CLAIM_MARKER = (
     "<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; "
-    "active_candidate=3; platform_gate_candidate=2; platform_gate_status=superseded; "
-    "macos_passed=583; linux_passed=580; linux_skipped=3; "
+    "active_candidate=3; platform_gate_candidate=3; platform_gate_status=accepted; "
+    "macos_passed=586; linux_passed=583; linux_skipped=3; "
     "windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->"
 )
 FORBIDDEN_RELEASE_CLAIMS = (

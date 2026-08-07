@@ -553,6 +553,11 @@ REQUIRED_ACCEPTANCE_EVIDENCE = {
             "fd6c6f2475848b79cf7c89a212d0f5ba2e0c52846cec7e572cc406dd3d8de092",
             "926832e28503b69d83c2ca760d3ad0065615b5a8",
         ),
+        _RESULTS + "release_candidate_development_candidate_3.json": (
+            _RESULTS + "release_candidate_candidate_3_local_gates.json",
+            "54e6bbd11d952c7f18afb7f4d637c5285daf6f4ac7596f649eeb5710af08bfcc",
+            "40cabe1dc5c3869ce67da60d3ce8bdbf883bc1a6",
+        ),
     },
 }
 REQUIRED_LINUX_EVIDENCE = {
@@ -2922,6 +2927,31 @@ def _validate_release_candidate_acceptance_evidence(
             "provenance_sha256": "895175035ddfeff155a88e42c93b7bbf5790b1351f7fd600f871ddefc4ec2fc4",
             "sha256sums_sha256": "ee8782ce98d87d99af106e53b4a251e585d3705cd6c6c89ce6bc4496531700c3",
         }
+    elif evidence_revision == 4:
+        contracts["macos"]["pytest"] = {
+            "passed": 586,
+            "skipped": 0,
+            "failed": 0,
+            "coverage_percent": 88,
+        }
+        contracts["macos"]["artifacts"] = {
+            "wheel_sha256": "466f8ebab1253a26bb2609596e54fb6539ebddff7df22598c95999ef525a7843",
+            "sdist_sha256": "7c2de1bc1fff12a69e9b222f1291a624d9780ce18004a49c177fb8446e3434f7",
+            "provenance_sha256": "246e08328a38fd5da2cb3a216c2b5bbfede87f34c021686134821f7804dd621a",
+            "sha256sums_sha256": "13709bbf111dc7caa5978f2f20fd5d36364e37bf72838f0fea927bc06a73e5d9",
+        }
+        contracts["linux"]["pytest"] = {
+            "passed": 583,
+            "skipped": 3,
+            "failed": 0,
+            "coverage_percent": 88,
+        }
+        contracts["linux"]["artifacts"] = {
+            "wheel_sha256": "466f8ebab1253a26bb2609596e54fb6539ebddff7df22598c95999ef525a7843",
+            "sdist_sha256": "7c2de1bc1fff12a69e9b222f1291a624d9780ce18004a49c177fb8446e3434f7",
+            "provenance_sha256": "0e8391102c84c744ad785e2c600a379b2f711f310b3708f8495c0eb421faccbb",
+            "sha256sums_sha256": "0cef2bd5a6893a9dfbd3a10ddcd07bb881687760680f158ee09db4e912471115",
+        }
     elif evidence_revision != 2:
         raise ValueError("unknown release-candidate local gate revision")
     if (
@@ -2976,7 +3006,7 @@ def _validate_release_candidate_acceptance_evidence(
     expected_registry = {
         "suite_count": 12,
         "experiment_count": 8,
-        "evidence_count": 100 if evidence_revision == 3 else 97,
+        "evidence_count": {2: 97, 3: 100, 4: 103}[evidence_revision],
         "qa_case_count": 121,
     }
     for name, contract in contracts.items():

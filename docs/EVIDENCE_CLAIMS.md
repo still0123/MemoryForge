@@ -1,6 +1,6 @@
 # MemoryForge v0.3.0 Evidence Claims
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=3; platform_gate_candidate=2; platform_gate_status=superseded; macos_passed=583; linux_passed=580; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=3; platform_gate_candidate=3; platform_gate_status=accepted; macos_passed=586; linux_passed=583; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 本页只列可由仓库内 Evidence 直接核验的主张。局部结果不得外推为任意仓库、任意语言或生产 SLA。
 
@@ -15,7 +15,8 @@
 | Candidate 2 development 6/6，真实核验 Wheel/sdist metadata、bytes、Commit 和 sdist clean-room | [`release_candidate_development_candidate_2.json`](../demo/results/release_candidate_development_candidate_2.json) | 已 superseded；confirmation 与 holdout 未运行 |
 | Candidate 2 在 macOS 583 passed，Linux 580 passed / 3 skipped，coverage 88%，Wheel/sdist 跨平台 SHA256 一致 | [`release_candidate_candidate_2_local_gates.json`](../demo/results/release_candidate_candidate_2_local_gates.json) | 已 superseded；固定 Commit `926832e`；不等于原生 Windows confirmation |
 | Candidate 2 静态终审为 0 P0 / 5 P1 / 1 P2，结果 rejected | [`release_candidate_candidate_2_static_review_rejected.json`](../demo/results/release_candidate_candidate_2_static_review_rejected.json) | 失败保留；未运行 confirmation/holdout |
-| Candidate 3 development 6/6，保留两套 isolated build bytes 并使用结构化 release claim | [`release_candidate_development_candidate_3.json`](../demo/results/release_candidate_development_candidate_3.json) | macOS/Linux 最终门禁待运行；confirmation 与 holdout 未运行 |
+| Candidate 3 development 6/6，保留两套 isolated build bytes 并使用结构化 release claim | [`release_candidate_development_candidate_3.json`](../demo/results/release_candidate_development_candidate_3.json) | confirmation 与 holdout 未运行 |
+| Candidate 3 在 macOS 586 passed，Linux 583 passed / 3 skipped，coverage 88%，Wheel/sdist 跨平台 SHA256 一致 | [`release_candidate_candidate_3_local_gates.json`](../demo/results/release_candidate_candidate_3_local_gates.json) | 固定 Commit `40cabe1`；不等于原生 Windows confirmation |
 | Candidate 2 首次 sdist preflight 因 macOS 路径 alias 失败且未生成输出目录 | [`release_candidate_sdist_probe_regression_rejected.json`](../demo/results/release_candidate_sdist_probe_regression_rejected.json) | 保留失败；修复使用 canonical path，未放宽 ownership gate |
 | 开发与构建依赖可冻结重放 | [`constraints/dev.txt`](../constraints/dev.txt)，SHA256 `48debebcfd2da302201688e0582c676cb571d66e96cd7a2a2e0654f49a544571` | 仅覆盖声明的平台与 Python 版本 |
 | Wheel 和 sdist 可独立安装 | 本地门禁与 [`run_release_check.py`](../demo/run_release_check.py) | 需要在精确 Commit 上重跑 |

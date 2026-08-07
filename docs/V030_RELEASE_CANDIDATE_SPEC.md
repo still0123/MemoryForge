@@ -1,10 +1,10 @@
 # v0.3.0 Release Candidate Specification
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=3; platform_gate_candidate=2; platform_gate_status=superseded; macos_passed=583; linux_passed=580; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=3; platform_gate_candidate=3; platform_gate_status=accepted; macos_passed=586; linux_passed=583; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 ## Status
 
-`DEVELOPMENT_ACCEPTED_LOCAL_GATES_PENDING`
+`LOCAL_GATES_ACCEPTED_FINAL_REVIEW_PENDING`
 
 ## Base
 
@@ -220,7 +220,23 @@ confirmation.
 Candidate 3 retains both isolated build outputs, binds a structured release
 claim across public documents, rejects non-executed clean-room checks, scans
 secret-bearing provenance keys, and rechecks summary source identity.
-Candidate 3 macOS/Linux gates and final static review remain pending.
+
+## Accepted Candidate 3 Local Gates
+
+- Evidence: `demo/results/release_candidate_candidate_3_local_gates.json`
+- Evidence SHA256:
+  `54e6bbd11d952c7f18afb7f4d637c5285daf6f4ac7596f649eeb5710af08bfcc`
+- Gate Commit:
+  `40cabe1dc5c3869ce67da60d3ce8bdbf883bc1a6`
+- macOS: 586 passed, 0 skipped, coverage 88%
+- Debian 12 / Lima: 583 passed, 3 skipped, coverage 88%
+- Wheel SHA256:
+  `466f8ebab1253a26bb2609596e54fb6539ebddff7df22598c95999ef525a7843`
+- sdist SHA256:
+  `7c2de1bc1fff12a69e9b222f1291a624d9780ce18004a49c177fb8446e3434f7`
+
+Both platforms passed the complete local gate. Final static review remains
+required before confirmation authorization.
 
 ## Confirmation Components
 
