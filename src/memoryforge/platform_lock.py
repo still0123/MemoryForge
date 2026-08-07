@@ -131,7 +131,7 @@ def _posix_namespace_lock_path(path: Path) -> Path:
         lock_root = home / ".memoryforge-locks"
         lock_root.mkdir(mode=0o700, exist_ok=True)
         metadata = lock_root.stat(follow_symlinks=False)
-    except OSError as exc:
+    except (OSError, KeyError) as exc:
         raise UnsafeLockFileError("namespace lock directory is unsafe") from exc
     if (
         not stat.S_ISDIR(metadata.st_mode)

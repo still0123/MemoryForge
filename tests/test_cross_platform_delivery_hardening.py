@@ -280,3 +280,19 @@ def test_namespace_lock_root_is_owner_controlled_home(tmp_path: Path) -> None:
     metadata = lock_path.parent.stat(follow_symlinks=False)
     assert metadata.st_uid == os.geteuid()
     assert metadata.st_mode & 0o077 == 0
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX namespace lock")
+def test_namespace_lock_translates_missing_passwd_identity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert platform_lock._pwd is not None
+
+    def missing_identity(_user_id: int) -> object:
+        raise KeyError("unmapped UID")
+
+    monkeypatch.setattr(platform_lock._pwd, "getpwuid", missing_identity)
+
+    with pytest.raises(platform_lock.UnsafeLockFileError, match="namespace lock directory"):
+        platform_lock._posix_namespace_lock_path(tmp_path)

@@ -48,6 +48,20 @@ else
 fi
 "$workdir/build/bin/python" -m build \
   --wheel --sdist --no-isolation --outdir "$output/dist"
+"$workdir/build/bin/python" - "$output"/dist/memoryforge-*.tar.gz <<'PY'
+import sys
+import tarfile
+
+with tarfile.open(sys.argv[1]) as archive:
+    forbidden = [
+        name
+        for name in archive.getnames()
+        if "/demo/results/artifacts/" in f"/{name}"
+        or name.endswith((".whl", ".tar.gz"))
+    ]
+if forbidden:
+    raise SystemExit(f"sdist contains retained or nested artifacts: {forbidden[:3]}")
+PY
 
 PIP_CONSTRAINT="$root/constraints/dev.txt" "$python" demo/run_release_check.py \
   --wheel "$output"/dist/memoryforge-*.whl \

@@ -35,6 +35,9 @@ memoryforge = "memoryforge.cli:main"
 [tool.hatch.build.targets.wheel]
 packages = ["src/memoryforge"]
 
+[tool.hatch.build.targets.sdist]
+exclude = ["/demo/results/artifacts"]
+
 [tool.pytest.ini_options]
 addopts = "-ra"
 testpaths = ["tests"]

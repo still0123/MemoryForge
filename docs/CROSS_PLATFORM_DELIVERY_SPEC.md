@@ -2,7 +2,7 @@
 
 ## Status
 
-`CANDIDATE_8_LOCAL_GATES_PASS_REVIEW_PENDING`
+`CANDIDATE_8_REVIEW_REJECTED_CANDIDATE_9_PENDING`
 
 ## Base
 
@@ -436,7 +436,19 @@ artifacts:
 - Retained artifact directory:
   `demo/results/artifacts/cross_platform_delivery_candidate_8/`
 
-Candidate 8 is the accepted development result pending final closure review.
+## Candidate 8 Final Review
+
+- Result: `REJECTED`
+- Findings: 2 P1
+- Confirmation status: `not_run`
+
+Candidate 8 remains retained but is superseded. Its sdist recursively included
+Candidate 7 retained binaries, causing each later sdist to grow without bound.
+Also, a POSIX UID without a passwd/NSS entry leaked `KeyError` outside the
+fail-closed Workspace error boundary. Candidate 9 excludes retained artifacts
+from sdist inputs, checks archive members in both local gate scripts, and
+translates missing UID identities to `UnsafeLockFileError`.
+
 Native Windows confirmation remains frozen at `not_run` and is not claimed.
 
 ## Goal
@@ -476,6 +488,7 @@ local PowerShell and native smoke entry points.
 - existing Workspace security errors stay fail-closed;
 - no database, SourceVersion, Citation, ChangeSet, or public payload schema
   changes;
+- retained gate artifacts are excluded from package sdist members;
 - no confirmation or holdout execution.
 
 ## PowerShell Gate

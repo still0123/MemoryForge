@@ -143,6 +143,13 @@ try {
         "hatchling"
     )
     $Sdist = Get-SingleArtifact $Dist "memoryforge-*.tar.gz"
+    $SdistCheck = @(
+        "import sys,tarfile",
+        "names=tarfile.open(sys.argv[1]).getnames()",
+        "bad=[n for n in names if '/demo/results/artifacts/' in '/'+n or n.endswith(('.whl','.tar.gz'))]",
+        "sys.exit(f'sdist contains retained or nested artifacts: {bad[:3]}') if bad else None"
+    ) -join ";"
+    Invoke-External $BuildPython @("-c", $SdistCheck, $Sdist)
     # Contract: --no-build-isolation
     Invoke-External $SdistPython @(
         "-m", "pip", "install",
