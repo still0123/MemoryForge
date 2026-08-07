@@ -382,6 +382,10 @@ def test_agent_answer_requires_each_clause_in_one_citation() -> None:
         "check_permission",
         [_citation("check_deny_permission")],
     )
+    assert not query_module.answer_is_supported(
+        "Administrators clear caches.",
+        [_citation("Administrators revoke sessions and users clear caches.")],
+    )
 
 
 def test_support_benchmark_requires_an_external_output_path(tmp_path: Path) -> None:

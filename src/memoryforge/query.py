@@ -1430,6 +1430,22 @@ def answer_is_supported(answer: str, citations: list[CitationPayload]) -> bool:
 
 
 def _answer_clause_is_supported(clause: str, evidence: str) -> bool:
+    if _normalise_support_text(clause).casefold() in _normalise_support_text(
+        evidence
+    ).casefold() and _has_support_negation(clause) == _has_support_negation(evidence):
+        return True
+    return any(
+        _ordered_clause_is_supported(clause, segment)
+        for segment in re.split(
+            r"[.!?。！？;\n]+|\b(?:and|or)\b|以及|并且",
+            evidence,
+            flags=re.IGNORECASE,
+        )
+        if segment.strip()
+    )
+
+
+def _ordered_clause_is_supported(clause: str, evidence: str) -> bool:
     answer_terms = [term for term in _ordered_terms(clause) if term not in {"and", "or"}]
     evidence_terms = _ordered_terms(evidence)
     if not answer_terms or _has_support_negation(clause) != _has_support_negation(evidence):
@@ -1443,6 +1459,10 @@ def _answer_clause_is_supported(clause: str, evidence: str) -> bool:
         else:
             return False
     return True
+
+
+def _normalise_support_text(text: str) -> str:
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def _matching_terms(question_terms: set[str], citation: CitationPayload) -> set[str]:

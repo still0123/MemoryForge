@@ -2,7 +2,7 @@
 
 ## Status
 
-`ACCEPTED_DEVELOPMENT_AND_LOCAL_REGRESSION`
+`CANDIDATE_13_IMPLEMENTED_DEVELOPMENT_PENDING`
 
 ## Frozen Inputs
 
@@ -664,6 +664,18 @@ deterministic across clean runs. Confirmation remains `not_run`.
 
 Candidate 12 is the accepted development and local-regression result.
 Confirmation remains `not_run`.
+
+## Candidate 13 Audit Fix
+
+Candidate 12 final re-review found one remaining P1: ordered subsequence
+matching could cross coordinated subject boundaries inside one Citation.
+`Administrators revoke sessions and users clear caches` could support the
+incorrect claim `Administrators clear caches`.
+
+Candidate 13 accepts an exact same-polarity evidence sentence directly.
+Otherwise, it splits the Citation at sentence and coordination boundaries and
+requires the full answer clause to be supported within one evidence segment.
+Candidate 13 development is pending. Confirmation remains `not_run`.
 
 ## Forbidden
 
