@@ -253,6 +253,45 @@ def test_benchmark_registry_binds_rejected_showcase_split_identity() -> None:
         )
 
 
+def test_benchmark_registry_rejects_loose_showcase_json_types() -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "static-showcase"
+    )
+    rejected = next(item for item in experiment["evidence"] if item["evidence_revision"] == 1)
+    rejected_payload = json.loads(
+        (validator.REPO_ROOT / rejected["path"]).read_text(encoding="utf-8")
+    )
+    rejected_payload["suite_revision"] = True
+    rejected_payload["development"]["pytest"]["passed"] = False
+    rejected_payload["development"]["failures"].append("ignored")
+    with pytest.raises(ValueError, match="rejected static-Showcase Evidence"):
+        validator._validate_static_showcase_experiment_payload(
+            experiment,
+            rejected,
+            rejected_payload,
+            experiment["splits"]["development"],
+            experiment["splits"]["confirmation"],
+        )
+
+    accepted = next(
+        item for item in experiment["evidence"] if item["status"] == "accepted_development"
+    )
+    accepted_payload = json.loads(
+        (validator.REPO_ROOT / accepted["path"]).read_text(encoding="utf-8")
+    )
+    accepted_payload["development"]["evaluation"]["metrics"]["pass_rate"] = 100
+    accepted_payload["development"]["evaluation"]["metrics"]["failed_cases"] = False
+    with pytest.raises(ValueError, match="accepted static-Showcase Evidence"):
+        validator._validate_static_showcase_experiment_payload(
+            experiment,
+            accepted,
+            accepted_payload,
+            experiment["splits"]["development"],
+            experiment["splits"]["confirmation"],
+        )
+
+
 def test_benchmark_registry_requires_local_gate_for_acceptance(tmp_path: Path) -> None:
     registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
     experiment = next(

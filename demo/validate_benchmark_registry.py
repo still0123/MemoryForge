@@ -1219,6 +1219,14 @@ def _validate_pytest_component_experiment_payload(
             raise ValueError(f"pytest component experiment metric mismatch: {metric}")
 
 
+def _strict_mapping(actual: object, expected: object) -> bool:
+    if not isinstance(actual, dict) or not isinstance(expected, dict):
+        return False
+    return set(actual) == set(expected) and all(
+        type(actual[key]) is type(value) and actual[key] == value for key, value in expected.items()
+    )
+
+
 def _validate_static_showcase_experiment_payload(
     experiment: dict[str, Any],
     artifact: dict[str, Any],
@@ -1227,7 +1235,8 @@ def _validate_static_showcase_experiment_payload(
     confirmation: dict[str, Any],
 ) -> None:
     if (
-        payload.get("schema_version") != 1
+        type(payload.get("schema_version")) is not int
+        or payload.get("schema_version") != 1
         or payload.get("suite_id") != "static-showcase"
         or payload.get("memoryforge_commit") != artifact["memoryforge_commit"]
         or payload.get("memoryforge_worktree_dirty") is not False
@@ -1241,13 +1250,18 @@ def _validate_static_showcase_experiment_payload(
         confirmation_payload = payload.get("confirmation", {})
         pytest_result = payload.get("development", {}).get("pytest", {})
         failures = payload.get("development", {}).get("failures")
+        valid_failures = isinstance(failures, list) and all(
+            isinstance(failure, dict)
+            and set(failure) == {"case_id", "classification", "detail"}
+            and all(
+                isinstance(failure.get(field), str) and failure[field]
+                for field in ("case_id", "classification", "detail")
+            )
+            for failure in failures
+        )
         failure_identities = (
-            [
-                (failure.get("case_id"), failure.get("classification"))
-                for failure in failures
-                if isinstance(failure, dict)
-            ]
-            if isinstance(failures, list)
+            [(failure.get("case_id"), failure.get("classification")) for failure in failures]
+            if valid_failures
             else []
         )
         if (
@@ -1263,6 +1277,7 @@ def _validate_static_showcase_experiment_payload(
                 "confirmation",
                 "passed",
             }
+            or type(payload.get("suite_revision")) is not int
             or payload.get("suite_revision") != contract["suite_revision"]
             or artifact["passed"] is not False
             or not isinstance(development_payload, dict)
@@ -1272,8 +1287,10 @@ def _validate_static_showcase_experiment_payload(
             or development_payload.get("sha256") != contract["development_sha256"]
             or development_payload.get("test_file")
             != {"path": "tests/test_showcase.py", "sha256": contract["test_sha256"]}
+            or type(development_payload.get("case_count")) is not int
             or development_payload.get("case_count") != 4
-            or pytest_result != contract["pytest"]
+            or not _strict_mapping(pytest_result, contract["pytest"])
+            or not valid_failures
             or failure_identities != contract["failures"]
             or not isinstance(confirmation_payload, dict)
             or confirmation_payload
@@ -1308,20 +1325,21 @@ def _validate_static_showcase_experiment_payload(
     ).hexdigest()
     if (
         set(payload) != MULTI_SOURCE_DEVELOPMENT_EVIDENCE_KEYS
+        or type(payload.get("suite_revision")) is not int
         or payload.get("suite_revision") != experiment["suite_revision"]
         or payload.get("development", {}).get("path") != development["path"]
         or payload.get("development", {}).get("sha256") != development["sha256"]
         or payload.get("development", {}).get("test_file")
         != {"path": development["test_file"], "sha256": development["test_sha256"]}
+        or type(payload.get("development", {}).get("case_count")) is not int
         or payload.get("development", {}).get("case_count") != development["case_count"]
         or not isinstance(evaluation, dict)
         or set(evaluation) != {"case_count", "metrics", "cases"}
+        or type(evaluation.get("case_count")) is not int
         or evaluation.get("case_count") != development["case_count"]
         or actual_cases != expected_cases
         or len(expected_cases) != development["case_count"]
-        or not isinstance(metrics, dict)
-        or metrics.get("pass_rate") != 100.0
-        or metrics.get("failed_cases") != 0
+        or not _strict_mapping(metrics, experiment["expected_metrics"]["development"])
         or not isinstance(runs, list)
         or [run.get("name") for run in runs if isinstance(run, dict)] != ["first", "second"]
         or any(
@@ -1339,9 +1357,6 @@ def _validate_static_showcase_experiment_payload(
         or artifact["passed"] is not True
     ):
         raise ValueError("accepted static-Showcase Evidence contract failed")
-    for metric, expected in experiment["expected_metrics"]["development"].items():
-        if metrics.get(metric) != expected:
-            raise ValueError(f"static-Showcase metric mismatch: {metric}")
 
 
 def _validate_multi_source_experiment_metadata(experiment: dict[str, Any]) -> None:
