@@ -137,6 +137,20 @@ REQUIRED_EXPERIMENT_EVIDENCE = {
             "4f2f15ddc06882612a547aaad81d4b67b4ffbf8b",
         ),
     },
+    "multi-source-coverage-selection": {
+        _RESULTS + "multi_source_coverage_baseline_rejected.json": (
+            1,
+            "rejected",
+            "6fa99baefed3cfa2b50bb044b3293c24ee90e697f0ff1a7f6636e91b3c548f81",
+            "79c41bc5fdb08de18351546f7869b8083da3a1b2",
+        ),
+        _RESULTS + "multi_source_coverage_development_candidate_1.json": (
+            2,
+            "accepted_development",
+            "ef584ff97687ff4a09644f203b9b8d135c420918e4a19e27a8f7354a3e9b5197",
+            "4303c159caac6c8bded2eeb9e0e3cba625f61dc2",
+        ),
+    },
 }
 REQUIRED_REGRESSION_EVIDENCE = {
     "exact-symbol-routing.learn-claude-code": {
@@ -158,6 +172,7 @@ REQUIRED_REGRESSION_EVIDENCE = {
             "dd7ac2df2af8da205f46044dd39cc4d2e1e41604",
         ),
     },
+    "multi-source-coverage-selection": {},
 }
 REQUIRED_ACCEPTANCE_EVIDENCE = {
     "exact-symbol-routing.learn-claude-code": {
@@ -224,6 +239,13 @@ REQUIRED_ACCEPTANCE_EVIDENCE = {
             "8d5b9cbf297b8f45f209096021360f6c8e37c5bf",
         ),
     },
+    "multi-source-coverage-selection": {
+        _RESULTS + "multi_source_coverage_development_candidate_1.json": (
+            _RESULTS + "multi_source_coverage_candidate_1_local_gate.json",
+            "6762a919accee61979507842bd912c9c9921259eeeeaeb0751e905fe63ef4bf6",
+            "73fa41087d222833b5025f5406ea3089b3f4519a",
+        ),
+    },
 }
 DEVELOPMENT_EVIDENCE_KEYS = {
     "schema_version",
@@ -235,6 +257,18 @@ DEVELOPMENT_EVIDENCE_KEYS = {
     "source_repository",
     "development",
     "baseline_evidence",
+    "confirmation",
+    "runs",
+    "gates",
+    "passed",
+}
+MULTI_SOURCE_DEVELOPMENT_EVIDENCE_KEYS = {
+    "schema_version",
+    "suite_id",
+    "suite_revision",
+    "memoryforge_commit",
+    "memoryforge_worktree_dirty",
+    "development",
     "confirmation",
     "runs",
     "gates",
@@ -301,6 +335,18 @@ FINAL_EXPERIMENT_GATE_KEYS = {
         "structural_benchmark",
         "unsupported_question_abstains",
     },
+    "multi-source-coverage-selection": {
+        "selection_accuracy",
+        "source_coverage_accuracy",
+        "term_coverage_accuracy",
+        "single_source_rank_preservation",
+        "duplicate_source_rate",
+        "deterministic_replay",
+        "selector_supports_required_sources",
+        "stable_memoryforge_commit",
+        "clean_worktree_after_run",
+        "confirmation_not_run",
+    },
 }
 LOCAL_GATE_KEYS = {
     "command",
@@ -315,6 +361,12 @@ LOCAL_GATE_KEYS = {
     "pip_check",
     "cli_version_smoke",
 }
+MULTI_SOURCE_SUPPORT_REGRESSION = (
+    _RESULTS + "support_score_multi_source_coverage_regression.json",
+    "631d6aace75de30fa7c68badd8f040163f8480db7b7a40a1eb60eae5fabc0b88",
+    "1fb2a1263f82ac9720b49543d177345567505c6d",
+    "1403431c27d6e1928699b868a285a932ed3a3ee84961c83f1f5e1ff8016eaa96",
+)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -484,9 +536,13 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
         for repository in repositories:
             _validate_repository(suite_id, repository)
         source_manifest = experiment.get("source_manifest")
-        if not isinstance(source_manifest, dict):
-            raise ValueError(f"experiment requires a source manifest: {suite_id}")
-        _validate_artifact(source_manifest, suite_id)
+        if suite_id == "multi-source-coverage-selection":
+            if source_manifest is not None:
+                raise ValueError(f"component experiment cannot declare source manifest: {suite_id}")
+        else:
+            if not isinstance(source_manifest, dict):
+                raise ValueError(f"experiment requires a source manifest: {suite_id}")
+            _validate_artifact(source_manifest, suite_id)
 
         splits = experiment.get("splits")
         if not isinstance(splits, dict) or set(splits) != SPLITS:
@@ -641,6 +697,15 @@ def _validate_experiment_payload(
     development: dict[str, Any],
     confirmation: dict[str, Any],
 ) -> None:
+    if experiment["suite_id"] == "multi-source-coverage-selection":
+        _validate_multi_source_experiment_payload(
+            experiment,
+            artifact,
+            payload,
+            development,
+            confirmation,
+        )
+        return
     repository = experiment["repositories"][0]
     if (
         payload.get("schema_version") != 1
@@ -709,6 +774,74 @@ def _validate_experiment_payload(
             )
 
 
+def _validate_multi_source_experiment_payload(
+    experiment: dict[str, Any],
+    artifact: dict[str, Any],
+    payload: dict[str, Any],
+    development: dict[str, Any],
+    confirmation: dict[str, Any],
+) -> None:
+    evaluation = payload.get("development", {}).get("evaluation", {})
+    cases = evaluation.get("cases", {}) if isinstance(evaluation, dict) else {}
+    frozen = json.loads((REPO_ROOT / development["path"]).read_text(encoding="utf-8"))
+    frozen_ids = [case.get("id") for case in frozen.get("cases", [])]
+    runs = payload.get("runs")
+    evaluation_sha256 = hashlib.sha256(
+        json.dumps(evaluation, sort_keys=True, ensure_ascii=False).encode("utf-8")
+    ).hexdigest()
+    if (
+        payload.get("schema_version") != 1
+        or set(payload) != MULTI_SOURCE_DEVELOPMENT_EVIDENCE_KEYS
+        or payload.get("suite_id") != experiment["suite_id"]
+        or payload.get("suite_revision") != experiment["suite_revision"]
+        or payload.get("memoryforge_commit") != artifact["memoryforge_commit"]
+        or payload.get("memoryforge_worktree_dirty") is not False
+        or payload.get("passed") is not artifact["passed"]
+        or payload.get("development", {}).get("path") != development["path"]
+        or payload.get("development", {}).get("sha256") != development["sha256"]
+        or payload.get("development", {}).get("case_count") != development["case_count"]
+        or not isinstance(evaluation, dict)
+        or set(evaluation) != {"case_count", "metrics", "cases"}
+        or evaluation.get("case_count") != development["case_count"]
+        or not isinstance(cases, list)
+        or [case.get("id") for case in cases] != frozen_ids
+        or len(set(frozen_ids)) != len(frozen_ids)
+        or not isinstance(runs, list)
+        or len(runs) != 2
+        or any(
+            not isinstance(run, dict)
+            or set(run) != {"name", "evaluation_sha256"}
+            or SHA256.fullmatch(str(run.get("evaluation_sha256"))) is None
+            for run in runs
+        )
+        or [run["name"] for run in runs] != ["first", "second"]
+        or any(run["evaluation_sha256"] != evaluation_sha256 for run in runs)
+        or payload.get("confirmation", {}).get("path") != confirmation["path"]
+        or payload.get("confirmation", {}).get("sha256") != confirmation["sha256"]
+        or payload.get("confirmation", {}).get("status") != "not_run"
+    ):
+        raise ValueError("multi-source experiment Evidence contract failed")
+    if artifact["status"] == "rejected":
+        if artifact["passed"] is not False or all(payload["gates"].values()):
+            raise ValueError("rejected multi-source Evidence must fail")
+        return
+    gates = payload.get("gates")
+    if (
+        artifact["status"] != "accepted_development"
+        or artifact["passed"] is not True
+        or not isinstance(gates, dict)
+        or set(gates) != FINAL_EXPERIMENT_GATE_KEYS[experiment["suite_id"]]
+        or not all(value is True for value in gates.values())
+    ):
+        raise ValueError("accepted multi-source Evidence gates failed")
+    metrics = evaluation.get("metrics")
+    if not isinstance(metrics, dict):
+        raise ValueError("multi-source experiment metrics missing")
+    for metric, expected in experiment["expected_metrics"]["development"].items():
+        if metrics.get(metric) != expected:
+            raise ValueError(f"multi-source experiment metric mismatch: {metric}")
+
+
 def _validate_regression_evidence(
     experiment: dict[str, Any],
     development_artifact: dict[str, Any],
@@ -771,11 +904,18 @@ def _validate_acceptance_evidence(
     pytest_result = local_gate.get("pytest", {})
     registry_result = local_gate.get("registry_validation", {})
     artifacts = local_gate.get("artifacts")
-    requires_artifacts = experiment["suite_id"] == "support-score.learn-claude-code"
+    multi_source = experiment["suite_id"] == "multi-source-coverage-selection"
+    requires_artifacts = experiment["suite_id"] in {
+        "support-score.learn-claude-code",
+        "multi-source-coverage-selection",
+    }
+    expected_payload_keys = LOCAL_GATE_EVIDENCE_KEYS | (
+        {"regression_evidence"} if multi_source else set()
+    )
     expected_local_gate_keys = LOCAL_GATE_KEYS | ({"artifacts"} if requires_artifacts else set())
     if (
         payload.get("schema_version") != 1
-        or set(payload) != LOCAL_GATE_EVIDENCE_KEYS
+        or set(payload) != expected_payload_keys
         or payload.get("suite_id") != experiment["suite_id"]
         or payload.get("suite_revision") != experiment["suite_revision"]
         or payload.get("memoryforge_commit") != commit
@@ -834,7 +974,65 @@ def _validate_acceptance_evidence(
         raise ValueError(
             f"experiment acceptance Evidence contract failed: {experiment['suite_id']}"
         )
+    if multi_source:
+        _validate_multi_source_support_regression(payload.get("regression_evidence"))
+        return 2
     return 1
+
+
+def _validate_multi_source_support_regression(artifact: object) -> None:
+    if not isinstance(artifact, dict):
+        raise ValueError("multi-source acceptance requires support regression Evidence")
+    expected_path, expected_sha256, expected_commit, expected_evaluation_sha256 = (
+        MULTI_SOURCE_SUPPORT_REGRESSION
+    )
+    if (
+        set(artifact)
+        != {
+            "path",
+            "sha256",
+            "memoryforge_commit",
+            "evaluation_sha256",
+            "passed",
+        }
+        or (
+            artifact.get("path"),
+            artifact.get("sha256"),
+            artifact.get("memoryforge_commit"),
+            artifact.get("evaluation_sha256"),
+        )
+        != MULTI_SOURCE_SUPPORT_REGRESSION
+        or artifact.get("passed") is not True
+    ):
+        raise ValueError("multi-source support regression Evidence identity changed")
+    _validate_artifact(artifact, "multi-source-coverage-selection")
+    payload = cast(
+        dict[str, Any],
+        json.loads((REPO_ROOT / expected_path).read_text(encoding="utf-8")),
+    )
+    metrics = payload.get("development", {}).get("evaluation", {}).get("memoryforge", {})
+    runs = payload.get("runs")
+    if (
+        payload.get("schema_version") != 1
+        or set(payload) != DEVELOPMENT_EVIDENCE_KEYS
+        or payload.get("suite_id") != "support-score.learn-claude-code"
+        or payload.get("memoryforge_commit") != expected_commit
+        or payload.get("memoryforge_worktree_dirty") is not False
+        or payload.get("passed") is not True
+        or payload.get("confirmation", {}).get("status") != "not_run"
+        or not isinstance(runs, list)
+        or len(runs) != 2
+        or any(run.get("evaluation_sha256") != expected_evaluation_sha256 for run in runs)
+        or not isinstance(metrics, dict)
+        or metrics.get("answer_accuracy") != 100.0
+        or metrics.get("citation_grounding_accuracy") != 100.0
+        or metrics.get("multi_source_coverage") != 100.0
+        or metrics.get("selective_accuracy") != 100.0
+        or metrics.get("coverage") != 90.0
+        or metrics.get("risk") != 0.0
+        or hashlib.sha256((REPO_ROOT / expected_path).read_bytes()).hexdigest() != expected_sha256
+    ):
+        raise ValueError("multi-source support regression Evidence contract failed")
 
 
 def _support_benchmark_module() -> Any:

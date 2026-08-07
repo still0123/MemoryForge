@@ -19,8 +19,8 @@ def test_benchmark_registry_binds_all_release_artifacts() -> None:
     assert summary == {
         "status": "valid",
         "suite_count": 12,
-        "experiment_count": 2,
-        "evidence_count": 49,
+        "experiment_count": 3,
+        "evidence_count": 53,
         "qa_case_count": 121,
         "qa_case_types_present": [
             "code_behavior",
@@ -73,6 +73,23 @@ def test_benchmark_registry_cannot_self_drop_negative_evidence(tmp_path: Path) -
         artifact
         for artifact in experiment["evidence"]
         if artifact["status"] == "accepted_development"
+    ]
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps(registry), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="experiment Evidence history is incomplete"):
+        validator.validate_registry(path)
+
+
+def test_benchmark_registry_cannot_drop_multi_source_baseline(tmp_path: Path) -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item
+        for item in registry["experiments"]
+        if item["suite_id"] == "multi-source-coverage-selection"
+    )
+    experiment["evidence"] = [
+        artifact for artifact in experiment["evidence"] if artifact["status"] != "rejected"
     ]
     path = tmp_path / "registry.json"
     path.write_text(json.dumps(registry), encoding="utf-8")

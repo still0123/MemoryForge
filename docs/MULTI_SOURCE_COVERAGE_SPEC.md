@@ -2,7 +2,7 @@
 
 ## Status
 
-`CANDIDATE_1_REGRESSION_PASS_LOCAL_GATE_PENDING`
+`ACCEPTED_DEVELOPMENT_AND_LOCAL_REGRESSION`
 
 ## Frozen Inputs
 
@@ -80,6 +80,31 @@ The baseline failed four source-quota cases:
 - Risk: 0.0%
 - Support-score confirmation status: `not_run`
 - Multi-source confirmation status: `not_run`
+
+## Candidate 1 Full Local Gate
+
+- Gate Commit:
+  `73fa41087d222833b5025f5406ea3089b3f4519a`
+- Acceptance Evidence:
+  `demo/results/multi_source_coverage_candidate_1_local_gate.json`
+- Acceptance Evidence SHA256:
+  `6762a919accee61979507842bd912c9c9921259eeeeaeb0751e905fe63ef4bf6`
+- Ruff check and format: passed
+- Strict Mypy: passed
+- Registry validation: passed
+- Dependency check: passed
+- Pytest: 485 passed
+- Coverage: 88%
+- Wheel clean-room: passed
+- sdist clean-room: passed
+- `pip check`: passed
+- CLI version smoke: passed
+- Multi-source confirmation status: `not_run`
+- Support-score confirmation status: `not_run`
+
+Candidate 1 is accepted for development and local regression. Its production
+change remains ineligible for a confirmation run until the release-candidate
+confirmation gate is explicitly opened.
 
 ## Problem
 
