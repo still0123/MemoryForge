@@ -162,6 +162,30 @@ def test_page_identifier_does_not_support_an_unrelated_selected_fact(tmp_path: P
     assert "exact_identifier_not_covered" in support["failed_hard_gates"]
 
 
+def test_module_context_identifier_is_not_an_answer_hard_gate(tmp_path: Path) -> None:
+    page_path = "wiki/pages/code/repository/task.md"
+    question = "Which class represents a task in s12_task_system.code?"
+    citation: CitationPayload = {
+        **_citation("`Task` (class): `class Task(BaseModel):`"),
+        "routing_text": "Task represents a task in s12_task_system.code.",
+    }
+
+    support = query_module._support_score(
+        tmp_path,
+        question,
+        query_module._terms(question),
+        [(page_path, citation)],
+        symbol_matches=(),
+        exact_symbol_fact_keys=set(),
+        required_sources=1,
+        code_page_paths={page_path},
+    )
+
+    assert support["components"]["exact_identifier_coverage"] == 1.0
+    assert "exact_identifier_not_covered" not in support["failed_hard_gates"]
+    assert support["sufficient"]
+
+
 def test_explicit_identifier_requires_symbol_or_page_fact_coverage(tmp_path: Path) -> None:
     page_path = "wiki/pages/code/repository/cache.md"
 

@@ -13,9 +13,9 @@ from typing import Any, cast
 
 from memoryforge.evaluation import run_evaluation
 from memoryforge.query import (
-    _all_explicit_code_identifiers,
     _has_support_condition,
     _has_support_negation,
+    _support_identifiers,
 )
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -244,7 +244,7 @@ def _valid_case_support(case: dict[str, Any], threshold: float) -> bool:
     components = support["components"]
     failed_hard_gates = []
     question = str(case.get("question", ""))
-    if _all_explicit_code_identifiers(question) and components["exact_identifier_coverage"] < 1:
+    if _support_identifiers(question) and components["exact_identifier_coverage"] < 1:
         failed_hard_gates.append("exact_identifier_not_covered")
     if support["score"] < threshold:
         failed_hard_gates.append("score_below_threshold")

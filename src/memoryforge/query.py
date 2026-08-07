@@ -651,6 +651,20 @@ def _all_explicit_code_identifiers(question: str) -> tuple[str, ...]:
     return tuple(dict.fromkeys(identifiers))
 
 
+def _support_identifiers(question: str) -> tuple[str, ...]:
+    return tuple(
+        identifier
+        for identifier in _all_explicit_code_identifiers(question)
+        if re.search(
+            rf"\bin\s+`?{re.escape(identifier)}`?(?:\W|$)",
+            question,
+            re.IGNORECASE,
+        )
+        is None
+        and re.search(rf"`?{re.escape(identifier)}`?\s*(?:中|内)", question) is None
+    )
+
+
 def _requested_symbol_kinds(question: str) -> set[str]:
     lowered = question.lower()
     english_terms = set(re.findall(r"[a-z_]+", lowered))
@@ -729,7 +743,7 @@ def _support_score(
     core_terms = (
         question_terms - _SUPPORT_CODE_KIND_TERMS - _RANKING_STOP_WORDS - _QUESTION_NOISE_TERMS
     )
-    explicit_identifiers = _all_explicit_code_identifiers(question)
+    explicit_identifiers = _support_identifiers(question)
     selected_page_paths = {page_path for page_path, _ in selected}
     selected_are_fields = bool(selected) and all(
         citation["quote"].startswith("Field ") for _, citation in selected

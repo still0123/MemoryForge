@@ -2,7 +2,7 @@
 
 ## Status
 
-`CANDIDATE_10_IMPLEMENTED_DEVELOPMENT_PENDING`
+`CANDIDATE_11_IMPLEMENTED_DEVELOPMENT_PENDING`
 
 ## Frozen Inputs
 
@@ -518,8 +518,37 @@ The review warning about Code Wiki module-overview pages was rejected: the
 frozen contract deliberately enforces refusal only on Code Wiki file pages in
 this focused candidate.
 
-Candidate 10 development and full local regression are pending. Confirmation
-remains `not_run`.
+## Candidate 10 Development Result
+
+- Candidate Commit:
+  `2729e37529fd7918f2591e5340dcaba2e90f8267`;
+- rejected Evidence:
+  `demo/results/support_score_development_candidate_10_rejected.json`;
+- rejected Evidence SHA256:
+  `f040c4760a301143e79c8919e174f34d04d689c0f173738b0d2b7ffa8b5f9c37`.
+
+Candidate 10 failed the frozen development gate:
+
+- Answer accuracy: 90.0%;
+- selective accuracy: 100.0%;
+- coverage: 80.0%;
+- risk: 0.0%;
+- Source recall@3, fact selection, and Citation grounding: 88.9%;
+- failed case: `dev-s12-task-class`;
+- failure classification: `insufficient_support`;
+- support score: 68.3.
+
+Both runs were structurally and evaluatively deterministic. MemoryForge and
+source Commits remained stable and both worktrees remained clean. The root
+cause is semantic: `in s12_task_system.code` is routing context, not the
+identifier of the requested answer. Treating it as an answer hard gate rejects
+the correctly selected `Task` class Fact.
+
+Candidate 10 is rejected and retained. Candidate 11 excludes identifiers used
+as explicit `in ...` or Chinese `... 中/内` routing context from the exact
+answer-identifier hard gate. The identifier remains available to routing and
+core-term scoring. Candidate 11 development is pending. Confirmation remains
+`not_run`.
 
 ## Forbidden
 
