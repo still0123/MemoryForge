@@ -362,8 +362,8 @@ REQUIRED_ACCEPTANCE_EVIDENCE = {
     "static-showcase": {
         _RESULTS + "static_showcase_development_candidate_5.json": (
             _RESULTS + "static_showcase_candidate_5_local_gate.json",
-            "cb892f55b100ff51cd6805933ab3f3c4ff39b5d0c676ad4cc7168aef55c0eada",
-            "782345ffec7fe2a10e3058b30845b48e09f6487d",
+            "e81c7c8c95c34507588c9af1270153dea57657d5c05a59ce7b3eab39f0d0f7a6",
+            "80e7ed72abe47684614928e5070a3390c9ff4bf0",
         ),
     },
 }
@@ -400,8 +400,8 @@ FINAL_ACCEPTANCE_REGISTRY_COUNTS = {
     },
     "static-showcase": {
         "suite_count": 12,
-        "experiment_count": 5,
-        "evidence_count": 62,
+        "experiment_count": 6,
+        "evidence_count": 71,
         "qa_case_count": 121,
     },
 }

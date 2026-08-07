@@ -211,3 +211,21 @@ Candidate 5:
   Trace, architecture, and HTML;
 - bits-code-guard: 10 P1 findings fixed, no unresolved P0-P2;
 - confirmation status: `not_run`.
+
+## Candidate 5 Post-Registry Local Gate
+
+- Gate Commit:
+  `80e7ed72abe47684614928e5070a3390c9ff4bf0`;
+- Acceptance Evidence:
+  `demo/results/static_showcase_candidate_5_local_gate.json`;
+- Acceptance Evidence SHA256:
+  `e81c7c8c95c34507588c9af1270153dea57657d5c05a59ce7b3eab39f0d0f7a6`;
+- registry: 12 suites, 6 experiments, 71 Evidence, 121 QA cases;
+- Ruff without cache and format: passed;
+- strict Mypy: passed;
+- dependency check: passed;
+- pytest: 516 passed;
+- coverage: 88%;
+- Wheel and sdist clean-room installs: passed;
+- `pip check` and CLI version smoke: passed;
+- confirmation: `not_run`.
