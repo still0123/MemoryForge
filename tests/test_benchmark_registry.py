@@ -19,8 +19,8 @@ def test_benchmark_registry_binds_all_release_artifacts() -> None:
     assert summary == {
         "status": "valid",
         "suite_count": 12,
-        "experiment_count": 4,
-        "evidence_count": 57,
+        "experiment_count": 5,
+        "evidence_count": 62,
         "qa_case_count": 121,
         "qa_case_types_present": [
             "code_behavior",
@@ -141,6 +141,38 @@ def test_benchmark_registry_pins_folder_import_repository_commit(tmp_path: Path)
         validator.validate_registry(path)
 
 
+def test_benchmark_registry_cannot_drop_github_thread_baseline(tmp_path: Path) -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item
+        for item in registry["experiments"]
+        if item["suite_id"] == "github-thread-import-lifecycle"
+    )
+    experiment["evidence"] = [
+        artifact for artifact in experiment["evidence"] if artifact["status"] != "rejected"
+    ]
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps(registry), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="experiment Evidence history is incomplete"):
+        validator.validate_registry(path)
+
+
+def test_benchmark_registry_pins_github_thread_repository_commit(tmp_path: Path) -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item
+        for item in registry["experiments"]
+        if item["suite_id"] == "github-thread-import-lifecycle"
+    )
+    experiment["repositories"][0]["commit"] = "0" * 40
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps(registry), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="metadata changed"):
+        validator.validate_registry(path)
+
+
 def test_benchmark_registry_requires_local_gate_for_acceptance(tmp_path: Path) -> None:
     registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
     experiment = next(
@@ -207,6 +239,52 @@ def test_benchmark_registry_pins_local_gate_identity(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="acceptance Evidence history is incomplete"):
         validator.validate_registry(path)
+
+
+def test_benchmark_registry_rejects_stale_final_acceptance_counts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    gate_path = (
+        validator.REPO_ROOT / "demo/results/github_thread_import_candidate_3_local_gate.json"
+    )
+    payload = json.loads(gate_path.read_text(encoding="utf-8"))
+    payload["local_gate"]["registry_validation"]["experiment_count"] = 4
+    monkeypatch.setattr(
+        validator,
+        "_validate_artifact",
+        lambda artifact, suite_id: None,
+    )
+    monkeypatch.setattr(
+        validator.Path,
+        "read_text",
+        lambda path, encoding="utf-8": json.dumps(payload),
+    )
+    experiment = {
+        "suite_id": "github-thread-import-lifecycle",
+        "suite_revision": 1,
+    }
+    development_artifact = {
+        "path": "demo/results/github_thread_import_development_candidate_3.json",
+        "sha256": "3c32675802191dbeec6c8477e0b1abcb618b115120575abc0e6509f8dc565b2c",
+        "memoryforge_commit": "c6f329152dac002ecead2f8d8bebcb002865aff6",
+        "status": "accepted_development",
+        "acceptance_evidence": {
+            "path": "demo/results/github_thread_import_candidate_3_local_gate.json",
+            "memoryforge_commit": payload["memoryforge_commit"],
+            "passed": True,
+        },
+    }
+    confirmation = {
+        "path": "demo/evaluation/github_thread_import_confirmation.json",
+        "sha256": "45de8d774b8d02b0112571ceb8c3b4d43db589cb0a68dbb96579aa2327ad24b0",
+    }
+
+    with pytest.raises(ValueError, match="acceptance Evidence contract failed"):
+        validator._validate_acceptance_evidence(
+            experiment,
+            development_artifact,
+            confirmation,
+        )
 
 
 def test_benchmark_registry_rejects_duplicate_support_case_identities() -> None:

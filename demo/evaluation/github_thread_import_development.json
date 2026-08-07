@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "suite_id": "github-thread-import-lifecycle",
+  "suite_revision": 1,
+  "split": "development",
+  "test_file": "tests/test_github_thread_import.py",
+  "test_sha256": "70be6edefcb388a05bb59a6f604c17722d6b335ff5b75d7e54aad912d4d0228e",
+  "cases": [
+    {
+      "id": "single-resource-endpoints",
+      "category": "single_resource",
+      "pytest_node": "tests/test_github_thread_import.py::test_github_thread_import_fetches_only_one_exact_thread",
+      "expected_status": "passed"
+    },
+    {
+      "id": "offline-json-duplicate",
+      "category": "duplicate_import",
+      "pytest_node": "tests/test_github_thread_import.py::test_github_thread_saved_json_replays_offline_and_is_idempotent",
+      "expected_status": "passed"
+    },
+    {
+      "id": "update-delete-reimport",
+      "category": "temporal_update",
+      "pytest_node": "tests/test_github_thread_import.py::test_github_thread_update_delete_and_reimport_lifecycle",
+      "expected_status": "passed"
+    },
+    {
+      "id": "privacy-boundaries",
+      "category": "privacy",
+      "pytest_node": "tests/test_github_thread_import.py::test_github_thread_privacy_boundaries_fail_before_source_writes",
+      "expected_status": "passed"
+    },
+    {
+      "id": "citation-locator-replay",
+      "category": "citation",
+      "pytest_node": "tests/test_github_thread_import.py::test_github_thread_preserves_locator_and_exact_citation_replay",
+      "expected_status": "passed"
+    }
+  ],
+  "expected_metrics": {
+    "pass_rate": 100.0,
+    "failed_cases": 0,
+    "deterministic_replay": true
+  }
+}

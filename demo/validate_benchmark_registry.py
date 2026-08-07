@@ -171,6 +171,32 @@ REQUIRED_EXPERIMENT_EVIDENCE = {
             "3d056c9d71a4caf6a625449ac3057f74ff98148c",
         ),
     },
+    "github-thread-import-lifecycle": {
+        _RESULTS + "github_thread_import_baseline_rejected.json": (
+            1,
+            "rejected",
+            "028d1d71db3e92b4b183a0fa3147d6eb581bb1274679a4d2c669d3e1f46b7255",
+            "271ec3490aa6cd14120913e7fa93f259bd9999fa",
+        ),
+        _RESULTS + "github_thread_import_development_candidate_1.json": (
+            2,
+            "accepted_development_superseded",
+            "0b3e8304467d6ee38cd826d225e6c19a69a40cf1c1ed5fd6f89884920fc84ee5",
+            "8be9a05da49e4da1efe742dd8406f2f4706cb3f0",
+        ),
+        _RESULTS + "github_thread_import_development_candidate_2.json": (
+            3,
+            "accepted_development_superseded",
+            "51963aab72b7462454544d4379ad46f44d9ae6c76924e68ffde9c155dfdce1fc",
+            "fc1504488cc7735c2bfbf03f030ce6de0c946ddb",
+        ),
+        _RESULTS + "github_thread_import_development_candidate_3.json": (
+            4,
+            "accepted_development",
+            "3c32675802191dbeec6c8477e0b1abcb618b115120575abc0e6509f8dc565b2c",
+            "c6f329152dac002ecead2f8d8bebcb002865aff6",
+        ),
+    },
 }
 REQUIRED_REGRESSION_EVIDENCE = {
     "exact-symbol-routing.learn-claude-code": {
@@ -194,6 +220,7 @@ REQUIRED_REGRESSION_EVIDENCE = {
     },
     "multi-source-coverage-selection": {},
     "folder-import-lifecycle": {},
+    "github-thread-import-lifecycle": {},
 }
 REQUIRED_ACCEPTANCE_EVIDENCE = {
     "exact-symbol-routing.learn-claude-code": {
@@ -273,6 +300,45 @@ REQUIRED_ACCEPTANCE_EVIDENCE = {
             "e4fa0230d4d84d4a428dc95e6732e0e0e3ce6c6823884274a70bc65b761f8997",
             "63e34ec0b22c6aee7e7a17426b984ffb205b4188",
         ),
+    },
+    "github-thread-import-lifecycle": {
+        _RESULTS + "github_thread_import_development_candidate_3.json": (
+            _RESULTS + "github_thread_import_candidate_3_local_gate.json",
+            "577d302250d9572b0fa295e3258d974b7f99f06b2a0f1fdbb34c1f6debb544fb",
+            "73242bc085e6a170d459b10324dabc57aed4bc50",
+        ),
+    },
+}
+FINAL_ACCEPTANCE_REGISTRY_COUNTS = {
+    "exact-symbol-routing.learn-claude-code": {
+        "suite_count": 12,
+        "experiment_count": 1,
+        "evidence_count": 20,
+        "qa_case_count": 121,
+    },
+    "support-score.learn-claude-code": {
+        "suite_count": 12,
+        "experiment_count": 2,
+        "evidence_count": 47,
+        "qa_case_count": 121,
+    },
+    "multi-source-coverage-selection": {
+        "suite_count": 12,
+        "experiment_count": 2,
+        "evidence_count": 49,
+        "qa_case_count": 121,
+    },
+    "folder-import-lifecycle": {
+        "suite_count": 12,
+        "experiment_count": 3,
+        "evidence_count": 53,
+        "qa_case_count": 121,
+    },
+    "github-thread-import-lifecycle": {
+        "suite_count": 12,
+        "experiment_count": 5,
+        "evidence_count": 62,
+        "qa_case_count": 121,
     },
 }
 DEVELOPMENT_EVIDENCE_KEYS = {
@@ -383,6 +449,14 @@ FINAL_EXPERIMENT_GATE_KEYS = {
         "clean_worktree_after_run",
         "confirmation_not_run",
     },
+    "github-thread-import-lifecycle": {
+        "pass_rate",
+        "failed_cases",
+        "deterministic_replay",
+        "stable_memoryforge_commit",
+        "clean_worktree_after_run",
+        "confirmation_not_run",
+    },
 }
 LOCAL_GATE_KEYS = {
     "command",
@@ -423,6 +497,17 @@ FOLDER_IMPORT_REPOSITORY = {
         "tests/test_folder_import.py",
         "demo/evaluation/folder_import_development.json",
         "demo/evaluation/folder_import_confirmation.json",
+    ],
+}
+GITHUB_THREAD_IMPORT_REPOSITORY = {
+    "repository": "still0123/MemoryForge",
+    "remote_url": "https://github.com/still0123/MemoryForge.git",
+    "commit": "271ec3490aa6cd14120913e7fa93f259bd9999fa",
+    "license": "MIT",
+    "source_paths": [
+        "tests/test_github_thread_import.py",
+        "demo/evaluation/github_thread_import_development.json",
+        "demo/evaluation/github_thread_import_confirmation.json",
     ],
 }
 
@@ -591,6 +676,8 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
             _validate_multi_source_experiment_metadata(experiment)
         elif suite_id == "folder-import-lifecycle":
             _validate_folder_import_experiment_metadata(experiment)
+        elif suite_id == "github-thread-import-lifecycle":
+            _validate_github_thread_experiment_metadata(experiment)
 
         repositories = experiment.get("repositories")
         if not isinstance(repositories, list) or not repositories:
@@ -598,7 +685,11 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
         for repository in repositories:
             _validate_repository(suite_id, repository)
         source_manifest = experiment.get("source_manifest")
-        if suite_id in {"multi-source-coverage-selection", "folder-import-lifecycle"}:
+        if suite_id in {
+            "multi-source-coverage-selection",
+            "folder-import-lifecycle",
+            "github-thread-import-lifecycle",
+        }:
             if "source_manifest" in experiment:
                 raise ValueError(f"component experiment cannot declare source manifest: {suite_id}")
         else:
@@ -768,8 +859,11 @@ def _validate_experiment_payload(
             confirmation,
         )
         return
-    if experiment["suite_id"] == "folder-import-lifecycle":
-        _validate_folder_import_experiment_payload(
+    if experiment["suite_id"] in {
+        "folder-import-lifecycle",
+        "github-thread-import-lifecycle",
+    }:
+        _validate_pytest_component_experiment_payload(
             experiment,
             artifact,
             payload,
@@ -913,7 +1007,7 @@ def _validate_multi_source_experiment_payload(
             raise ValueError(f"multi-source experiment metric mismatch: {metric}")
 
 
-def _validate_folder_import_experiment_payload(
+def _validate_pytest_component_experiment_payload(
     experiment: dict[str, Any],
     artifact: dict[str, Any],
     payload: dict[str, Any],
@@ -966,29 +1060,29 @@ def _validate_folder_import_experiment_payload(
         or payload.get("confirmation", {}).get("sha256") != confirmation["sha256"]
         or payload.get("confirmation", {}).get("status") != "not_run"
     ):
-        raise ValueError("folder-import experiment Evidence contract failed")
+        raise ValueError("pytest component experiment Evidence contract failed")
     gates = payload.get("gates")
     if (
         not isinstance(gates, dict)
         or set(gates) != FINAL_EXPERIMENT_GATE_KEYS[experiment["suite_id"]]
     ):
-        raise ValueError("folder-import experiment gates are invalid")
+        raise ValueError("pytest component experiment gates are invalid")
     if artifact["status"] == "rejected":
         if artifact["passed"] is not False or all(gates.values()):
-            raise ValueError("rejected folder-import Evidence must fail")
+            raise ValueError("rejected pytest component Evidence must fail")
         return
     if (
         artifact["status"] not in {"accepted_development", "accepted_development_superseded"}
         or artifact["passed"] is not True
         or not all(value is True for value in gates.values())
     ):
-        raise ValueError("accepted folder-import Evidence gates failed")
+        raise ValueError("accepted pytest component Evidence gates failed")
     metrics = evaluation.get("metrics")
     if not isinstance(metrics, dict):
-        raise ValueError("folder-import experiment metrics missing")
+        raise ValueError("pytest component experiment metrics missing")
     for metric, expected in experiment["expected_metrics"]["development"].items():
         if metrics.get(metric) != expected:
-            raise ValueError(f"folder-import experiment metric mismatch: {metric}")
+            raise ValueError(f"pytest component experiment metric mismatch: {metric}")
 
 
 def _validate_multi_source_experiment_metadata(experiment: dict[str, Any]) -> None:
@@ -1008,6 +1102,16 @@ def _validate_folder_import_experiment_metadata(experiment: dict[str, Any]) -> N
         or experiment.get("repositories") != [FOLDER_IMPORT_REPOSITORY]
     ):
         raise ValueError("folder-import experiment metadata changed")
+
+
+def _validate_github_thread_experiment_metadata(experiment: dict[str, Any]) -> None:
+    if (
+        experiment.get("suite_type") != "source_lifecycle"
+        or experiment.get("evaluator") != "demo.run_github_thread_import_benchmark"
+        or experiment.get("max_wiki_pages") != 3
+        or experiment.get("repositories") != [GITHUB_THREAD_IMPORT_REPOSITORY]
+    ):
+        raise ValueError("GitHub thread-import experiment metadata changed")
 
 
 def _validate_regression_evidence(
@@ -1077,6 +1181,7 @@ def _validate_acceptance_evidence(
         "support-score.learn-claude-code",
         "multi-source-coverage-selection",
         "folder-import-lifecycle",
+        "github-thread-import-lifecycle",
     }
     expected_payload_keys = LOCAL_GATE_EVIDENCE_KEYS | (
         {"regression_evidence"} if multi_source else set()
@@ -1106,6 +1211,10 @@ def _validate_acceptance_evidence(
         or any(
             isinstance(value, bool) or not isinstance(value, int) or value < 1
             for value in registry_result.values()
+        )
+        or (
+            development_artifact.get("status") == "accepted_development"
+            and registry_result != FINAL_ACCEPTANCE_REGISTRY_COUNTS.get(str(experiment["suite_id"]))
         )
         or local_gate.get("dependency_check") != "passed"
         or not isinstance(pytest_result.get("passed"), int)

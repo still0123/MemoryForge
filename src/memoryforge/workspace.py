@@ -1361,6 +1361,45 @@ def reconcile_folder_sources(
     return len(stale_version_ids)
 
 
+def deactivate_current_source(
+    workspace: Workspace,
+    *,
+    source_id: str,
+    expected_source_path: str,
+) -> bool:
+    """Deactivate one explicitly identified current source while preserving history."""
+    if re.fullmatch(r"[a-f0-9]{64}", source_id) is None:
+        raise ValueError("source_id must be a SHA256 digest")
+    expected_path = PurePosixPath(expected_source_path)
+    if (
+        expected_path.is_absolute()
+        or not expected_path.parts
+        or any(part in {"", ".", ".."} for part in expected_path.parts)
+        or "\\" in expected_source_path
+    ):
+        raise ValueError("expected source path must be a safe POSIX relative path")
+    with _connect(workspace.index_path) as connection:
+        row = connection.execute(
+            """
+            SELECT versions.id, sources.source_path
+            FROM sources
+            LEFT JOIN source_versions AS versions
+              ON versions.source_id = sources.id AND versions.is_current = 1
+            WHERE sources.source_id = ?
+            """,
+            (source_id,),
+        ).fetchone()
+        if row is None or row["id"] is None:
+            return False
+        if str(row["source_path"]) != expected_path.as_posix():
+            raise WorkspaceIntegrityError("source identity does not match its expected path")
+        connection.execute(
+            "UPDATE source_versions SET is_current = 0 WHERE id = ?",
+            (int(row["id"]),),
+        )
+    return True
+
+
 def _get_git_repository(workspace: Workspace, repository_id: str) -> GitRepositoryRecord:
     with _connect(workspace.index_path) as connection:
         row = connection.execute(

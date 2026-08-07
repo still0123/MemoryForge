@@ -27,6 +27,11 @@ from memoryforge.feishu_bot import FeishuBotError, reply_to_feishu_text
 from memoryforge.feishu_service import FeishuServiceError, serve_feishu_bot
 from memoryforge.folder_adapter import sync_folder
 from memoryforge.git_adapter import GitRepositoryError
+from memoryforge.github_thread_adapter import (
+    delete_github_thread,
+    import_github_thread,
+    import_github_thread_json,
+)
 from memoryforge.importer import SourceValidationError, import_local_file
 from memoryforge.linting import lint_workspace
 from memoryforge.models import ChangeOperationType, Sensitivity
@@ -163,6 +168,113 @@ def folder_import(
     except (
         MemoryForgeError,
         SourceValidationError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(json.dumps(result.model_dump(mode="json"), ensure_ascii=False, indent=2))
+
+
+@app.command("github-thread-import")
+def github_thread_import(
+    url: Annotated[str, typer.Argument(help="One public GitHub Issue or Pull Request URL.")],
+    workspace: WorkspaceOption = Path("."),
+    save_json: Annotated[
+        Path | None,
+        typer.Option("--save-json", help="Write normalized JSON for offline replay."),
+    ] = None,
+    category: Annotated[
+        str,
+        typer.Option("--category", "-c", help="SourceVersion category."),
+    ] = "refs",
+    tag: Annotated[
+        list[str] | None,
+        typer.Option("--tag", "-t", help="Repeatable tag stored in the immutable manifest."),
+    ] = None,
+    local_only: Annotated[
+        bool,
+        typer.Option("--local-only", help="Keep the public thread out of remote model requests."),
+    ] = False,
+) -> None:
+    """Fetch and import exactly one public GitHub thread."""
+    try:
+        result = import_github_thread(
+            workspace,
+            url,
+            save_json=save_json,
+            category=category,
+            tags=tuple(tag or ()),
+            sensitivity=Sensitivity.LOCAL_ONLY if local_only else Sensitivity.PUBLIC,
+        )
+    except (
+        MemoryForgeError,
+        SourceValidationError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(json.dumps(result.model_dump(mode="json"), ensure_ascii=False, indent=2))
+
+
+@app.command("github-thread-import-json")
+def github_thread_import_json(
+    path: Annotated[Path, typer.Argument(help="Saved normalized GitHub thread JSON.")],
+    workspace: WorkspaceOption = Path("."),
+    category: Annotated[
+        str,
+        typer.Option("--category", "-c", help="SourceVersion category."),
+    ] = "refs",
+    tag: Annotated[
+        list[str] | None,
+        typer.Option("--tag", "-t", help="Repeatable tag stored in the immutable manifest."),
+    ] = None,
+    local_only: Annotated[
+        bool,
+        typer.Option("--local-only", help="Keep the public thread out of remote model requests."),
+    ] = False,
+) -> None:
+    """Replay one saved GitHub thread snapshot without network access."""
+    try:
+        result = import_github_thread_json(
+            workspace,
+            path,
+            source_root=path.expanduser().parent,
+            category=category,
+            tags=tuple(tag or ()),
+            sensitivity=Sensitivity.LOCAL_ONLY if local_only else Sensitivity.PUBLIC,
+        )
+    except (
+        MemoryForgeError,
+        SourceValidationError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(json.dumps(result.model_dump(mode="json"), ensure_ascii=False, indent=2))
+
+
+@app.command("github-thread-delete")
+def github_thread_delete(
+    url: Annotated[str, typer.Argument(help="Imported GitHub Issue or Pull Request URL.")],
+    workspace: WorkspaceOption = Path("."),
+) -> None:
+    """Deactivate one GitHub thread while retaining immutable history."""
+    try:
+        result = delete_github_thread(workspace, url)
+    except (
+        MemoryForgeError,
         WorkspaceIntegrityError,
         WorkspaceSecurityError,
         ValueError,

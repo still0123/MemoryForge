@@ -49,6 +49,10 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 [tool.ruff.lint.per-file-ignores]
 # Frozen experiment input; changing its import order would invalidate registered Evidence.
 "tests/test_folder_import.py" = ["I001"]
+"tests/test_github_thread_import.py" = ["I001"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["memoryforge"]
 
 [tool.mypy]
 python_version = "3.11"

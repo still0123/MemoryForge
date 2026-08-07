@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "suite_id": "github-thread-import-lifecycle",
+  "suite_revision": 1,
+  "memoryforge_commit": "271ec3490aa6cd14120913e7fa93f259bd9999fa",
+  "memoryforge_worktree_dirty": false,
+  "development": {
+    "path": "demo/evaluation/github_thread_import_development.json",
+    "sha256": "b4a8f3269b6c99b9a7d5c3a122621f9186c966bad9170501c49749ce2de0f4ff",
+    "test_file": "tests/test_github_thread_import.py",
+    "test_sha256": "70be6edefcb388a05bb59a6f604c17722d6b335ff5b75d7e54aad912d4d0228e",
+    "case_count": 5,
+    "evaluation": {
+      "case_count": 5,
+      "metrics": {
+        "pass_rate": 0.0,
+        "failed_cases": 5
+      },
+      "cases": [
+        {
+          "id": "single-resource-endpoints",
+          "category": "single_resource",
+          "pytest_node": "tests/test_github_thread_import.py::test_github_thread_import_fetches_only_one_exact_thread",
+          "status": "failed",
+          "error_classification": "pytest_failure"
+        },
+        {
+          "id": "offline-json-duplicate",
+          "category": "duplicate_import",
+          "pytest_node": "tests/test_github_thread_import.py::test_github_thread_saved_json_replays_offline_and_is_idempotent",
+          "status": "failed",
+          "error_classification": "pytest_failure"
+        },
+        {
+          "id": "update-delete-reimport",
+          "category": "temporal_update",
+          "pytest_node": "tests/test_github_thread_import.py::test_github_thread_update_delete_and_reimport_lifecycle",
+          "status": "failed",
+          "error_classification": "pytest_failure"
+        },
+        {
+          "id": "privacy-boundaries",
+          "category": "privacy",
+          "pytest_node": "tests/test_github_thread_import.py::test_github_thread_privacy_boundaries_fail_before_source_writes",
+          "status": "failed",
+          "error_classification": "pytest_failure"
+        },
+        {
+          "id": "citation-locator-replay",
+          "category": "citation",
+          "pytest_node": "tests/test_github_thread_import.py::test_github_thread_preserves_locator_and_exact_citation_replay",
+          "status": "failed",
+          "error_classification": "pytest_failure"
+        }
+      ]
+    }
+  },
+  "confirmation": {
+    "path": "demo/evaluation/github_thread_import_confirmation.json",
+    "sha256": "45de8d774b8d02b0112571ceb8c3b4d43db589cb0a68dbb96579aa2327ad24b0",
+    "status": "not_run"
+  },
+  "runs": [
+    {
+      "name": "first",
+      "evaluation_sha256": "fde769efe8bafc6846640dd89271a1238459e699cdb93abc015de2b2ec9634e8"
+    },
+    {
+      "name": "second",
+      "evaluation_sha256": "fde769efe8bafc6846640dd89271a1238459e699cdb93abc015de2b2ec9634e8"
+    }
+  ],
+  "gates": {
+    "pass_rate": false,
+    "failed_cases": false,
+    "deterministic_replay": true,
+    "stable_memoryforge_commit": true,
+    "clean_worktree_after_run": true,
+    "confirmation_not_run": true
+  },
+  "passed": false
+}
