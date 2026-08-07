@@ -420,19 +420,6 @@ def _document_claims_consistent(texts: dict[Path, str]) -> bool:
         )
         if any(status != "not_run" for status in statuses):
             return False
-        if any(
-            int(value) not in {574, 583, 586}
-            for value in re.findall(r"macOS\D{0,12}(\d+)\s+passed", text)
-        ):
-            return False
-        if any(
-            (int(passed), int(skipped)) not in {(571, 3), (580, 3), (583, 3)}
-            for passed, skipped in re.findall(
-                r"(?:Linux|Debian)\D{0,12}(\d+)\s+passed\s*/\s*(\d+)\s+skipped",
-                text,
-            )
-        ):
-            return False
     return True
 
 

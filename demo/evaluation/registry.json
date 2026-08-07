@@ -1143,6 +1143,15 @@
             "passed": true
           },
           "passed": true
+        },
+        {
+          "split": "development",
+          "evidence_revision": 5,
+          "status": "rejected",
+          "path": "demo/results/release_candidate_development_candidate_4_rejected.json",
+          "sha256": "2b55864983c0b5cc7fa9b3819b9a94b68cdd3192bd55b156fbcc5f564df48fbc",
+          "memoryforge_commit": "7e998d509ee7a4aba31f269e16699d18343ec978",
+          "passed": false
         }
       ]
     }

@@ -1,0 +1,887 @@
+{
+  "experiments": [
+    {
+      "accepted_evidence": [
+        {
+          "memoryforge_commit": "5308078614e83ad90e3eae9ccdd490bb156f9948",
+          "path": "demo/results/exact_symbol_routing_development_final.json",
+          "sha256": "a72494d69964a1c93b228fb73ffa1d8608bf714153cc54efa1096984addc0fc7"
+        }
+      ],
+      "confirmation": {
+        "case_count": 5,
+        "path": "demo/evaluation/learn_claude_code_qa_confirm_v031.json",
+        "sha256": "b86fe1f7999c09af9bf7c6bed4951c1c4c565318c39192bea1831d942466c117",
+        "status": "not_run"
+      },
+      "holdout": null,
+      "suite_id": "exact-symbol-routing.learn-claude-code",
+      "suite_revision": 1
+    },
+    {
+      "accepted_evidence": [
+        {
+          "memoryforge_commit": "4f2f15ddc06882612a547aaad81d4b67b4ffbf8b",
+          "path": "demo/results/support_score_development_candidate_14.json",
+          "sha256": "7159992bf66e87e4cfd4e6fde70e65fa50d169002276d444bd6255223a93254a"
+        }
+      ],
+      "confirmation": {
+        "case_count": 5,
+        "path": "demo/evaluation/learn_claude_code_qa_confirm_v031.json",
+        "sha256": "b86fe1f7999c09af9bf7c6bed4951c1c4c565318c39192bea1831d942466c117",
+        "status": "not_run"
+      },
+      "holdout": null,
+      "suite_id": "support-score.learn-claude-code",
+      "suite_revision": 1
+    },
+    {
+      "accepted_evidence": [
+        {
+          "memoryforge_commit": "4303c159caac6c8bded2eeb9e0e3cba625f61dc2",
+          "path": "demo/results/multi_source_coverage_development_candidate_1.json",
+          "sha256": "ef584ff97687ff4a09644f203b9b8d135c420918e4a19e27a8f7354a3e9b5197"
+        }
+      ],
+      "confirmation": {
+        "case_count": 4,
+        "path": "demo/evaluation/multi_source_coverage_confirmation.json",
+        "sha256": "2759e7f3cc34e97b575e59a128a21e7c56e07d5d3afe08d8c80d02f4dc5a5a1a",
+        "status": "not_run"
+      },
+      "holdout": null,
+      "suite_id": "multi-source-coverage-selection",
+      "suite_revision": 1
+    },
+    {
+      "accepted_evidence": [
+        {
+          "memoryforge_commit": "3d056c9d71a4caf6a625449ac3057f74ff98148c",
+          "path": "demo/results/folder_import_development_candidate_2.json",
+          "sha256": "d6a2c7ee8d9d74f75eea88b276db09c9dd2846e143702a3e30ee0ca858f2780d"
+        }
+      ],
+      "confirmation": {
+        "case_count": 3,
+        "path": "demo/evaluation/folder_import_confirmation.json",
+        "sha256": "099d8a49892e9f0b2e6203891bbeeb6ccac53042be2e86fea110180c426cf45d",
+        "status": "not_run"
+      },
+      "holdout": null,
+      "suite_id": "folder-import-lifecycle",
+      "suite_revision": 1
+    },
+    {
+      "accepted_evidence": [
+        {
+          "memoryforge_commit": "c6f329152dac002ecead2f8d8bebcb002865aff6",
+          "path": "demo/results/github_thread_import_development_candidate_3.json",
+          "sha256": "3c32675802191dbeec6c8477e0b1abcb618b115120575abc0e6509f8dc565b2c"
+        }
+      ],
+      "confirmation": {
+        "case_count": 3,
+        "path": "demo/evaluation/github_thread_import_confirmation.json",
+        "sha256": "45de8d774b8d02b0112571ceb8c3b4d43db589cb0a68dbb96579aa2327ad24b0",
+        "status": "not_run"
+      },
+      "holdout": null,
+      "suite_id": "github-thread-import-lifecycle",
+      "suite_revision": 1
+    },
+    {
+      "accepted_evidence": [
+        {
+          "memoryforge_commit": "12d0ecadb4d8d310e2fa3b22f71dbfe770bd2567",
+          "path": "demo/results/static_showcase_development_candidate_5.json",
+          "sha256": "5e644b467738bcb8121a0a224a7e7ca31b11b37d4ee6962b7b5659b72544101e"
+        }
+      ],
+      "confirmation": {
+        "case_count": 3,
+        "path": "demo/evaluation/static_showcase_confirmation.json",
+        "sha256": "4c64d073a2a1af46a068219af158ed77bc1e99a1b4de6601e01634d63140166e",
+        "status": "not_run"
+      },
+      "holdout": null,
+      "suite_id": "static-showcase",
+      "suite_revision": 3
+    },
+    {
+      "accepted_evidence": [
+        {
+          "memoryforge_commit": "70f76ebfcc7a7bd64f926955e09cfa0a6f45766d",
+          "path": "demo/results/cross_platform_delivery_candidate_9.json",
+          "sha256": "425f3047bae7df586a9a529a33024f667f4c98d096bce8edb101676e04135b0c"
+        }
+      ],
+      "confirmation": {
+        "case_count": 3,
+        "path": "demo/evaluation/cross_platform_delivery_confirmation.json",
+        "sha256": "200074acfb79979bf4663b97ae25e9dd62fa0f94359b8aa0d39c4250256660fc",
+        "status": "not_run"
+      },
+      "holdout": null,
+      "suite_id": "cross-platform-delivery",
+      "suite_revision": 1
+    },
+    {
+      "accepted_evidence": [
+        {
+          "memoryforge_commit": "5005f1511301797d7d1a9ce25c3a885ab6ba85ba",
+          "path": "demo/results/release_candidate_development_candidate_3.json",
+          "sha256": "c61e5817c9a55e2bda780a7381512087c0a37943d8d34bb0e0a54a880a074349"
+        }
+      ],
+      "confirmation": {
+        "case_count": 26,
+        "path": "demo/evaluation/release_candidate_confirmation.json",
+        "sha256": "3eed08e04592b614a709cd18c6a92951b5da145d7dab4b9997824cd4e002e805",
+        "status": "not_run"
+      },
+      "holdout": {
+        "case_count": 5,
+        "path": "demo/evaluation/release_candidate_holdout.json",
+        "sha256": "b466644bef2748a96d598540c54633fe49770af97fc71ce6e62e18eda687e8f8",
+        "status": "not_run"
+      },
+      "suite_id": "release-candidate-delivery",
+      "suite_revision": 1
+    }
+  ],
+  "macro": {
+    "abstention_accuracy": 0.0,
+    "answer_accuracy": 43.3,
+    "citation_grounding_accuracy": 98.8,
+    "multi_source_coverage": 100.0,
+    "repository_path_isolation_accuracy": 100.0,
+    "source_recall_at_3": 69.8
+  },
+  "memoryforge_commit": "7e998d509ee7a4aba31f269e16699d18343ec978",
+  "negative_results": [
+    {
+      "answer_accuracy": 60.0,
+      "split": "development",
+      "status": "retained_metric_gap",
+      "suite_id": "code-wiki-qa.learn-claude-code"
+    },
+    {
+      "path": "demo/results/cross_platform_delivery_baseline_rejected.json",
+      "sha256": "f169486f1fc757abaaf3728187703834510726c2cae11736c2e82ba220e369ac",
+      "status": "rejected",
+      "suite_id": "cross-platform-delivery"
+    },
+    {
+      "answer_accuracy": 96.7,
+      "split": "development",
+      "status": "retained_metric_gap",
+      "suite_id": "doc-wiki-qa.agent-skill-eval"
+    },
+    {
+      "answer_accuracy": 10.0,
+      "split": "development",
+      "status": "retained_metric_gap",
+      "suite_id": "doc-wiki-qa.click"
+    },
+    {
+      "answer_accuracy": 0.0,
+      "split": "holdout",
+      "status": "retained_metric_gap",
+      "suite_id": "doc-wiki-qa.click"
+    },
+    {
+      "answer_accuracy": 0.0,
+      "split": "confirmation",
+      "status": "retained_metric_gap",
+      "suite_id": "doc-wiki-qa.document-frequency"
+    },
+    {
+      "answer_accuracy": 10.0,
+      "split": "development",
+      "status": "retained_metric_gap",
+      "suite_id": "doc-wiki-qa.document-frequency"
+    },
+    {
+      "answer_accuracy": 66.7,
+      "split": "confirmation",
+      "status": "retained_metric_gap",
+      "suite_id": "doc-wiki-qa.local-fact-morphology"
+    },
+    {
+      "answer_accuracy": 80.0,
+      "split": "development",
+      "status": "retained_metric_gap",
+      "suite_id": "doc-wiki-qa.local-fact-morphology"
+    },
+    {
+      "answer_accuracy": 66.7,
+      "split": "confirmation",
+      "status": "retained_metric_gap",
+      "suite_id": "doc-wiki-qa.page-aware-griffe"
+    },
+    {
+      "path": "demo/results/exact_symbol_routing_development.json",
+      "sha256": "3769f91c17687228f4a509f5b7ecc49b5fa23b10b5cb17fdfe8475d1e770d2b8",
+      "status": "development_passed_regression_failed",
+      "suite_id": "exact-symbol-routing.learn-claude-code"
+    },
+    {
+      "path": "demo/results/exact_symbol_routing_candidate_2_regression_rejected.json",
+      "sha256": "d07b5a54ec11dc044fbb091b7372461885a02e68fde0803b004dbe8cf3fb60f8",
+      "status": "regression_rejected",
+      "suite_id": "exact-symbol-routing.learn-claude-code"
+    },
+    {
+      "path": "demo/results/exact_symbol_routing_candidate_1_rejected.json",
+      "sha256": "6dad9f745ec4477dbb5990113f043a0cffa47e14cc0ccf1490854100789e89e1",
+      "status": "rejected",
+      "suite_id": "exact-symbol-routing.learn-claude-code"
+    },
+    {
+      "path": "demo/results/folder_import_baseline_rejected.json",
+      "sha256": "6dee68b6723d483fc308a6f09dbc5a1e06e58b7d5793eca92ec5ab08c53481ec",
+      "status": "rejected",
+      "suite_id": "folder-import-lifecycle"
+    },
+    {
+      "path": "demo/results/github_thread_import_baseline_rejected.json",
+      "sha256": "028d1d71db3e92b4b183a0fa3147d6eb581bb1274679a4d2c669d3e1f46b7255",
+      "status": "rejected",
+      "suite_id": "github-thread-import-lifecycle"
+    },
+    {
+      "path": "demo/results/multi_source_coverage_baseline_rejected.json",
+      "sha256": "6fa99baefed3cfa2b50bb044b3293c24ee90e697f0ff1a7f6636e91b3c548f81",
+      "status": "rejected",
+      "suite_id": "multi-source-coverage-selection"
+    },
+    {
+      "path": "demo/results/release_candidate_sdist_probe_regression_rejected.json",
+      "sha256": "b0c18c7e2d23d47e3cb8cb1200c3511dc9a4bb560ac81e531e4492c5f1353d5b",
+      "status": "regression_rejected",
+      "suite_id": "release-candidate-delivery"
+    },
+    {
+      "path": "demo/results/release_candidate_candidate_2_static_review_rejected.json",
+      "sha256": "475b6e5981bc43438107c67a7fd3ab05fc95888bfb30c391f2e7ae2275c23d45",
+      "status": "regression_rejected",
+      "suite_id": "release-candidate-delivery"
+    },
+    {
+      "path": "demo/results/release_candidate_baseline_rejected.json",
+      "sha256": "2e2674ce071489f92d4a480b4f0c0018e0b416764e9a2df1a7ff8a2fc7640740",
+      "status": "rejected",
+      "suite_id": "release-candidate-delivery"
+    },
+    {
+      "path": "demo/results/static_showcase_baseline_rejected.json",
+      "sha256": "c8448999fad2f5ee50cd249688981498eb30fd9b52d8d4f8dde27c72fafb4952",
+      "status": "rejected",
+      "suite_id": "static-showcase"
+    },
+    {
+      "path": "demo/results/static_showcase_candidate_0_fixture_rejected.json",
+      "sha256": "5afefb3f7312007c9ca3c1f3c2ab08cc369df79a025b55112f9ecd3e28f60f5d",
+      "status": "rejected",
+      "suite_id": "static-showcase"
+    },
+    {
+      "path": "demo/results/static_showcase_candidate_1_fixture_rejected.json",
+      "sha256": "5f7841001452563bb5963c71f605f35ef587b56a868d40febbb0236026635e8b",
+      "status": "rejected",
+      "suite_id": "static-showcase"
+    },
+    {
+      "path": "demo/results/support_score_development.json",
+      "sha256": "d6699dd57109b5bbc573fdf17355084a3ac045e43f5766f4c539c42621208a75",
+      "status": "development_passed_regression_failed",
+      "suite_id": "support-score.learn-claude-code"
+    },
+    {
+      "path": "demo/results/support_score_development_final.json",
+      "sha256": "4592fb565ae53596dd69b7ca80a4870f2b7430b03f9a3a2e5d9fa4660902aa29",
+      "status": "development_passed_regression_failed",
+      "suite_id": "support-score.learn-claude-code"
+    },
+    {
+      "path": "demo/results/support_score_candidate_1_regression_rejected.json",
+      "sha256": "2da64ec8a359162e531153bd28f37c185a0f23fae85aa95c8efc22b852dd87ef",
+      "status": "regression_rejected",
+      "suite_id": "support-score.learn-claude-code"
+    },
+    {
+      "path": "demo/results/support_score_candidate_2_regression_rejected.json",
+      "sha256": "4ef87510f5a1780aa90ffdd184742fa35ca45ed58d4eac5e5127137e8e64f867",
+      "status": "regression_rejected",
+      "suite_id": "support-score.learn-claude-code"
+    },
+    {
+      "path": "demo/results/support_score_development_candidate_10_rejected.json",
+      "sha256": "f040c4760a301143e79c8919e174f34d04d689c0f173738b0d2b7ffa8b5f9c37",
+      "status": "rejected",
+      "suite_id": "support-score.learn-claude-code"
+    }
+  ],
+  "package_version": "0.3.0",
+  "registry": {
+    "evidence_count": 104,
+    "experiment_count": 8,
+    "qa_case_count": 121,
+    "qa_case_types_present": [
+      "code_behavior",
+      "cross_repository",
+      "exact_symbol",
+      "multi_source",
+      "paraphrase",
+      "single_hop",
+      "temporal_update",
+      "unanswerable"
+    ],
+    "status": "valid",
+    "suite_count": 12,
+    "suite_types": [
+      "code_wiki_qa",
+      "code_wiki_structure",
+      "document_wiki_qa",
+      "source_lifecycle"
+    ]
+  },
+  "schema_version": 1,
+  "suites": [
+    {
+      "evidence": [
+        {
+          "evidence_revision": 1,
+          "memoryforge_commit": "42de67d385ad94f5500d7911845b391e8b9c3577",
+          "path": "demo/results/agent_skill_eval_public.json",
+          "sha256": "d777b5b7547b3e53d66742b03cd5a376d523d17ab7caa108bfa5684ec24f95cf",
+          "split": "development"
+        }
+      ],
+      "metrics": {
+        "development": {
+          "answer_accuracy": 96.7,
+          "citation_grounding_accuracy": 100.0,
+          "source_recall_at_3": 96.2
+        }
+      },
+      "repositories": [
+        {
+          "commit": "93f5dc05229da250b041850ad8deeeec886ef304",
+          "license": "Apache-2.0",
+          "repository": "ranmaoxia0123/AgentSkill-Eval"
+        }
+      ],
+      "splits": {
+        "confirmation": null,
+        "development": {
+          "case_count": 30,
+          "path": "demo/evaluation/agent_skill_eval.json",
+          "sha256": "efa3a69d8564665b605abe2fb2227185e3f45de8c140fde297d3889965a96f18"
+        },
+        "holdout": null
+      },
+      "suite_id": "doc-wiki-qa.agent-skill-eval",
+      "suite_revision": 1,
+      "suite_type": "document_wiki_qa"
+    },
+    {
+      "evidence": [
+        {
+          "evidence_revision": 1,
+          "memoryforge_commit": "293bd8f5fa2d1de9dfba75989205fdc7930b371a",
+          "path": "demo/results/click_docs_dev_v021.json",
+          "sha256": "8c7c18ccb9049a83f95f9c6a36a02979577ff95e43c687d77461fccdd113e06d",
+          "split": "development"
+        },
+        {
+          "evidence_revision": 1,
+          "memoryforge_commit": "293bd8f5fa2d1de9dfba75989205fdc7930b371a",
+          "path": "demo/results/click_docs_holdout_v021.json",
+          "sha256": "a9b9f47bc805987384ae5d006498e8780e69c8b1ae15d00fdba49abad792efe1",
+          "split": "holdout"
+        }
+      ],
+      "metrics": {
+        "development": {
+          "answer_accuracy": 10.0,
+          "citation_grounding_accuracy": 100.0,
+          "source_recall_at_3": 0.0
+        },
+        "holdout": {
+          "answer_accuracy": 0.0,
+          "citation_grounding_accuracy": 100.0,
+          "source_recall_at_3": 0.0
+        }
+      },
+      "repositories": [
+        {
+          "commit": "00e592cea702e0b2caa0dee42489fdb1c22cd845",
+          "license": "BSD-3-Clause",
+          "repository": "pallets/click"
+        }
+      ],
+      "splits": {
+        "confirmation": null,
+        "development": {
+          "case_count": 10,
+          "path": "demo/evaluation/click_docs_dev_v021.json",
+          "sha256": "744bd889a92ade8a4e93bb8a2273a0e2d812e8494b188045e64f98a3077ec39c"
+        },
+        "holdout": {
+          "case_count": 10,
+          "path": "demo/evaluation/click_docs_holdout_v021.json",
+          "sha256": "9dd2673f64c74b3fbad50a966885224f57fc9ccec2a81c3ce6f9cfa33ee46165"
+        }
+      },
+      "suite_id": "doc-wiki-qa.click",
+      "suite_revision": 1,
+      "suite_type": "document_wiki_qa"
+    },
+    {
+      "evidence": [
+        {
+          "evidence_revision": 1,
+          "memoryforge_commit": "868fa7d5b54ecf11fc36c27d23339eebb289984f",
+          "path": "demo/results/uvicorn_df_development_v023.json",
+          "sha256": "97560f0322c3861139b876ccc2144048eb46b286d6abd08bbbf8c4051fc078f3",
+          "split": "development"
+        },
+        {
+          "evidence_revision": 2,
+          "memoryforge_commit": "42de67d385ad94f5500d7911845b391e8b9c3577",
+          "path": "demo/results/typer_grounded_accuracy_audit_v025.json",
+          "sha256": "7b26b5af5613ea2a998b220d2b5cfe17fce22f9333caf68210ba9bd484b85653",
+          "split": "confirmation"
+        }
+      ],
+      "metrics": {
+        "confirmation": {
+          "answer_accuracy": 0.0,
+          "citation_grounding_accuracy": 100.0,
+          "source_recall_at_3": 58.3
+        },
+        "development": {
+          "answer_accuracy": 10.0,
+          "citation_grounding_accuracy": 100.0,
+          "source_recall_at_3": 90.0
+        }
+      },
+      "repositories": [
+        {
+          "commit": "ee8e45ca472db17b4aef1d539f209539062d002e",
+          "license": "BSD-3-Clause",
+          "repository": "encode/uvicorn"
+        },
+        {
+          "commit": "b4bd8b74fe5339444d7a3b71580649d59f6c085f",
+          "license": "MIT",
+          "repository": "fastapi/typer"
+        }
+      ],
+      "splits": {
+        "confirmation": {
+          "case_count": 12,
+          "path": "demo/evaluation/typer_docs_confirm_v023.json",
+          "sha256": "d6104cbb32c64678612ff376bdfa34d2813b17036dff4cdedaf3a340df5aade4"
+        },
+        "development": {
+          "case_count": 10,
+          "path": "demo/evaluation/uvicorn_docs_dev_v023.json",
+          "sha256": "3cdb4e1efe7aa88c9d4561acecfda45900ccd3c7113b7024fc6567e717e12f05"
+        },
+        "holdout": null
+      },
+      "suite_id": "doc-wiki-qa.document-frequency",
+      "suite_revision": 1,
+      "suite_type": "document_wiki_qa"
+    },
+    {
+      "evidence": [
+        {
+          "evidence_revision": 1,
+          "memoryforge_commit": "e72b41454b9ca620437b3a687ae9552930e1aa7d",
+          "path": "demo/results/watchfiles_local_morphology_development_v028.json",
+          "sha256": "40bf9664f6bf25513a8b39affe04a125d93a7bdfa79dddde554afa657c68aa4f",
+          "split": "development"
+        },
+        {
+          "evidence_revision": 1,
+          "memoryforge_commit": "e72b41454b9ca620437b3a687ae9552930e1aa7d",
+          "path": "demo/results/structlog_local_morphology_confirm_v028.json",
+          "sha256": "bf758227f42952c55f39a4fdec33b94f205dcb72a2f51c3b1bb4044081f0e1fb",
+          "split": "confirmation"
+        }
+      ],
+      "metrics": {
+        "confirmation": {
+          "answer_accuracy": 66.7,
+          "citation_grounding_accuracy": 100.0,
+          "source_recall_at_3": 100.0
+        },
+        "development": {
+          "answer_accuracy": 80.0,
+          "citation_grounding_accuracy": 100.0,
+          "source_recall_at_3": 100.0
+        }
+      },
+      "repositories": [
+        {
+          "commit": "42257e82089c3ef880aba8a2f2fc1662a663d61e",
+          "license": "MIT",
+          "repository": "samuelcolvin/watchfiles"
+        },
+        {
+          "commit": "0da7e10462206554def250147980db207231be38",
+          "license": "MIT OR Apache-2.0",
+          "repository": "hynek/structlog"
+        }
+      ],
+      "splits": {
+        "confirmation": {
+          "case_count": 12,
+          "path": "demo/evaluation/structlog_local_morphology_confirm_v028.json",
+          "sha256": "012f363e6d020fd23bdee314d0f2b082bd6f4d1f18e1d8c5ea4be2e87e36db42"
+        },
+        "development": {
+          "case_count": 10,
+          "path": "demo/evaluation/watchfiles_local_morphology_dev_v028.json",
+          "sha256": "a007b80c962e681d23e7ed720e11751918d2d9017b35df7d9da74f8be62ed6d4"
+        },
+        "holdout": null
+      },
+      "suite_id": "doc-wiki-qa.local-fact-morphology",
+      "suite_revision": 1,
+      "suite_type": "document_wiki_qa"
+    },
+    {
+      "evidence": [
+        {
+          "evidence_revision": 2,
+          "memoryforge_commit": "e72b41454b9ca620437b3a687ae9552930e1aa7d",
+          "path": "demo/results/griffe_local_morphology_regression_v028.json",
+          "sha256": "42989bac55894cb5bbe7b98e62f209aef01498cffaef1cf8e8e97550194fbfa7",
+          "split": "confirmation"
+        }
+      ],
+      "metrics": {
+        "confirmation": {
+          "answer_accuracy": 66.7,
+          "citation_grounding_accuracy": 100.0,
+          "source_recall_at_3": 83.3
+        }
+      },
+      "repositories": [
+        {
+          "commit": "6b3caab7ce4fdcb1c9386937dad17510d35a3321",
+          "license": "ISC",
+          "repository": "mkdocstrings/griffe"
+        }
+      ],
+      "splits": {
+        "confirmation": {
+          "case_count": 12,
+          "path": "demo/evaluation/griffe_page_aware_confirm_v027.json",
+          "sha256": "5cc6b553be1f35caadff716e7cfbc9a9021095e9ee78b8a47c66ae50a5fb1e24"
+        },
+        "development": null,
+        "holdout": null
+      },
+      "suite_id": "doc-wiki-qa.page-aware-griffe",
+      "suite_revision": 1,
+      "suite_type": "document_wiki_qa"
+    },
+    {
+      "evidence": [
+        {
+          "evidence_revision": 1,
+          "memoryforge_commit": "e5c5ce8710c27a89b55c6e9c7a4c5122db54ae7f",
+          "path": "demo/results/learn_claude_code_qa_dev_v031.json",
+          "sha256": "65ae9959e64b67e45bdc2a4572548af4bffe98026fbb511687f108d32a2b099e",
+          "split": "development"
+        }
+      ],
+      "metrics": {
+        "confirmation": {
+          "status": "frozen_not_run"
+        },
+        "development": {
+          "abstention_accuracy": 0.0,
+          "answer_accuracy": 60.0,
+          "citation_grounding_accuracy": 88.9,
+          "multi_source_coverage": 100.0,
+          "repository_path_isolation_accuracy": 100.0,
+          "source_recall_at_3": 100.0
+        }
+      },
+      "repositories": [
+        {
+          "commit": "7b564c3ee6996039cb4e13a53024dfe2d4388d35",
+          "license": "MIT",
+          "repository": "shareAI-lab/learn-claude-code"
+        }
+      ],
+      "splits": {
+        "confirmation": {
+          "case_count": 5,
+          "path": "demo/evaluation/learn_claude_code_qa_confirm_v031.json",
+          "sha256": "b86fe1f7999c09af9bf7c6bed4951c1c4c565318c39192bea1831d942466c117",
+          "status": "frozen_not_run"
+        },
+        "development": {
+          "case_count": 10,
+          "path": "demo/evaluation/learn_claude_code_qa_dev_v031.json",
+          "sha256": "3085859283115b351ce1c38a6bf1c111b1ac7e669f96ed1e3aa4f9fc31610b7d"
+        },
+        "holdout": null
+      },
+      "suite_id": "code-wiki-qa.learn-claude-code",
+      "suite_revision": 1,
+      "suite_type": "code_wiki_qa"
+    },
+    {
+      "evidence": [
+        {
+          "evidence_revision": 1,
+          "memoryforge_commit": "345f585efcf0c72ad51bbd972c46456a839d4891",
+          "path": "demo/results/external_code_wiki_v021.json",
+          "sha256": "9073b96cad920df5bddcd46eadbbe507b0b673e8d714a0619ad0913fb6f6c496",
+          "split": "development"
+        }
+      ],
+      "metrics": {
+        "development": {
+          "citation_grounding_accuracy": 100.0,
+          "core_relation_recall": 100.0,
+          "expected_source_coverage": 100.0,
+          "module_assignment_accuracy": 100.0,
+          "symbol_recall": 100.0
+        }
+      },
+      "repositories": [
+        {
+          "commit": "00e592cea702e0b2caa0dee42489fdb1c22cd845",
+          "license": "BSD-3-Clause",
+          "repository": "pallets/click"
+        }
+      ],
+      "splits": {
+        "confirmation": null,
+        "development": {
+          "case_count": 57,
+          "path": "demo/evaluation/external_code_wiki_click_v021.json",
+          "sha256": "4e987766c80be0e0b09ac20dbb5ed9331abc5918784fa5ef5a7b031e28a56f12"
+        },
+        "holdout": null
+      },
+      "suite_id": "code-wiki-structure.click",
+      "suite_revision": 1,
+      "suite_type": "code_wiki_structure"
+    },
+    {
+      "evidence": [
+        {
+          "evidence_revision": 1,
+          "memoryforge_commit": "345f585efcf0c72ad51bbd972c46456a839d4891",
+          "path": "demo/results/external_code_wiki_v021.json",
+          "sha256": "9073b96cad920df5bddcd46eadbbe507b0b673e8d714a0619ad0913fb6f6c496",
+          "split": "development"
+        }
+      ],
+      "metrics": {
+        "development": {
+          "citation_grounding_accuracy": 100.0,
+          "core_relation_recall": 100.0,
+          "expected_source_coverage": 100.0,
+          "module_assignment_accuracy": 100.0,
+          "symbol_recall": 100.0
+        }
+      },
+      "repositories": [
+        {
+          "commit": "adbc8813901bba65827259daa8e22ff94ec1f30e",
+          "license": "Apache-2.0",
+          "repository": "spf13/cobra"
+        }
+      ],
+      "splits": {
+        "confirmation": null,
+        "development": {
+          "case_count": 76,
+          "path": "demo/evaluation/external_code_wiki_cobra_v021.json",
+          "sha256": "223a31ced074ed3993a8e6641bf4a5c729c9999d5acc39be56ba02b7a0837b05"
+        },
+        "holdout": null
+      },
+      "suite_id": "code-wiki-structure.cobra",
+      "suite_revision": 1,
+      "suite_type": "code_wiki_structure"
+    },
+    {
+      "evidence": [
+        {
+          "evidence_revision": 1,
+          "memoryforge_commit": "345f585efcf0c72ad51bbd972c46456a839d4891",
+          "path": "demo/results/external_code_wiki_v021.json",
+          "sha256": "9073b96cad920df5bddcd46eadbbe507b0b673e8d714a0619ad0913fb6f6c496",
+          "split": "development"
+        }
+      ],
+      "metrics": {
+        "development": {
+          "citation_grounding_accuracy": 100.0,
+          "core_relation_recall": 100.0,
+          "expected_source_coverage": 100.0,
+          "module_assignment_accuracy": 100.0,
+          "symbol_recall": 100.0
+        }
+      },
+      "repositories": [
+        {
+          "commit": "912f0f51b0ced654d0069741e7160834dca742ee",
+          "license": "MIT",
+          "repository": "colinhacks/zod"
+        }
+      ],
+      "splits": {
+        "confirmation": null,
+        "development": {
+          "case_count": 74,
+          "path": "demo/evaluation/external_code_wiki_zod_v021.json",
+          "sha256": "58fdfb80fffde1682f34e20adc37afb66bd924d17354da50bac6b573df3d29e5"
+        },
+        "holdout": null
+      },
+      "suite_id": "code-wiki-structure.zod",
+      "suite_revision": 1,
+      "suite_type": "code_wiki_structure"
+    },
+    {
+      "evidence": [
+        {
+          "evidence_revision": 1,
+          "memoryforge_commit": "5a28c862289bfe938786ac026b8b4a5ee6247911",
+          "path": "demo/results/external_code_wiki_learn_claude_code_v031.json",
+          "sha256": "b200c0e8150f815ee5446fc81a59f0d2ede6ef7ffb03706d37a547344232b82b",
+          "split": "development"
+        }
+      ],
+      "metrics": {
+        "development": {
+          "citation_grounding_accuracy": 100.0,
+          "core_relation_recall": 100.0,
+          "expected_source_coverage": 100.0,
+          "module_assignment_accuracy": 100.0,
+          "symbol_recall": 100.0
+        }
+      },
+      "repositories": [
+        {
+          "commit": "7b564c3ee6996039cb4e13a53024dfe2d4388d35",
+          "license": "MIT",
+          "repository": "shareAI-lab/learn-claude-code"
+        }
+      ],
+      "splits": {
+        "confirmation": null,
+        "development": {
+          "case_count": 45,
+          "path": "demo/evaluation/external_code_wiki_learn_claude_code_v031.json",
+          "sha256": "ad72345d4f19c70aa6a2f050abc945ebe0ca3e51a135f0571cb599098ba75d2f"
+        },
+        "holdout": null
+      },
+      "suite_id": "code-wiki-structure.learn-claude-code",
+      "suite_revision": 1,
+      "suite_type": "code_wiki_structure"
+    },
+    {
+      "evidence": [
+        {
+          "evidence_revision": 1,
+          "memoryforge_commit": "523a2f1a7092b8e66895600a65286f79a6f62320",
+          "path": "demo/results/wiki_fact_index_baseline.json",
+          "sha256": "57343945d9f4c9db48a7e2990b4e0cf49ac5ac8623e4f40c7f763a4abca6f8ec",
+          "split": "development"
+        }
+      ],
+      "metrics": {
+        "development": {
+          "deterministic_replay": true,
+          "fact_rows_match_fts": true,
+          "facts": 1356,
+          "facts_use_applied_source_versions": true,
+          "metadata_round_trip": true,
+          "pages_with_facts": 39,
+          "passed": true,
+          "relation_metadata_present": true,
+          "relations": 86,
+          "structural_benchmark": true,
+          "symbol_metadata_present": true,
+          "symbols": 1270
+        }
+      },
+      "repositories": [
+        {
+          "commit": "7b564c3ee6996039cb4e13a53024dfe2d4388d35",
+          "license": "MIT",
+          "repository": "shareAI-lab/learn-claude-code"
+        },
+        {
+          "commit": "912f0f51b0ced654d0069741e7160834dca742ee",
+          "license": "MIT",
+          "repository": "colinhacks/zod"
+        }
+      ],
+      "splits": {
+        "confirmation": null,
+        "development": {
+          "case_count": 39,
+          "path": "demo/evaluation/wiki_fact_index_sources.json",
+          "sha256": "ee337432eb8ac87dd1376edea889190ee98e68cc40fa115301e74de7d9042d99"
+        },
+        "holdout": null
+      },
+      "suite_id": "wiki-fact-index.public-structure",
+      "suite_revision": 1,
+      "suite_type": "code_wiki_structure"
+    },
+    {
+      "evidence": [
+        {
+          "evidence_revision": 1,
+          "memoryforge_commit": "349398c971bfd26917a8000601cd582f40fe54da",
+          "path": "demo/results/source_lifecycle_baseline.json",
+          "sha256": "c5de8028e398f3c92d17afac18826e2e63b477020e24de60e2024498e832dd52",
+          "split": "development"
+        }
+      ],
+      "metrics": {
+        "development": {
+          "pass_rate": 100.0,
+          "passed_cases": 7
+        }
+      },
+      "repositories": [
+        {
+          "commit": "349398c971bfd26917a8000601cd582f40fe54da",
+          "license": "NOASSERTION",
+          "repository": "still0123/MemoryForge"
+        }
+      ],
+      "splits": {
+        "confirmation": null,
+        "development": {
+          "case_count": 7,
+          "path": "demo/evaluation/source_lifecycle_suite.json",
+          "sha256": "077a0d1a6a97167e7f67046750a08d6a97becde27c5bc63a9f3912ad4c45b26b"
+        },
+        "holdout": null
+      },
+      "suite_id": "source-lifecycle.local-git",
+      "suite_revision": 1,
+      "suite_type": "source_lifecycle"
+    }
+  ]
+}

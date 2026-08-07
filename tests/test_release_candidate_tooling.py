@@ -92,6 +92,10 @@ def test_release_document_claims_are_explicit() -> None:
         assert text.count(benchmark.RELEASE_CLAIM_MARKER) == 1
         assert not any(claim in text for claim in benchmark.FORBIDDEN_RELEASE_CLAIMS)
     texts = {path: path.read_text(encoding="utf-8") for path in benchmark.DOCUMENTS}
+    texts[benchmark.DOCUMENTS[2]] += (
+        "\nHistorical gate: macOS 559 passed, Linux 556 passed / 3 skipped.\n"
+    )
+    assert benchmark._document_claims_consistent(texts)
     texts[benchmark.DOCUMENTS[0]] += "\nConfirmation status: `passed`\n"
     assert not benchmark._document_claims_consistent(texts)
 

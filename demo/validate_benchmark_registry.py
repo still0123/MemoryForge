@@ -336,6 +336,24 @@ REQUIRED_EXPERIMENT_EVIDENCE = {
             "c61e5817c9a55e2bda780a7381512087c0a37943d8d34bb0e0a54a880a074349",
             "5005f1511301797d7d1a9ce25c3a885ab6ba85ba",
         ),
+        _RESULTS + "release_candidate_development_candidate_4_rejected.json": (
+            5,
+            "rejected",
+            "2b55864983c0b5cc7fa9b3819b9a94b68cdd3192bd55b156fbcc5f564df48fbc",
+            "7e998d509ee7a4aba31f269e16699d18343ec978",
+        ),
+    },
+}
+RELEASE_CANDIDATE_REJECTED_FAILURES = {
+    _RESULTS + "release_candidate_baseline_rejected.json": {
+        "package-version-consistency": "version_mismatch",
+        "registry-and-benchmark-summary": "benchmark_summary_mismatch",
+        "local-reproducible-artifacts": "artifact_missing",
+        "workspace-release-drill": "workspace_drill_failure",
+        "release-document-consistency": "release_document_mismatch",
+    },
+    _RESULTS + "release_candidate_development_candidate_4_rejected.json": {
+        "release-document-consistency": "release_document_mismatch",
     },
 }
 STATIC_SHOWCASE_REJECTED_CONTRACTS = {
@@ -1804,28 +1822,39 @@ def _validate_release_candidate_experiment_payload(
     ):
         raise ValueError("release-candidate experiment Evidence contract failed")
 
+    if artifact["evidence_revision"] >= 5 and not _validate_release_development_artifacts(
+        payload.get("release_artifacts"),
+        artifact["memoryforge_commit"],
+    ):
+        raise ValueError("release-candidate retained build Evidence changed")
+
     metrics = evaluation.get("metrics")
     if artifact["status"] == "rejected":
+        failures = RELEASE_CANDIDATE_REJECTED_FAILURES.get(str(artifact["path"]))
+        if failures is None:
+            raise ValueError("unknown rejected release-candidate Evidence")
+        failed_cases = len(failures)
+        reproducible_artifacts = "local-reproducible-artifacts" not in failures
         expected_metrics = {
-            "pass_rate": 16.7,
-            "failed_cases": 5,
-            "reproducible_artifacts": False,
+            "pass_rate": round(100 * (len(frozen_ids) - failed_cases) / len(frozen_ids), 1),
+            "failed_cases": failed_cases,
+            "reproducible_artifacts": reproducible_artifacts,
             "private_detail_leaks": 0,
             "confirmation_not_run": True,
             "holdout_not_run": True,
         }
         expected_cases = [
-            ("package-version-consistency", "failed", "version_mismatch"),
-            ("registry-and-benchmark-summary", "failed", "benchmark_summary_mismatch"),
-            ("local-reproducible-artifacts", "failed", "artifact_missing"),
-            ("workspace-release-drill", "failed", "workspace_drill_failure"),
-            ("release-document-consistency", "failed", "release_document_mismatch"),
-            ("frozen-splits-remain-closed", "passed", "none"),
+            (
+                case_id,
+                "failed" if case_id in failures else "passed",
+                failures.get(case_id, "none"),
+            )
+            for case_id in frozen_ids
         ]
         expected_gates = {
             "pass_rate": False,
             "failed_cases": False,
-            "reproducible_artifacts": False,
+            "reproducible_artifacts": reproducible_artifacts,
             "private_detail_leaks": True,
             "confirmation_not_run": True,
             "holdout_not_run": True,
@@ -1855,11 +1884,6 @@ def _validate_release_candidate_experiment_payload(
         or not all(value is True for value in gates.values())
     ):
         raise ValueError("accepted release-candidate Evidence gates failed")
-    if artifact["evidence_revision"] >= 5 and not _validate_release_development_artifacts(
-        payload.get("release_artifacts"),
-        artifact["memoryforge_commit"],
-    ):
-        raise ValueError("release-candidate retained build Evidence changed")
 
 
 def _validate_release_development_artifacts(payload: object, commit: str) -> bool:

@@ -238,6 +238,28 @@ secret-bearing provenance keys, and rechecks summary source identity.
 Both platforms passed the complete local gate. Final static review remains
 required before confirmation authorization.
 
+## Rejected Development Candidate 4
+
+- Evidence:
+  `demo/results/release_candidate_development_candidate_4_rejected.json`
+- Evidence SHA256:
+  `2b55864983c0b5cc7fa9b3819b9a94b68cdd3192bd55b156fbcc5f564df48fbc`
+- MemoryForge Commit:
+  `7e998d509ee7a4aba31f269e16699d18343ec978`
+- Result: `REJECTED`
+- Development pass rate: 83.3%
+- Failed cases: 1
+- Error classification: `release_document_mismatch`
+- Confirmation status: `not_run`
+- Holdout status: `not_run`
+
+Candidate 4 proved both isolated builds, the Workspace drill, package
+metadata, Registry summary, and frozen split closure. Its document gate
+incorrectly treated retained historical platform counts as contradictory
+current release claims. The failed Evidence and both build byte sets remain
+registered; the shared document validator must distinguish the canonical
+release marker from historical Evidence before another candidate runs.
+
 ## Confirmation Components
 
 The release confirmation manifest binds:
