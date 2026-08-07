@@ -311,6 +311,14 @@ REQUIRED_EXPERIMENT_EVIDENCE = {
             "70f76ebfcc7a7bd64f926955e09cfa0a6f45766d",
         ),
     },
+    "release-candidate-delivery": {
+        _RESULTS + "release_candidate_baseline_rejected.json": (
+            1,
+            "rejected",
+            "2e2674ce071489f92d4a480b4f0c0018e0b416764e9a2df1a7ff8a2fc7640740",
+            "4d834679ec61355e285fb36a0cceef8f489a9083",
+        ),
+    },
 }
 STATIC_SHOWCASE_REJECTED_CONTRACTS = {
     _RESULTS + "static_showcase_baseline_rejected.json": {
@@ -373,6 +381,7 @@ REQUIRED_REGRESSION_EVIDENCE = {
     "github-thread-import-lifecycle": {},
     "static-showcase": {},
     "cross-platform-delivery": {},
+    "release-candidate-delivery": {},
 }
 REQUIRED_ACCEPTANCE_EVIDENCE = {
     "exact-symbol-routing.learn-claude-code": {
@@ -504,6 +513,7 @@ REQUIRED_ACCEPTANCE_EVIDENCE = {
             "9779fb4624e21575de8b0de359cc199cecb88589",
         ),
     },
+    "release-candidate-delivery": {},
 }
 REQUIRED_LINUX_EVIDENCE = {
     "cross-platform-delivery": {
@@ -783,6 +793,7 @@ MULTI_SOURCE_DEVELOPMENT_EVIDENCE_KEYS = {
     "passed",
 }
 CROSS_PLATFORM_DEVELOPMENT_EVIDENCE_KEYS = MULTI_SOURCE_DEVELOPMENT_EVIDENCE_KEYS | {"runtime"}
+RELEASE_CANDIDATE_DEVELOPMENT_EVIDENCE_KEYS = MULTI_SOURCE_DEVELOPMENT_EVIDENCE_KEYS | {"holdout"}
 CROSS_PLATFORM_DEVELOPMENT_RUNTIME_CONTRACTS = {
     _RESULTS + "cross_platform_delivery_candidate_3.json": {
         "implementation": "CPython",
@@ -939,6 +950,17 @@ FINAL_EXPERIMENT_GATE_KEYS = {
         "clean_worktree_after_run",
         "confirmation_not_run",
     },
+    "release-candidate-delivery": {
+        "pass_rate",
+        "failed_cases",
+        "reproducible_artifacts",
+        "private_detail_leaks",
+        "confirmation_not_run",
+        "holdout_not_run",
+        "deterministic_replay",
+        "stable_memoryforge_commit",
+        "clean_worktree_after_run",
+    },
 }
 LOCAL_GATE_KEYS = {
     "command",
@@ -1086,6 +1108,19 @@ CROSS_PLATFORM_REPOSITORY = {
         "tests/test_cross_platform_delivery.py",
         "demo/evaluation/cross_platform_delivery_development.json",
         "demo/evaluation/cross_platform_delivery_confirmation.json",
+    ],
+}
+RELEASE_CANDIDATE_REPOSITORY = {
+    "repository": "still0123/MemoryForge",
+    "remote_url": "https://github.com/still0123/MemoryForge.git",
+    "commit": "4d834679ec61355e285fb36a0cceef8f489a9083",
+    "license": "MIT",
+    "source_paths": [
+        "demo/run_release_candidate_benchmark.py",
+        "demo/evaluation/release_candidate_development.json",
+        "demo/evaluation/release_candidate_confirmation.json",
+        "demo/evaluation/release_candidate_holdout.json",
+        "tests/test_release_candidate_contract.py",
     ],
 }
 
@@ -1260,6 +1295,8 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
             _validate_static_showcase_experiment_metadata(experiment)
         elif suite_id == "cross-platform-delivery":
             _validate_cross_platform_experiment_metadata(experiment)
+        elif suite_id == "release-candidate-delivery":
+            _validate_release_candidate_experiment_metadata(experiment)
 
         repositories = experiment.get("repositories")
         if not isinstance(repositories, list) or not repositories:
@@ -1273,6 +1310,7 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
             "github-thread-import-lifecycle",
             "static-showcase",
             "cross-platform-delivery",
+            "release-candidate-delivery",
         }:
             if "source_manifest" in experiment:
                 raise ValueError(f"component experiment cannot declare source manifest: {suite_id}")
@@ -1291,14 +1329,29 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
         _validate_artifact(development, suite_id)
         _validate_artifact(confirmation, suite_id)
         development_count, _, _ = _suite_cases(development)
-        confirmation_count, _, _ = _suite_cases(confirmation)
+        release_candidate = suite_id == "release-candidate-delivery"
+        if release_candidate:
+            confirmation_count = _release_confirmation_case_count(confirmation, suite_id)
+            holdout = splits["holdout"]
+            if not isinstance(holdout, dict):
+                raise ValueError(f"release experiment requires frozen holdout: {suite_id}")
+            _validate_artifact(holdout, suite_id)
+            holdout_count, _, _ = _suite_cases(holdout)
+            holdout_valid = (
+                type(holdout.get("case_count")) is int
+                and holdout_count == holdout.get("case_count")
+                and holdout.get("status") == "not_run"
+            )
+        else:
+            confirmation_count, _, _ = _suite_cases(confirmation)
+            holdout_valid = splits["holdout"] is None
         if (
             type(development.get("case_count")) is not int
             or type(confirmation.get("case_count")) is not int
             or development_count != development.get("case_count")
             or confirmation_count != confirmation.get("case_count")
             or confirmation.get("status") != "not_run"
-            or splits["holdout"] is not None
+            or not holdout_valid
         ):
             raise ValueError(f"experiment split contract failed: {suite_id}")
 
@@ -1460,6 +1513,15 @@ def _validate_experiment_payload(
     development: dict[str, Any],
     confirmation: dict[str, Any],
 ) -> None:
+    if experiment["suite_id"] == "release-candidate-delivery":
+        _validate_release_candidate_experiment_payload(
+            experiment,
+            artifact,
+            payload,
+            development,
+            confirmation,
+        )
+        return
     if experiment["suite_id"] == "multi-source-coverage-selection":
         _validate_multi_source_experiment_payload(
             experiment,
@@ -1625,6 +1687,113 @@ def _validate_multi_source_experiment_payload(
     for metric, expected in experiment["expected_metrics"]["development"].items():
         if metrics.get(metric) != expected:
             raise ValueError(f"multi-source experiment metric mismatch: {metric}")
+
+
+def _validate_release_candidate_experiment_payload(
+    experiment: dict[str, Any],
+    artifact: dict[str, Any],
+    payload: dict[str, Any],
+    development: dict[str, Any],
+    confirmation: dict[str, Any],
+) -> None:
+    holdout = experiment["splits"]["holdout"]
+    evaluation = payload.get("development", {}).get("evaluation", {})
+    cases = evaluation.get("cases") if isinstance(evaluation, dict) else None
+    frozen = json.loads((REPO_ROOT / development["path"]).read_text(encoding="utf-8"))
+    frozen_ids = [case.get("id") for case in frozen.get("cases", [])]
+    runs = payload.get("runs")
+    gates = payload.get("gates")
+    evaluation_sha256 = hashlib.sha256(
+        json.dumps(evaluation, sort_keys=True, ensure_ascii=False).encode("utf-8")
+    ).hexdigest()
+    if (
+        set(payload) != RELEASE_CANDIDATE_DEVELOPMENT_EVIDENCE_KEYS
+        or payload.get("schema_version") != 1
+        or payload.get("suite_id") != experiment["suite_id"]
+        or payload.get("suite_revision") != experiment["suite_revision"]
+        or payload.get("memoryforge_commit") != artifact["memoryforge_commit"]
+        or payload.get("memoryforge_worktree_dirty") is not False
+        or payload.get("passed") is not artifact["passed"]
+        or set(payload.get("development", {})) != {"path", "sha256", "case_count", "evaluation"}
+        or payload.get("development", {}).get("path") != development["path"]
+        or payload.get("development", {}).get("sha256") != development["sha256"]
+        or payload.get("development", {}).get("case_count") != development["case_count"]
+        or not isinstance(evaluation, dict)
+        or set(evaluation) != {"case_count", "metrics", "cases"}
+        or evaluation.get("case_count") != development["case_count"]
+        or not isinstance(cases, list)
+        or [case.get("id") for case in cases if isinstance(case, dict)] != frozen_ids
+        or any(
+            not isinstance(case, dict) or set(case) != {"id", "status", "error_classification"}
+            for case in cases
+        )
+        or not isinstance(runs, list)
+        or len(runs) != 2
+        or [run.get("name") for run in runs if isinstance(run, dict)] != ["first", "second"]
+        or any(
+            not isinstance(run, dict)
+            or set(run) != {"name", "evaluation_sha256"}
+            or run.get("evaluation_sha256") != evaluation_sha256
+            for run in runs
+        )
+        or payload.get("confirmation")
+        != {
+            "path": confirmation["path"],
+            "sha256": confirmation["sha256"],
+            "status": "not_run",
+        }
+        or not isinstance(holdout, dict)
+        or payload.get("holdout")
+        != {
+            "path": holdout["path"],
+            "sha256": holdout["sha256"],
+            "status": "not_run",
+        }
+        or not isinstance(gates, dict)
+        or set(gates) != FINAL_EXPERIMENT_GATE_KEYS[experiment["suite_id"]]
+    ):
+        raise ValueError("release-candidate experiment Evidence contract failed")
+
+    metrics = evaluation.get("metrics")
+    if artifact["status"] == "rejected":
+        expected_metrics = {
+            "pass_rate": 16.7,
+            "failed_cases": 5,
+            "reproducible_artifacts": False,
+            "private_detail_leaks": 0,
+            "confirmation_not_run": True,
+            "holdout_not_run": True,
+        }
+        expected_cases = [
+            ("package-version-consistency", "failed", "version_mismatch"),
+            ("registry-and-benchmark-summary", "failed", "benchmark_summary_mismatch"),
+            ("local-reproducible-artifacts", "failed", "artifact_missing"),
+            ("workspace-release-drill", "failed", "workspace_drill_failure"),
+            ("release-document-consistency", "failed", "release_document_mismatch"),
+            ("frozen-splits-remain-closed", "passed", "none"),
+        ]
+        actual_cases = [
+            (case["id"], case["status"], case["error_classification"]) for case in cases
+        ]
+        if (
+            artifact["passed"] is not False
+            or not _strict_mapping(metrics, expected_metrics)
+            or actual_cases != expected_cases
+            or all(value is True for value in gates.values())
+        ):
+            raise ValueError("rejected release-candidate Evidence changed")
+        return
+
+    if (
+        artifact["status"] not in {"accepted_development", "accepted_development_superseded"}
+        or artifact["passed"] is not True
+        or not _strict_mapping(metrics, experiment["expected_metrics"]["development"])
+        or any(
+            case["status"] != "passed" or case["error_classification"] != "none" for case in cases
+        )
+        or not all(value is True for value in gates.values())
+    ):
+        raise ValueError("accepted release-candidate Evidence gates failed")
 
 
 def _validate_pytest_component_experiment_payload(
@@ -2085,6 +2254,17 @@ def _validate_cross_platform_experiment_metadata(experiment: dict[str, Any]) -> 
         or experiment.get("repositories") != [CROSS_PLATFORM_REPOSITORY]
     ):
         raise ValueError("cross-platform delivery experiment metadata changed")
+
+
+def _validate_release_candidate_experiment_metadata(experiment: dict[str, Any]) -> None:
+    if (
+        experiment.get("suite_revision") != 1
+        or experiment.get("suite_type") != "source_lifecycle"
+        or experiment.get("evaluator") != "demo.run_release_candidate_benchmark"
+        or experiment.get("max_wiki_pages") != 3
+        or experiment.get("repositories") != [RELEASE_CANDIDATE_REPOSITORY]
+    ):
+        raise ValueError("release-candidate delivery experiment metadata changed")
 
 
 def _validate_regression_evidence(
@@ -2554,6 +2734,20 @@ def _suite_cases(split: dict[str, Any]) -> tuple[int, set[str], set[str]]:
         set(),
         set(),
     )
+
+
+def _release_confirmation_case_count(split: dict[str, Any], suite_id: str) -> int:
+    payload = json.loads((REPO_ROOT / split["path"]).read_text(encoding="utf-8"))
+    components = payload.get("components")
+    if not isinstance(components, list) or len(components) != 7:
+        raise ValueError(f"release confirmation components changed: {suite_id}")
+    case_count = 0
+    for component in components:
+        if not isinstance(component, dict) or type(component.get("case_count")) is not int:
+            raise ValueError(f"release confirmation component invalid: {suite_id}")
+        _validate_artifact(component, suite_id)
+        case_count += component["case_count"]
+    return case_count
 
 
 def _validate_metrics(suite: dict[str, Any], evidence: dict[str, Any]) -> None:

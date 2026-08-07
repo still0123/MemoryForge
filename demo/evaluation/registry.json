@@ -1020,6 +1020,72 @@
           "passed": true
         }
       ]
+    },
+    {
+      "suite_id": "release-candidate-delivery",
+      "suite_revision": 1,
+      "suite_type": "source_lifecycle",
+      "evaluator": "demo.run_release_candidate_benchmark",
+      "model_judge": false,
+      "max_wiki_pages": 3,
+      "required_evidence_statuses": [
+        "rejected"
+      ],
+      "repositories": [
+        {
+          "repository": "still0123/MemoryForge",
+          "remote_url": "https://github.com/still0123/MemoryForge.git",
+          "commit": "4d834679ec61355e285fb36a0cceef8f489a9083",
+          "license": "MIT",
+          "source_paths": [
+            "demo/run_release_candidate_benchmark.py",
+            "demo/evaluation/release_candidate_development.json",
+            "demo/evaluation/release_candidate_confirmation.json",
+            "demo/evaluation/release_candidate_holdout.json",
+            "tests/test_release_candidate_contract.py"
+          ]
+        }
+      ],
+      "splits": {
+        "development": {
+          "path": "demo/evaluation/release_candidate_development.json",
+          "sha256": "8d9fe33359b71ac0b86b6fa42b0bc5ee34080126af3ae0b9bf2fa2c0121cf2a6",
+          "case_count": 6
+        },
+        "confirmation": {
+          "path": "demo/evaluation/release_candidate_confirmation.json",
+          "sha256": "3eed08e04592b614a709cd18c6a92951b5da145d7dab4b9997824cd4e002e805",
+          "case_count": 26,
+          "status": "not_run"
+        },
+        "holdout": {
+          "path": "demo/evaluation/release_candidate_holdout.json",
+          "sha256": "b466644bef2748a96d598540c54633fe49770af97fc71ce6e62e18eda687e8f8",
+          "case_count": 5,
+          "status": "not_run"
+        }
+      },
+      "expected_metrics": {
+        "development": {
+          "pass_rate": 100.0,
+          "failed_cases": 0,
+          "reproducible_artifacts": true,
+          "private_detail_leaks": 0,
+          "confirmation_not_run": true,
+          "holdout_not_run": true
+        }
+      },
+      "evidence": [
+        {
+          "split": "development",
+          "evidence_revision": 1,
+          "status": "rejected",
+          "path": "demo/results/release_candidate_baseline_rejected.json",
+          "sha256": "2e2674ce071489f92d4a480b4f0c0018e0b416764e9a2df1a7ff8a2fc7640740",
+          "memoryforge_commit": "4d834679ec61355e285fb36a0cceef8f489a9083",
+          "passed": false
+        }
+      ]
     }
   ],
   "suites": [

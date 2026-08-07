@@ -23,8 +23,8 @@ def test_benchmark_registry_binds_all_release_artifacts() -> None:
     assert summary == {
         "status": "valid",
         "suite_count": 12,
-        "experiment_count": 7,
-        "evidence_count": 95,
+        "experiment_count": 8,
+        "evidence_count": 96,
         "qa_case_count": 121,
         "qa_case_types_present": [
             "code_behavior",
@@ -231,6 +231,73 @@ def test_benchmark_registry_pins_cross_platform_repository_commit(tmp_path: Path
 
     with pytest.raises(ValueError, match="metadata changed"):
         validator.validate_registry(path)
+
+
+def test_benchmark_registry_cannot_drop_release_candidate_baseline(tmp_path: Path) -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "release-candidate-delivery"
+    )
+    experiment["evidence"] = []
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps(registry), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="requires generated evidence"):
+        validator.validate_registry(path)
+
+
+def test_benchmark_registry_pins_release_candidate_repository_commit(tmp_path: Path) -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "release-candidate-delivery"
+    )
+    experiment["repositories"][0]["commit"] = "0" * 40
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps(registry), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="metadata changed"):
+        validator.validate_registry(path)
+
+
+def test_benchmark_registry_keeps_release_candidate_holdout_closed(tmp_path: Path) -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "release-candidate-delivery"
+    )
+    experiment["splits"]["holdout"]["status"] = "passed"
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps(registry), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="split contract failed"):
+        validator.validate_registry(path)
+
+
+def test_benchmark_registry_binds_rejected_release_candidate_cases() -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "release-candidate-delivery"
+    )
+    artifact = experiment["evidence"][0]
+    payload = json.loads((validator.REPO_ROOT / artifact["path"]).read_text(encoding="utf-8"))
+    payload["development"]["evaluation"]["cases"][0]["status"] = "passed"
+    evaluation_sha256 = hashlib.sha256(
+        json.dumps(
+            payload["development"]["evaluation"],
+            sort_keys=True,
+            ensure_ascii=False,
+        ).encode()
+    ).hexdigest()
+    for run in payload["runs"]:
+        run["evaluation_sha256"] = evaluation_sha256
+
+    with pytest.raises(ValueError, match="rejected release-candidate Evidence changed"):
+        validator._validate_release_candidate_experiment_payload(
+            experiment,
+            artifact,
+            payload,
+            experiment["splits"]["development"],
+            experiment["splits"]["confirmation"],
+        )
 
 
 def test_benchmark_registry_rejects_contradictory_cross_platform_case_evidence() -> None:
