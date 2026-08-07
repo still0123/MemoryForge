@@ -2,7 +2,7 @@
 
 ## Status
 
-`CANDIDATE_7_DEVELOPMENT_PASSED_REGRESSION_PENDING`
+`ACCEPTED_DEVELOPMENT_AND_LOCAL_REGRESSION`
 
 ## Frozen Inputs
 
@@ -365,6 +365,28 @@ development and local-gate schemas, including retained artifact hashes.
 
 Candidate 7 retains all accepted development metrics and the unsupported score
 of 35.0. Both clean runs are deterministic. Confirmation remains `not_run`.
+
+## Candidate 7 Full Local Gate
+
+- Gate Commit:
+  `3b5447a9f8fa592adc2e5ac48930f9da9a56be5f`;
+- acceptance Evidence:
+  `demo/results/support_score_candidate_7_local_gate.json`;
+- acceptance Evidence SHA256:
+  `1e0ad1a190d5051f6c9ebdc4dcd71cf14bde007e12fef7289ab6af6d8b7733e1`;
+- Ruff check and format: passed;
+- strict Mypy: passed;
+- registry: 12 release suites, two experiments, 31 Evidence artifacts, and 121
+  QA cases;
+- dependency check: passed;
+- pytest: 467 passed;
+- coverage: 88%;
+- Wheel clean-room: passed;
+- sdist clean-room: passed;
+- `pip check` and CLI version smoke test: passed.
+
+Candidate 7 is the accepted development and local-regression result.
+Confirmation remains `not_run`.
 
 ## Forbidden
 
