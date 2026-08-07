@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "suite_id": "support-score.learn-claude-code",
+  "suite_revision": 1,
+  "memoryforge_commit": "dd7ac2df2af8da205f46044dd39cc4d2e1e41604",
+  "memoryforge_worktree_dirty": false,
+  "development_evidence": {
+    "path": "demo/results/support_score_development_final.json",
+    "sha256": "4592fb565ae53596dd69b7ca80a4870f2b7430b03f9a3a2e5d9fa4660902aa29",
+    "memoryforge_commit": "807e8e76e0b787b7c7eae08f405afbeca6c9a783",
+    "passed": true
+  },
+  "regression": {
+    "command": "scripts/check_local.sh",
+    "ruff_check": "passed",
+    "ruff_format": "passed",
+    "strict_mypy": "passed",
+    "registry_validation": "passed",
+    "dependency_check": "passed",
+    "pytest": {
+      "passed": 457,
+      "failed": 1,
+      "coverage_percent": 88,
+      "failed_node": "tests/test_query_workflow.py::test_ask_expands_no_more_than_the_page_budget",
+      "expected_page_reads": [
+        "a.md",
+        "b.md"
+      ],
+      "actual_page_reads": [
+        "a.md",
+        "b.md",
+        "b.md"
+      ]
+    },
+    "wheel_sdist_clean_room": "not_run_after_pytest_failure"
+  },
+  "root_cause": "Candidate 2 reread a selected page during support scoring instead of reusing content already read within the bounded page-expansion loop.",
+  "confirmation": {
+    "path": "demo/evaluation/learn_claude_code_qa_confirm_v031.json",
+    "sha256": "b86fe1f7999c09af9bf7c6bed4951c1c4c565318c39192bea1831d942466c117",
+    "status": "not_run"
+  },
+  "passed": false
+}

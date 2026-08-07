@@ -2,7 +2,7 @@
 
 ## Status
 
-`CANDIDATE_2_DEVELOPMENT_PASSED_REGRESSION_PENDING`
+`CANDIDATE_2_DEVELOPMENT_PASSED_REGRESSION_FAILED`
 
 ## Frozen Inputs
 
@@ -182,6 +182,25 @@ suite, or confirmation input changed.
 Candidate 2 retains all Candidate 1 development metrics. Both clean runs are
 byte-deterministic at the evaluation layer. The unsupported case remains 55.0
 and returns `unknown`. Confirmation remains `not_run`.
+
+## Candidate 2 Regression Result
+
+Candidate 2 failed the full local gate at Commit
+`dd7ac2df2af8da205f46044dd39cc4d2e1e41604`:
+
+- 457 tests passed and one failed;
+- failed node:
+  `tests/test_query_workflow.py::test_ask_expands_no_more_than_the_page_budget`;
+- support scoring reread `b.md`, producing three page reads for a two-page
+  route;
+- Wheel and sdist checks did not run after the pytest failure.
+
+Regression Evidence:
+`demo/results/support_score_candidate_2_regression_rejected.json`.
+
+Candidate 2 is rejected. Candidate 3 must reuse code-page Fact terms collected
+during the bounded expansion loop and perform no additional page read.
+Confirmation remains `not_run`.
 
 ## Forbidden
 
