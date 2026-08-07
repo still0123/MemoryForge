@@ -2,7 +2,7 @@
 
 ## Status
 
-`CANDIDATE_13_IMPLEMENTED_DEVELOPMENT_PENDING`
+`CANDIDATE_13_DEVELOPMENT_PASSED_REGRESSION_PENDING`
 
 ## Frozen Inputs
 
@@ -675,7 +675,24 @@ incorrect claim `Administrators clear caches`.
 Candidate 13 accepts an exact same-polarity evidence sentence directly.
 Otherwise, it splits the Citation at sentence and coordination boundaries and
 requires the full answer clause to be supported within one evidence segment.
-Candidate 13 development is pending. Confirmation remains `not_run`.
+
+## Candidate 13 Development Result
+
+- Candidate Commit:
+  `3e20ad8ca0d54fa06fa8ca0aaed4dad959a63009`;
+- Evidence:
+  `demo/results/support_score_development_candidate_13.json`;
+- Evidence SHA256:
+  `8b1d45c721b4ecf55a25510ee8851b7891474739186f0c428eb7098b0a894b34`;
+- structural SHA256:
+  `be5f3707fbd19145e184f6a98597fbc12e05633af32cd466977e035448685e7d`;
+- deterministic evaluation SHA256:
+  `1403431c27d6e1928699b868a285a932ed3a3ee84961c83f1f5e1ff8016eaa96`.
+
+Candidate 13 retains all accepted development metrics: 100.0% Answer,
+selective, route, Source, fact, Citation, multi-source, abstention, and
+repository-isolation metrics; coverage remains 90.0% and risk remains 0.0%.
+Full local regression is pending. Confirmation remains `not_run`.
 
 ## Forbidden
 
