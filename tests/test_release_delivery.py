@@ -1,0 +1,78 @@
+from __future__ import annotations
+
+import importlib.util
+import io
+import tarfile
+from pathlib import Path
+
+import pytest
+
+
+def _module(name: str, relative_path: str):
+    path = Path(__file__).resolve().parent.parent / relative_path
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+summary_builder = _module("build_benchmark_summary", "demo/build_benchmark_summary.py")
+workspace_drill = _module("run_release_workspace_drill", "demo/run_release_workspace_drill.py")
+release_builder = _module("build_release", "scripts/build_release.py")
+
+
+def test_benchmark_summary_reports_macro_per_suite_and_negatives() -> None:
+    summary = summary_builder.build_summary()
+
+    assert summary["registry"]["qa_case_count"] == 121
+    assert len(summary["suites"]) == 12
+    assert summary["macro"]["citation_grounding_accuracy"] > 90
+    assert any(
+        result["suite_id"] == "doc-wiki-qa.click" and result["status"] == "retained_metric_gap"
+        for result in summary["negative_results"]
+    )
+
+
+def test_workspace_release_drill_runs_real_public_workflow(tmp_path: Path) -> None:
+    workdir = tmp_path / "drill"
+    workdir.mkdir()
+
+    evidence = workspace_drill.run_drill(workdir)
+
+    assert evidence["private_detail_leaks"] == 0
+    assert evidence["passed"] is True
+    assert set(evidence["checks"]) == {
+        "refresh",
+        "review",
+        "approve",
+        "apply",
+        "lint",
+        "no_pending_ingest",
+        "backup",
+        "restore",
+        "query",
+        "showcase",
+    }
+
+
+def test_release_builder_rejects_nested_artifacts(tmp_path: Path) -> None:
+    clean = tmp_path / "clean.tar.gz"
+    dirty = tmp_path / "dirty.tar.gz"
+    _tar(clean, "memoryforge-0.3.0/pyproject.toml")
+    _tar(
+        dirty,
+        "memoryforge-0.3.0/demo/results/artifacts/candidate/memoryforge.whl",
+    )
+
+    release_builder._validate_sdist(clean)
+    with pytest.raises(SystemExit, match="retained or nested artifacts"):
+        release_builder._validate_sdist(dirty)
+
+
+def _tar(path: Path, name: str) -> None:
+    payload = b"release fixture"
+    info = tarfile.TarInfo(name)
+    info.size = len(payload)
+    with tarfile.open(path, "w:gz") as archive:
+        archive.addfile(info, io.BytesIO(payload))
