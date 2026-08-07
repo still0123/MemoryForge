@@ -2,7 +2,7 @@
   "schema_version": 1,
   "suite_id": "github-thread-import-lifecycle",
   "suite_revision": 1,
-  "memoryforge_commit": "81ed329f12de7077daee39f8e419a17c1ddb1d9e",
+  "memoryforge_commit": "73242bc085e6a170d459b10324dabc57aed4bc50",
   "memoryforge_worktree_dirty": false,
   "development_evidence": {
     "path": "demo/results/github_thread_import_development_candidate_3.json",
@@ -23,7 +23,7 @@
     },
     "dependency_check": "passed",
     "pytest": {
-      "passed": 505,
+      "passed": 506,
       "failed": 0,
       "coverage_percent": 88
     },
@@ -33,9 +33,9 @@
     "cli_version_smoke": "passed",
     "artifacts": {
       "wheel_sha256": "ea7e0eccd39cf134f3609048a8ca72bdcd2af7b0022179911a9a4e75d8a21e48",
-      "sdist_sha256": "f7330e4a1880589ec4e8225691c2a26bb82df82da7378b3146d1abab5820f1d7",
-      "provenance_sha256": "07908acc91b1a7e188678dc354aaa267a77d9e8a0fd6a615684e0530adec89fb",
-      "sha256sums_sha256": "a8da269314409ba10096847fb0d6509f54ef11c9c794371510d72bc63858b590"
+      "sdist_sha256": "155af4c113e298e207176dcb63d7ddfb75784b786d7bdc193341162463ff7ab1",
+      "provenance_sha256": "afb80afc7ac08a50eb82e6d373738b3169404ee798b51d290f3537dee6c750a4",
+      "sha256sums_sha256": "59c96fc3d94f169f2a25063dce9326dcc8141467753dd91627cd38b791eef5ef"
     }
   },
   "confirmation": {

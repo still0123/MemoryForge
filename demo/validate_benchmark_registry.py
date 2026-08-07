@@ -304,8 +304,8 @@ REQUIRED_ACCEPTANCE_EVIDENCE = {
     "github-thread-import-lifecycle": {
         _RESULTS + "github_thread_import_development_candidate_3.json": (
             _RESULTS + "github_thread_import_candidate_3_local_gate.json",
-            "ce8496e9f5c92f588a0a25bf16cc6a8023b349e6d3696169b062bec433c66baf",
-            "81ed329f12de7077daee39f8e419a17c1ddb1d9e",
+            "577d302250d9572b0fa295e3258d974b7f99f06b2a0f1fdbb34c1f6debb544fb",
+            "73242bc085e6a170d459b10324dabc57aed4bc50",
         ),
     },
 }
