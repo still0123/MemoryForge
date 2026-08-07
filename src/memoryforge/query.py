@@ -28,6 +28,7 @@ _WORDS = re.compile(r"[a-z0-9]+|[\u4e00-\u9fff]+", re.IGNORECASE)
 _CAMEL_CASE_PARTS = re.compile(r"[A-Z]+(?=[A-Z][a-z]|$)|[A-Z]?[a-z]+")
 _CJK = re.compile(r"^[\u4e00-\u9fff]+$")
 _EXPLICIT_CODE_IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*")
+_SYMBOL_FACT_KIND = re.compile(r"^`[^`]+` \((?P<kind>[a-z_]+)\):")
 _REPOSITORY_OVERVIEW_LINK = re.compile(r"^pages/repository-[a-f0-9]{12}\.md$")
 _NEGATION_CUES = ("不", "无", "未", "没", "避免", "拒绝")
 _STOP_WORDS = {
@@ -526,14 +527,31 @@ def _applied_code_symbol_matches(
         identifiers,
         repository_id=repository_id,
     )
-    if repository_id is not None:
-        return matches
+    requested_kinds = _requested_symbol_kinds(question)
+    if requested_kinds:
+        matches = tuple(
+            match
+            for match in matches
+            if (kind_match := _SYMBOL_FACT_KIND.match(match.quote)) is not None
+            and kind_match["kind"] in requested_kinds
+        )
     repository_ids_by_identifier: dict[str, set[str | None]] = {}
     for match in matches:
         repository_ids_by_identifier.setdefault(match.identifier, set()).add(match.repository_id)
-    return tuple(
+    unambiguous = tuple(
         match for match in matches if len(repository_ids_by_identifier[match.identifier]) == 1
     )
+    contextualized: list[AppliedCodeSymbolMatch] = []
+    for identifier in dict.fromkeys(match.identifier for match in unambiguous):
+        group = [match for match in unambiguous if match.identifier == identifier]
+        context_identifiers = [candidate for candidate in identifiers if candidate != identifier]
+        contextual = [
+            match
+            for match in group
+            if any(context in (match.symbol or "").split(".") for context in context_identifiers)
+        ]
+        contextualized.extend(contextual or group)
+    return tuple(contextualized)
 
 
 def _explicit_code_identifiers(question: str) -> tuple[str, ...]:
@@ -558,6 +576,36 @@ def _explicit_code_identifiers(question: str) -> tuple[str, ...]:
         ):
             identifiers.append(identifier)
     return tuple(dict.fromkeys(identifiers[:8]))
+
+
+def _requested_symbol_kinds(question: str) -> set[str]:
+    lowered = question.lower()
+    english_terms = set(re.findall(r"[a-z_]+", lowered))
+    kinds = {
+        kind
+        for marker, kind in (
+            ("class", "class"),
+            ("interface", "interface"),
+            ("method", "method"),
+            ("function", "function"),
+            ("struct", "struct"),
+        )
+        if marker in english_terms
+    }
+    if "type alias" in lowered:
+        kinds.add("type_alias")
+    for marker, kind in (
+        ("类", "class"),
+        ("接口", "interface"),
+        ("方法", "method"),
+        ("函数", "function"),
+        ("结构体", "struct"),
+    ):
+        if marker in question:
+            kinds.add(kind)
+    if "method" in kinds:
+        kinds.add("function")
+    return kinds
 
 
 def _citation_fact_key(

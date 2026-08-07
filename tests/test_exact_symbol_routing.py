@@ -50,7 +50,92 @@ def test_unscoped_symbol_routes_fail_closed_across_repositories(
     )
 
 
-def _match(repository_id: str, page_path: str) -> AppliedCodeSymbolMatch:
+def test_symbol_routes_use_explicit_module_context(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    (tmp_path / "raw").mkdir()
+    internal = tmp_path / ".memoryforge"
+    internal.mkdir()
+    (internal / "index.sqlite").touch()
+    repository_id = "a" * 64
+    matches = (
+        _match(
+            repository_id,
+            "wiki/pages/code/a/s01.md",
+            symbol="s01_agent_loop.code.agent_loop",
+            identifier="agent_loop",
+        ),
+        _match(
+            repository_id,
+            "wiki/pages/code/a/s03.md",
+            symbol="s03_permission.code.agent_loop",
+            identifier="agent_loop",
+        ),
+        _match(
+            repository_id,
+            "wiki/pages/code/a/s12.md",
+            symbol="s12_task_system.code.agent_loop",
+            identifier="agent_loop",
+        ),
+    )
+    monkeypatch.setattr(
+        query_module,
+        "find_applied_code_symbol_facts",
+        lambda *args, **kwargs: matches,
+    )
+
+    selected = query_module._applied_code_symbol_matches(
+        tmp_path,
+        "Compare agent_loop in s01_agent_loop and s12_task_system.",
+        repository_id=repository_id,
+    )
+
+    assert [match.page_path for match in selected] == [
+        "wiki/pages/code/a/s01.md",
+        "wiki/pages/code/a/s12.md",
+    ]
+
+
+def test_requested_symbol_kind_rejects_a_module_context(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    (tmp_path / "raw").mkdir()
+    internal = tmp_path / ".memoryforge"
+    internal.mkdir()
+    (internal / "index.sqlite").touch()
+    module = _match(
+        "a" * 64,
+        "wiki/pages/code/a/s12.md",
+        symbol="s12_task_system.code",
+        identifier="s12_task_system.code",
+        kind="module",
+    )
+    monkeypatch.setattr(
+        query_module,
+        "find_applied_code_symbol_facts",
+        lambda *args, **kwargs: (module,),
+    )
+
+    assert (
+        query_module._applied_code_symbol_matches(
+            tmp_path,
+            "Which class represents a task in s12_task_system.code?",
+            repository_id="a" * 64,
+        )
+        == ()
+    )
+
+
+def _match(
+    repository_id: str,
+    page_path: str,
+    *,
+    symbol: str = "src.service.run",
+    identifier: str = "run",
+    kind: str = "function",
+) -> AppliedCodeSymbolMatch:
     return AppliedCodeSymbolMatch(
         fact_id="c" * 64,
         page_path=page_path,
@@ -59,10 +144,10 @@ def _match(repository_id: str, page_path: str) -> AppliedCodeSymbolMatch:
         source_version=1,
         locator="chars:0-10",
         section_path="Code: src/service.py",
-        quote="`src.service.run` (function): `def run() -> str:`",
+        quote=f"`{symbol}` ({kind}): `def run() -> str:`",
         routing_text="",
-        symbol="src.service.run",
+        symbol=symbol,
         relation_type=None,
-        identifier="run",
-        match_kind="display_name",
+        identifier=identifier,
+        match_kind=("qualified_name" if "." in identifier else "display_name"),
     )
