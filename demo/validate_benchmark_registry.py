@@ -260,6 +260,12 @@ REQUIRED_EXPERIMENT_EVIDENCE = {
             "f2bd8afa6759c3d1ddbc796444cfb58d968fbab82818c27f1c0f24590013801e",
             "96c720cf49ed0bfc97fd765e9af025ab6f4ae9ea",
         ),
+        _RESULTS + "cross_platform_delivery_candidate_2.json": (
+            3,
+            "accepted_development",
+            "22a309f133008268e857e4331f70967d58f0c06adc45ab1988f8a99ee3c34775",
+            "7d0a296ffbbb73863b63ec732608a6e3c0bab35b",
+        ),
     },
 }
 STATIC_SHOWCASE_REJECTED_CONTRACTS = {
@@ -417,7 +423,13 @@ REQUIRED_ACCEPTANCE_EVIDENCE = {
             "5c719c387addc6a415658727597400cfd1af7846",
         ),
     },
-    "cross-platform-delivery": {},
+    "cross-platform-delivery": {
+        _RESULTS + "cross_platform_delivery_candidate_2.json": (
+            _RESULTS + "cross_platform_delivery_candidate_2_local_gate.json",
+            "6318d9bf999163917441c65e8085bce3548424b6a7183b4c284e7f9c43b9b2d7",
+            "7d0a296ffbbb73863b63ec732608a6e3c0bab35b",
+        ),
+    },
 }
 FINAL_ACCEPTANCE_REGISTRY_COUNTS = {
     "exact-symbol-routing.learn-claude-code": {
@@ -454,6 +466,12 @@ FINAL_ACCEPTANCE_REGISTRY_COUNTS = {
         "suite_count": 12,
         "experiment_count": 6,
         "evidence_count": 71,
+        "qa_case_count": 121,
+    },
+    "cross-platform-delivery": {
+        "suite_count": 12,
+        "experiment_count": 7,
+        "evidence_count": 73,
         "qa_case_count": 121,
     },
 }
@@ -1564,6 +1582,7 @@ def _validate_acceptance_evidence(
         "folder-import-lifecycle",
         "github-thread-import-lifecycle",
         "static-showcase",
+        "cross-platform-delivery",
     }
     expected_payload_keys = LOCAL_GATE_EVIDENCE_KEYS | (
         {"regression_evidence"} if multi_source else set()

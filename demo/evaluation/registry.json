@@ -802,7 +802,8 @@
       "max_wiki_pages": 3,
       "required_evidence_statuses": [
         "rejected",
-        "accepted_development_superseded"
+        "accepted_development_superseded",
+        "accepted_development"
       ],
       "repositories": [
         {
@@ -860,6 +861,21 @@
           "path": "demo/results/cross_platform_delivery_candidate_1.json",
           "sha256": "f2bd8afa6759c3d1ddbc796444cfb58d968fbab82818c27f1c0f24590013801e",
           "memoryforge_commit": "96c720cf49ed0bfc97fd765e9af025ab6f4ae9ea",
+          "passed": true
+        },
+        {
+          "split": "development",
+          "evidence_revision": 3,
+          "status": "accepted_development",
+          "path": "demo/results/cross_platform_delivery_candidate_2.json",
+          "sha256": "22a309f133008268e857e4331f70967d58f0c06adc45ab1988f8a99ee3c34775",
+          "memoryforge_commit": "7d0a296ffbbb73863b63ec732608a6e3c0bab35b",
+          "acceptance_evidence": {
+            "path": "demo/results/cross_platform_delivery_candidate_2_local_gate.json",
+            "sha256": "6318d9bf999163917441c65e8085bce3548424b6a7183b4c284e7f9c43b9b2d7",
+            "memoryforge_commit": "7d0a296ffbbb73863b63ec732608a6e3c0bab35b",
+            "passed": true
+          },
           "passed": true
         }
       ]

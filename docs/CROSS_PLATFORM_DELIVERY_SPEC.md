@@ -2,7 +2,7 @@
 
 ## Status
 
-`DEVELOPMENT_PASS_REGRESSION_PENDING`
+`ACCEPTED_DEVELOPMENT_AND_LOCAL_REGRESSION`
 
 ## Base
 
@@ -74,6 +74,36 @@ The native Windows type audit leaves 27 errors in the documented POSIX
 directory-descriptor and `fchmod` paths. It reports no error in
 `platform_lock.py`. This is retained as a negative portability boundary and
 is not represented as native Windows confirmation.
+
+## Candidate 2 Full Local Gate
+
+- Development Evidence:
+  `demo/results/cross_platform_delivery_candidate_2.json`
+- Development Evidence SHA256:
+  `22a309f133008268e857e4331f70967d58f0c06adc45ab1988f8a99ee3c34775`
+- Gate Commit:
+  `7d0a296ffbbb73863b63ec732608a6e3c0bab35b`
+- Acceptance Evidence:
+  `demo/results/cross_platform_delivery_candidate_2_local_gate.json`
+- Acceptance Evidence SHA256:
+  `6318d9bf999163917441c65e8085bce3548424b6a7183b4c284e7f9c43b9b2d7`
+- Development pass rate: 100.0%
+- Deterministic evaluation SHA256:
+  `04e69c51fd4ca959da432fc501db91c06bfcc3d1ef04002042dee5fa147b3f54`
+- Ruff check and format: passed
+- Strict Mypy: passed
+- Registry validation: 12 suites / 7 experiments / 73 Evidence / 121 QA
+- Dependency check: passed
+- Pytest: 529 passed
+- Coverage: 88%
+- Wheel clean-room: passed
+- sdist clean-room: passed
+- `pip check`: passed
+- CLI version smoke: passed
+- Confirmation status: `not_run`
+
+Candidate 2 is accepted for development and local regression. Native Windows
+confirmation and Linux full-gate evidence remain open release-delivery work.
 
 ## Goal
 
