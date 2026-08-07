@@ -2,7 +2,7 @@
 
 ## Status
 
-`CANDIDATE_9_DEVELOPMENT_PASS_FINAL_GATES_PENDING`
+`CANDIDATE_9_LOCAL_GATES_PASS_REVIEW_PENDING`
 
 ## Base
 
@@ -463,10 +463,49 @@ Native Windows confirmation remains frozen at `not_run` and is not claimed.
 - Development pass rate: 100.0%
 - Deterministic evaluation SHA256:
   `03879bd4165a21543fadd0ecd237d5976c6b19330bc0bab7d321a84ee1ec92f1`
-- Focused regression: 72 passed
+- Full pytest: 559 passed
 - Confirmation status: `not_run`
 
-Final macOS and local Linux gates remain pending.
+## Candidate 9 Final Local Gates
+
+macOS acceptance:
+
+- Gate Commit:
+  `9779fb4624e21575de8b0de359cc199cecb88589`
+- Acceptance Evidence:
+  `demo/results/cross_platform_delivery_candidate_9_local_gate.json`
+- Acceptance Evidence SHA256:
+  `4e5ec614f020503eba1639fe6807f93ff6386024636912c9742775daa7c1e406`
+- Runtime: Darwin arm64, CPython 3.11.15, hosted runner false
+- Pytest: 559 passed
+- Coverage: 88%
+- Registry at gate: 12 suites / 7 experiments / 93 Evidence / 121 QA
+
+Linux acceptance:
+
+- Evidence:
+  `demo/results/cross_platform_delivery_candidate_9_linux_gate.json`
+- Evidence SHA256:
+  `a724e17659ecfd5c8a5057cc9f50ed03abd5d6624934dc5920f016905483ed22`
+- Runtime: local Lima 2.2.0 VM, Debian 12 aarch64, CPython 3.11.2
+- Pytest: 556 passed, 3 platform-specific cases skipped, 0 failed
+- Coverage: 88%
+- Registry at gate: 12 suites / 7 experiments / 93 Evidence / 121 QA
+
+Both gates executed the isolated CLI version smoke and produced byte-identical
+artifacts:
+
+- Wheel SHA256:
+  `1f269e47ac28b76009cbd3cdfa6d7ae51dd3aee60bf9a30bfc0a38f33f444c74`
+- sdist SHA256:
+  `55f76b3f97aab4ba1d65a47fe6107cb1133ec0d1ab1012758c9887262a444fee`
+- sdist size: 824,555 bytes
+- Retained artifact directory:
+  `demo/results/artifacts/cross_platform_delivery_candidate_9/`
+
+The sdist contains no retained artifact directory, Wheel, or nested sdist.
+Candidate 9 is the accepted development result pending final closure review.
+Native Windows confirmation remains frozen at `not_run` and is not claimed.
 
 ## Goal
 
