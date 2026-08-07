@@ -86,15 +86,16 @@ def main(argv: list[str] | None = None) -> None:
 def _run_suite(suite: dict[str, Any]) -> dict[str, Any]:
     cases = [_run_case(case) for case in suite["cases"]]
     passed = sum(case["status"] == "passed" for case in cases)
-    all_passed = passed == len(cases)
+    status_by_id = {case["id"]: case["status"] for case in cases}
+    snapshot_passed = status_by_id["complete-public-readonly-snapshot"] == "passed"
     return {
         "case_count": len(cases),
         "metrics": {
             "pass_rate": round(100 * passed / len(cases), 1),
             "failed_cases": len(cases) - passed,
-            "required_sections": 8 if all_passed else 0,
-            "local_detail_leaks": 0 if all_passed else 1,
-            "workspace_mutations": 0 if all_passed else 1,
+            "required_sections": 8 if snapshot_passed else 0,
+            "local_detail_leaks": 0 if snapshot_passed else 1,
+            "workspace_mutations": 0 if snapshot_passed else 1,
         },
         "cases": cases,
     }
@@ -103,6 +104,8 @@ def _run_suite(suite: dict[str, Any]) -> dict[str, Any]:
 def _run_case(case: dict[str, str]) -> dict[str, str]:
     environment = dict(os.environ)
     environment["PYTHONPATH"] = str(REPO_ROOT / "src")
+    environment.pop("PYTEST_ADDOPTS", None)
+    environment["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
     node = f"tests/test_showcase.py::{case['test']}"
     completed = subprocess.run(
         [sys.executable, "-m", "pytest", "-q", node],
@@ -111,7 +114,7 @@ def _run_case(case: dict[str, str]) -> dict[str, str]:
         capture_output=True,
         text=True,
     )
-    status = "passed" if completed.returncode == 0 else "failed"
+    status = "passed" if completed.returncode == 0 and "1 passed" in completed.stdout else "failed"
     return {
         "id": case["id"],
         "pytest_node": node,

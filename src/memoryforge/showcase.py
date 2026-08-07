@@ -26,6 +26,7 @@ from memoryforge.workspace import Workspace
 
 _MARKER_NAME = ".memoryforge-showcase"
 _MARKER = "memoryforge-showcase-v1\n"
+_OUTPUT_FILES = {_MARKER_NAME, "index.html", "showcase.json"}
 _MAX_EVIDENCE_BYTES = 5 * 1024 * 1024
 _MAX_STAGED_BYTES = 5 * 1024 * 1024
 _MAX_DIFF_CHARS = 200_000
@@ -56,12 +57,16 @@ def build_showcase(
     """Build a deterministic static Showcase without modifying the Workspace."""
     opened = Workspace.open_readonly(workspace)
     destination = _validate_output(opened.root, output)
+    workspace_commit = opened.current_commit()
     evidence_payload = _read_evidence(evidence) if evidence is not None else None
     snapshot = _build_snapshot(
         opened,
+        workspace_commit=workspace_commit,
         evidence_payload=evidence_payload,
         include_local=include_local,
     )
+    if opened.current_commit() != workspace_commit:
+        raise ShowcaseBuildError("Workspace changed during Showcase build")
     payload = (json.dumps(snapshot, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode(
         "utf-8"
     )
@@ -79,6 +84,7 @@ def build_showcase(
 def _build_snapshot(
     workspace: Workspace,
     *,
+    workspace_commit: str,
     evidence_payload: dict[str, Any] | None,
     include_local: bool,
 ) -> dict[str, Any]:
@@ -88,6 +94,7 @@ def _build_snapshot(
     )
     pages = _wiki_snapshot(
         workspace,
+        workspace_commit=workspace_commit,
         include_local=include_local,
     )
     query = _query_snapshot(
@@ -98,19 +105,20 @@ def _build_snapshot(
     benchmark = _benchmark_snapshot(evidence_payload)
     return {
         "schema_version": 1,
-        "workspace_commit": workspace.current_commit(),
+        "workspace_commit": workspace_commit,
         "privacy": privacy,
         "sources": sources,
         "wiki": {"pages": pages},
         "changeset": _changeset_snapshot(
             workspace,
+            workspace_commit=workspace_commit,
             public_source_versions=public_source_versions,
             include_local=include_local,
         ),
         "query": query,
         "rejection": _rejection_snapshot(workspace),
         "benchmark": benchmark,
-        "architecture": _architecture_snapshot(workspace, pages),
+        "architecture": _architecture_snapshot(workspace, workspace_commit, pages),
     }
 
 
@@ -189,18 +197,21 @@ def _source_snapshot(
 def _wiki_snapshot(
     workspace: Workspace,
     *,
+    workspace_commit: str,
     include_local: bool,
 ) -> list[dict[str, Any]]:
     rows = _query_rows(
         workspace,
         """
-        SELECT page_sources.page_path, page_sources.source_id, versions.sensitivity
-        FROM page_sources
-        JOIN applied_source_versions AS applied
-          ON applied.source_id = page_sources.source_id
+        SELECT
+            facts.page_path,
+            facts.source_id,
+            facts.source_version,
+            versions.sensitivity
+        FROM wiki_facts AS facts
         JOIN source_versions AS versions
-          ON versions.id = applied.source_version_id
-        ORDER BY page_sources.page_path, page_sources.source_id
+          ON versions.id = facts.source_version
+        ORDER BY facts.page_path, facts.source_id, facts.source_version
         """,
     )
     owners: dict[str, set[str]] = defaultdict(set)
@@ -214,8 +225,9 @@ def _wiki_snapshot(
     for path, source_ids in sorted(owners.items()):
         if not include_local and (not source_ids or path in private_pages):
             continue
-        page = _workspace_file(workspace.root, path)
-        content = _read_regular_file(page, max_bytes=_MAX_STAGED_BYTES).decode("utf-8")
+        content = workspace.version_store.read_text_at(workspace_commit, path)
+        if content is None:
+            raise ShowcaseBuildError("Showcase Wiki page is missing from its fixed Commit")
         match = _HEADING.search(content)
         pages.append(
             {
@@ -231,6 +243,7 @@ def _wiki_snapshot(
 def _changeset_snapshot(
     workspace: Workspace,
     *,
+    workspace_commit: str,
     public_source_versions: set[tuple[str, int]],
     include_local: bool,
 ) -> dict[str, Any] | None:
@@ -269,6 +282,8 @@ def _changeset_snapshot(
             record,
             proposal_sha256,
         )
+        if review is None or approval is None:
+            raise ShowcaseBuildError("Applied ChangeSet lacks review or approval Evidence")
         receipt = _read_json_file(entry / "receipt.json")
         if (
             receipt.get("status") != "APPLIED"
@@ -276,6 +291,12 @@ def _changeset_snapshot(
             or re.fullmatch(r"[a-f0-9]{40,64}", str(receipt.get("commit", ""))) is None
         ):
             raise ShowcaseBuildError("Applied ChangeSet receipt is invalid")
+        applied_commit = str(receipt["commit"])
+        if not workspace.version_store.is_ancestor(
+            record.changeset.base_commit,
+            applied_commit,
+        ) or not workspace.version_store.is_ancestor(applied_commit, workspace_commit):
+            raise ShowcaseBuildError("Applied ChangeSet Commit history is invalid")
         diffs = []
         for proposed in record.proposed_files:
             candidate_path = entry / "proposed" / proposed.path
@@ -285,6 +306,12 @@ def _changeset_snapshot(
             ).decode("utf-8")
             if hashlib.sha256(candidate.encode("utf-8")).hexdigest() != proposed.content_sha256:
                 raise ShowcaseBuildError("Applied ChangeSet candidate hash is invalid")
+            applied = workspace.version_store.read_text_at(applied_commit, proposed.path)
+            if (
+                applied is None
+                or hashlib.sha256(applied.encode("utf-8")).hexdigest() != proposed.content_sha256
+            ):
+                raise ShowcaseBuildError("Applied ChangeSet Commit content is invalid")
             base = workspace.version_store.read_text_at(
                 record.changeset.base_commit,
                 proposed.path,
@@ -304,12 +331,12 @@ def _changeset_snapshot(
                 {
                     "changeset_id": record.changeset.changeset_id,
                     "base_commit": record.changeset.base_commit,
-                    "applied_commit": str(receipt.get("commit", "")),
+                    "applied_commit": applied_commit,
                     "source_ids": sorted(source_ids),
                     "lifecycle": {
                         "proposed": True,
-                        "reviewed": review is not None,
-                        "approved": approval is not None,
+                        "reviewed": True,
+                        "approved": True,
                         "applied": True,
                     },
                     "unified_diff": diffs,
@@ -442,14 +469,14 @@ def _rejection_snapshot(workspace: Workspace) -> dict[str, Any]:
 
 def _architecture_snapshot(
     workspace: Workspace,
+    workspace_commit: str,
     pages: list[dict[str, Any]],
 ) -> dict[str, Any]:
     for page in pages:
         path = str(page["path"])
-        content = _read_regular_file(
-            _workspace_file(workspace.root, path),
-            max_bytes=_MAX_STAGED_BYTES,
-        ).decode("utf-8")
+        content = workspace.version_store.read_text_at(workspace_commit, path)
+        if content is None:
+            raise ShowcaseBuildError("Code Wiki architecture page is missing from its Commit")
         match = _MERMAID.search(content)
         if match is None:
             continue
@@ -854,22 +881,6 @@ def _read_regular_file(path: Path, *, max_bytes: int) -> bytes:
         os.close(descriptor)
 
 
-def _workspace_file(root: Path, relative: str) -> Path:
-    path = root / relative
-    try:
-        path.relative_to(root)
-    except ValueError as exc:
-        raise ShowcaseBuildError("Showcase Wiki path escapes the Workspace") from exc
-    current = root
-    for part in Path(relative).parts:
-        current /= part
-        if current.is_symlink():
-            raise ShowcaseBuildError("Showcase Wiki path contains a symbolic link")
-    if not path.is_file():
-        raise ShowcaseBuildError("Showcase Wiki page is missing")
-    return path
-
-
 def _validate_output(workspace: Path, output: Path) -> Path:
     destination = output.expanduser().absolute()
     if destination.is_symlink():
@@ -884,11 +895,12 @@ def _validate_output(workspace: Path, output: Path) -> Path:
     if destination.exists():
         if not destination.is_dir():
             raise ShowcaseBuildError("Showcase output must be a directory")
-        entries = list(destination.iterdir())
+        entries = {entry.name for entry in destination.iterdir()}
         if entries:
             marker = destination / _MARKER_NAME
             if (
-                marker.is_symlink()
+                entries != _OUTPUT_FILES
+                or marker.is_symlink()
                 or not marker.is_file()
                 or _read_regular_file(marker, max_bytes=128).decode("ascii") != _MARKER
             ):
@@ -900,29 +912,71 @@ def _publish(destination: Path, *, payload: bytes, page: bytes) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     _require_no_symlink_components(destination.parent)
     temporary = destination.parent / f".{destination.name}.tmp-{uuid.uuid4().hex}"
-    backup = destination.parent / f".{destination.name}.backup-{uuid.uuid4().hex}"
     temporary.mkdir(mode=0o700)
     try:
         _write_new_file(temporary / _MARKER_NAME, _MARKER.encode("ascii"))
         _write_new_file(temporary / "showcase.json", payload)
         _write_new_file(temporary / "index.html", page)
-        moved_old = False
-        try:
-            if destination.exists():
-                os.replace(destination, backup)
-                moved_old = True
+        if destination.exists():
+            _publish_into_existing(destination, temporary)
+        else:
             os.replace(temporary, destination)
-        except Exception:
-            if moved_old and backup.exists() and not destination.exists():
-                os.replace(backup, destination)
-            raise
-        if backup.exists():
-            shutil.rmtree(backup)
     except OSError as exc:
         raise ShowcaseBuildError("Showcase output could not be published safely") from exc
     finally:
         if temporary.exists():
             shutil.rmtree(temporary)
+
+
+def _publish_into_existing(destination: Path, temporary: Path) -> None:
+    flags = os.O_RDONLY | os.O_DIRECTORY | getattr(os, "O_NOFOLLOW", 0)
+    destination_fd = os.open(destination, flags)
+    temporary_fd = os.open(temporary, flags)
+    try:
+        identity = os.fstat(destination_fd)
+        entries = set(os.listdir(destination_fd))
+        names: tuple[str, ...]
+        if entries:
+            if entries != _OUTPUT_FILES:
+                raise ShowcaseBuildError("Showcase output is not owned by MemoryForge")
+            marker = _read_regular_file_at(destination_fd, _MARKER_NAME, max_bytes=128)
+            if marker.decode("ascii") != _MARKER:
+                raise ShowcaseBuildError("Showcase output is not owned by MemoryForge")
+            names = ("showcase.json", "index.html")
+        else:
+            names = ("showcase.json", "index.html", _MARKER_NAME)
+        for name in names:
+            os.replace(
+                name,
+                name,
+                src_dir_fd=temporary_fd,
+                dst_dir_fd=destination_fd,
+            )
+        os.fsync(destination_fd)
+        current = os.stat(destination, follow_symlinks=False)
+        if (current.st_dev, current.st_ino) != (identity.st_dev, identity.st_ino):
+            raise ShowcaseBuildError("Showcase output changed during publication")
+        if set(os.listdir(destination_fd)) != _OUTPUT_FILES:
+            raise ShowcaseBuildError("Showcase output changed during publication")
+    finally:
+        os.close(temporary_fd)
+        os.close(destination_fd)
+
+
+def _read_regular_file_at(directory_fd: int, name: str, *, max_bytes: int) -> bytes:
+    descriptor = os.open(
+        name,
+        os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
+        dir_fd=directory_fd,
+    )
+    try:
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > max_bytes:
+            raise ShowcaseBuildError("Showcase output marker is invalid")
+        with os.fdopen(descriptor, "rb", closefd=False) as source:
+            return source.read(max_bytes + 1)
+    finally:
+        os.close(descriptor)
 
 
 def _write_new_file(path: Path, payload: bytes) -> None:
