@@ -2,7 +2,7 @@
 
 ## Status
 
-`CANDIDATE_1_DEVELOPMENT_PASS_REGRESSION_PENDING`
+`CANDIDATE_2_DEVELOPMENT_PASS_REGRESSION_PENDING`
 
 ## Base
 
@@ -58,12 +58,34 @@ and explicit deletion path do not exist at the baseline Commit.
   `8be9a05da49e4da1efe742dd8406f2f4706cb3f0`
 - Evidence SHA256:
   `0b3e8304467d6ee38cd826d225e6c19a69a40cf1c1ed5fd6f89884920fc84ee5`
+- Result: `DEVELOPMENT_PASS_SUPERSEDED`
+- Development pass rate: 100.0%
+- Failed cases: 0
+- Deterministic evaluation SHA256:
+  `486e1e81b633257de4f8f13f1c0d8b35079efbe97ad7d544d0c6250c03e13729`
+- Confirmation status: `not_run`
+
+Candidate 1 allowed a network snapshot and saved JSON to exceed the existing
+5 MiB offline import boundary, so MemoryForge could create a replay artifact
+that its own offline path rejected.
+
+## Candidate 2 Result
+
+- Evidence:
+  `demo/results/github_thread_import_development_candidate_2.json`
+- MemoryForge Commit:
+  `fc1504488cc7735c2bfbf03f030ce6de0c946ddb`
+- Evidence SHA256:
+  `51963aab72b7462454544d4379ad46f44d9ae6c76924e68ffde9c155dfdce1fc`
 - Result: `DEVELOPMENT_PASS_REGRESSION_PENDING`
 - Development pass rate: 100.0%
 - Failed cases: 0
 - Deterministic evaluation SHA256:
   `486e1e81b633257de4f8f13f1c0d8b35079efbe97ad7d544d0c6250c03e13729`
 - Confirmation status: `not_run`
+
+Candidate 2 applies the same 5 MiB ceiling to normalized saved JSON and
+rendered Markdown before either artifact is written.
 
 ## Goal
 

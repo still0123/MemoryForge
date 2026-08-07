@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "suite_id": "github-thread-import-lifecycle",
+  "suite_revision": 1,
+  "memoryforge_commit": "fc1504488cc7735c2bfbf03f030ce6de0c946ddb",
+  "memoryforge_worktree_dirty": false,
+  "development": {
+    "path": "demo/evaluation/github_thread_import_development.json",
+    "sha256": "b4a8f3269b6c99b9a7d5c3a122621f9186c966bad9170501c49749ce2de0f4ff",
+    "test_file": "tests/test_github_thread_import.py",
+    "test_sha256": "70be6edefcb388a05bb59a6f604c17722d6b335ff5b75d7e54aad912d4d0228e",
+    "case_count": 5,
+    "evaluation": {
+      "case_count": 5,
+      "metrics": {
+        "pass_rate": 100.0,
+        "failed_cases": 0
+      },
+      "cases": [
+        {
+          "id": "single-resource-endpoints",
+          "category": "single_resource",
+          "pytest_node": "tests/test_github_thread_import.py::test_github_thread_import_fetches_only_one_exact_thread",
+          "status": "passed",
+          "error_classification": "none"
+        },
+        {
+          "id": "offline-json-duplicate",
+          "category": "duplicate_import",
+          "pytest_node": "tests/test_github_thread_import.py::test_github_thread_saved_json_replays_offline_and_is_idempotent",
+          "status": "passed",
+          "error_classification": "none"
+        },
+        {
+          "id": "update-delete-reimport",
+          "category": "temporal_update",
+          "pytest_node": "tests/test_github_thread_import.py::test_github_thread_update_delete_and_reimport_lifecycle",
+          "status": "passed",
+          "error_classification": "none"
+        },
+        {
+          "id": "privacy-boundaries",
+          "category": "privacy",
+          "pytest_node": "tests/test_github_thread_import.py::test_github_thread_privacy_boundaries_fail_before_source_writes",
+          "status": "passed",
+          "error_classification": "none"
+        },
+        {
+          "id": "citation-locator-replay",
+          "category": "citation",
+          "pytest_node": "tests/test_github_thread_import.py::test_github_thread_preserves_locator_and_exact_citation_replay",
+          "status": "passed",
+          "error_classification": "none"
+        }
+      ]
+    }
+  },
+  "confirmation": {
+    "path": "demo/evaluation/github_thread_import_confirmation.json",
+    "sha256": "45de8d774b8d02b0112571ceb8c3b4d43db589cb0a68dbb96579aa2327ad24b0",
+    "status": "not_run"
+  },
+  "runs": [
+    {
+      "name": "first",
+      "evaluation_sha256": "486e1e81b633257de4f8f13f1c0d8b35079efbe97ad7d544d0c6250c03e13729"
+    },
+    {
+      "name": "second",
+      "evaluation_sha256": "486e1e81b633257de4f8f13f1c0d8b35079efbe97ad7d544d0c6250c03e13729"
+    }
+  ],
+  "gates": {
+    "pass_rate": true,
+    "failed_cases": true,
+    "deterministic_replay": true,
+    "stable_memoryforge_commit": true,
+    "clean_worktree_after_run": true,
+    "confirmation_not_run": true
+  },
+  "passed": true
+}
