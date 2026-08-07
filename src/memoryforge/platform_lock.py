@@ -82,22 +82,35 @@ def exclusive_workspace_lock(root: Path, lock_path: Path) -> Iterator[None]:
             yield
         return
 
+    if root.parent == root:
+        with _exclusive_posix_directory_lock(root), exclusive_file_lock(lock_path):
+            yield
+        return
+    with (
+        _exclusive_posix_directory_lock(root.parent),
+        _exclusive_posix_directory_lock(root),
+        exclusive_file_lock(lock_path),
+    ):
+        yield
+
+
+@contextmanager
+def _exclusive_posix_directory_lock(path: Path) -> Iterator[None]:
     directory_flag = getattr(os, "O_DIRECTORY", None)
     no_follow_flag = getattr(os, "O_NOFOLLOW", None)
     if directory_flag is None or no_follow_flag is None:
         raise UnsafeLockFileError("Workspace directory locking is unsupported")
     try:
-        descriptor = os.open(root, os.O_RDONLY | directory_flag | no_follow_flag)
+        descriptor = os.open(path, os.O_RDONLY | directory_flag | no_follow_flag)
     except OSError as exc:
         raise UnsafeLockFileError("Workspace directory could not be opened safely") from exc
     locked = False
     try:
-        _require_same_directory(root, descriptor)
+        _require_same_directory(path, descriptor)
         lock_descriptor(descriptor)
         locked = True
-        _require_same_directory(root, descriptor)
-        with exclusive_file_lock(lock_path):
-            yield
+        _require_same_directory(path, descriptor)
+        yield
     finally:
         try:
             if locked:

@@ -22,7 +22,7 @@ def test_benchmark_registry_binds_all_release_artifacts() -> None:
         "status": "valid",
         "suite_count": 12,
         "experiment_count": 7,
-        "evidence_count": 81,
+        "evidence_count": 83,
         "qa_case_count": 121,
         "qa_case_types_present": [
             "code_behavior",
@@ -358,6 +358,46 @@ def test_benchmark_registry_binds_linux_runtime(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(validator.json, "loads", lambda _value: payload)
     with pytest.raises(ValueError, match="Linux Evidence contract failed"):
         validator._validate_linux_evidence(
+            experiment,
+            candidate,
+            experiment["splits"]["confirmation"],
+        )
+
+
+def test_benchmark_registry_binds_final_development_runtime() -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "cross-platform-delivery"
+    )
+    candidate = next(item for item in experiment["evidence"] if item["evidence_revision"] == 6)
+    payload = json.loads((validator.REPO_ROOT / candidate["path"]).read_text(encoding="utf-8"))
+    payload["runtime"]["system"] = "Windows"
+
+    with pytest.raises(ValueError, match="pytest component experiment Evidence contract failed"):
+        validator._validate_pytest_component_experiment_payload(
+            experiment,
+            candidate,
+            payload,
+            experiment["splits"]["development"],
+            experiment["splits"]["confirmation"],
+        )
+
+
+def test_benchmark_registry_binds_final_macos_gate_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "cross-platform-delivery"
+    )
+    candidate = next(item for item in experiment["evidence"] if item["evidence_revision"] == 6)
+    acceptance = candidate["acceptance_evidence"]
+    payload = json.loads((validator.REPO_ROOT / acceptance["path"]).read_text(encoding="utf-8"))
+    payload["runtime"]["hosted_runner"] = True
+
+    monkeypatch.setattr(validator.json, "loads", lambda _value: payload)
+    with pytest.raises(ValueError, match="acceptance Evidence contract failed"):
+        validator._validate_acceptance_evidence(
             experiment,
             candidate,
             experiment["splits"]["confirmation"],

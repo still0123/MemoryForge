@@ -920,6 +920,18 @@
           "path": "demo/results/cross_platform_delivery_candidate_5.json",
           "sha256": "4f1cb0fcad903e7e525670d9efde02148b2cdf2a9bef532210997f9ca8102106",
           "memoryforge_commit": "cba84d7a6b01d20abfb353e85ae2733210bde98b",
+          "linux_evidence": {
+            "path": "demo/results/cross_platform_delivery_candidate_5_linux_gate.json",
+            "sha256": "d58dacc1bd4a34f6230e3045db058e4f2542e671d1f017311c02147ee76e3a8f",
+            "memoryforge_commit": "c9af1ed22c5aef64a6b888b494fb27872c7d6ad9",
+            "passed": true
+          },
+          "acceptance_evidence": {
+            "path": "demo/results/cross_platform_delivery_candidate_5_local_gate.json",
+            "sha256": "20d2ea86f04120b4f27c8ba39ef8e613de2c11acedcb46961284ad56a72f9240",
+            "memoryforge_commit": "c9af1ed22c5aef64a6b888b494fb27872c7d6ad9",
+            "passed": true
+          },
           "passed": true
         }
       ]

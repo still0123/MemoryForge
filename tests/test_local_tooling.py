@@ -42,6 +42,9 @@ def test_local_check_keeps_the_quality_and_artifact_contract() -> None:
         "hatchling",
         "--no-build-isolation",
         "pip check",
+        "env -u PYTHONPATH PYTHONNOUSERSITE=1",
+        "-I -m pip check",
+        "sdist import escaped clean environment",
         "hashlib.sha256",
         "SHA256SUMS",
     ):

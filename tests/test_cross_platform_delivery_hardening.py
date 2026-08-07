@@ -179,3 +179,22 @@ def test_workspace_lock_is_not_split_by_lock_file_replacement(tmp_path: Path) ->
             time.sleep(0.05)
             assert not waiting.done()
         waiting.result(timeout=2)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX namespace lock")
+def test_workspace_lock_is_not_split_by_root_replacement(tmp_path: Path) -> None:
+    workspace = Workspace.initialize(tmp_path / "workspace")
+
+    def acquire_second() -> None:
+        with workspace.exclusive_lock():
+            pass
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        with workspace.exclusive_lock():
+            workspace.root.rename(tmp_path / "displaced-workspace")
+            workspace.root.mkdir()
+            workspace.internal_dir.mkdir()
+            waiting = executor.submit(acquire_second)
+            time.sleep(0.05)
+            assert not waiting.done()
+        waiting.result(timeout=2)

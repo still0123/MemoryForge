@@ -452,6 +452,11 @@ REQUIRED_ACCEPTANCE_EVIDENCE = {
             "a8ce5385fecdbef45660dc809ae8a4a20ed197aec6aa96ab1464877dd66b018d",
             "31f51cd121559654f4e129b96921f2d81e991e6e",
         ),
+        _RESULTS + "cross_platform_delivery_candidate_5.json": (
+            _RESULTS + "cross_platform_delivery_candidate_5_local_gate.json",
+            "20d2ea86f04120b4f27c8ba39ef8e613de2c11acedcb46961284ad56a72f9240",
+            "c9af1ed22c5aef64a6b888b494fb27872c7d6ad9",
+        ),
     },
 }
 REQUIRED_LINUX_EVIDENCE = {
@@ -465,6 +470,11 @@ REQUIRED_LINUX_EVIDENCE = {
             _RESULTS + "cross_platform_delivery_candidate_4_linux_gate.json",
             "f09affaa4dd7633e10cd37752f9ce1ed7e7258a12bc747cda2bc20c805beadc1",
             "1ed10462e0585be8fdafa34e6c42de6e2a0ba784",
+        ),
+        _RESULTS + "cross_platform_delivery_candidate_5.json": (
+            _RESULTS + "cross_platform_delivery_candidate_5_linux_gate.json",
+            "d58dacc1bd4a34f6230e3045db058e4f2542e671d1f017311c02147ee76e3a8f",
+            "c9af1ed22c5aef64a6b888b494fb27872c7d6ad9",
         ),
     },
 }
@@ -515,6 +525,29 @@ LINUX_EVIDENCE_CONTRACTS = {
             "coverage_percent": 88,
         },
     },
+    _RESULTS + "cross_platform_delivery_candidate_5_linux_gate.json": {
+        "runtime": {
+            "virtualization": "Lima 2.2.0 local VM",
+            "distribution": "Debian GNU/Linux 12",
+            "kernel": "Linux 6.1.0-50-cloud-arm64",
+            "architecture": "aarch64",
+            "implementation": "CPython",
+            "python": "3.11.2",
+            "hosted_runner": False,
+        },
+        "registry_validation": {
+            "suite_count": 12,
+            "experiment_count": 7,
+            "evidence_count": 81,
+            "qa_case_count": 121,
+        },
+        "pytest": {
+            "passed": 542,
+            "skipped": 2,
+            "failed": 0,
+            "coverage_percent": 88,
+        },
+    },
 }
 FINAL_ACCEPTANCE_REGISTRY_COUNTS = {
     "exact-symbol-routing.learn-claude-code": {
@@ -556,7 +589,7 @@ FINAL_ACCEPTANCE_REGISTRY_COUNTS = {
     "cross-platform-delivery": {
         "suite_count": 12,
         "experiment_count": 7,
-        "evidence_count": 77,
+        "evidence_count": 81,
         "qa_case_count": 121,
     },
 }

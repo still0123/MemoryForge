@@ -2,7 +2,7 @@
 
 ## Status
 
-`CANDIDATE_5_DEVELOPMENT_PASS_GATE_PENDING`
+`CANDIDATE_6_CROSS_GROUP_FIX_PENDING`
 
 ## Base
 
@@ -191,8 +191,51 @@ Candidate 4 became superseded after final review found collection
   `03879bd4165a21543fadd0ecd237d5976c6b19330bc0bab7d321a84ee1ec92f1`
 - Confirmation status: `not_run`
 
-Candidate 5 adds exact collection syntax classification. It is pending the
-final host and Linux artifact gates plus final static-review recheck.
+Candidate 5 adds exact collection syntax classification. Its final host and
+Linux gates are recorded below.
+
+## Candidate 5 Final Local Gates
+
+macOS acceptance:
+
+- Gate Commit:
+  `c9af1ed22c5aef64a6b888b494fb27872c7d6ad9`
+- Acceptance Evidence:
+  `demo/results/cross_platform_delivery_candidate_5_local_gate.json`
+- Acceptance Evidence SHA256:
+  `20d2ea86f04120b4f27c8ba39ef8e613de2c11acedcb46961284ad56a72f9240`
+- Runtime: Darwin arm64, CPython 3.11.15, hosted runner false
+- Pytest: 544 passed
+- Coverage: 88%
+- Registry at gate: 12 suites / 7 experiments / 81 Evidence / 121 QA
+
+Linux acceptance:
+
+- Evidence:
+  `demo/results/cross_platform_delivery_candidate_5_linux_gate.json`
+- Evidence SHA256:
+  `d58dacc1bd4a34f6230e3045db058e4f2542e671d1f017311c02147ee76e3a8f`
+- Runtime: local Lima 2.2.0 VM, Debian 12 aarch64, CPython 3.11.2
+- Pytest: 542 passed, 2 macOS-only cases skipped, 0 failed
+- Coverage: 88%
+- Registry at gate: 12 suites / 7 experiments / 81 Evidence / 121 QA
+
+Both gates passed Ruff, format, strict Mypy, dependency checks, Wheel and
+sdist clean-room installs, `pip check`, CLI smoke, and Code Wiki release
+checks. Both produced byte-identical artifacts:
+
+- Wheel SHA256:
+  `71c8644213185531f58b2f215e70a8e3cbf471a50c5207916dd862657bc6b11d`
+- sdist SHA256:
+  `51046aa8a0c83a64d8e54f5aac8485fb7de1b3ff6ded855b2ec5cb3816fd4137`
+
+PowerShell 7.6 parsed `scripts/check_local.ps1` without syntax errors.
+Candidate 5 passed development and both local gates, then became superseded
+when cross-group review showed Workspace root replacement could split the
+POSIX lock and `scripts/check_local.sh` could import the source checkout during
+its sdist probe. Candidate 6 locks the parent namespace and isolates the POSIX
+sdist import. Native Windows confirmation remains frozen at `not_run` and is
+not claimed.
 
 ## Goal
 
@@ -221,9 +264,8 @@ local PowerShell and native smoke entry points.
 
 ## Integration Contract
 
-- `Workspace.exclusive_lock` locks the Workspace root directory descriptor on
-  POSIX plus the compatibility lock file, and delegates to the lock file on
-  Windows;
+- `Workspace.exclusive_lock` locks the parent namespace, Workspace root, and
+  compatibility lock file on POSIX, and delegates to the lock file on Windows;
 - `ChangeSetStore` serializes mutations by locking its opened staging
   directory through the platform descriptor API;
 - `workspace.py` and `changesets.py` contain no direct platform lock imports;
