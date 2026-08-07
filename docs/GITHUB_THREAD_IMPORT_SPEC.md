@@ -2,7 +2,7 @@
 
 ## Status
 
-`CANDIDATE_2_DEVELOPMENT_PASS_REGRESSION_PENDING`
+`CANDIDATE_3_DEVELOPMENT_PASS_REGRESSION_PENDING`
 
 ## Base
 
@@ -77,7 +77,7 @@ that its own offline path rejected.
   `fc1504488cc7735c2bfbf03f030ce6de0c946ddb`
 - Evidence SHA256:
   `51963aab72b7462454544d4379ad46f44d9ae6c76924e68ffde9c155dfdce1fc`
-- Result: `DEVELOPMENT_PASS_REGRESSION_PENDING`
+- Result: `DEVELOPMENT_PASS_SUPERSEDED`
 - Development pass rate: 100.0%
 - Failed cases: 0
 - Deterministic evaluation SHA256:
@@ -86,6 +86,27 @@ that its own offline path rejected.
 
 Candidate 2 applies the same 5 MiB ceiling to normalized saved JSON and
 rendered Markdown before either artifact is written.
+
+Candidate 2 still accepted a contribution whose locator belonged to the same
+thread but to a different comment or review ID.
+
+## Candidate 3 Result
+
+- Evidence:
+  `demo/results/github_thread_import_development_candidate_3.json`
+- MemoryForge Commit:
+  `c6f329152dac002ecead2f8d8bebcb002865aff6`
+- Evidence SHA256:
+  `3c32675802191dbeec6c8477e0b1abcb618b115120575abc0e6509f8dc565b2c`
+- Result: `DEVELOPMENT_PASS_REGRESSION_PENDING`
+- Development pass rate: 100.0%
+- Failed cases: 0
+- Deterministic evaluation SHA256:
+  `486e1e81b633257de4f8f13f1c0d8b35079efbe97ad7d544d0c6250c03e13729`
+- Confirmation status: `not_run`
+
+Candidate 3 binds each contribution kind and ID to its exact GitHub fragment:
+`issuecomment-<id>`, `pullrequestreview-<id>`, or `discussion_r<id>`.
 
 ## Frozen Test Lint Exception
 
