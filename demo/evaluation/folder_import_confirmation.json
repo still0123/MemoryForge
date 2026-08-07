@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "suite_id": "folder-import-lifecycle",
+  "suite_revision": 1,
+  "split": "confirmation",
+  "status": "not_run",
+  "cases": [
+    {
+      "id": "confirmation-ignore-deactivates-current-source",
+      "category": "temporal_update",
+      "scenario": "After a successful sync, add an ignore rule for one current file and sync once.",
+      "expected": "The ignored source becomes non-current while its historical SourceVersion remains."
+    },
+    {
+      "id": "confirmation-directory-symlink-not-traversed",
+      "category": "privacy",
+      "scenario": "Place a directory symlink to an external directory below the imported root.",
+      "expected": "No source below the symlink target is read, returned, or stored."
+    },
+    {
+      "id": "confirmation-html-update-stable-identity",
+      "category": "temporal_update",
+      "scenario": "Update readable text in one saved HTML file and sync once.",
+      "expected": "The source ID remains stable and exactly one new current SourceVersion is created."
+    }
+  ]
+}
