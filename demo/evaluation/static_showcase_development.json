@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "suite_id": "static-showcase",
+  "suite_revision": 1,
+  "test_file": {
+    "path": "tests/test_showcase.py",
+    "sha256": "5ac08a2fc24e005737eddc094ef372baa317775b58a88e067d20e93287ab33ae"
+  },
+  "cases": [
+    {
+      "id": "complete-public-readonly-snapshot",
+      "test": "test_showcase_builds_complete_public_snapshot_without_mutating_workspace",
+      "expected": "all eight sections, public data only, zero Workspace mutation"
+    },
+    {
+      "id": "owned-deterministic-rebuild",
+      "test": "test_showcase_rebuild_is_deterministic_and_replaces_only_owned_output",
+      "expected": "byte-identical rebuild and foreign output retention"
+    },
+    {
+      "id": "unsafe-output-rejection",
+      "test": "test_showcase_rejects_unsafe_or_workspace_internal_output",
+      "expected": "symlink and Workspace-internal output rejected"
+    },
+    {
+      "id": "zero-key-nested-cli",
+      "test": "test_showcase_nested_cli_builds_without_model_credentials",
+      "expected": "memoryforge showcase build succeeds without credentials"
+    }
+  ],
+  "expected_metrics": {
+    "pass_rate": 100.0,
+    "failed_cases": 0,
+    "required_sections": 8,
+    "local_detail_leaks": 0,
+    "workspace_mutations": 0,
+    "deterministic_replay": true
+  }
+}
