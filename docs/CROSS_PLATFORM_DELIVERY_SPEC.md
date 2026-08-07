@@ -2,7 +2,7 @@
 
 ## Status
 
-`DEVELOPMENT_PASS_REVIEW_FIX_PENDING`
+`CANDIDATE_3_DEVELOPMENT_AND_LINUX_PASS`
 
 ## Base
 
@@ -115,8 +115,39 @@ static review reproduced these P1 defects:
 The fix candidate returns ChangeSet serialization to the opened staging
 directory descriptor, isolates pytest startup, adds process-tree timeouts and
 runtime provenance, hardens artifact paths and rejected Evidence, and isolates
-the PowerShell sdist probe. Native Windows confirmation and Linux full-gate
-evidence remain open release-delivery work.
+the PowerShell sdist probe. Native Windows confirmation remains open
+release-delivery work.
+
+## Candidate 3 Development And Linux Gate
+
+- Development Evidence:
+  `demo/results/cross_platform_delivery_candidate_3.json`
+- Development Evidence SHA256:
+  `1584be87a25356d6189c55a696c35d9b679c4c56c654da261c1caf6d185abb31`
+- MemoryForge Commit:
+  `79188650e953c6c183b631fd41432e795bde0eaa`
+- Runtime: CPython 3.11.15 / Darwin arm64
+- Development pass rate: 100.0%
+- Deterministic evaluation SHA256:
+  `9cafc35adc2f818d9aff8a8e5bbead013ac5e91e77471b25ba5f0d6882a5a27b`
+- Full host pytest: 538 passed
+- Confirmation status: `not_run`
+
+Linux Evidence:
+
+- Path:
+  `demo/results/cross_platform_delivery_candidate_3_linux_gate.json`
+- SHA256:
+  `efd898c2a3c9eb4807b0610bf5c2979ccc5a86b48fd81735f4b72a6ce6360824`
+- Runtime: local Lima 2.2.0 VM, Debian 12 aarch64, CPython 3.11.2
+- Pytest: 536 passed, 2 macOS-only cases skipped, 0 failed
+- Coverage: 88%
+- Ruff, format, strict Mypy, registry, dependency check: passed
+- Wheel and sdist clean-room: passed
+- Hosted runner: false
+
+Candidate 3 remains pending the final host artifact gate and static-review
+recheck. Native Windows confirmation remains `not_run`.
 
 ## Goal
 

@@ -266,6 +266,12 @@ REQUIRED_EXPERIMENT_EVIDENCE = {
             "22a309f133008268e857e4331f70967d58f0c06adc45ab1988f8a99ee3c34775",
             "7d0a296ffbbb73863b63ec732608a6e3c0bab35b",
         ),
+        _RESULTS + "cross_platform_delivery_candidate_3.json": (
+            4,
+            "accepted_development_superseded",
+            "1584be87a25356d6189c55a696c35d9b679c4c56c654da261c1caf6d185abb31",
+            "79188650e953c6c183b631fd41432e795bde0eaa",
+        ),
     },
 }
 STATIC_SHOWCASE_REJECTED_CONTRACTS = {
@@ -428,6 +434,15 @@ REQUIRED_ACCEPTANCE_EVIDENCE = {
             _RESULTS + "cross_platform_delivery_candidate_2_local_gate.json",
             "6318d9bf999163917441c65e8085bce3548424b6a7183b4c284e7f9c43b9b2d7",
             "7d0a296ffbbb73863b63ec732608a6e3c0bab35b",
+        ),
+    },
+}
+REQUIRED_LINUX_EVIDENCE = {
+    "cross-platform-delivery": {
+        _RESULTS + "cross_platform_delivery_candidate_3.json": (
+            _RESULTS + "cross_platform_delivery_candidate_3_linux_gate.json",
+            "efd898c2a3c9eb4807b0610bf5c2979ccc5a86b48fd81735f4b72a6ce6360824",
+            "79188650e953c6c183b631fd41432e795bde0eaa",
         ),
     },
 }
@@ -938,6 +953,7 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
         statuses: set[str] = set()
         required_regression = REQUIRED_REGRESSION_EVIDENCE.get(suite_id)
         required_acceptance = REQUIRED_ACCEPTANCE_EVIDENCE.get(suite_id)
+        required_linux = REQUIRED_LINUX_EVIDENCE.get(suite_id, {})
         if required_regression is None or required_acceptance is None:
             raise ValueError(f"experiment acceptance Evidence history is missing: {suite_id}")
         for artifact in evidence:
@@ -997,6 +1013,21 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
                 raise ValueError(
                     f"experiment acceptance Evidence history is incomplete: {suite_id}"
                 )
+            expected_linux = required_linux.get(path)
+            linux_evidence = artifact.get("linux_evidence")
+            if expected_linux is None:
+                if linux_evidence is not None:
+                    raise ValueError(f"unexpected Linux Evidence: {suite_id}")
+            elif (
+                not isinstance(linux_evidence, dict)
+                or (
+                    linux_evidence.get("path"),
+                    linux_evidence.get("sha256"),
+                    linux_evidence.get("memoryforge_commit"),
+                )
+                != expected_linux
+            ):
+                raise ValueError(f"Linux Evidence history is incomplete: {suite_id}")
             statuses.add(status)
             if COMMIT.fullmatch(commit) is None:
                 raise ValueError(f"invalid experiment Evidence Commit: {suite_id}")
@@ -1019,6 +1050,12 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
                 )
             if expected_acceptance is not None:
                 evidence_count += _validate_acceptance_evidence(
+                    experiment,
+                    artifact,
+                    confirmation,
+                )
+            if expected_linux is not None:
+                evidence_count += _validate_linux_evidence(
                     experiment,
                     artifact,
                     confirmation,
@@ -1596,6 +1633,106 @@ def _validate_regression_evidence(
         raise ValueError(
             f"experiment regression Evidence contract failed: {experiment['suite_id']}"
         )
+    return 1
+
+
+def _validate_linux_evidence(
+    experiment: dict[str, Any],
+    development_artifact: dict[str, Any],
+    confirmation: dict[str, Any],
+) -> int:
+    artifact = development_artifact.get("linux_evidence")
+    if not isinstance(artifact, dict):
+        raise ValueError("cross-platform experiment requires Linux Evidence")
+    _validate_artifact(artifact, str(experiment["suite_id"]))
+    commit = str(artifact.get("memoryforge_commit"))
+    if COMMIT.fullmatch(commit) is None or artifact.get("passed") is not True:
+        raise ValueError("invalid Linux Evidence identity")
+    payload = cast(
+        dict[str, Any],
+        json.loads((REPO_ROOT / artifact["path"]).read_text(encoding="utf-8")),
+    )
+    local_gate = payload.get("local_gate")
+    runtime = payload.get("runtime")
+    if (
+        type(payload.get("schema_version")) is not int
+        or payload.get("schema_version") != 1
+        or set(payload)
+        != {
+            "schema_version",
+            "suite_id",
+            "suite_revision",
+            "memoryforge_commit",
+            "memoryforge_worktree_dirty",
+            "runtime",
+            "local_gate",
+            "confirmation",
+            "passed",
+        }
+        or payload.get("suite_id") != experiment["suite_id"]
+        or type(payload.get("suite_revision")) is not int
+        or payload.get("suite_revision") != experiment["suite_revision"]
+        or payload.get("memoryforge_commit") != commit
+        or payload.get("memoryforge_worktree_dirty") is not False
+        or not _strict_mapping(
+            runtime,
+            {
+                "virtualization": "Lima 2.2.0 local VM",
+                "distribution": "Debian GNU/Linux 12",
+                "kernel": "Linux 6.1.0-50-cloud-arm64",
+                "architecture": "aarch64",
+                "implementation": "CPython",
+                "python": "3.11.2",
+                "hosted_runner": False,
+            },
+        )
+        or not isinstance(local_gate, dict)
+        or set(local_gate) != LOCAL_GATE_KEYS | {"artifacts"}
+        or local_gate.get("command") != "scripts/check_local.sh"
+        or local_gate.get("ruff_check") != "passed"
+        or local_gate.get("ruff_format") != "passed"
+        or local_gate.get("strict_mypy") != "passed"
+        or not _strict_mapping(
+            local_gate.get("registry_validation"),
+            {
+                "suite_count": 12,
+                "experiment_count": 7,
+                "evidence_count": 75,
+                "qa_case_count": 121,
+            },
+        )
+        or local_gate.get("dependency_check") != "passed"
+        or not _strict_mapping(
+            local_gate.get("pytest"),
+            {
+                "passed": 536,
+                "skipped": 2,
+                "failed": 0,
+                "coverage_percent": 88,
+            },
+        )
+        or local_gate.get("wheel_clean_room") != "passed"
+        or local_gate.get("sdist_clean_room") != "passed"
+        or local_gate.get("pip_check") != "passed"
+        or local_gate.get("cli_version_smoke") != "passed"
+        or not isinstance(local_gate.get("artifacts"), dict)
+        or set(local_gate["artifacts"])
+        != {
+            "wheel_sha256",
+            "sdist_sha256",
+            "provenance_sha256",
+            "sha256sums_sha256",
+        }
+        or any(SHA256.fullmatch(str(value)) is None for value in local_gate["artifacts"].values())
+        or payload.get("confirmation")
+        != {
+            "path": confirmation["path"],
+            "sha256": confirmation["sha256"],
+            "status": "not_run",
+        }
+        or payload.get("passed") is not True
+    ):
+        raise ValueError("Linux Evidence contract failed")
     return 1
 
 

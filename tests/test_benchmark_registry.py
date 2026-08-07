@@ -22,7 +22,7 @@ def test_benchmark_registry_binds_all_release_artifacts() -> None:
         "status": "valid",
         "suite_count": 12,
         "experiment_count": 7,
-        "evidence_count": 75,
+        "evidence_count": 77,
         "qa_case_count": 121,
         "qa_case_types_present": [
             "code_behavior",
@@ -326,6 +326,41 @@ def test_benchmark_registry_rejects_artifact_outside_repository(tmp_path: Path) 
                 "sha256": hashlib.sha256(outside.read_bytes()).hexdigest(),
             },
             "outside",
+        )
+
+
+def test_benchmark_registry_cannot_drop_cross_platform_linux_evidence(
+    tmp_path: Path,
+) -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "cross-platform-delivery"
+    )
+    candidate = next(item for item in experiment["evidence"] if item["evidence_revision"] == 4)
+    del candidate["linux_evidence"]
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps(registry), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="Linux Evidence history is incomplete"):
+        validator.validate_registry(path)
+
+
+def test_benchmark_registry_binds_linux_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "cross-platform-delivery"
+    )
+    candidate = next(item for item in experiment["evidence"] if item["evidence_revision"] == 4)
+    linux = candidate["linux_evidence"]
+    payload = json.loads((validator.REPO_ROOT / linux["path"]).read_text(encoding="utf-8"))
+    payload["runtime"]["hosted_runner"] = True
+
+    monkeypatch.setattr(validator.json, "loads", lambda _value: payload)
+    with pytest.raises(ValueError, match="Linux Evidence contract failed"):
+        validator._validate_linux_evidence(
+            experiment,
+            candidate,
+            experiment["splits"]["confirmation"],
         )
 
 

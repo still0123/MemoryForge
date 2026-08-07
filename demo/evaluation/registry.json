@@ -876,6 +876,21 @@
             "passed": true
           },
           "passed": true
+        },
+        {
+          "split": "development",
+          "evidence_revision": 4,
+          "status": "accepted_development_superseded",
+          "path": "demo/results/cross_platform_delivery_candidate_3.json",
+          "sha256": "1584be87a25356d6189c55a696c35d9b679c4c56c654da261c1caf6d185abb31",
+          "memoryforge_commit": "79188650e953c6c183b631fd41432e795bde0eaa",
+          "linux_evidence": {
+            "path": "demo/results/cross_platform_delivery_candidate_3_linux_gate.json",
+            "sha256": "efd898c2a3c9eb4807b0610bf5c2979ccc5a86b48fd81735f4b72a6ce6360824",
+            "memoryforge_commit": "79188650e953c6c183b631fd41432e795bde0eaa",
+            "passed": true
+          },
+          "passed": true
         }
       ]
     }
