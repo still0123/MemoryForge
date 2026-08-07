@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "suite_id": "static-showcase",
+  "suite_revision": 1,
+  "memoryforge_commit": "bec8c0edea1fa7a126fa15db8078065bb45e2eae",
+  "memoryforge_worktree_dirty": false,
+  "development": {
+    "path": "demo/evaluation/static_showcase_development.json",
+    "sha256": "ff6e74e31ac0ce4891e04c4320874e503ec6dd935bf55da29ecf0243f24bf63f",
+    "test_file": {
+      "path": "tests/test_showcase.py",
+      "sha256": "5ac08a2fc24e005737eddc094ef372baa317775b58a88e067d20e93287ab33ae"
+    },
+    "case_count": 4,
+    "pytest": {
+      "passed": 0,
+      "failed": 4,
+      "errors": 0,
+      "exit_code": 1
+    },
+    "failures": [
+      {
+        "case_id": "complete-public-readonly-snapshot",
+        "classification": "FIXTURE_PRECONDITION",
+        "detail": "Code Wiki setup omitted the required code-add registration"
+      },
+      {
+        "case_id": "owned-deterministic-rebuild",
+        "classification": "FIXTURE_PRECONDITION",
+        "detail": "Code Wiki setup omitted the required code-add registration"
+      },
+      {
+        "case_id": "unsafe-output-rejection",
+        "classification": "FIXTURE_PRECONDITION",
+        "detail": "Code Wiki setup omitted the required code-add registration"
+      },
+      {
+        "case_id": "zero-key-nested-cli",
+        "classification": "FIXTURE_PRECONDITION",
+        "detail": "Code Wiki setup omitted the required code-add registration"
+      }
+    ]
+  },
+  "confirmation": {
+    "path": "demo/evaluation/static_showcase_confirmation.json",
+    "sha256": "1a75c146f884459a7bad5a995bda9eed32b91f043332d3ce735aadc73ccdf555",
+    "status": "not_run"
+  },
+  "passed": false
+}

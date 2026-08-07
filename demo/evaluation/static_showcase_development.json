@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
   "suite_id": "static-showcase",
-  "suite_revision": 1,
+  "suite_revision": 2,
   "test_file": {
     "path": "tests/test_showcase.py",
-    "sha256": "5ac08a2fc24e005737eddc094ef372baa317775b58a88e067d20e93287ab33ae"
+    "sha256": "1353c6e571df641617a6f906dcf5f6afcc1e61d9409d1392c3aee1be593fb0ec"
   },
   "cases": [
     {

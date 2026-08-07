@@ -1,6 +1,6 @@
 # Static Showcase Specification
 
-Status: PREREGISTERED
+Status: DEVELOPMENT_REVISION_2_FROZEN
 
 ## Goal
 
@@ -100,6 +100,22 @@ The builder:
 The frozen confirmation file is
 `demo/evaluation/static_showcase_confirmation.json`. Its status remains
 `not_run` until the release-candidate confirmation gate opens.
+
+Revision 1 omitted the existing `code-add` setup command, so every test failed
+before exercising Showcase behavior with `cannot plan modules for an empty
+code index`. That negative result remains in
+`demo/results/static_showcase_candidate_0_fixture_rejected.json`. Revision 2
+adds only the missing setup command; assertions and expected metrics are
+unchanged.
+
+Frozen revision 2 identities:
+
+- development SHA256:
+  `773ceef802964b197bab56cf7fbfadd255f32bce776e1c99029bec9b23c91cf6`;
+- confirmation SHA256:
+  `cdc59f2eccfe920204be0a5875dbbaf3eefb2d517ff098419bed6d47ecb8e0d8`;
+- test SHA256:
+  `1353c6e571df641617a6f906dcf5f6afcc1e61d9409d1392c3aee1be593fb0ec`.
 
 ## Acceptance Threshold
 

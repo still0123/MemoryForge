@@ -179,6 +179,7 @@ def _public_workspace(tmp_path: Path) -> tuple[Path, Path]:
         str(workspace),
     )
     repository_id = registered["repository_id"]
+    _invoke(runner, "code-add", repository_id, "src", "--workspace", str(workspace))
     _invoke(runner, "git-sync", repository_id, "--workspace", str(workspace))
     proposed = _invoke_json(
         runner,

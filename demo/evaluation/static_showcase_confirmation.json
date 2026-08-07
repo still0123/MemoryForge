@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "suite_id": "static-showcase",
-  "suite_revision": 1,
+  "suite_revision": 2,
   "status": "not_run",
   "cases": [
     {
