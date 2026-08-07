@@ -472,7 +472,7 @@ def _lint_fact_index(
     issues: list[LintIssue],
 ) -> None:
     fact_count = int(index.execute("SELECT COUNT(*) FROM wiki_facts").fetchone()[0])
-    fts_count = int(index.execute("SELECT COUNT(*) FROM wiki_fact_fts").fetchone()[0])
+    fts_count = int(index.execute("SELECT COUNT(*) FROM wiki_fact_fts_docsize").fetchone()[0])
     if fact_count != fts_count:
         issues.append(
             _issue(

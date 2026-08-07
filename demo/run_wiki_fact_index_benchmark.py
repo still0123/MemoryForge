@@ -137,7 +137,9 @@ def _fact_evidence(workspace: Path, *, sample_query: str | None) -> dict[str, An
             ORDER BY fact_id
             """
         ).fetchall()
-        fts_count = int(connection.execute("SELECT COUNT(*) FROM wiki_fact_fts").fetchone()[0])
+        fts_count = int(
+            connection.execute("SELECT COUNT(*) FROM wiki_fact_fts_docsize").fetchone()[0]
+        )
         applied_count = int(
             connection.execute(
                 """

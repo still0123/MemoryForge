@@ -2563,8 +2563,14 @@ def _apply_schema(connection: sqlite3.Connection) -> None:
 
 
 def _backfill_wiki_facts(connection: sqlite3.Connection, root: Path) -> None:
-    if connection.execute("SELECT 1 FROM wiki_facts LIMIT 1").fetchone() is not None:
+    fact_count = int(connection.execute("SELECT COUNT(*) FROM wiki_facts").fetchone()[0])
+    fts_count = int(connection.execute("SELECT COUNT(*) FROM wiki_fact_fts_docsize").fetchone()[0])
+    if fact_count:
+        if fts_count != fact_count:
+            connection.execute("INSERT INTO wiki_fact_fts(wiki_fact_fts) VALUES ('rebuild')")
         return
+    if fts_count:
+        connection.execute("INSERT INTO wiki_fact_fts(wiki_fact_fts) VALUES ('delete-all')")
     pages_root = root / "wiki/pages"
     if not pages_root.exists():
         return

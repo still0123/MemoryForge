@@ -176,6 +176,35 @@ def test_workspace_migration_backfills_facts_from_applied_pages(
     assert _fact_counts(workspace) == (1, 1)
 
 
+def test_workspace_repairs_an_empty_fact_fts_projection(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    source = tmp_path / "policy.md"
+    source.write_text("# Policy\n\nRetries stop after three attempts.\n", encoding="utf-8")
+    workspace = tmp_path / "workspace"
+    runner = CliRunner()
+    monkeypatch.chdir(tmp_path)
+    assert runner.invoke(app, ["init", str(workspace)]).exit_code == 0
+    _import_and_apply(runner, workspace, source)
+
+    with sqlite3.connect(workspace / ".memoryforge/index.sqlite") as connection:
+        connection.execute("INSERT INTO wiki_fact_fts(wiki_fact_fts) VALUES ('delete-all')")
+        assert int(connection.execute("SELECT COUNT(*) FROM wiki_fact_fts").fetchone()[0]) == 1
+        assert (
+            int(connection.execute("SELECT COUNT(*) FROM wiki_fact_fts_docsize").fetchone()[0]) == 0
+        )
+
+    issues = lint_workspace(workspace)["issues"]
+    assert any(issue["code"] == "fact_index_count_mismatch" for issue in issues)
+
+    Workspace.open(workspace)
+
+    assert len(search_wiki_facts(workspace, "three attempts")) == 1
+    assert _fact_counts(workspace) == (1, 1)
+    assert lint_workspace(workspace)["status"] == "clean"
+
+
 def test_code_wiki_fact_index_round_trips_symbol_and_relation_metadata(
     tmp_path: Path,
 ) -> None:
@@ -285,7 +314,7 @@ def _create_repository(path: Path, color: str) -> Path:
 def _fact_counts(workspace: Path) -> tuple[int, int]:
     with sqlite3.connect(workspace / ".memoryforge/index.sqlite") as connection:
         facts = int(connection.execute("SELECT COUNT(*) FROM wiki_facts").fetchone()[0])
-        fts = int(connection.execute("SELECT COUNT(*) FROM wiki_fact_fts").fetchone()[0])
+        fts = int(connection.execute("SELECT COUNT(*) FROM wiki_fact_fts_docsize").fetchone()[0])
     return facts, fts
 
 
