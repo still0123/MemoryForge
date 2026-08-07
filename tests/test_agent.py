@@ -203,7 +203,7 @@ def test_agent_session_keeps_three_latest_turns_and_isolates_sessions(
                     AgentStep(action="read_evidence", citation_index=0),
                     AgentStep(
                         action="final",
-                        answer=f"answer {index}",
+                        answer="Cache entries expire after sixty seconds.",
                         citation_indexes=(0,),
                     ),
                 ]
@@ -363,6 +363,33 @@ def test_agent_rejects_final_without_reading_its_citation(tmp_path: Path, monkey
     assert result["status"] == "max_steps"
     assert result["events"][-1]["action"] == "final"
     assert "read_evidence" in result["events"][-1]["result"]
+
+
+def test_agent_rejects_final_claim_not_supported_by_its_citation(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workspace = _applied_public_workspace(tmp_path, monkeypatch)
+
+    result = run_agent(
+        workspace,
+        "When do cache entries expire?",
+        provider=StubAgentProvider(
+            [
+                AgentStep(action="search_wiki", query="When do cache entries expire?"),
+                AgentStep(action="read_evidence", citation_index=0),
+                AgentStep(
+                    action="final",
+                    answer="Cache entries expire after sixty seconds and revoke every session.",
+                    citation_indexes=(0,),
+                ),
+            ]
+        ),
+        max_steps=3,
+    )
+
+    assert result["status"] == "max_steps"
+    assert "support the original question" in result["events"][-1]["result"]
 
 
 def test_agent_reports_provider_error_as_terminal_status(tmp_path: Path, monkeypatch) -> None:

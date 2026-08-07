@@ -13,7 +13,7 @@ from typing import Any, cast
 
 from memoryforge.evaluation import run_evaluation
 from memoryforge.query import (
-    _explicit_code_identifiers,
+    _all_explicit_code_identifiers,
     _has_support_condition,
     _has_support_negation,
 )
@@ -233,7 +233,7 @@ def _valid_case_support(case: dict[str, Any], threshold: float) -> bool:
     components = support["components"]
     failed_hard_gates = []
     question = str(case.get("question", ""))
-    if _explicit_code_identifiers(question) and components["exact_identifier_coverage"] < 1:
+    if _all_explicit_code_identifiers(question) and components["exact_identifier_coverage"] < 1:
         failed_hard_gates.append("exact_identifier_not_covered")
     if support["score"] < threshold:
         failed_hard_gates.append("score_below_threshold")

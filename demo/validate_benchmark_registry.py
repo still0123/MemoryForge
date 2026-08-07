@@ -407,13 +407,23 @@ def _validate_experiment_payload(
         ):
             raise ValueError(f"experiment Evidence gates failed: {experiment['suite_id']}")
         if experiment["suite_id"] == "support-score.learn-claude-code":
+            source_manifest = json.loads(
+                (REPO_ROOT / experiment["source_manifest"]["path"]).read_text(encoding="utf-8")
+            )
+            threshold = source_manifest.get("support_threshold")
+            if (
+                isinstance(threshold, bool)
+                or not isinstance(threshold, (int, float))
+                or payload.get("development", {}).get("support_threshold") != threshold
+            ):
+                raise ValueError("support-score threshold does not match frozen manifest")
             cases = payload.get("development", {}).get("evaluation", {}).get("cases")
             if not isinstance(cases, list) or len(cases) != development["case_count"]:
                 raise ValueError("support-score case Evidence is incomplete")
             for case in cases:
                 if not _support_benchmark_module()._valid_case_support(
                     case,
-                    float(payload["development"]["support_threshold"]),
+                    float(threshold),
                 ):
                     raise ValueError("support-score case Evidence contract failed")
     actual = payload["development"]["metrics"]

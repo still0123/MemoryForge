@@ -12,6 +12,7 @@ from memoryforge.provider import OpenAICompatibleProvider
 from memoryforge.query import (
     AskPayload,
     EvidencePayload,
+    answer_is_supported,
     answer_question,
 )
 from memoryforge.sessions import SessionStore, render_context, rewrite_query, save_turn
@@ -137,7 +138,19 @@ def run_agent(
                 return result
             if not _citation_indexes_are_valid(latest, decision.citation_indexes):
                 tool_result = {"error": "citation_indexes contain an unknown citation"}
-            elif answer and citations and _citations_are_read(citations, evidence):
+            elif (
+                answer
+                and citations
+                and _citations_are_read(citations, evidence)
+                and _final_answer_is_supported(
+                    workspace_root,
+                    rewrite_query(question, recent_turns),
+                    answer,
+                    citations,
+                    max_pages=max_pages,
+                    repository_id=repository_id,
+                )
+            ):
                 changeset_id = None
                 if propose_update:
                     compilation = propose_agent_update(
@@ -184,7 +197,10 @@ def run_agent(
                 return result
             else:
                 tool_result = {
-                    "error": "final answer needs at least one citation returned by read_evidence"
+                    "error": (
+                        "final answer needs citations returned by read_evidence that support "
+                        "the original question and every answer term"
+                    )
                 }
         elif decision.action == "search_wiki":
             if not decision.query or not decision.query.strip():
@@ -435,6 +451,38 @@ def _citation_indexes_are_valid(
     return all(
         not isinstance(index, bool) and 0 <= index < len(latest["citations"]) for index in indexes
     )
+
+
+def _final_answer_is_supported(
+    workspace_root: Path,
+    question: str,
+    answer: str,
+    citations: list[CitationPayload],
+    *,
+    max_pages: int,
+    repository_id: str | None,
+) -> bool:
+    verified = answer_question(
+        workspace_root,
+        question,
+        max_pages=max_pages,
+        max_citations=_MAX_AGENT_CITATIONS,
+        repository_id=repository_id,
+    )
+    if verified["status"] != "answered":
+        return False
+    support = verified.get("support")
+    if support is not None and not support["sufficient"]:
+        return False
+    verified_citations = {
+        (citation["source_id"], citation["source_version"], citation["locator"])
+        for citation in verified["citations"]
+    }
+    selected = {
+        (citation["source_id"], citation["source_version"], citation["locator"])
+        for citation in citations
+    }
+    return selected <= verified_citations and answer_is_supported(answer, citations)
 
 
 def _json_tool_result(result: AskPayload) -> dict[str, object]:

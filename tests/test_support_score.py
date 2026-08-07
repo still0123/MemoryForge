@@ -118,6 +118,28 @@ def test_conditional_support_requires_one_fact_to_cover_both_clauses(tmp_path: P
     assert "condition_not_co_located" in support["failed_hard_gates"]
 
 
+def test_conditional_support_accepts_identifier_from_the_selected_page(tmp_path: Path) -> None:
+    page_path = "wiki/pages/code/repository/cache.md"
+    question = "When CacheManager expires entries, are sessions revoked?"
+
+    support = query_module._support_score(
+        tmp_path,
+        question,
+        query_module._terms(question),
+        [(page_path, _citation("When cache expires entries, sessions are revoked."))],
+        symbol_matches=(),
+        exact_symbol_fact_keys=set(),
+        required_sources=1,
+        code_page_paths={page_path},
+        code_page_fact_terms={page_path: query_module._terms("CacheManager")},
+        code_page_identifiers={page_path: {"CacheManager"}},
+    )
+
+    assert support["components"]["exact_identifier_coverage"] == 1.0
+    assert support["components"]["fact_co_location"] == 1.0
+    assert support["sufficient"]
+
+
 def test_explicit_identifier_requires_symbol_or_page_fact_coverage(tmp_path: Path) -> None:
     page_path = "wiki/pages/code/repository/cache.md"
 
@@ -188,6 +210,37 @@ def test_all_explicit_identifiers_require_coverage(tmp_path: Path) -> None:
     )
 
     assert support["components"]["exact_identifier_coverage"] == 0.5
+    assert "exact_identifier_not_covered" in support["failed_hard_gates"]
+
+
+def test_support_does_not_truncate_explicit_identifier_coverage(tmp_path: Path) -> None:
+    page_path = "wiki/pages/code/repository/adapters.md"
+    identifiers = [
+        "AdapterOne",
+        "AdapterTwo",
+        "AdapterThree",
+        "AdapterFour",
+        "AdapterFive",
+        "AdapterSix",
+        "AdapterSeven",
+        "AdapterEight",
+        "AdapterNine",
+    ]
+    covered = identifiers[:-1]
+    question = "Which " + ", ".join(identifiers) + " run production?"
+
+    support = query_module._support_score(
+        tmp_path,
+        question,
+        query_module._terms(question),
+        [(page_path, _citation(" ".join(covered) + " run production."))],
+        symbol_matches=(),
+        exact_symbol_fact_keys=set(),
+        required_sources=1,
+        code_page_paths={page_path},
+    )
+
+    assert support["components"]["exact_identifier_coverage"] == 0.8889
     assert "exact_identifier_not_covered" in support["failed_hard_gates"]
 
 
