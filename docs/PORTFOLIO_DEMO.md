@@ -78,9 +78,9 @@ Relation、Module、Mermaid edge 和 Citation 指标均为 100%，单文件更�
 provenance 由双隔离本地构建生成；原生 Windows confirmation、holdout 与最终 tag 完成前只称
 release candidate，不称已发布。
 
-当前 release candidate 本地门禁为 macOS 574 passed、Linux 571 passed / 3 skipped，
-coverage 均为 88%；原生 Windows confirmation 未运行。这组结果只证明固定 Commit 的本地交付
-链路，不外推为 Windows 成功。
+已 superseded 的 Candidate 1 本地门禁为 macOS 574 passed、Linux 571 passed / 3 skipped，
+coverage 均为 88%；Candidate 2 最终本地门禁待重跑，原生 Windows confirmation 未运行。这组
+结果只证明固定 Commit 的本地交付链路，不外推为 Windows 成功。
 
 随后展示 support-score development：Answer 与 Selective Accuracy 为 100%，Coverage 为 90%，
 Risk 为 0%；同时明确 confirmation 尚未运行。这样可以说明“有正向指标，但不越过冻结 split

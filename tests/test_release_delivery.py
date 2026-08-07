@@ -40,6 +40,11 @@ def test_benchmark_summary_reports_macro_per_suite_and_negatives() -> None:
         result["suite_id"] == "doc-wiki-qa.click" and result["status"] == "retained_metric_gap"
         for result in summary["negative_results"]
     )
+    assert any(
+        result["suite_id"] == "release-candidate-delivery"
+        and result["status"] == "regression_rejected"
+        for result in summary["negative_results"]
+    )
 
 
 def test_workspace_release_drill_runs_real_public_workflow(

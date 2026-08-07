@@ -137,6 +137,16 @@ def _negative_results(registry: dict[str, Any]) -> list[dict[str, Any]]:
                         "sha256": evidence["sha256"],
                     }
                 )
+            regression = evidence.get("regression_evidence")
+            if isinstance(regression, dict):
+                results.append(
+                    {
+                        "suite_id": experiment["suite_id"],
+                        "status": "regression_rejected",
+                        "path": regression["path"],
+                        "sha256": regression["sha256"],
+                    }
+                )
     for suite in registry["suites"]:
         for split, metrics in suite["expected_metrics"].items():
             if (

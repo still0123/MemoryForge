@@ -16,6 +16,8 @@
 - 增加双隔离 release build、Workspace backup/restore drill、benchmark summary 与本地
   provenance；RC 门禁在 macOS 为 574 passed、Linux 为 571 passed / 3 skipped，Wheel/sdist
   跨平台 SHA256 一致；retained artifacts 不进入 sdist。
+- 强化 release gate：核验实际 Wheel/sdist metadata 和 bytes，增加独立 sdist clean-room 与
+  atomic publish；保留 macOS 路径 alias 导致的 preflight 失败。
 - 强化回答准确率契约，要求关键事实和冻结来源同时命中；AgentSkill-Eval 30 题严格 Answer 为
   96.7%，Citation grounding 为 100%，Source recall@3 为 96.2%；
 - 追加独立 Click 20 题复评；回答准确率 5.0%、来源召回 16.7%，再次确认外部有效性缺口；

@@ -1030,6 +1030,7 @@
       "max_wiki_pages": 3,
       "required_evidence_statuses": [
         "rejected",
+        "accepted_development_superseded",
         "accepted_development"
       ],
       "repositories": [
@@ -1089,7 +1090,7 @@
         {
           "split": "development",
           "evidence_revision": 2,
-          "status": "accepted_development",
+          "status": "accepted_development_superseded",
           "path": "demo/results/release_candidate_development_candidate_1.json",
           "sha256": "9c9a40dcd491613ca55f54e7b25ba78993be0eef0ee7fff4dbccf6f65fca3695",
           "memoryforge_commit": "b51a90d9603c2558ae72817bfbc8f291c3933812",
@@ -1098,6 +1099,21 @@
             "sha256": "94924487672989ea216a1728caf77f94bfeb094cae496c78f832ec2838f65d9b",
             "memoryforge_commit": "3980b47fec0a8abc001c4df740b6924d3f32223a",
             "passed": true
+          },
+          "passed": true
+        },
+        {
+          "split": "development",
+          "evidence_revision": 3,
+          "status": "accepted_development",
+          "path": "demo/results/release_candidate_development_candidate_2.json",
+          "sha256": "84a5a2e3eefb6894d512a0aea6ccc4626844ceaaab55a28b3a96f733f84b0792",
+          "memoryforge_commit": "4972b3c2223c5e6fe7248090a9d8ee006c1c271b",
+          "regression_evidence": {
+            "path": "demo/results/release_candidate_sdist_probe_regression_rejected.json",
+            "sha256": "b0c18c7e2d23d47e3cb8cb1200c3511dc9a4bb560ac81e531e4492c5f1353d5b",
+            "memoryforge_commit": "94b136e0ddda947c14e4ab0297b6505e00b9c63f",
+            "passed": false
           },
           "passed": true
         }

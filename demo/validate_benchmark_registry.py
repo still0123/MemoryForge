@@ -320,9 +320,15 @@ REQUIRED_EXPERIMENT_EVIDENCE = {
         ),
         _RESULTS + "release_candidate_development_candidate_1.json": (
             2,
-            "accepted_development",
+            "accepted_development_superseded",
             "9c9a40dcd491613ca55f54e7b25ba78993be0eef0ee7fff4dbccf6f65fca3695",
             "b51a90d9603c2558ae72817bfbc8f291c3933812",
+        ),
+        _RESULTS + "release_candidate_development_candidate_2.json": (
+            3,
+            "accepted_development",
+            "84a5a2e3eefb6894d512a0aea6ccc4626844ceaaab55a28b3a96f733f84b0792",
+            "4972b3c2223c5e6fe7248090a9d8ee006c1c271b",
         ),
     },
 }
@@ -387,7 +393,13 @@ REQUIRED_REGRESSION_EVIDENCE = {
     "github-thread-import-lifecycle": {},
     "static-showcase": {},
     "cross-platform-delivery": {},
-    "release-candidate-delivery": {},
+    "release-candidate-delivery": {
+        _RESULTS + "release_candidate_development_candidate_2.json": (
+            _RESULTS + "release_candidate_sdist_probe_regression_rejected.json",
+            "b0c18c7e2d23d47e3cb8cb1200c3511dc9a4bb560ac81e531e4492c5f1353d5b",
+            "94b136e0ddda947c14e4ab0297b6505e00b9c63f",
+        ),
+    },
 }
 REQUIRED_ACCEPTANCE_EVIDENCE = {
     "exact-symbol-routing.learn-claude-code": {
@@ -2352,6 +2364,14 @@ def _validate_regression_evidence(
         dict[str, Any],
         json.loads((REPO_ROOT / artifact["path"]).read_text(encoding="utf-8")),
     )
+    if experiment["suite_id"] == "release-candidate-delivery":
+        return _validate_release_sdist_regression(
+            experiment,
+            development_artifact,
+            payload,
+            confirmation,
+            commit,
+        )
     pytest_result = payload.get("regression", {}).get("pytest", {})
     if (
         type(payload.get("schema_version")) is not int
@@ -2377,6 +2397,78 @@ def _validate_regression_evidence(
         raise ValueError(
             f"experiment regression Evidence contract failed: {experiment['suite_id']}"
         )
+    return 1
+
+
+def _validate_release_sdist_regression(
+    experiment: dict[str, Any],
+    development_artifact: dict[str, Any],
+    payload: dict[str, Any],
+    confirmation: dict[str, Any],
+    commit: str,
+) -> int:
+    holdout = experiment["splits"]["holdout"]
+    if (
+        set(payload)
+        != {
+            "schema_version",
+            "suite_id",
+            "suite_revision",
+            "memoryforge_commit",
+            "memoryforge_worktree_dirty",
+            "candidate",
+            "release_build",
+            "root_cause",
+            "confirmation",
+            "holdout",
+            "passed",
+        }
+        or type(payload.get("schema_version")) is not int
+        or payload.get("schema_version") != 1
+        or payload.get("suite_id") != experiment["suite_id"]
+        or type(payload.get("suite_revision")) is not int
+        or payload.get("suite_revision") != experiment["suite_revision"]
+        or payload.get("memoryforge_commit") != commit
+        or payload.get("memoryforge_worktree_dirty") is not False
+        or not _git_commit_descends_from(development_artifact["memoryforge_commit"], commit)
+        or payload.get("candidate") != "release-development-candidate-2-preflight"
+        or payload.get("release_build")
+        != {
+            "command": "python scripts/build_release.py --output <external-release-directory>",
+            "status": "failed",
+            "classification": "sdist_clean_room_path_alias",
+            "error": "sdist clean-room import escaped or reported the wrong version",
+            "output_created": False,
+            "confirmation_executed": False,
+            "holdout_executed": False,
+        }
+        or payload.get("root_cause")
+        != {
+            "summary": (
+                "The macOS /var to /private/var alias made equivalent environment and import "
+                "paths compare as different paths."
+            ),
+            "fix": (
+                "Resolve the clean-room environment path before checking import ownership; "
+                "keep the strict ownership check."
+            ),
+        }
+        or payload.get("confirmation")
+        != {
+            "path": confirmation["path"],
+            "sha256": confirmation["sha256"],
+            "status": "not_run",
+        }
+        or not isinstance(holdout, dict)
+        or payload.get("holdout")
+        != {
+            "path": holdout["path"],
+            "sha256": holdout["sha256"],
+            "status": "not_run",
+        }
+        or payload.get("passed") is not False
+    ):
+        raise ValueError("release-candidate sdist regression Evidence changed")
     return 1
 
 

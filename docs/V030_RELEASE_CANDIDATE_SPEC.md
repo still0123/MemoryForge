@@ -2,7 +2,7 @@
 
 ## Status
 
-`DEVELOPMENT_ACCEPTED_CONFIRMATION_PENDING`
+`DEVELOPMENT_ACCEPTED_LOCAL_GATES_PENDING`
 
 ## Base
 
@@ -82,14 +82,14 @@ Failures are retained with deterministic classifications:
 - `workspace_drill_failure`;
 - `release_document_mismatch`.
 
-## Accepted Development Result
+## Superseded Development Candidate 1
 
 - Evidence: `demo/results/release_candidate_development_candidate_1.json`
 - Evidence SHA256:
   `9c9a40dcd491613ca55f54e7b25ba78993be0eef0ee7fff4dbccf6f65fca3695`
 - MemoryForge Commit:
   `b51a90d9603c2558ae72817bfbc8f291c3933812`
-- Result: `ACCEPTED_DEVELOPMENT`
+- Result: `ACCEPTED_DEVELOPMENT_SUPERSEDED`
 - Development pass rate: 100.0%
 - Failed cases: 0
 - Reproducible Wheel/sdist: true
@@ -97,11 +97,12 @@ Failures are retained with deterministic classifications:
 - Confirmation status: `not_run`
 - Holdout status: `not_run`
 
-Candidate 1 is the only accepted release development result. It authorizes
-final local review and release-candidate freeze; it does not itself authorize
-holdout or claim native Windows success.
+Candidate 1 passed the original development checks and dual-platform local
+gates, but final static review found release Evidence checks weaker than their
+claims. The result and artifacts remain retained; they no longer authorize a
+release-candidate freeze.
 
-## Accepted Local Gates
+## Superseded Candidate 1 Local Gates
 
 - Evidence: `demo/results/release_candidate_candidate_1_local_gates.json`
 - Evidence SHA256:
@@ -122,6 +123,45 @@ SHA256SUMS are retained under
 `demo/results/artifacts/release_candidate_delivery_candidate_1/`.
 GitHub Actions remained disabled. Native Windows confirmation and holdout
 remain `not_run`.
+
+## Rejected Candidate 2 Preflight
+
+- Evidence:
+  `demo/results/release_candidate_sdist_probe_regression_rejected.json`
+- Evidence SHA256:
+  `b0c18c7e2d23d47e3cb8cb1200c3511dc9a4bb560ac81e531e4492c5f1353d5b`
+- MemoryForge Commit:
+  `94b136e0ddda947c14e4ab0297b6505e00b9c63f`
+- Result: `REJECTED`
+- Classification: `sdist_clean_room_path_alias`
+- Release output created: false
+- Confirmation status: `not_run`
+- Holdout status: `not_run`
+
+The strict sdist import-ownership probe exposed the macOS `/var` to
+`/private/var` alias. The fix canonicalizes the environment path and keeps the
+ownership check; it does not weaken the gate.
+
+## Accepted Development Candidate 2
+
+- Evidence: `demo/results/release_candidate_development_candidate_2.json`
+- Evidence SHA256:
+  `84a5a2e3eefb6894d512a0aea6ccc4626844ceaaab55a28b3a96f733f84b0792`
+- MemoryForge Commit:
+  `4972b3c2223c5e6fe7248090a9d8ee006c1c271b`
+- Result: `ACCEPTED_DEVELOPMENT`
+- Development pass rate: 100.0%
+- Failed cases: 0
+- Reproducible Wheel/sdist: true
+- Private detail leaks: 0
+- Confirmation status: `not_run`
+- Holdout status: `not_run`
+
+Candidate 2 validates actual Wheel and sdist metadata and bytes, exact source
+Commit binding, independent sdist clean-room installation, deterministic
+malformed-artifact classification, structured document boundaries, and atomic
+release publication. Final macOS/Linux gates and static review must pass again
+before confirmation authorization.
 
 ## Confirmation Components
 
