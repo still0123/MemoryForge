@@ -25,6 +25,7 @@ from memoryforge.evaluation import run_evaluation
 from memoryforge.feishu_adapter import FeishuDocumentError, import_feishu_document
 from memoryforge.feishu_bot import FeishuBotError, reply_to_feishu_text
 from memoryforge.feishu_service import FeishuServiceError, serve_feishu_bot
+from memoryforge.folder_adapter import sync_folder
 from memoryforge.git_adapter import GitRepositoryError
 from memoryforge.importer import SourceValidationError, import_local_file
 from memoryforge.linting import lint_workspace
@@ -125,6 +126,46 @@ def import_command(
         SourceValidationError,
         WorkspaceIntegrityError,
         WorkspaceSecurityError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(json.dumps(result.model_dump(mode="json"), ensure_ascii=False, indent=2))
+
+
+@app.command("folder-import")
+def folder_import(
+    folder: Annotated[Path, typer.Argument(help="Local folder to import recursively.")],
+    workspace: WorkspaceOption = Path("."),
+    category: Annotated[
+        str,
+        typer.Option("--category", "-c", help="SourceVersion category."),
+    ] = "refs",
+    tag: Annotated[
+        list[str] | None,
+        typer.Option("--tag", "-t", help="Repeatable tag stored in immutable manifests."),
+    ] = None,
+    public: Annotated[
+        bool,
+        typer.Option("--public", help="Allow imported folder sources in remote model requests."),
+    ] = False,
+) -> None:
+    """Import one deterministic local folder snapshot without following links."""
+    try:
+        result = sync_folder(
+            workspace,
+            folder,
+            category=category,
+            tags=tuple(tag or ()),
+            sensitivity=Sensitivity.PUBLIC if public else Sensitivity.LOCAL_ONLY,
+        )
+    except (
+        MemoryForgeError,
+        SourceValidationError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
         FileNotFoundError,
         OSError,
         sqlite3.Error,

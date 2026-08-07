@@ -290,8 +290,8 @@ def _store_local_document(
     return result
 
 
-def _is_ignored(source_root: Path, relative_path: str) -> bool:
-    """Apply the documented, intentionally small .memoryforgeignore subset."""
+def _memoryforgeignore_rules(source_root: Path) -> tuple[str, ...]:
+    """Read and validate the intentionally small .memoryforgeignore subset."""
     try:
         root_fd = os.open(
             source_root,
@@ -307,7 +307,7 @@ def _is_ignored(source_root: Path, relative_path: str) -> bool:
                 dir_fd=root_fd,
             )
         except FileNotFoundError:
-            return False
+            return ()
         except OSError as exc:
             raise SourceValidationError(".memoryforgeignore could not be opened safely") from exc
         try:
@@ -323,7 +323,7 @@ def _is_ignored(source_root: Path, relative_path: str) -> bool:
     finally:
         os.close(root_fd)
 
-    path = PurePosixPath(relative_path)
+    validated = []
     for raw_rule in rules:
         rule = raw_rule.strip()
         if not rule or rule.startswith("#"):
@@ -332,12 +332,27 @@ def _is_ignored(source_root: Path, relative_path: str) -> bool:
             raise SourceValidationError(
                 ".memoryforgeignore negation rules are not supported in Phase 1"
             )
+        pattern = rule.lstrip("/").rstrip("/")
+        if not pattern or any(part == ".." for part in PurePosixPath(pattern).parts):
+            raise SourceValidationError(".memoryforgeignore contains an unsafe rule")
+        validated.append(raw_rule.strip())
+    return tuple(validated)
+
+
+def _is_ignored(
+    source_root: Path,
+    relative_path: str,
+    *,
+    rules: tuple[str, ...] | None = None,
+) -> bool:
+    """Apply validated .memoryforgeignore rules to one POSIX relative path."""
+    path = PurePosixPath(relative_path)
+    for raw_rule in rules if rules is not None else _memoryforgeignore_rules(source_root):
+        rule = raw_rule
         anchored = rule.startswith("/")
         rule = rule.lstrip("/")
         directory_rule = rule.endswith("/")
         rule = rule.rstrip("/")
-        if not rule or any(part == ".." for part in PurePosixPath(rule).parts):
-            raise SourceValidationError(".memoryforgeignore contains an unsafe rule")
         candidates = [relative_path] if anchored or "/" in rule else list(path.parts)
         if directory_rule:
             directories = [

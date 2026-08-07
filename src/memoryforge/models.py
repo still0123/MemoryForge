@@ -133,6 +133,38 @@ class GitRepositorySyncResult(BaseModel):
     documents: tuple[GitDocumentSyncResult, ...] = ()
 
 
+class FolderDocumentSyncResult(BaseModel):
+    """One local file imported from a recursive folder snapshot."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source_id: SourceId
+    relative_path: str = Field(min_length=1)
+    status: Literal["created", "updated", "unchanged"]
+
+
+class FolderSyncResult(BaseModel):
+    """Deterministic summary of one recursive folder import."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    folder_id: str = Field(pattern=r"^[a-f0-9]{64}$")
+    created: int = Field(ge=0)
+    updated: int = Field(ge=0)
+    unchanged: int = Field(ge=0)
+    deleted: int = Field(ge=0)
+    documents: tuple[FolderDocumentSyncResult, ...] = ()
+
+    @model_validator(mode="after")
+    def validate_counts_and_paths(self) -> FolderSyncResult:
+        if self.created + self.updated + self.unchanged != len(self.documents):
+            raise ValueError("folder sync counts must match documents")
+        paths = tuple(document.relative_path for document in self.documents)
+        if paths != tuple(sorted(paths)) or len(paths) != len(set(paths)):
+            raise ValueError("folder sync paths must be sorted and unique")
+        return self
+
+
 class TopicGroup(BaseModel):
     """One model-proposed navigation topic for already compiled source pages."""
 
