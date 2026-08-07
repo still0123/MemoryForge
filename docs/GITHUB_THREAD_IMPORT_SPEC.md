@@ -2,7 +2,7 @@
 
 ## Status
 
-`BASELINE_RECORDED_DEVELOPMENT_OPEN`
+`CANDIDATE_1_DEVELOPMENT_PASS_REGRESSION_PENDING`
 
 ## Base
 
@@ -49,6 +49,21 @@ changes. Confirmation must not run during development.
 
 All cases fail because the preregistered connector, commands, JSON contract,
 and explicit deletion path do not exist at the baseline Commit.
+
+## Candidate 1 Result
+
+- Evidence:
+  `demo/results/github_thread_import_development_candidate_1.json`
+- MemoryForge Commit:
+  `8be9a05da49e4da1efe742dd8406f2f4706cb3f0`
+- Evidence SHA256:
+  `0b3e8304467d6ee38cd826d225e6c19a69a40cf1c1ed5fd6f89884920fc84ee5`
+- Result: `DEVELOPMENT_PASS_REGRESSION_PENDING`
+- Development pass rate: 100.0%
+- Failed cases: 0
+- Deterministic evaluation SHA256:
+  `486e1e81b633257de4f8f13f1c0d8b35079efbe97ad7d544d0c6250c03e13729`
+- Confirmation status: `not_run`
 
 ## Goal
 
