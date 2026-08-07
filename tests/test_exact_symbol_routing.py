@@ -128,6 +128,30 @@ def test_requested_symbol_kind_rejects_a_module_context(
     )
 
 
+def test_relation_questions_do_not_use_the_symbol_shortcut(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    (tmp_path / "raw").mkdir()
+    internal = tmp_path / ".memoryforge"
+    internal.mkdir()
+    (internal / "index.sqlite").touch()
+    monkeypatch.setattr(
+        query_module,
+        "find_applied_code_symbol_facts",
+        lambda *args, **kwargs: (_match("a" * 64, "wiki/pages/code/a/service.md"),),
+    )
+
+    assert (
+        query_module._applied_code_symbol_matches(
+            tmp_path,
+            "Which module does src.service import?",
+            repository_id="a" * 64,
+        )
+        == ()
+    )
+
+
 def _match(
     repository_id: str,
     page_path: str,

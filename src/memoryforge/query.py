@@ -517,6 +517,7 @@ def _applied_code_symbol_matches(
     index_path = workspace_root / ".memoryforge" / "index.sqlite"
     if (
         not identifiers
+        or _is_code_relation_question(question)
         or not (workspace_root / "raw").is_dir()
         or not index_path.is_file()
         or index_path.is_symlink()
@@ -606,6 +607,26 @@ def _requested_symbol_kinds(question: str) -> set[str]:
     if "method" in kinds:
         kinds.add("function")
     return kinds
+
+
+def _is_code_relation_question(question: str) -> bool:
+    english_terms = set(re.findall(r"[a-z_]+", question.lower()))
+    return bool(
+        english_terms
+        & {
+            "call",
+            "calls",
+            "depend",
+            "dependency",
+            "dependencies",
+            "extend",
+            "extends",
+            "implement",
+            "implements",
+            "import",
+            "imports",
+        }
+    ) or any(marker in question for marker in ("依赖", "导入", "调用", "继承", "实现"))
 
 
 def _citation_fact_key(
