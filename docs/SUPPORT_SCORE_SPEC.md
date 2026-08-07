@@ -1,0 +1,123 @@
+# Evidence Support Score Specification
+
+## Status
+
+`PREREGISTERED_DEVELOPMENT_ONLY`
+
+## Frozen Inputs
+
+- Base Commit:
+  `42fe0e8fff8d543c4e28053f15458ff8f2138329`
+- Development suite:
+  `demo/evaluation/learn_claude_code_qa_dev_v031.json`
+- Development suite SHA256:
+  `3085859283115b351ce1c38a6bf1c111b1ac7e669f96ed1e3aa4f9fc31610b7d`
+- Exact-Symbol development Evidence:
+  `demo/results/exact_symbol_routing_development_final.json`
+- Evidence SHA256:
+  `a72494d69964a1c93b228fb73ffa1d8608bf714153cc54efa1096984addc0fc7`
+- Confirmation suite SHA256:
+  `b86fe1f7999c09af9bf7c6bed4951c1c4c565318c39192bea1831d942466c117`
+- Confirmation status: `not_run`
+
+The confirmation split must not run in this phase.
+
+## Baseline
+
+- Answer accuracy: 90.0%;
+- page route recall@3: 100.0%;
+- Source recall@3: 100.0%;
+- fact selection accuracy: 100.0%;
+- Citation grounding: 100.0%;
+- multi-source coverage: 100.0%;
+- abstention accuracy: 0.0%;
+- repository path isolation: 100.0%.
+
+The sole failure is
+`dev-unknown-vector-database`, classified `wrong_abstention`.
+
+## Hypothesis
+
+The unsupported question passes current matching because a generic code-kind
+term and one topical term are enough to select a signature Fact. Its evidence
+does not cover the core conclusion: storage of embeddings in a vector
+database.
+
+A fixed support threshold over explicit Fact properties should reject this
+answer without changing page routing or any answerable fact selection.
+
+## Support Contract
+
+Every selected answer receives:
+
+- `score`: 0-100;
+- `threshold`: 75;
+- `sufficient`: boolean;
+- six named components from 0-1;
+- a deterministic list of failed hard gates.
+
+Component weights:
+
+- exact identifier coverage: 0.20;
+- core question-term coverage: 0.35;
+- conclusion and condition co-location: 0.15;
+- negation alignment: 0.10;
+- multi-source coverage: 0.10;
+- current SourceVersion grounding: 0.10.
+
+Rules:
+
+1. generic code-kind words do not count as core support;
+2. exact identifiers are complete tokens, never substring fragments;
+3. a conditional question requires its condition terms in the same selected
+   Fact as the conclusion;
+4. a negated question requires aligned negation in selected evidence;
+5. a multi-source request requires the requested Citation count;
+6. every selected Citation must identify the currently applied
+   SourceVersion;
+7. Code Wiki answers require score >= 75 and no failed hard gate;
+8. insufficient support returns `unknown`;
+9. non-Code Wiki answers expose the score but are not rejected in this focused
+   candidate.
+
+## Evaluation Contract
+
+Add deterministic outputs:
+
+- per-case support score and components;
+- selective accuracy among answered cases;
+- answer coverage;
+- risk at the frozen operating point;
+- threshold and per-suite operating point;
+- existing Answer, route, fact, Citation, multi-source, abstention, and
+  repository metrics unchanged.
+
+## Development Gates
+
+Accept only if:
+
+- Answer accuracy is 100%;
+- selective accuracy is 100%;
+- coverage is 90%;
+- risk is 0%;
+- abstention accuracy is 100%;
+- page route recall@3 is 100%;
+- Source recall@3 is 100%;
+- fact selection accuracy is 100%;
+- Citation grounding is 100%;
+- multi-source coverage is 100%;
+- repository path isolation is 100%;
+- the unsupported vector-database case returns `unknown`;
+- all registered query, Relation, structural, lifecycle, lint, type, coverage,
+  Wheel, and sdist gates pass.
+
+Any failed gate rejects production integration and retains its Evidence.
+
+## Forbidden
+
+- LLM judge or model confidence;
+- question, repository, suite, or expected-answer special cases;
+- modifying frozen labels or required terms;
+- embeddings, vector stores, graph stores, or new dependencies;
+- confirmation or holdout execution;
+- increasing the three-page default budget.
