@@ -119,6 +119,9 @@ def run_evaluation(workspace_root: Path, config_path: Path) -> dict[str, object]
     ]
     total = len(cases)
     answerable = [case for case in cases if case["category"] != "unanswerable"]
+    answered = [case for case in cases if case["memoryforge"]["answer_status"] == "answered"]
+    selective_accuracy = _percentage(case["memoryforge"]["answer_correct"] for case in answered)
+    coverage = round(100 * len(answered) / total, 1)
     classifications = {
         classification: sum(
             case["memoryforge"]["error_classification"] == classification for case in cases
@@ -157,6 +160,17 @@ def run_evaluation(workspace_root: Path, config_path: Path) -> dict[str, object]
                 for case in cases
                 if case["category"] == "unanswerable"
             ),
+            "selective_accuracy": selective_accuracy,
+            "coverage": coverage,
+            "risk": round(100.0 - selective_accuracy, 1),
+            "risk_coverage": [
+                {
+                    "threshold": 75.0,
+                    "coverage": coverage,
+                    "selective_accuracy": selective_accuracy,
+                    "risk": round(100.0 - selective_accuracy, 1),
+                }
+            ],
             "repository_path_isolation_accuracy": _percentage(
                 case["memoryforge"]["repository_path_isolated"]
                 for case in cases
@@ -331,6 +345,7 @@ def _evaluate_case(
         "category": case.category,
         "question": case.question,
         "memoryforge": {
+            "answer_status": answer["status"],
             "answer_correct": answer_correct,
             "page_route_expected_sources_recalled": page_route_expected_sources_recalled,
             "fact_selection_correct": fact_selection_correct,
@@ -342,6 +357,7 @@ def _evaluate_case(
             "expected_repository_ids": sorted(repository_id for repository_id in repository_ids),
             "abstention_correct": answer["status"] == case.expected_status,
             "error_classification": error_classification,
+            "support": answer.get("support"),
             "wiki_pages_read": sum(step["level"] == "L1" for step in trace),
             "raw_sources_read": sum(step["level"] == "L3" for step in trace),
             "evidence_characters": sum(len(excerpt) for excerpt in evidence),

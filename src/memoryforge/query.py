@@ -15,6 +15,7 @@ from memoryforge.wiki_facts import parse_page_citations as _page_citations
 from memoryforge.workspace import (
     find_applied_code_symbol_facts,
     find_applied_page_paths,
+    is_applied_source_version,
     is_public_source_version,
     read_source_excerpt,
     repository_page_paths,
@@ -68,10 +69,40 @@ _CODE_QUERY_EXPANSIONS = {
 }
 _ENVIRONMENT_ASSIGNMENT = re.compile(r"\b(?:export\s+)?[A-Z][A-Z0-9_]{2,}=")
 _CODE_FACT = re.compile(r"^(?:package|type|func|class|def)\b")
+_SUPPORT_THRESHOLD = 75.0
+_SUPPORT_CODE_KIND_TERMS = {
+    "class",
+    "constant",
+    "function",
+    "interface",
+    "method",
+    "module",
+    "package",
+    "struct",
+    "type",
+}
 
 
 class EvidencePayload(CitationPayload):
     text: str
+
+
+class SupportComponents(TypedDict):
+    exact_identifier_coverage: float
+    core_term_coverage: float
+    fact_co_location: float
+    negation_alignment: float
+    multi_source_coverage: float
+    current_source_versions: float
+
+
+class SupportPayload(TypedDict):
+    score: float
+    threshold: float
+    sufficient: bool
+    enforced: bool
+    components: SupportComponents
+    failed_hard_gates: list[str]
 
 
 class AskPayload(TypedDict):
@@ -86,6 +117,7 @@ class AskPayload(TypedDict):
     model_status: NotRequired[Literal["used", "fallback"]]
     trace: NotRequired[list[TraceStep]]
     evidence: NotRequired[list[EvidencePayload]]
+    support: NotRequired[SupportPayload]
 
 
 class TraceStep(TypedDict):
@@ -164,6 +196,7 @@ def answer_question(
     raw_candidate_matches: list[tuple[frozenset[str], bool, str, CitationPayload]] = []
     page_ranks: dict[str, int] = {}
     local_morphology_pages: set[str] = set()
+    code_page_paths: set[str] = set()
 
     for page_rank, page in enumerate(
         _candidate_pages(
@@ -187,6 +220,8 @@ def answer_question(
             or "generated: code_wiki" in prefix
             or "generated: code_module_overview" in prefix
         )
+        if code_page and _is_code_file_page(page):
+            code_page_paths.add(page_path)
         if not any(_CJK.fullmatch(term) for term in question_terms) and not code_page:
             local_morphology_pages.add(page_path)
         trace.append({"level": "L1", "artifact": page_path})
@@ -318,6 +353,19 @@ def answer_question(
             answer, selected = generated
             model_status = "used"
 
+    support = _support_score(
+        workspace_root,
+        question,
+        question_terms,
+        selected,
+        symbol_matches=symbol_matches,
+        exact_symbol_fact_keys=exact_symbol_fact_keys,
+        required_citations=max_citations,
+        code_page_paths=code_page_paths,
+    )
+    if not support["sufficient"]:
+        return _unknown_payload(debug, trace, support=support)
+
     citations = [citation for _, citation in selected]
     pages = list(dict.fromkeys(page_path for page_path, _ in selected))
     for page_path in pages:
@@ -332,6 +380,7 @@ def answer_question(
         "source_version": citation["source_version"],
         "locator": citation["locator"],
         "quote": citation["quote"],
+        "support": support,
     }
     if model_status is not None:
         result["model_status"] = model_status
@@ -491,7 +540,12 @@ def _fallback_answer(
     return " ".join(citation["quote"] for _, citation in selected)
 
 
-def _unknown_payload(debug: bool, trace: list[TraceStep]) -> AskPayload:
+def _unknown_payload(
+    debug: bool,
+    trace: list[TraceStep],
+    *,
+    support: SupportPayload | None = None,
+) -> AskPayload:
     result: AskPayload = {
         "status": "unknown",
         "answer": "不知道",
@@ -504,6 +558,8 @@ def _unknown_payload(debug: bool, trace: list[TraceStep]) -> AskPayload:
     }
     if debug:
         result["trace"] = trace
+    if support is not None:
+        result["support"] = support
     return result
 
 
@@ -640,6 +696,127 @@ def _citation_fact_key(
         citation["source_version"] if isinstance(citation, dict) else citation.source_version,
         citation["locator"] if isinstance(citation, dict) else citation.locator,
         citation["quote"] if isinstance(citation, dict) else citation.quote,
+    )
+
+
+def _support_score(
+    workspace_root: Path,
+    question: str,
+    question_terms: set[str],
+    selected: list[tuple[str, CitationPayload]],
+    *,
+    symbol_matches: tuple[AppliedCodeSymbolMatch, ...],
+    exact_symbol_fact_keys: set[tuple[str, str, int, str, str]],
+    required_citations: int,
+    code_page_paths: set[str],
+) -> SupportPayload:
+    core_terms = (
+        question_terms - _SUPPORT_CODE_KIND_TERMS - _RANKING_STOP_WORDS - _QUESTION_NOISE_TERMS
+    )
+    covered_terms: set[str] = set()
+    per_fact_coverage = []
+    for _page_path, citation in selected:
+        matching = _local_english_matching_terms(
+            core_terms,
+            citation,
+            enabled=True,
+        )
+        covered_terms.update(matching)
+        per_fact_coverage.append(len(matching))
+    core_coverage = len(covered_terms) / len(core_terms) if core_terms else 1.0
+
+    exact_identifier_coverage = (
+        1.0
+        if not symbol_matches
+        or any(
+            _citation_fact_key(page_path, citation) in exact_symbol_fact_keys
+            for page_path, citation in selected
+        )
+        else 0.0
+    )
+    fact_co_location = float(
+        not core_terms or max(per_fact_coverage, default=0) >= min(2, len(core_terms))
+    )
+    question_has_negation = _has_support_negation(question)
+    negation_alignment = float(
+        not question_has_negation
+        or any(_has_support_negation(citation["quote"]) for _, citation in selected)
+    )
+    citation_identities = {
+        (citation["source_id"], citation["source_version"], citation["locator"])
+        for _, citation in selected
+    }
+    multi_source_coverage = (
+        min(1.0, len(citation_identities) / required_citations) if required_citations > 1 else 1.0
+    )
+    real_workspace = (workspace_root / "raw").is_dir() and (
+        workspace_root / ".memoryforge" / "index.sqlite"
+    ).is_file()
+    current_source_versions = float(
+        not real_workspace
+        or all(
+            is_applied_source_version(
+                workspace_root,
+                source_id=citation["source_id"],
+                source_version=citation["source_version"],
+            )
+            for _, citation in selected
+        )
+    )
+    components: SupportComponents = {
+        "exact_identifier_coverage": exact_identifier_coverage,
+        "core_term_coverage": round(core_coverage, 4),
+        "fact_co_location": fact_co_location,
+        "negation_alignment": negation_alignment,
+        "multi_source_coverage": round(multi_source_coverage, 4),
+        "current_source_versions": current_source_versions,
+    }
+    score = round(
+        100
+        * (
+            0.20 * exact_identifier_coverage
+            + 0.35 * core_coverage
+            + 0.15 * fact_co_location
+            + 0.10 * negation_alignment
+            + 0.10 * multi_source_coverage
+            + 0.10 * current_source_versions
+        ),
+        1,
+    )
+    enforced = any(page_path in code_page_paths for page_path, _ in selected)
+    failed_hard_gates = []
+    if enforced:
+        if score < _SUPPORT_THRESHOLD:
+            failed_hard_gates.append("score_below_threshold")
+        if _has_support_condition(question) and not fact_co_location:
+            failed_hard_gates.append("condition_not_co_located")
+        if question_has_negation and not negation_alignment:
+            failed_hard_gates.append("negation_not_aligned")
+        if required_citations > 1 and multi_source_coverage < 1:
+            failed_hard_gates.append("multi_source_incomplete")
+        if not current_source_versions:
+            failed_hard_gates.append("citation_not_current")
+    return {
+        "score": score,
+        "threshold": _SUPPORT_THRESHOLD,
+        "sufficient": not failed_hard_gates,
+        "enforced": enforced,
+        "components": components,
+        "failed_hard_gates": failed_hard_gates,
+    }
+
+
+def _has_support_negation(text: str) -> bool:
+    terms = set(re.findall(r"[a-z]+", text.lower()))
+    return bool(terms & {"never", "no", "not", "without"}) or any(
+        cue in text for cue in _NEGATION_CUES
+    )
+
+
+def _has_support_condition(text: str) -> bool:
+    terms = set(re.findall(r"[a-z]+", text.lower()))
+    return bool(terms & {"after", "before", "if", "unless", "when", "without"}) or any(
+        marker in text for marker in ("当", "如果", "条件", "没有")
     )
 
 
