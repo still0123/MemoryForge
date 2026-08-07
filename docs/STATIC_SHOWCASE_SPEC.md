@@ -1,6 +1,6 @@
 # Static Showcase Specification
 
-Status: DEVELOPMENT_REVISION_2_FROZEN
+Status: DEVELOPMENT_REVISION_3_FROZEN
 
 ## Goal
 
@@ -108,14 +108,20 @@ code index`. That negative result remains in
 adds only the missing setup command; assertions and expected metrics are
 unchanged.
 
-Frozen revision 2 identities:
+Revision 2 then used the single-file `import` command for a temporary file
+outside its allowed source root. Its four setup failures remain in
+`demo/results/static_showcase_candidate_1_fixture_rejected.json`. Revision 3
+uses the existing local-only `folder-import` command on an isolated temporary
+directory. Assertions and expected metrics remain unchanged.
+
+Frozen revision 3 identities:
 
 - development SHA256:
-  `773ceef802964b197bab56cf7fbfadd255f32bce776e1c99029bec9b23c91cf6`;
+  `e3839b86256b8cb6275f4afb5ac3bf1da5a4e0adb66e18fc1c1fcc89d0721e17`;
 - confirmation SHA256:
-  `cdc59f2eccfe920204be0a5875dbbaf3eefb2d517ff098419bed6d47ecb8e0d8`;
+  `4c64d073a2a1af46a068219af158ed77bc1e99a1b4de6601e01634d63140166e`;
 - test SHA256:
-  `1353c6e571df641617a6f906dcf5f6afcc1e61d9409d1392c3aee1be593fb0ec`.
+  `11ca2dd0dbe3bac7b9e8fedbda0a40655e6a76269cf48feb003ce6470ffa33f5`.
 
 ## Acceptance Threshold
 

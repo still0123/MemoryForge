@@ -194,13 +194,14 @@ def _public_workspace(tmp_path: Path) -> tuple[Path, Path]:
     _invoke(runner, "approve", changeset_id, "--workspace", str(workspace))
     _invoke(runner, "apply", changeset_id, "--workspace", str(workspace))
 
-    private_note = tmp_path / "private.md"
+    private_folder = tmp_path / "private-source"
+    private_folder.mkdir()
+    private_note = private_folder / "private.md"
     private_note.write_text("# Private launch plan\n\nPrivate launch plan.\n", encoding="utf-8")
     _invoke(
         runner,
-        "import",
-        str(private_note),
-        "--local-only",
+        "folder-import",
+        str(private_folder),
         "--workspace",
         str(workspace),
     )
