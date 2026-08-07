@@ -1,6 +1,6 @@
 # 秋招演示与面试说明
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=5; platform_gate_candidate=3; platform_gate_status=accepted; macos_passed=586; linux_passed=583; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=5; platform_gate_candidate=5; platform_gate_status=accepted; macos_passed=586; linux_passed=583; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 这份文档用于把 MemoryForge 讲成一个完整项目。演示只使用公开的 `AgentSkill-Eval` 文档，不使用公司代码、真实飞书正文、Token 或 App Secret。
 
@@ -80,12 +80,9 @@ Relation、Module、Mermaid edge 和 Citation 指标均为 100%，单文件更�
 provenance 由双隔离本地构建生成；原生 Windows confirmation、holdout 与最终 tag 完成前只称
 release candidate，不称已发布。
 
-当前 Candidate 3 本地门禁为 macOS 586 passed、Linux 583 passed / 3 skipped，coverage 均为
+当前 Candidate 5 本地门禁为 macOS 586 passed、Linux 583 passed / 3 skipped，coverage 均为
 88%；原生 Windows confirmation 未运行。这组结果只证明固定 Commit 的本地交付链路，不外推为
 Windows 成功。
-
-Candidate 5 development 已 6/6 通过并保留双构建字节；其本地门禁尚未运行，因此平台指标仍引用
-Candidate 3，不混用两个 Commit 的结论。
 
 随后展示 support-score development：Answer 与 Selective Accuracy 为 100%，Coverage 为 90%，
 Risk 为 0%；同时明确 confirmation 尚未运行。这样可以说明“有正向指标，但不越过冻结 split

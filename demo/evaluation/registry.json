@@ -1160,6 +1160,12 @@
           "path": "demo/results/release_candidate_development_candidate_5.json",
           "sha256": "a64d26d8103c5bc7c0e2f61627fe978f57920a31d4be5252866cbbe354e6d861",
           "memoryforge_commit": "b42d6a887053464f138f87dd45922d22dc58baa0",
+          "acceptance_evidence": {
+            "path": "demo/results/release_candidate_candidate_5_local_gates.json",
+            "sha256": "0eb8fe924537f6fc8ecdf6657e117abda3771705678364835b7e327fea43a808",
+            "memoryforge_commit": "88a0b101aad708190331d42ac1557e1cd44be114",
+            "passed": true
+          },
           "passed": true
         }
       ]

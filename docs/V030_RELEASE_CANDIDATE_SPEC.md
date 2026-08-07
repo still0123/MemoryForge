@@ -1,10 +1,10 @@
 # v0.3.0 Release Candidate Specification
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=5; platform_gate_candidate=3; platform_gate_status=accepted; macos_passed=586; linux_passed=583; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=5; platform_gate_candidate=5; platform_gate_status=accepted; macos_passed=586; linux_passed=583; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 ## Status
 
-`DEVELOPMENT_ACCEPTED_LOCAL_GATES_PENDING`
+`LOCAL_GATES_ACCEPTED_FINAL_REVIEW_PENDING`
 
 ## Base
 
@@ -277,9 +277,26 @@ release marker from historical Evidence before another candidate runs.
 
 Candidate 5 limits current-claim validation to the canonical release marker
 and required current claims while retaining all historical platform Evidence.
-Both isolated build byte sets are registered. macOS and Linux local gates
-must run on a later clean Commit before final review can authorize
-confirmation.
+Both isolated build byte sets are registered.
+
+## Accepted Candidate 5 Local Gates
+
+- Evidence: `demo/results/release_candidate_candidate_5_local_gates.json`
+- Evidence SHA256:
+  `0eb8fe924537f6fc8ecdf6657e117abda3771705678364835b7e327fea43a808`
+- Gate Commit:
+  `88a0b101aad708190331d42ac1557e1cd44be114`
+- macOS: 586 passed, 0 skipped, coverage 88%
+- Debian 12 / Lima: 583 passed, 3 skipped, coverage 88%
+- Wheel SHA256:
+  `f96013bf056ddfd5f0bc0da3a2df60b6ca819433b20095745bf9a84d89de6360`
+- sdist SHA256:
+  `8d682330b75a93163dc13fdd4b1ae5b2e901d506b65c3edd18586463ccf78b88`
+
+Both platforms passed Ruff, formatting, strict Mypy, Registry validation,
+dependency checks, the full pytest suite, Wheel clean-room, sdist clean-room,
+`pip check`, and CLI version smoke. Final static review remains required
+before confirmation authorization.
 
 ## Confirmation Components
 
