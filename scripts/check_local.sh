@@ -48,6 +48,20 @@ else
 fi
 "$workdir/build/bin/python" -m build \
   --wheel --sdist --no-isolation --outdir "$output/dist"
+"$workdir/build/bin/python" - "$output"/dist/memoryforge-*.tar.gz <<'PY'
+import sys
+import tarfile
+
+with tarfile.open(sys.argv[1]) as archive:
+    forbidden = [
+        name
+        for name in archive.getnames()
+        if "/demo/results/artifacts/" in f"/{name}"
+        or name.endswith((".whl", ".tar.gz"))
+    ]
+if forbidden:
+    raise SystemExit(f"sdist contains retained or nested artifacts: {forbidden[:3]}")
+PY
 
 PIP_CONSTRAINT="$root/constraints/dev.txt" "$python" demo/run_release_check.py \
   --wheel "$output"/dist/memoryforge-*.whl \
@@ -60,8 +74,26 @@ PIP_CONSTRAINT="$root/constraints/dev.txt" "$python" demo/run_release_check.py \
 "$workdir/sdist/bin/python" -m pip install \
   -c "$root/constraints/dev.txt" \
   --no-build-isolation "$output"/dist/memoryforge-*.tar.gz
-"$workdir/sdist/bin/python" -m pip check
-"$workdir/sdist/bin/python" -m memoryforge --version
+(
+  cd "$workdir"
+  env -u PYTHONPATH PYTHONNOUSERSITE=1 \
+    "$workdir/sdist/bin/python" -I -m pip check
+  env -u PYTHONPATH PYTHONNOUSERSITE=1 \
+    "$workdir/sdist/bin/python" -I - "$workdir/sdist" <<'PY'
+import importlib.metadata
+import memoryforge
+import sys
+from pathlib import Path
+
+environment = Path(sys.argv[1]).resolve()
+import_path = Path(memoryforge.__file__).resolve()
+if not import_path.is_relative_to(environment):
+    raise SystemExit(f"sdist import escaped clean environment: {import_path}")
+print(importlib.metadata.version("memoryforge"))
+PY
+  env -u PYTHONPATH PYTHONNOUSERSITE=1 \
+    "$workdir/sdist/bin/python" -I -m memoryforge --version
+)
 
 "$python" - "$output" <<'PY'
 import hashlib

@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "memoryforge_commit": "569451d7f56d5606e8b000f15e34e04b87cb62a4",
+  "memoryforge_worktree_dirty": false,
+  "package": {
+    "version": "0.2.1",
+    "wheel": "memoryforge-0.2.1-py3-none-any.whl",
+    "wheel_sha256": "6a9225a6d4391adad38460b1044b5ebf8e94e5235cadba0a4907eb9056f6dfeb",
+    "import_path": ".venv/lib/python3.11/site-packages/memoryforge/__init__.py",
+    "import_from_fresh_venv": true,
+    "dependencies": {
+      "pydantic": "2.13.4",
+      "tree-sitter": "0.25.2",
+      "tree-sitter-go": "0.25.0",
+      "tree-sitter-python": "0.25.0",
+      "tree-sitter-typescript": "0.23.2",
+      "typer": "0.27.1"
+    }
+  },
+  "runtime": {
+    "implementation": "CPython",
+    "python": "3.11.2",
+    "platform": "Linux-6.1.0-50-cloud-arm64-aarch64-with-glibc2.36"
+  },
+  "commands": [
+    "python -m pip install <wheel>",
+    "python -m pip check",
+    "python -m memoryforge --help",
+    "python demo/run_code_wiki_benchmark.py"
+  ],
+  "checks": {
+    "pip_check": "passed",
+    "cli_help": "passed",
+    "code_wiki_benchmark": "passed",
+    "public_demo": "not_run"
+  },
+  "code_wiki": {
+    "evidence_sha256": "f17fb6e939e80cffe6a51b783a5684d296728e0ffdb6ce8589d1f1e880f20880",
+    "metrics": {
+      "expected_source_coverage": 100.0,
+      "symbol_recall": 100.0,
+      "core_relation_recall": 100.0,
+      "known_gap_relation_recall": 100.0,
+      "overall_relation_recall": 100.0,
+      "module_assignment_accuracy": 100.0,
+      "citation_grounding_accuracy": 100.0,
+      "architecture_edge_grounding": 100.0,
+      "mermaid_edge_coverage": 100.0,
+      "architecture_citation_coverage": 100.0,
+      "architecture_mermaid_determinism": 100.0,
+      "deterministic_replay": 100.0
+    },
+    "gates": {
+      "core_symbols": true,
+      "core_relations": true,
+      "module_assignment": true,
+      "citations": true,
+      "architecture_wiki": true,
+      "deterministic": true
+    },
+    "incremental": {
+      "changed_symbols": [
+        "py.app",
+        "py.app.run_local"
+      ],
+      "expected_changed_symbols": [
+        "py.app",
+        "py.app.run_local"
+      ],
+      "changed_pages": [
+        "wiki/pages/code/<repository-id-prefix>/py/app.md"
+      ],
+      "expected_changed_pages": [
+        "wiki/pages/code/<repository-id-prefix>/py/app.md"
+      ],
+      "changed_page_ratio": 0.2,
+      "max_changed_page_ratio": 0.25,
+      "stable_symbol_ids": true,
+      "passed": true
+    }
+  },
+  "public_demo": {
+    "status": "not_run",
+    "required_commit": "93f5dc05229da250b041850ad8deeeec886ef304"
+  }
+}

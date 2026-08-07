@@ -8,6 +8,8 @@ import hashlib
 import importlib.util
 import json
 import re
+import subprocess
+import tarfile
 from pathlib import Path
 from typing import Any, cast
 
@@ -247,6 +249,68 @@ REQUIRED_EXPERIMENT_EVIDENCE = {
             "12d0ecadb4d8d310e2fa3b22f71dbfe770bd2567",
         ),
     },
+    "cross-platform-delivery": {
+        _RESULTS + "cross_platform_delivery_baseline_rejected.json": (
+            1,
+            "rejected",
+            "f169486f1fc757abaaf3728187703834510726c2cae11736c2e82ba220e369ac",
+            "bef6c7e35e9d8e282d2b3b0e0c4b3874a12f9e8a",
+        ),
+        _RESULTS + "cross_platform_delivery_candidate_1.json": (
+            2,
+            "accepted_development_superseded",
+            "f2bd8afa6759c3d1ddbc796444cfb58d968fbab82818c27f1c0f24590013801e",
+            "96c720cf49ed0bfc97fd765e9af025ab6f4ae9ea",
+        ),
+        _RESULTS + "cross_platform_delivery_candidate_2.json": (
+            3,
+            "accepted_development_superseded",
+            "22a309f133008268e857e4331f70967d58f0c06adc45ab1988f8a99ee3c34775",
+            "7d0a296ffbbb73863b63ec732608a6e3c0bab35b",
+        ),
+        _RESULTS + "cross_platform_delivery_candidate_3.json": (
+            4,
+            "accepted_development_superseded",
+            "1584be87a25356d6189c55a696c35d9b679c4c56c654da261c1caf6d185abb31",
+            "79188650e953c6c183b631fd41432e795bde0eaa",
+        ),
+        _RESULTS + "cross_platform_delivery_candidate_4.json": (
+            5,
+            "accepted_development_superseded",
+            "198c3654291ba762b591891f894f87c3ebc41764faa8e7e24cfc5c484a4c39cb",
+            "2bb3505ce2c5b32ec1ce6e2b4dcd1a12638cc93f",
+        ),
+        _RESULTS + "cross_platform_delivery_candidate_5.json": (
+            6,
+            "accepted_development_superseded",
+            "4f1cb0fcad903e7e525670d9efde02148b2cdf2a9bef532210997f9ca8102106",
+            "cba84d7a6b01d20abfb353e85ae2733210bde98b",
+        ),
+        _RESULTS + "cross_platform_delivery_candidate_6.json": (
+            7,
+            "accepted_development_superseded",
+            "17bdad1bb9ce7b1cfeff779e4c096d5c981248326493088a2bbee43898fbb706",
+            "b3dab407db3f3103456dcbe79d704e4a72c6b656",
+        ),
+        _RESULTS + "cross_platform_delivery_candidate_7.json": (
+            8,
+            "accepted_development_superseded",
+            "dd48d59e149f9195410f793edacacb8ca90c899ee4691b6e214fcb8ebedc567a",
+            "5e7c50ca377622a21600a7fa877046af92fefc4c",
+        ),
+        _RESULTS + "cross_platform_delivery_candidate_8.json": (
+            9,
+            "accepted_development_superseded",
+            "e86b08906ddd99bf8cf14089cc9e2e873c902d6855c33596c2cc973352f2d106",
+            "beb4bd0f41afc804136ce1e96b8b9857d88be30b",
+        ),
+        _RESULTS + "cross_platform_delivery_candidate_9.json": (
+            10,
+            "accepted_development",
+            "425f3047bae7df586a9a529a33024f667f4c98d096bce8edb101676e04135b0c",
+            "70f76ebfcc7a7bd64f926955e09cfa0a6f45766d",
+        ),
+    },
 }
 STATIC_SHOWCASE_REJECTED_CONTRACTS = {
     _RESULTS + "static_showcase_baseline_rejected.json": {
@@ -308,6 +372,7 @@ REQUIRED_REGRESSION_EVIDENCE = {
     "folder-import-lifecycle": {},
     "github-thread-import-lifecycle": {},
     "static-showcase": {},
+    "cross-platform-delivery": {},
 }
 REQUIRED_ACCEPTANCE_EVIDENCE = {
     "exact-symbol-routing.learn-claude-code": {
@@ -402,6 +467,249 @@ REQUIRED_ACCEPTANCE_EVIDENCE = {
             "5c719c387addc6a415658727597400cfd1af7846",
         ),
     },
+    "cross-platform-delivery": {
+        _RESULTS + "cross_platform_delivery_candidate_2.json": (
+            _RESULTS + "cross_platform_delivery_candidate_2_local_gate.json",
+            "6318d9bf999163917441c65e8085bce3548424b6a7183b4c284e7f9c43b9b2d7",
+            "7d0a296ffbbb73863b63ec732608a6e3c0bab35b",
+        ),
+        _RESULTS + "cross_platform_delivery_candidate_3.json": (
+            _RESULTS + "cross_platform_delivery_candidate_3_local_gate.json",
+            "a8ce5385fecdbef45660dc809ae8a4a20ed197aec6aa96ab1464877dd66b018d",
+            "31f51cd121559654f4e129b96921f2d81e991e6e",
+        ),
+        _RESULTS + "cross_platform_delivery_candidate_5.json": (
+            _RESULTS + "cross_platform_delivery_candidate_5_local_gate.json",
+            "20d2ea86f04120b4f27c8ba39ef8e613de2c11acedcb46961284ad56a72f9240",
+            "c9af1ed22c5aef64a6b888b494fb27872c7d6ad9",
+        ),
+        _RESULTS + "cross_platform_delivery_candidate_6.json": (
+            _RESULTS + "cross_platform_delivery_candidate_6_local_gate.json",
+            "21e0c9f5752030fc7e3a94bedb45c2868d803c50b93d67866e2af2bd554dd593",
+            "271a788b51ce1e5a6072362d7dea0a13e1c31fad",
+        ),
+        _RESULTS + "cross_platform_delivery_candidate_7.json": (
+            _RESULTS + "cross_platform_delivery_candidate_7_local_gate.json",
+            "7d047d5d3a360450c046adf90fcd3165c6bab4a5417c7e2a71ff70b06dba9ed1",
+            "569451d7f56d5606e8b000f15e34e04b87cb62a4",
+        ),
+        _RESULTS + "cross_platform_delivery_candidate_8.json": (
+            _RESULTS + "cross_platform_delivery_candidate_8_local_gate.json",
+            "99d534741eebb1a10121d753953d420edde8e6381ec454e660a90dba3a338c7d",
+            "04f246f815f0c80f74a3aa20caf5af3a31ff5c92",
+        ),
+        _RESULTS + "cross_platform_delivery_candidate_9.json": (
+            _RESULTS + "cross_platform_delivery_candidate_9_local_gate.json",
+            "4e5ec614f020503eba1639fe6807f93ff6386024636912c9742775daa7c1e406",
+            "9779fb4624e21575de8b0de359cc199cecb88589",
+        ),
+    },
+}
+REQUIRED_LINUX_EVIDENCE = {
+    "cross-platform-delivery": {
+        _RESULTS + "cross_platform_delivery_candidate_3.json": (
+            _RESULTS + "cross_platform_delivery_candidate_3_linux_gate.json",
+            "efd898c2a3c9eb4807b0610bf5c2979ccc5a86b48fd81735f4b72a6ce6360824",
+            "79188650e953c6c183b631fd41432e795bde0eaa",
+        ),
+        _RESULTS + "cross_platform_delivery_candidate_4.json": (
+            _RESULTS + "cross_platform_delivery_candidate_4_linux_gate.json",
+            "f09affaa4dd7633e10cd37752f9ce1ed7e7258a12bc747cda2bc20c805beadc1",
+            "1ed10462e0585be8fdafa34e6c42de6e2a0ba784",
+        ),
+        _RESULTS + "cross_platform_delivery_candidate_5.json": (
+            _RESULTS + "cross_platform_delivery_candidate_5_linux_gate.json",
+            "d58dacc1bd4a34f6230e3045db058e4f2542e671d1f017311c02147ee76e3a8f",
+            "c9af1ed22c5aef64a6b888b494fb27872c7d6ad9",
+        ),
+        _RESULTS + "cross_platform_delivery_candidate_6.json": (
+            _RESULTS + "cross_platform_delivery_candidate_6_linux_gate.json",
+            "ef31991c6efc21cbdeec6ab656937961e0df3bfbcecaf4b92de6f97c8b59575f",
+            "271a788b51ce1e5a6072362d7dea0a13e1c31fad",
+        ),
+        _RESULTS + "cross_platform_delivery_candidate_7.json": (
+            _RESULTS + "cross_platform_delivery_candidate_7_linux_gate.json",
+            "263ff1e5ec752d5bb2f18372ee70c6dd3e1f5a6d80ee7719cc15d5ab092a5bc6",
+            "569451d7f56d5606e8b000f15e34e04b87cb62a4",
+        ),
+        _RESULTS + "cross_platform_delivery_candidate_8.json": (
+            _RESULTS + "cross_platform_delivery_candidate_8_linux_gate.json",
+            "14553130cb03afaa220a476f5be2d1b170c89afb9fcf74af4730c93a6cae65b6",
+            "04f246f815f0c80f74a3aa20caf5af3a31ff5c92",
+        ),
+        _RESULTS + "cross_platform_delivery_candidate_9.json": (
+            _RESULTS + "cross_platform_delivery_candidate_9_linux_gate.json",
+            "a724e17659ecfd5c8a5057cc9f50ed03abd5d6624934dc5920f016905483ed22",
+            "9779fb4624e21575de8b0de359cc199cecb88589",
+        ),
+    },
+}
+LINUX_EVIDENCE_CONTRACTS = {
+    _RESULTS + "cross_platform_delivery_candidate_3_linux_gate.json": {
+        "runtime": {
+            "virtualization": "Lima 2.2.0 local VM",
+            "distribution": "Debian GNU/Linux 12",
+            "kernel": "Linux 6.1.0-50-cloud-arm64",
+            "architecture": "aarch64",
+            "implementation": "CPython",
+            "python": "3.11.2",
+            "hosted_runner": False,
+        },
+        "registry_validation": {
+            "suite_count": 12,
+            "experiment_count": 7,
+            "evidence_count": 75,
+            "qa_case_count": 121,
+        },
+        "pytest": {
+            "passed": 536,
+            "skipped": 2,
+            "failed": 0,
+            "coverage_percent": 88,
+        },
+    },
+    _RESULTS + "cross_platform_delivery_candidate_4_linux_gate.json": {
+        "runtime": {
+            "virtualization": "Lima 2.2.0 local VM",
+            "distribution": "Debian GNU/Linux 12",
+            "kernel": "Linux 6.1.0-50-cloud-arm64",
+            "architecture": "aarch64",
+            "implementation": "CPython",
+            "python": "3.11.2",
+            "hosted_runner": False,
+        },
+        "registry_validation": {
+            "suite_count": 12,
+            "experiment_count": 7,
+            "evidence_count": 79,
+            "qa_case_count": 121,
+        },
+        "pytest": {
+            "passed": 542,
+            "skipped": 2,
+            "failed": 0,
+            "coverage_percent": 88,
+        },
+    },
+    _RESULTS + "cross_platform_delivery_candidate_5_linux_gate.json": {
+        "runtime": {
+            "virtualization": "Lima 2.2.0 local VM",
+            "distribution": "Debian GNU/Linux 12",
+            "kernel": "Linux 6.1.0-50-cloud-arm64",
+            "architecture": "aarch64",
+            "implementation": "CPython",
+            "python": "3.11.2",
+            "hosted_runner": False,
+        },
+        "registry_validation": {
+            "suite_count": 12,
+            "experiment_count": 7,
+            "evidence_count": 81,
+            "qa_case_count": 121,
+        },
+        "pytest": {
+            "passed": 542,
+            "skipped": 2,
+            "failed": 0,
+            "coverage_percent": 88,
+        },
+    },
+    _RESULTS + "cross_platform_delivery_candidate_6_linux_gate.json": {
+        "runtime": {
+            "virtualization": "Lima 2.2.0 local VM",
+            "distribution": "Debian GNU/Linux 12",
+            "kernel": "Linux 6.1.0-50-cloud-arm64",
+            "architecture": "aarch64",
+            "implementation": "CPython",
+            "python": "3.11.2",
+            "hosted_runner": False,
+        },
+        "registry_validation": {
+            "suite_count": 12,
+            "experiment_count": 7,
+            "evidence_count": 84,
+            "qa_case_count": 121,
+        },
+        "pytest": {
+            "passed": 545,
+            "skipped": 2,
+            "failed": 0,
+            "coverage_percent": 88,
+        },
+    },
+    _RESULTS + "cross_platform_delivery_candidate_7_linux_gate.json": {
+        "runtime": {
+            "virtualization": "Lima 2.2.0 local VM",
+            "distribution": "Debian GNU/Linux 12",
+            "kernel": "Linux 6.1.0-50-cloud-arm64",
+            "architecture": "aarch64",
+            "implementation": "CPython",
+            "python": "3.11.2",
+            "hosted_runner": False,
+        },
+        "registry_validation": {
+            "suite_count": 12,
+            "experiment_count": 7,
+            "evidence_count": 87,
+            "qa_case_count": 121,
+        },
+        "pytest": {
+            "passed": 554,
+            "skipped": 3,
+            "failed": 0,
+            "coverage_percent": 88,
+        },
+        "bound_artifacts": True,
+    },
+    _RESULTS + "cross_platform_delivery_candidate_8_linux_gate.json": {
+        "runtime": {
+            "virtualization": "Lima 2.2.0 local VM",
+            "distribution": "Debian GNU/Linux 12",
+            "kernel": "Linux 6.1.0-50-cloud-arm64",
+            "architecture": "aarch64",
+            "implementation": "CPython",
+            "python": "3.11.2",
+            "hosted_runner": False,
+        },
+        "registry_validation": {
+            "suite_count": 12,
+            "experiment_count": 7,
+            "evidence_count": 90,
+            "qa_case_count": 121,
+        },
+        "pytest": {
+            "passed": 555,
+            "skipped": 3,
+            "failed": 0,
+            "coverage_percent": 88,
+        },
+        "bound_artifacts": True,
+    },
+    _RESULTS + "cross_platform_delivery_candidate_9_linux_gate.json": {
+        "runtime": {
+            "virtualization": "Lima 2.2.0 local VM",
+            "distribution": "Debian GNU/Linux 12",
+            "kernel": "Linux 6.1.0-50-cloud-arm64",
+            "architecture": "aarch64",
+            "implementation": "CPython",
+            "python": "3.11.2",
+            "hosted_runner": False,
+        },
+        "registry_validation": {
+            "suite_count": 12,
+            "experiment_count": 7,
+            "evidence_count": 93,
+            "qa_case_count": 121,
+        },
+        "pytest": {
+            "passed": 556,
+            "skipped": 3,
+            "failed": 0,
+            "coverage_percent": 88,
+        },
+        "bound_artifacts": True,
+        "clean_sdist": True,
+    },
 }
 FINAL_ACCEPTANCE_REGISTRY_COUNTS = {
     "exact-symbol-routing.learn-claude-code": {
@@ -440,6 +748,12 @@ FINAL_ACCEPTANCE_REGISTRY_COUNTS = {
         "evidence_count": 71,
         "qa_case_count": 121,
     },
+    "cross-platform-delivery": {
+        "suite_count": 12,
+        "experiment_count": 7,
+        "evidence_count": 93,
+        "qa_case_count": 121,
+    },
 }
 DEVELOPMENT_EVIDENCE_KEYS = {
     "schema_version",
@@ -467,6 +781,51 @@ MULTI_SOURCE_DEVELOPMENT_EVIDENCE_KEYS = {
     "runs",
     "gates",
     "passed",
+}
+CROSS_PLATFORM_DEVELOPMENT_EVIDENCE_KEYS = MULTI_SOURCE_DEVELOPMENT_EVIDENCE_KEYS | {"runtime"}
+CROSS_PLATFORM_DEVELOPMENT_RUNTIME_CONTRACTS = {
+    _RESULTS + "cross_platform_delivery_candidate_3.json": {
+        "implementation": "CPython",
+        "python": "3.11.15",
+        "system": "Darwin",
+        "machine": "arm64",
+    },
+    _RESULTS + "cross_platform_delivery_candidate_4.json": {
+        "implementation": "CPython",
+        "python": "3.11.15",
+        "system": "Darwin",
+        "machine": "arm64",
+    },
+    _RESULTS + "cross_platform_delivery_candidate_5.json": {
+        "implementation": "CPython",
+        "python": "3.11.15",
+        "system": "Darwin",
+        "machine": "arm64",
+    },
+    _RESULTS + "cross_platform_delivery_candidate_6.json": {
+        "implementation": "CPython",
+        "python": "3.11.15",
+        "system": "Darwin",
+        "machine": "arm64",
+    },
+    _RESULTS + "cross_platform_delivery_candidate_7.json": {
+        "implementation": "CPython",
+        "python": "3.11.15",
+        "system": "Darwin",
+        "machine": "arm64",
+    },
+    _RESULTS + "cross_platform_delivery_candidate_8.json": {
+        "implementation": "CPython",
+        "python": "3.11.15",
+        "system": "Darwin",
+        "machine": "arm64",
+    },
+    _RESULTS + "cross_platform_delivery_candidate_9.json": {
+        "implementation": "CPython",
+        "python": "3.11.15",
+        "system": "Darwin",
+        "machine": "arm64",
+    },
 }
 LOCAL_GATE_EVIDENCE_KEYS = {
     "schema_version",
@@ -568,6 +927,18 @@ FINAL_EXPERIMENT_GATE_KEYS = {
         "clean_worktree_after_run",
         "confirmation_not_run",
     },
+    "cross-platform-delivery": {
+        "pass_rate",
+        "failed_cases",
+        "direct_platform_imports",
+        "windows_lock_offset",
+        "windows_lock_bytes",
+        "local_smoke",
+        "deterministic_replay",
+        "stable_memoryforge_commit",
+        "clean_worktree_after_run",
+        "confirmation_not_run",
+    },
 }
 LOCAL_GATE_KEYS = {
     "command",
@@ -581,6 +952,80 @@ LOCAL_GATE_KEYS = {
     "sdist_clean_room",
     "pip_check",
     "cli_version_smoke",
+}
+CROSS_PLATFORM_MAC_RUNTIME = {
+    "system": "Darwin",
+    "machine": "arm64",
+    "implementation": "CPython",
+    "python": "3.11.15",
+    "hosted_runner": False,
+}
+CROSS_PLATFORM_MAC_GATE_CONTRACTS = {
+    _RESULTS + "cross_platform_delivery_candidate_5_local_gate.json": {
+        "registry_validation": {
+            "suite_count": 12,
+            "experiment_count": 7,
+            "evidence_count": 81,
+            "qa_case_count": 121,
+        },
+        "pytest": {
+            "passed": 544,
+            "failed": 0,
+            "coverage_percent": 88,
+        },
+    },
+    _RESULTS + "cross_platform_delivery_candidate_6_local_gate.json": {
+        "registry_validation": {
+            "suite_count": 12,
+            "experiment_count": 7,
+            "evidence_count": 84,
+            "qa_case_count": 121,
+        },
+        "pytest": {
+            "passed": 547,
+            "failed": 0,
+            "coverage_percent": 88,
+        },
+    },
+    _RESULTS + "cross_platform_delivery_candidate_7_local_gate.json": {
+        "registry_validation": {
+            "suite_count": 12,
+            "experiment_count": 7,
+            "evidence_count": 87,
+            "qa_case_count": 121,
+        },
+        "pytest": {
+            "passed": 557,
+            "failed": 0,
+            "coverage_percent": 88,
+        },
+    },
+    _RESULTS + "cross_platform_delivery_candidate_8_local_gate.json": {
+        "registry_validation": {
+            "suite_count": 12,
+            "experiment_count": 7,
+            "evidence_count": 90,
+            "qa_case_count": 121,
+        },
+        "pytest": {
+            "passed": 558,
+            "failed": 0,
+            "coverage_percent": 88,
+        },
+    },
+    _RESULTS + "cross_platform_delivery_candidate_9_local_gate.json": {
+        "registry_validation": {
+            "suite_count": 12,
+            "experiment_count": 7,
+            "evidence_count": 93,
+            "qa_case_count": 121,
+        },
+        "pytest": {
+            "passed": 559,
+            "failed": 0,
+            "coverage_percent": 88,
+        },
+    },
 }
 MULTI_SOURCE_SUPPORT_REGRESSION = (
     _RESULTS + "support_score_multi_source_coverage_regression.json",
@@ -630,6 +1075,17 @@ STATIC_SHOWCASE_REPOSITORY = {
         "tests/test_showcase.py",
         "demo/evaluation/static_showcase_development.json",
         "demo/evaluation/static_showcase_confirmation.json",
+    ],
+}
+CROSS_PLATFORM_REPOSITORY = {
+    "repository": "still0123/MemoryForge",
+    "remote_url": "https://github.com/still0123/MemoryForge.git",
+    "commit": "bef6c7e35e9d8e282d2b3b0e0c4b3874a12f9e8a",
+    "license": "MIT",
+    "source_paths": [
+        "tests/test_cross_platform_delivery.py",
+        "demo/evaluation/cross_platform_delivery_development.json",
+        "demo/evaluation/cross_platform_delivery_confirmation.json",
     ],
 }
 
@@ -802,6 +1258,8 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
             _validate_github_thread_experiment_metadata(experiment)
         elif suite_id == "static-showcase":
             _validate_static_showcase_experiment_metadata(experiment)
+        elif suite_id == "cross-platform-delivery":
+            _validate_cross_platform_experiment_metadata(experiment)
 
         repositories = experiment.get("repositories")
         if not isinstance(repositories, list) or not repositories:
@@ -814,6 +1272,7 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
             "folder-import-lifecycle",
             "github-thread-import-lifecycle",
             "static-showcase",
+            "cross-platform-delivery",
         }:
             if "source_manifest" in experiment:
                 raise ValueError(f"component experiment cannot declare source manifest: {suite_id}")
@@ -834,7 +1293,9 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
         development_count, _, _ = _suite_cases(development)
         confirmation_count, _, _ = _suite_cases(confirmation)
         if (
-            development_count != development.get("case_count")
+            type(development.get("case_count")) is not int
+            or type(confirmation.get("case_count")) is not int
+            or development_count != development.get("case_count")
             or confirmation_count != confirmation.get("case_count")
             or confirmation.get("status") != "not_run"
             or splits["holdout"] is not None
@@ -877,10 +1338,13 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
         statuses: set[str] = set()
         required_regression = REQUIRED_REGRESSION_EVIDENCE.get(suite_id)
         required_acceptance = REQUIRED_ACCEPTANCE_EVIDENCE.get(suite_id)
+        required_linux = REQUIRED_LINUX_EVIDENCE.get(suite_id, {})
         if required_regression is None or required_acceptance is None:
             raise ValueError(f"experiment acceptance Evidence history is missing: {suite_id}")
         for artifact in evidence:
             _validate_artifact(artifact, suite_id)
+            if artifact.get("split") != "development":
+                raise ValueError(f"experiment Evidence split changed: {suite_id}")
             evidence_revision = artifact.get("evidence_revision")
             if (
                 isinstance(evidence_revision, bool)
@@ -936,6 +1400,21 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
                 raise ValueError(
                     f"experiment acceptance Evidence history is incomplete: {suite_id}"
                 )
+            expected_linux = required_linux.get(path)
+            linux_evidence = artifact.get("linux_evidence")
+            if expected_linux is None:
+                if linux_evidence is not None:
+                    raise ValueError(f"unexpected Linux Evidence: {suite_id}")
+            elif (
+                not isinstance(linux_evidence, dict)
+                or (
+                    linux_evidence.get("path"),
+                    linux_evidence.get("sha256"),
+                    linux_evidence.get("memoryforge_commit"),
+                )
+                != expected_linux
+            ):
+                raise ValueError(f"Linux Evidence history is incomplete: {suite_id}")
             statuses.add(status)
             if COMMIT.fullmatch(commit) is None:
                 raise ValueError(f"invalid experiment Evidence Commit: {suite_id}")
@@ -958,6 +1437,12 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
                 )
             if expected_acceptance is not None:
                 evidence_count += _validate_acceptance_evidence(
+                    experiment,
+                    artifact,
+                    confirmation,
+                )
+            if expected_linux is not None:
+                evidence_count += _validate_linux_evidence(
                     experiment,
                     artifact,
                     confirmation,
@@ -987,6 +1472,7 @@ def _validate_experiment_payload(
     if experiment["suite_id"] in {
         "folder-import-lifecycle",
         "github-thread-import-lifecycle",
+        "cross-platform-delivery",
     }:
         _validate_pytest_component_experiment_payload(
             experiment,
@@ -1148,6 +1634,9 @@ def _validate_pytest_component_experiment_payload(
     development: dict[str, Any],
     confirmation: dict[str, Any],
 ) -> None:
+    cross_platform = experiment["suite_id"] == "cross-platform-delivery"
+    runtime_cross_platform = cross_platform and artifact["evidence_revision"] >= 4
+    diagnostic_cross_platform = cross_platform and artifact["evidence_revision"] >= 5
     evaluation = payload.get("development", {}).get("evaluation", {})
     cases = evaluation.get("cases", {}) if isinstance(evaluation, dict) else {}
     frozen = json.loads((REPO_ROOT / development["path"]).read_text(encoding="utf-8"))
@@ -1161,21 +1650,49 @@ def _validate_pytest_component_experiment_payload(
         "sha256": development.get("test_sha256"),
     }
     _validate_artifact(test_artifact, str(experiment["suite_id"]))
+    development_payload = payload.get("development", {})
+    if cross_platform:
+        test_binding_valid = (
+            development_payload.get("test_file")
+            == {
+                "path": development["test_file"],
+                "sha256": development["test_sha256"],
+            }
+            and "test_sha256" not in development_payload
+        )
+    else:
+        test_binding_valid = (
+            development_payload.get("test_file") == development["test_file"]
+            and development_payload.get("test_sha256") == development["test_sha256"]
+        )
+    expected_payload_keys = (
+        CROSS_PLATFORM_DEVELOPMENT_EVIDENCE_KEYS
+        if runtime_cross_platform
+        else MULTI_SOURCE_DEVELOPMENT_EVIDENCE_KEYS
+    )
+    runtime = payload.get("runtime")
+    runtime_contract = CROSS_PLATFORM_DEVELOPMENT_RUNTIME_CONTRACTS.get(str(artifact.get("path")))
+    runtime_valid = not runtime_cross_platform or (
+        runtime_contract is not None and _strict_mapping(runtime, runtime_contract)
+    )
     if (
-        payload.get("schema_version") != 1
-        or set(payload) != MULTI_SOURCE_DEVELOPMENT_EVIDENCE_KEYS
+        type(payload.get("schema_version")) is not int
+        or payload.get("schema_version") != 1
+        or set(payload) != expected_payload_keys
         or payload.get("suite_id") != experiment["suite_id"]
+        or type(payload.get("suite_revision")) is not int
         or payload.get("suite_revision") != experiment["suite_revision"]
         or payload.get("memoryforge_commit") != artifact["memoryforge_commit"]
         or payload.get("memoryforge_worktree_dirty") is not False
         or payload.get("passed") is not artifact["passed"]
         or payload.get("development", {}).get("path") != development["path"]
         or payload.get("development", {}).get("sha256") != development["sha256"]
-        or payload.get("development", {}).get("test_file") != development["test_file"]
-        or payload.get("development", {}).get("test_sha256") != development["test_sha256"]
+        or not test_binding_valid
+        or type(payload.get("development", {}).get("case_count")) is not int
         or payload.get("development", {}).get("case_count") != development["case_count"]
         or not isinstance(evaluation, dict)
         or set(evaluation) != {"case_count", "metrics", "cases"}
+        or type(evaluation.get("case_count")) is not int
         or evaluation.get("case_count") != development["case_count"]
         or not isinstance(cases, list)
         or [case.get("id") for case in cases] != frozen_ids
@@ -1193,6 +1710,7 @@ def _validate_pytest_component_experiment_payload(
         or payload.get("confirmation", {}).get("path") != confirmation["path"]
         or payload.get("confirmation", {}).get("sha256") != confirmation["sha256"]
         or payload.get("confirmation", {}).get("status") != "not_run"
+        or not runtime_valid
     ):
         raise ValueError("pytest component experiment Evidence contract failed")
     gates = payload.get("gates")
@@ -1201,6 +1719,64 @@ def _validate_pytest_component_experiment_payload(
         or set(gates) != FINAL_EXPERIMENT_GATE_KEYS[experiment["suite_id"]]
     ):
         raise ValueError("pytest component experiment gates are invalid")
+    metrics = evaluation.get("metrics")
+    if not isinstance(metrics, dict):
+        raise ValueError("pytest component experiment metrics missing")
+    if cross_platform:
+        expected_status = "failed" if artifact["status"] == "rejected" else "passed"
+        expected_classification = "pytest_failure" if artifact["status"] == "rejected" else "none"
+        expected_cases = [
+            {
+                "id": case["id"],
+                "pytest_node": (f"tests/test_cross_platform_delivery.py::{case['test']}"),
+                "status": expected_status,
+                **({"return_code": 0} if runtime_cross_platform else {}),
+                **(
+                    {
+                        "timed_out": False,
+                        "diagnostic_sha256": hashlib.sha256(b"0:none:False").hexdigest(),
+                    }
+                    if diagnostic_cross_platform
+                    else {}
+                ),
+                "error_classification": expected_classification,
+            }
+            for case in frozen["cases"]
+        ]
+        expected_metrics = (
+            {
+                "pass_rate": 0.0,
+                "failed_cases": 7,
+                "direct_platform_imports": 2,
+                "windows_lock_offset": -1,
+                "windows_lock_bytes": 0,
+                "local_smoke": "failed",
+            }
+            if artifact["status"] == "rejected"
+            else experiment["expected_metrics"]["development"]
+        )
+        expected_gates = (
+            {
+                "pass_rate": False,
+                "failed_cases": False,
+                "direct_platform_imports": False,
+                "windows_lock_offset": False,
+                "windows_lock_bytes": False,
+                "local_smoke": False,
+                "deterministic_replay": True,
+                "stable_memoryforge_commit": True,
+                "clean_worktree_after_run": True,
+                "confirmation_not_run": True,
+            }
+            if artifact["status"] == "rejected"
+            else {key: True for key in FINAL_EXPERIMENT_GATE_KEYS[experiment["suite_id"]]}
+        )
+        if (
+            not _strict_json_value(cases, expected_cases)
+            or not _strict_mapping(metrics, expected_metrics)
+            or not _strict_mapping(gates, expected_gates)
+        ):
+            raise ValueError("cross-platform delivery case Evidence changed")
     if artifact["status"] == "rejected":
         if artifact["passed"] is not False or all(gates.values()):
             raise ValueError("rejected pytest component Evidence must fail")
@@ -1211,20 +1787,121 @@ def _validate_pytest_component_experiment_payload(
         or not all(value is True for value in gates.values())
     ):
         raise ValueError("accepted pytest component Evidence gates failed")
-    metrics = evaluation.get("metrics")
-    if not isinstance(metrics, dict):
-        raise ValueError("pytest component experiment metrics missing")
     for metric, expected in experiment["expected_metrics"]["development"].items():
         if metrics.get(metric) != expected:
             raise ValueError(f"pytest component experiment metric mismatch: {metric}")
 
 
 def _strict_mapping(actual: object, expected: object) -> bool:
-    if not isinstance(actual, dict) or not isinstance(expected, dict):
-        return False
-    return set(actual) == set(expected) and all(
-        type(actual[key]) is type(value) and actual[key] == value for key, value in expected.items()
+    return (
+        isinstance(actual, dict)
+        and isinstance(expected, dict)
+        and _strict_json_value(actual, expected)
     )
+
+
+def _strict_json_value(actual: object, expected: object) -> bool:
+    if type(actual) is not type(expected):
+        return False
+    if isinstance(expected, dict):
+        return (
+            isinstance(actual, dict)
+            and set(actual) == set(expected)
+            and all(_strict_json_value(actual[key], value) for key, value in expected.items())
+        )
+    if isinstance(expected, list):
+        return (
+            isinstance(actual, list)
+            and len(actual) == len(expected)
+            and all(
+                _strict_json_value(actual_value, expected_value)
+                for actual_value, expected_value in zip(actual, expected, strict=True)
+            )
+        )
+    return actual == expected
+
+
+def _git_commit_descends_from(commit: str, ancestor: str) -> bool:
+    if COMMIT.fullmatch(commit) is None or COMMIT.fullmatch(ancestor) is None:
+        return False
+    return (
+        subprocess.run(
+            ["git", "merge-base", "--is-ancestor", ancestor, commit],
+            cwd=REPO_ROOT,
+            check=False,
+            capture_output=True,
+        ).returncode
+        == 0
+    )
+
+
+def _validate_bound_gate_artifacts(
+    artifact_files: object,
+    artifact_digests: object,
+    gate_commit: str,
+    *,
+    require_clean_sdist: bool = False,
+) -> bool:
+    digest_fields = {
+        "wheel": "wheel_sha256",
+        "sdist": "sdist_sha256",
+        "provenance": "provenance_sha256",
+        "sha256sums": "sha256sums_sha256",
+    }
+    if (
+        not isinstance(artifact_files, dict)
+        or set(artifact_files) != set(digest_fields)
+        or not isinstance(artifact_digests, dict)
+    ):
+        return False
+    paths: dict[str, Path] = {}
+    for name, digest_field in digest_fields.items():
+        artifact = artifact_files.get(name)
+        if (
+            not isinstance(artifact, dict)
+            or set(artifact) != {"path", "sha256"}
+            or artifact.get("sha256") != artifact_digests.get(digest_field)
+        ):
+            return False
+        _validate_artifact(artifact, "cross-platform gate artifact")
+        paths[name] = REPO_ROOT / str(artifact["path"])
+
+    provenance = json.loads(paths["provenance"].read_text(encoding="utf-8"))
+    package = provenance.get("package", {}) if isinstance(provenance, dict) else {}
+    if (
+        not isinstance(provenance, dict)
+        or provenance.get("memoryforge_commit") != gate_commit
+        or provenance.get("memoryforge_worktree_dirty") is not False
+        or not isinstance(package, dict)
+        or package.get("wheel") != paths["wheel"].name
+        or package.get("wheel_sha256") != artifact_digests.get("wheel_sha256")
+        or package.get("import_from_fresh_venv") is not True
+    ):
+        return False
+
+    if require_clean_sdist:
+        try:
+            with tarfile.open(paths["sdist"], "r:gz") as archive:
+                members = archive.getnames()
+        except (OSError, tarfile.TarError):
+            return False
+        if any(
+            "/demo/results/artifacts/" in f"/{name}" or name.endswith((".whl", ".tar.gz"))
+            for name in members
+        ):
+            return False
+
+    sums: dict[str, str] = {}
+    for line in paths["sha256sums"].read_text(encoding="ascii").splitlines():
+        parts = line.split("  ", 1)
+        if len(parts) != 2 or parts[1] in sums:
+            return False
+        sums[parts[1]] = parts[0]
+    return sums == {
+        f"dist/{paths['wheel'].name}": artifact_digests["wheel_sha256"],
+        f"dist/{paths['sdist'].name}": artifact_digests["sdist_sha256"],
+        "release-provenance.json": artifact_digests["provenance_sha256"],
+    }
 
 
 def _validate_static_showcase_experiment_payload(
@@ -1399,6 +2076,17 @@ def _validate_static_showcase_experiment_metadata(experiment: dict[str, Any]) ->
         raise ValueError("static-Showcase experiment metadata changed")
 
 
+def _validate_cross_platform_experiment_metadata(experiment: dict[str, Any]) -> None:
+    if (
+        experiment.get("suite_revision") != 1
+        or experiment.get("suite_type") != "source_lifecycle"
+        or experiment.get("evaluator") != "demo.run_cross_platform_delivery_benchmark"
+        or experiment.get("max_wiki_pages") != 3
+        or experiment.get("repositories") != [CROSS_PLATFORM_REPOSITORY]
+    ):
+        raise ValueError("cross-platform delivery experiment metadata changed")
+
+
 def _validate_regression_evidence(
     experiment: dict[str, Any],
     development_artifact: dict[str, Any],
@@ -1417,9 +2105,11 @@ def _validate_regression_evidence(
     )
     pytest_result = payload.get("regression", {}).get("pytest", {})
     if (
-        payload.get("schema_version") != 1
+        type(payload.get("schema_version")) is not int
+        or payload.get("schema_version") != 1
         or set(payload) != REGRESSION_EVIDENCE_KEYS
         or payload.get("suite_id") != experiment["suite_id"]
+        or type(payload.get("suite_revision")) is not int
         or payload.get("suite_revision") != experiment["suite_revision"]
         or payload.get("memoryforge_commit") != commit
         or payload.get("memoryforge_worktree_dirty") is not False
@@ -1438,6 +2128,101 @@ def _validate_regression_evidence(
         raise ValueError(
             f"experiment regression Evidence contract failed: {experiment['suite_id']}"
         )
+    return 1
+
+
+def _validate_linux_evidence(
+    experiment: dict[str, Any],
+    development_artifact: dict[str, Any],
+    confirmation: dict[str, Any],
+) -> int:
+    artifact = development_artifact.get("linux_evidence")
+    if not isinstance(artifact, dict):
+        raise ValueError("cross-platform experiment requires Linux Evidence")
+    _validate_artifact(artifact, str(experiment["suite_id"]))
+    commit = str(artifact.get("memoryforge_commit"))
+    if (
+        COMMIT.fullmatch(commit) is None
+        or artifact.get("passed") is not True
+        or not _git_commit_descends_from(commit, str(development_artifact["memoryforge_commit"]))
+    ):
+        raise ValueError("invalid Linux Evidence identity")
+    payload = cast(
+        dict[str, Any],
+        json.loads((REPO_ROOT / artifact["path"]).read_text(encoding="utf-8")),
+    )
+    contract = LINUX_EVIDENCE_CONTRACTS.get(str(artifact["path"]))
+    local_gate = payload.get("local_gate")
+    runtime = payload.get("runtime")
+    bound_artifacts = isinstance(contract, dict) and contract.get("bound_artifacts") is True
+    expected_local_gate_keys = (
+        LOCAL_GATE_KEYS | {"artifacts"} | ({"artifact_files"} if bound_artifacts else set())
+    )
+    if (
+        contract is None
+        or type(payload.get("schema_version")) is not int
+        or payload.get("schema_version") != 1
+        or set(payload)
+        != {
+            "schema_version",
+            "suite_id",
+            "suite_revision",
+            "memoryforge_commit",
+            "memoryforge_worktree_dirty",
+            "runtime",
+            "local_gate",
+            "confirmation",
+            "passed",
+        }
+        or payload.get("suite_id") != experiment["suite_id"]
+        or type(payload.get("suite_revision")) is not int
+        or payload.get("suite_revision") != experiment["suite_revision"]
+        or payload.get("memoryforge_commit") != commit
+        or payload.get("memoryforge_worktree_dirty") is not False
+        or not _strict_mapping(runtime, contract["runtime"])
+        or not isinstance(local_gate, dict)
+        or set(local_gate) != expected_local_gate_keys
+        or local_gate.get("command") != "scripts/check_local.sh"
+        or local_gate.get("ruff_check") != "passed"
+        or local_gate.get("ruff_format") != "passed"
+        or local_gate.get("strict_mypy") != "passed"
+        or not _strict_mapping(
+            local_gate.get("registry_validation"),
+            contract["registry_validation"],
+        )
+        or local_gate.get("dependency_check") != "passed"
+        or not _strict_mapping(local_gate.get("pytest"), contract["pytest"])
+        or local_gate.get("wheel_clean_room") != "passed"
+        or local_gate.get("sdist_clean_room") != "passed"
+        or local_gate.get("pip_check") != "passed"
+        or local_gate.get("cli_version_smoke") != "passed"
+        or not isinstance(local_gate.get("artifacts"), dict)
+        or set(local_gate["artifacts"])
+        != {
+            "wheel_sha256",
+            "sdist_sha256",
+            "provenance_sha256",
+            "sha256sums_sha256",
+        }
+        or any(SHA256.fullmatch(str(value)) is None for value in local_gate["artifacts"].values())
+        or (
+            bound_artifacts
+            and not _validate_bound_gate_artifacts(
+                local_gate.get("artifact_files"),
+                local_gate.get("artifacts"),
+                commit,
+                require_clean_sdist=contract.get("clean_sdist") is True,
+            )
+        )
+        or payload.get("confirmation")
+        != {
+            "path": confirmation["path"],
+            "sha256": confirmation["sha256"],
+            "status": "not_run",
+        }
+        or payload.get("passed") is not True
+    ):
+        raise ValueError("Linux Evidence contract failed")
     return 1
 
 
@@ -1462,24 +2247,63 @@ def _validate_acceptance_evidence(
     registry_result = local_gate.get("registry_validation", {})
     artifacts = local_gate.get("artifacts")
     multi_source = experiment["suite_id"] == "multi-source-coverage-selection"
+    cross_platform_mac = (
+        experiment["suite_id"] == "cross-platform-delivery"
+        and development_artifact["evidence_revision"] >= 6
+    )
+    bound_artifacts = cross_platform_mac and development_artifact["evidence_revision"] >= 8
+    mac_contract = (
+        CROSS_PLATFORM_MAC_GATE_CONTRACTS.get(str(artifact["path"])) if cross_platform_mac else None
+    )
     requires_artifacts = experiment["suite_id"] in {
         "support-score.learn-claude-code",
         "multi-source-coverage-selection",
         "folder-import-lifecycle",
         "github-thread-import-lifecycle",
         "static-showcase",
+        "cross-platform-delivery",
     }
     expected_payload_keys = LOCAL_GATE_EVIDENCE_KEYS | (
         {"regression_evidence"} if multi_source else set()
     )
-    expected_local_gate_keys = LOCAL_GATE_KEYS | ({"artifacts"} if requires_artifacts else set())
+    if cross_platform_mac:
+        expected_payload_keys.add("runtime")
+    expected_local_gate_keys = (
+        LOCAL_GATE_KEYS
+        | ({"artifacts"} if requires_artifacts else set())
+        | ({"artifact_files"} if bound_artifacts else set())
+    )
     if (
-        payload.get("schema_version") != 1
+        type(payload.get("schema_version")) is not int
+        or payload.get("schema_version") != 1
         or set(payload) != expected_payload_keys
         or payload.get("suite_id") != experiment["suite_id"]
+        or type(payload.get("suite_revision")) is not int
         or payload.get("suite_revision") != experiment["suite_revision"]
         or payload.get("memoryforge_commit") != commit
         or payload.get("memoryforge_worktree_dirty") is not False
+        or (
+            cross_platform_mac
+            and not _git_commit_descends_from(
+                commit,
+                str(development_artifact["memoryforge_commit"]),
+            )
+        )
+        or (
+            cross_platform_mac
+            and not _strict_mapping(payload.get("runtime"), CROSS_PLATFORM_MAC_RUNTIME)
+        )
+        or (
+            cross_platform_mac
+            and (
+                mac_contract is None
+                or not _strict_mapping(
+                    registry_result,
+                    mac_contract["registry_validation"],
+                )
+                or not _strict_mapping(pytest_result, mac_contract["pytest"])
+            )
+        )
         or payload.get("development_evidence", {}).get("path") != development_artifact["path"]
         or payload.get("development_evidence", {}).get("sha256") != development_artifact["sha256"]
         or payload.get("development_evidence", {}).get("memoryforge_commit")
@@ -1528,6 +2352,15 @@ def _validate_acceptance_evidence(
                     "sha256sums_sha256",
                 }
                 or any(SHA256.fullmatch(str(value)) is None for value in artifacts.values())
+            )
+        )
+        or (
+            bound_artifacts
+            and not _validate_bound_gate_artifacts(
+                local_gate.get("artifact_files"),
+                artifacts,
+                commit,
+                require_clean_sdist=development_artifact["evidence_revision"] >= 10,
             )
         )
         or payload.get("confirmation", {}).get("path") != confirmation["path"]
@@ -1668,8 +2501,24 @@ def _validate_repository(suite_id: str, repository: dict[str, Any]) -> None:
 
 
 def _validate_artifact(artifact: dict[str, Any], suite_id: str) -> None:
-    path = REPO_ROOT / str(artifact.get("path", ""))
-    if not path.is_file() or not path.is_relative_to(REPO_ROOT):
+    relative = Path(str(artifact.get("path", "")))
+    if (
+        relative.is_absolute()
+        or not relative.parts
+        or any(part in {"", ".", ".."} for part in relative.parts)
+    ):
+        raise ValueError(f"registered artifact path is unsafe: {suite_id}")
+    candidate = REPO_ROOT.joinpath(*relative.parts)
+    current = REPO_ROOT
+    for part in relative.parts:
+        current /= part
+        if current.is_symlink():
+            raise ValueError(f"registered artifact path is unsafe: {suite_id}")
+    try:
+        path = candidate.resolve(strict=True)
+    except OSError:
+        raise ValueError(f"registered artifact missing: {suite_id}") from None
+    if not path.is_file() or not path.is_relative_to(REPO_ROOT.resolve()):
         raise ValueError(f"registered artifact missing: {suite_id}")
     expected_sha = str(artifact.get("sha256"))
     if SHA256.fullmatch(expected_sha) is None:

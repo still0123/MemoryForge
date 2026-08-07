@@ -259,6 +259,12 @@ Evidence 在本机执行：
 ./scripts/check_local.sh
 ```
 
+Windows PowerShell 使用同一门禁契约：
+
+```powershell
+.\scripts\check_local.ps1
+```
+
 产物默认写入被 Git 忽略的 `local-evidence/<UTC timestamp>/`。安装、命名产物和手动发布流程见
 [本地免费工具链](docs/LOCAL_FREE_TOOLING.md)。
 

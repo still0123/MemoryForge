@@ -792,6 +792,234 @@
           "passed": true
         }
       ]
+    },
+    {
+      "suite_id": "cross-platform-delivery",
+      "suite_revision": 1,
+      "suite_type": "source_lifecycle",
+      "evaluator": "demo.run_cross_platform_delivery_benchmark",
+      "model_judge": false,
+      "max_wiki_pages": 3,
+      "required_evidence_statuses": [
+        "rejected",
+        "accepted_development_superseded",
+        "accepted_development"
+      ],
+      "repositories": [
+        {
+          "repository": "still0123/MemoryForge",
+          "remote_url": "https://github.com/still0123/MemoryForge.git",
+          "commit": "bef6c7e35e9d8e282d2b3b0e0c4b3874a12f9e8a",
+          "license": "MIT",
+          "source_paths": [
+            "tests/test_cross_platform_delivery.py",
+            "demo/evaluation/cross_platform_delivery_development.json",
+            "demo/evaluation/cross_platform_delivery_confirmation.json"
+          ]
+        }
+      ],
+      "splits": {
+        "development": {
+          "path": "demo/evaluation/cross_platform_delivery_development.json",
+          "sha256": "0082594121022f6f97b6eae3d4106819794c0b988f531a02e51b9ec2194fb6ff",
+          "test_file": "tests/test_cross_platform_delivery.py",
+          "test_sha256": "08601b7effba8271ac318a58a5b0906b934bdeaa4564edcd0ec5738e61618ac3",
+          "case_count": 7
+        },
+        "confirmation": {
+          "path": "demo/evaluation/cross_platform_delivery_confirmation.json",
+          "sha256": "200074acfb79979bf4663b97ae25e9dd62fa0f94359b8aa0d39c4250256660fc",
+          "case_count": 3,
+          "status": "not_run"
+        },
+        "holdout": null
+      },
+      "expected_metrics": {
+        "development": {
+          "pass_rate": 100.0,
+          "failed_cases": 0,
+          "direct_platform_imports": 0,
+          "windows_lock_offset": 0,
+          "windows_lock_bytes": 1,
+          "local_smoke": "passed"
+        }
+      },
+      "evidence": [
+        {
+          "split": "development",
+          "evidence_revision": 1,
+          "status": "rejected",
+          "path": "demo/results/cross_platform_delivery_baseline_rejected.json",
+          "sha256": "f169486f1fc757abaaf3728187703834510726c2cae11736c2e82ba220e369ac",
+          "memoryforge_commit": "bef6c7e35e9d8e282d2b3b0e0c4b3874a12f9e8a",
+          "passed": false
+        },
+        {
+          "split": "development",
+          "evidence_revision": 2,
+          "status": "accepted_development_superseded",
+          "path": "demo/results/cross_platform_delivery_candidate_1.json",
+          "sha256": "f2bd8afa6759c3d1ddbc796444cfb58d968fbab82818c27f1c0f24590013801e",
+          "memoryforge_commit": "96c720cf49ed0bfc97fd765e9af025ab6f4ae9ea",
+          "passed": true
+        },
+        {
+          "split": "development",
+          "evidence_revision": 3,
+          "status": "accepted_development_superseded",
+          "path": "demo/results/cross_platform_delivery_candidate_2.json",
+          "sha256": "22a309f133008268e857e4331f70967d58f0c06adc45ab1988f8a99ee3c34775",
+          "memoryforge_commit": "7d0a296ffbbb73863b63ec732608a6e3c0bab35b",
+          "acceptance_evidence": {
+            "path": "demo/results/cross_platform_delivery_candidate_2_local_gate.json",
+            "sha256": "6318d9bf999163917441c65e8085bce3548424b6a7183b4c284e7f9c43b9b2d7",
+            "memoryforge_commit": "7d0a296ffbbb73863b63ec732608a6e3c0bab35b",
+            "passed": true
+          },
+          "passed": true
+        },
+        {
+          "split": "development",
+          "evidence_revision": 4,
+          "status": "accepted_development_superseded",
+          "path": "demo/results/cross_platform_delivery_candidate_3.json",
+          "sha256": "1584be87a25356d6189c55a696c35d9b679c4c56c654da261c1caf6d185abb31",
+          "memoryforge_commit": "79188650e953c6c183b631fd41432e795bde0eaa",
+          "linux_evidence": {
+            "path": "demo/results/cross_platform_delivery_candidate_3_linux_gate.json",
+            "sha256": "efd898c2a3c9eb4807b0610bf5c2979ccc5a86b48fd81735f4b72a6ce6360824",
+            "memoryforge_commit": "79188650e953c6c183b631fd41432e795bde0eaa",
+            "passed": true
+          },
+          "acceptance_evidence": {
+            "path": "demo/results/cross_platform_delivery_candidate_3_local_gate.json",
+            "sha256": "a8ce5385fecdbef45660dc809ae8a4a20ed197aec6aa96ab1464877dd66b018d",
+            "memoryforge_commit": "31f51cd121559654f4e129b96921f2d81e991e6e",
+            "passed": true
+          },
+          "passed": true
+        },
+        {
+          "split": "development",
+          "evidence_revision": 5,
+          "status": "accepted_development_superseded",
+          "path": "demo/results/cross_platform_delivery_candidate_4.json",
+          "sha256": "198c3654291ba762b591891f894f87c3ebc41764faa8e7e24cfc5c484a4c39cb",
+          "memoryforge_commit": "2bb3505ce2c5b32ec1ce6e2b4dcd1a12638cc93f",
+          "linux_evidence": {
+            "path": "demo/results/cross_platform_delivery_candidate_4_linux_gate.json",
+            "sha256": "f09affaa4dd7633e10cd37752f9ce1ed7e7258a12bc747cda2bc20c805beadc1",
+            "memoryforge_commit": "1ed10462e0585be8fdafa34e6c42de6e2a0ba784",
+            "passed": true
+          },
+          "passed": true
+        },
+        {
+          "split": "development",
+          "evidence_revision": 6,
+          "status": "accepted_development_superseded",
+          "path": "demo/results/cross_platform_delivery_candidate_5.json",
+          "sha256": "4f1cb0fcad903e7e525670d9efde02148b2cdf2a9bef532210997f9ca8102106",
+          "memoryforge_commit": "cba84d7a6b01d20abfb353e85ae2733210bde98b",
+          "linux_evidence": {
+            "path": "demo/results/cross_platform_delivery_candidate_5_linux_gate.json",
+            "sha256": "d58dacc1bd4a34f6230e3045db058e4f2542e671d1f017311c02147ee76e3a8f",
+            "memoryforge_commit": "c9af1ed22c5aef64a6b888b494fb27872c7d6ad9",
+            "passed": true
+          },
+          "acceptance_evidence": {
+            "path": "demo/results/cross_platform_delivery_candidate_5_local_gate.json",
+            "sha256": "20d2ea86f04120b4f27c8ba39ef8e613de2c11acedcb46961284ad56a72f9240",
+            "memoryforge_commit": "c9af1ed22c5aef64a6b888b494fb27872c7d6ad9",
+            "passed": true
+          },
+          "passed": true
+        },
+        {
+          "split": "development",
+          "evidence_revision": 7,
+          "status": "accepted_development_superseded",
+          "path": "demo/results/cross_platform_delivery_candidate_6.json",
+          "sha256": "17bdad1bb9ce7b1cfeff779e4c096d5c981248326493088a2bbee43898fbb706",
+          "memoryforge_commit": "b3dab407db3f3103456dcbe79d704e4a72c6b656",
+          "linux_evidence": {
+            "path": "demo/results/cross_platform_delivery_candidate_6_linux_gate.json",
+            "sha256": "ef31991c6efc21cbdeec6ab656937961e0df3bfbcecaf4b92de6f97c8b59575f",
+            "memoryforge_commit": "271a788b51ce1e5a6072362d7dea0a13e1c31fad",
+            "passed": true
+          },
+          "acceptance_evidence": {
+            "path": "demo/results/cross_platform_delivery_candidate_6_local_gate.json",
+            "sha256": "21e0c9f5752030fc7e3a94bedb45c2868d803c50b93d67866e2af2bd554dd593",
+            "memoryforge_commit": "271a788b51ce1e5a6072362d7dea0a13e1c31fad",
+            "passed": true
+          },
+          "passed": true
+        },
+        {
+          "split": "development",
+          "evidence_revision": 8,
+          "status": "accepted_development_superseded",
+          "path": "demo/results/cross_platform_delivery_candidate_7.json",
+          "sha256": "dd48d59e149f9195410f793edacacb8ca90c899ee4691b6e214fcb8ebedc567a",
+          "memoryforge_commit": "5e7c50ca377622a21600a7fa877046af92fefc4c",
+          "linux_evidence": {
+            "path": "demo/results/cross_platform_delivery_candidate_7_linux_gate.json",
+            "sha256": "263ff1e5ec752d5bb2f18372ee70c6dd3e1f5a6d80ee7719cc15d5ab092a5bc6",
+            "memoryforge_commit": "569451d7f56d5606e8b000f15e34e04b87cb62a4",
+            "passed": true
+          },
+          "acceptance_evidence": {
+            "path": "demo/results/cross_platform_delivery_candidate_7_local_gate.json",
+            "sha256": "7d047d5d3a360450c046adf90fcd3165c6bab4a5417c7e2a71ff70b06dba9ed1",
+            "memoryforge_commit": "569451d7f56d5606e8b000f15e34e04b87cb62a4",
+            "passed": true
+          },
+          "passed": true
+        },
+        {
+          "split": "development",
+          "evidence_revision": 9,
+          "status": "accepted_development_superseded",
+          "path": "demo/results/cross_platform_delivery_candidate_8.json",
+          "sha256": "e86b08906ddd99bf8cf14089cc9e2e873c902d6855c33596c2cc973352f2d106",
+          "memoryforge_commit": "beb4bd0f41afc804136ce1e96b8b9857d88be30b",
+          "linux_evidence": {
+            "path": "demo/results/cross_platform_delivery_candidate_8_linux_gate.json",
+            "sha256": "14553130cb03afaa220a476f5be2d1b170c89afb9fcf74af4730c93a6cae65b6",
+            "memoryforge_commit": "04f246f815f0c80f74a3aa20caf5af3a31ff5c92",
+            "passed": true
+          },
+          "acceptance_evidence": {
+            "path": "demo/results/cross_platform_delivery_candidate_8_local_gate.json",
+            "sha256": "99d534741eebb1a10121d753953d420edde8e6381ec454e660a90dba3a338c7d",
+            "memoryforge_commit": "04f246f815f0c80f74a3aa20caf5af3a31ff5c92",
+            "passed": true
+          },
+          "passed": true
+        },
+        {
+          "split": "development",
+          "evidence_revision": 10,
+          "status": "accepted_development",
+          "path": "demo/results/cross_platform_delivery_candidate_9.json",
+          "sha256": "425f3047bae7df586a9a529a33024f667f4c98d096bce8edb101676e04135b0c",
+          "memoryforge_commit": "70f76ebfcc7a7bd64f926955e09cfa0a6f45766d",
+          "linux_evidence": {
+            "path": "demo/results/cross_platform_delivery_candidate_9_linux_gate.json",
+            "sha256": "a724e17659ecfd5c8a5057cc9f50ed03abd5d6624934dc5920f016905483ed22",
+            "memoryforge_commit": "9779fb4624e21575de8b0de359cc199cecb88589",
+            "passed": true
+          },
+          "acceptance_evidence": {
+            "path": "demo/results/cross_platform_delivery_candidate_9_local_gate.json",
+            "sha256": "4e5ec614f020503eba1639fe6807f93ff6386024636912c9742775daa7c1e406",
+            "memoryforge_commit": "9779fb4624e21575de8b0de359cc199cecb88589",
+            "passed": true
+          },
+          "passed": true
+        }
+      ]
     }
   ],
   "suites": [

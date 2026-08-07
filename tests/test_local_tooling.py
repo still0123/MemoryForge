@@ -20,6 +20,9 @@ def test_package_and_cli_versions_match_v021() -> None:
 
     assert project["project"]["version"] == "0.2.1"
     assert memoryforge.__version__ == "0.2.1"
+    assert project["tool"]["hatch"]["build"]["targets"]["sdist"]["exclude"] == [
+        "/demo/results/artifacts"
+    ]
 
 
 def test_local_check_keeps_the_quality_and_artifact_contract() -> None:
@@ -42,8 +45,35 @@ def test_local_check_keeps_the_quality_and_artifact_contract() -> None:
         "hatchling",
         "--no-build-isolation",
         "pip check",
+        "env -u PYTHONPATH PYTHONNOUSERSITE=1",
+        "-I -m pip check",
+        "sdist import escaped clean environment",
+        "sdist contains retained or nested artifacts",
+        "/demo/results/artifacts/",
+        '"$workdir/sdist/bin/python" -I -m memoryforge --version',
         "hashlib.sha256",
         "SHA256SUMS",
+    ):
+        assert required in script
+
+
+def test_powershell_gate_uses_literal_paths_and_isolated_sdist_probe() -> None:
+    root = Path(__file__).resolve().parent.parent
+    script = (root / "scripts/check_local.ps1").read_text(encoding="utf-8")
+
+    for required in (
+        "Resolve-Path -LiteralPath",
+        "Set-Location -LiteralPath",
+        "Get-ChildItem -LiteralPath",
+        "Get-Item -LiteralPath",
+        "Get-FileHash -Algorithm SHA256 -LiteralPath",
+        "Set-Content -LiteralPath",
+        "Remove-Item Env:PYTHONPATH",
+        'Invoke-External $SdistPython @("-I", "-m", "pip", "check")',
+        "sdist import escaped clean environment",
+        "sdist contains retained or nested artifacts",
+        "/demo/results/artifacts/",
+        'Invoke-External $SdistPython @("-I", "-m", "memoryforge", "--version")',
     ):
         assert required in script
 

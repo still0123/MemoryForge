@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "suite_id": "cross-platform-delivery",
+  "suite_revision": 1,
+  "memoryforge_commit": "1ed10462e0585be8fdafa34e6c42de6e2a0ba784",
+  "memoryforge_worktree_dirty": false,
+  "runtime": {
+    "virtualization": "Lima 2.2.0 local VM",
+    "distribution": "Debian GNU/Linux 12",
+    "kernel": "Linux 6.1.0-50-cloud-arm64",
+    "architecture": "aarch64",
+    "implementation": "CPython",
+    "python": "3.11.2",
+    "hosted_runner": false
+  },
+  "local_gate": {
+    "command": "scripts/check_local.sh",
+    "ruff_check": "passed",
+    "ruff_format": "passed",
+    "strict_mypy": "passed",
+    "registry_validation": {
+      "suite_count": 12,
+      "experiment_count": 7,
+      "evidence_count": 79,
+      "qa_case_count": 121
+    },
+    "dependency_check": "passed",
+    "pytest": {
+      "passed": 542,
+      "skipped": 2,
+      "failed": 0,
+      "coverage_percent": 88
+    },
+    "wheel_clean_room": "passed",
+    "sdist_clean_room": "passed",
+    "pip_check": "passed",
+    "cli_version_smoke": "passed",
+    "artifacts": {
+      "wheel_sha256": "71c8644213185531f58b2f215e70a8e3cbf471a50c5207916dd862657bc6b11d",
+      "sdist_sha256": "945b96ff3f47c5e7ff2421084e20038b9d884215f39d1be619c4578d13a179ee",
+      "provenance_sha256": "d65a1b45655974dfaf548be5c1381b4259b90b33037b84f281258d82ca5a78ee",
+      "sha256sums_sha256": "50257d8e320da53579f5843872e724976c77c4532093d618d84a06a8e1e98bed"
+    }
+  },
+  "confirmation": {
+    "path": "demo/evaluation/cross_platform_delivery_confirmation.json",
+    "sha256": "200074acfb79979bf4663b97ae25e9dd62fa0f94359b8aa0d39c4250256660fc",
+    "status": "not_run"
+  },
+  "passed": true
+}
