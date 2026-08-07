@@ -4,6 +4,9 @@
 
 ![MemoryForge 工作流](assets/memoryforge-flow.svg)
 
+![Showcase 来源、Wiki、ChangeSet 与 Query Trace](assets/memoryforge-showcase-01.png)
+![Showcase 指标、失败案例与 Code Wiki 架构](assets/memoryforge-showcase-02.png)
+
 ## 这是什么项目？
 
 写项目久了，最难找的往往不是代码，而是“为什么当初这么设计”“这个规则写在哪”“方案为什么被放弃”。这些答案通常散落在 README、`docs/`、ADR、复盘和飞书文档里，而且会持续变化。
@@ -16,6 +19,42 @@
 资料进来 -> 生成并审核 Wiki -> 通过 CLI / 飞书提问 -> 得到可回溯的答案
 ```
 
+## 60 秒公开演示
+
+不需要模型 Key、数据库服务或 Web 后台。三步生成可直接打开的只读静态 Showcase：
+
+```bash
+python -m pip install -e '.[dev]'
+python demo/run_showcase_demo.py \
+  --workdir /private/tmp/memoryforge-showcase-demo \
+  --output /private/tmp/memoryforge-showcase
+open /private/tmp/memoryforge-showcase/index.html
+```
+
+它从仓库内固定的 Python、Go、TypeScript 公开夹具开始，真实执行
+`import → Code Index → ChangeSet → review → approve → apply → query → showcase`，并展示来源版本、
+Wiki 树、Diff、Citation Trace、Benchmark、保留的失败案例、正确拒答和 Mermaid 架构。输出只有
+`index.html`、`showcase.json` 和所有权 marker；没有远程脚本或网络请求。
+
+### 它和普通 RAG 的区别
+
+| 普通 RAG | MemoryForge |
+| --- | --- |
+| 原文切片后直接召回 | 先编译为可读、可审核、可版本化的 Wiki |
+| page recall 常被当成回答质量 | 页面路由、事实选择、Answer、Citation 分开评测 |
+| 更新直接替换索引 | 先生成 ChangeSet，再 `review → approve → apply` |
+| 主题相关就尝试回答 | support score 不足时返回 `unknown` |
+| 很难重放一次结论 | Citation 固定到 SourceVersion、locator、Commit 和 SHA256 |
+
+### 当前公开 Evidence
+
+| 结果 | 指标 | 边界 |
+| --- | ---: | --- |
+| 三语言 Code Wiki | Symbol / core Relation / Mermaid / Citation 均为 **100%** | 固定公开夹具 |
+| AgentSkill-Eval 文档 Wiki | Answer **96.7%**，Citation **100%** | 单一公开仓库 30 题 |
+| Click 外部迁移 | development / holdout Answer **10% / 0%** | 真实负结果，未隐藏 |
+| Static Showcase development | **4/4**，本地详情泄漏 **0**，Workspace 变更 **0** | confirmation 未运行 |
+
 ## 它解决了什么问题？
 
 | 常见问题 | MemoryForge 的做法 |
@@ -24,11 +63,11 @@
 | 文档更新后 Wiki 很容易过期 | 根据来源路由更新受影响页面，不重复生成一堆近似摘要 |
 | 问答容易胡编或找不到出处 | 先查目录和少量 Wiki 页面；需要时再回读原文并返回引用 |
 | 资料敏感，不适合直接上传 | 默认 `local_only`；是否让模型读取本地资料必须显式授权 |
-| 项目只有命令行，不直观 | 可接入飞书私聊机器人，作为项目的展示与交互入口 |
+| 项目只有命令行，不直观 | 生成只读静态 Showcase；飞书保留为可选交互入口 |
 
 ## 核心能力
 
-- **多源资料接入**：本地 Markdown/TXT、已克隆的 Git 仓库、飞书 Docx/Wiki、单篇公开网页或保存的 HTML。
+- **多源资料接入**：递归 Folder（Markdown/TXT/HTML）、已克隆 Git 仓库、单个 GitHub Issue/PR Thread、飞书 Docx/Wiki、单篇公开网页或保存的 HTML。
 - **WikiCompiler**：将资料编译为“项目/模块介绍、机制说明、方案与复盘”三类 Markdown 页面；每页都保留来源、版本与原文位置。
 - **代码 Wiki**：用 Tree-sitter 为显式选择的 Python、Go、TypeScript/TSX 代码构建确定性符号图、模块计划和带引用 Wiki，仍须人工审核后应用；页面按仓库短 ID 分目录，多个仓库的同名模块不会互相覆盖。
 - **增量更新**：新资料优先扩展已有主题；资料更新时只重编译受影响的页面。
@@ -37,6 +76,8 @@
 - **飞书展示入口**：`feishu-serve` 直接接收飞书私聊消息，查询本地 Wiki 后回复；可显式启用模型，将命中的证据组织成更自然的回答。
 - **模型不可用时可降级**：模型服务超时或临时繁忙时，`ask` 和飞书入口回退到已验证的 Wiki 原文，不让用户一直等待或得到无引用的错误答案。
 - **可验证性**：提供 `lint` 检查页面/来源关系，提供 `eval` 用公开题集检查回答、引用与读取成本。
+- **只读展示**：`memoryforge showcase build` 生成自包含静态 Evidence 页面；默认隐藏
+  `local_only` 来源、页面、ChangeSet 和 Citation 细节。
 
 ## 一次提问是怎么完成的？
 
@@ -233,7 +274,7 @@ Evidence 在本机执行：
 | `review → approve → apply` 而非直接生成 | 审阅、授权和落盘分别留痕；避免自动覆盖已有知识 |
 | `INDEX + FTS5 + 页面展开` 而非全量拼接 | 控制检索范围和上下文成本，便于解释“这次读了什么” |
 | 证据优先的最小 Agent | 让模型负责组织答案，不让它执行代码或扩展为难控的通用助手 |
-| 飞书作为展示入口 | 将真实 Wiki 问答能力放到日常聊天场景中，而不重复实现另一套知识库 |
+| 静态 Showcase 为默认展示 | 零 Key、零服务器、可直接审查；飞书只保留为可选聊天入口 |
 
 ## 资料与模型边界
 
@@ -265,6 +306,7 @@ memoryforge lint --workspace <workspace>
 # 问答与展示
 memoryforge ask '<question>' --workspace <workspace>
 memoryforge agent '<question>' --workspace <workspace>
+memoryforge showcase build --workspace <workspace> --output <directory>
 memoryforge feishu-serve --workspace <workspace>
 ```
 

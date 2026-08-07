@@ -27,6 +27,21 @@
 
 不写时间戳、绝对路径、API Key、环境变量或 workspace 内部 Git commit，因此两个不同临时 workspace 连续运行结果一致。
 
+## 零 Key 静态 Showcase
+
+不准备外部仓库也可以直接运行三语言公开演示：
+
+```bash
+.venv/bin/python demo/run_showcase_demo.py \
+  --workdir /private/tmp/memoryforge-showcase-demo \
+  --output /private/tmp/memoryforge-showcase
+open /private/tmp/memoryforge-showcase/index.html
+```
+
+脚本复用固定 Code Wiki 夹具，真实执行导入、索引、ChangeSet 审核应用、查询和静态导出。页面同时
+引用已提交的 Click 外部迁移失败和 AgentSkill-Eval 正确拒答案例；这些结果来自固定 Evidence，
+不是为展示临时合成的模拟指标。生成文件不含模型调用、远程脚本、绝对 Workspace 路径或凭据。
+
 ## 这份基线证明什么
 
 它证明公开 Git 文档可以沿真实路径完成 `导入 → 编译 → 审核 → 写入 → 检索 → 回源 → 评测`，并记录

@@ -661,6 +661,137 @@
           "passed": true
         }
       ]
+    },
+    {
+      "suite_id": "static-showcase",
+      "suite_revision": 3,
+      "suite_type": "source_lifecycle",
+      "evaluator": "demo.run_static_showcase_benchmark",
+      "model_judge": false,
+      "max_wiki_pages": 3,
+      "required_evidence_statuses": [
+        "rejected",
+        "accepted_development_superseded",
+        "accepted_development"
+      ],
+      "repositories": [
+        {
+          "repository": "still0123/MemoryForge",
+          "remote_url": "https://github.com/still0123/MemoryForge.git",
+          "commit": "cf8a47eb2e62b0aff7bf5e056efd848902df3e06",
+          "license": "MIT",
+          "source_paths": [
+            "tests/test_showcase.py",
+            "demo/evaluation/static_showcase_development.json",
+            "demo/evaluation/static_showcase_confirmation.json"
+          ]
+        }
+      ],
+      "splits": {
+        "development": {
+          "path": "demo/evaluation/static_showcase_development.json",
+          "sha256": "e3839b86256b8cb6275f4afb5ac3bf1da5a4e0adb66e18fc1c1fcc89d0721e17",
+          "test_file": "tests/test_showcase.py",
+          "test_sha256": "11ca2dd0dbe3bac7b9e8fedbda0a40655e6a76269cf48feb003ce6470ffa33f5",
+          "case_count": 4
+        },
+        "confirmation": {
+          "path": "demo/evaluation/static_showcase_confirmation.json",
+          "sha256": "4c64d073a2a1af46a068219af158ed77bc1e99a1b4de6601e01634d63140166e",
+          "case_count": 3,
+          "status": "not_run"
+        },
+        "holdout": null
+      },
+      "expected_metrics": {
+        "development": {
+          "pass_rate": 100.0,
+          "failed_cases": 0,
+          "required_sections": 8,
+          "local_detail_leaks": 0,
+          "workspace_mutations": 0
+        }
+      },
+      "evidence": [
+        {
+          "split": "development",
+          "evidence_revision": 1,
+          "status": "rejected",
+          "path": "demo/results/static_showcase_baseline_rejected.json",
+          "sha256": "c8448999fad2f5ee50cd249688981498eb30fd9b52d8d4f8dde27c72fafb4952",
+          "memoryforge_commit": "cf8a47eb2e62b0aff7bf5e056efd848902df3e06",
+          "passed": false
+        },
+        {
+          "split": "development",
+          "evidence_revision": 2,
+          "status": "rejected",
+          "path": "demo/results/static_showcase_candidate_0_fixture_rejected.json",
+          "sha256": "5afefb3f7312007c9ca3c1f3c2ab08cc369df79a025b55112f9ecd3e28f60f5d",
+          "memoryforge_commit": "bec8c0edea1fa7a126fa15db8078065bb45e2eae",
+          "passed": false
+        },
+        {
+          "split": "development",
+          "evidence_revision": 3,
+          "status": "rejected",
+          "path": "demo/results/static_showcase_candidate_1_fixture_rejected.json",
+          "sha256": "5f7841001452563bb5963c71f605f35ef587b56a868d40febbb0236026635e8b",
+          "memoryforge_commit": "a84f777f3e701aa5f67175445c20a3b656bcac0a",
+          "passed": false
+        },
+        {
+          "split": "development",
+          "evidence_revision": 4,
+          "status": "accepted_development_superseded",
+          "path": "demo/results/static_showcase_development_candidate_1.json",
+          "sha256": "22f58560b5597dfc4f643656c918a466ee62e1d9e19ac2ec1f2d92740b5057c0",
+          "memoryforge_commit": "649f1ca35cf363f6eda9e4cd563c2ba6e29fecff",
+          "passed": true
+        },
+        {
+          "split": "development",
+          "evidence_revision": 5,
+          "status": "accepted_development_superseded",
+          "path": "demo/results/static_showcase_development_candidate_2.json",
+          "sha256": "0ae35723c8f6f30c4edcfabae89c3a078b965a2d89563e3006b08eaee17573eb",
+          "memoryforge_commit": "1962f19a399ba0805a9c107fd14741fdfcb34759",
+          "passed": true
+        },
+        {
+          "split": "development",
+          "evidence_revision": 6,
+          "status": "accepted_development_superseded",
+          "path": "demo/results/static_showcase_development_candidate_3.json",
+          "sha256": "3cb6113516a5d6b3e0b5e2c357bde6470350c0a8be0aecfaa563253135ed7da7",
+          "memoryforge_commit": "c07d2d275caa4449ffc6cc20f3a709ebf4c59b0b",
+          "passed": true
+        },
+        {
+          "split": "development",
+          "evidence_revision": 7,
+          "status": "accepted_development_superseded",
+          "path": "demo/results/static_showcase_development_candidate_4.json",
+          "sha256": "2340e3ecd313a85fdcdb2384ea5c936dd564b4ca8c0e6e1440af2a49c5661234",
+          "memoryforge_commit": "77b9026c1b88fbfa1138dd74c9efb3f9abf23d90",
+          "passed": true
+        },
+        {
+          "split": "development",
+          "evidence_revision": 8,
+          "status": "accepted_development",
+          "path": "demo/results/static_showcase_development_candidate_5.json",
+          "sha256": "5e644b467738bcb8121a0a224a7e7ca31b11b37d4ee6962b7b5659b72544101e",
+          "memoryforge_commit": "12d0ecadb4d8d310e2fa3b22f71dbfe770bd2567",
+          "acceptance_evidence": {
+            "path": "demo/results/static_showcase_candidate_5_local_gate.json",
+            "sha256": "c17d2ebe838ac9d43e58825bd90c07d504cea5850f0d51995718b7827aafd9df",
+            "memoryforge_commit": "5c719c387addc6a415658727597400cfd1af7846",
+            "passed": true
+          },
+          "passed": true
+        }
+      ]
     }
   ],
   "suites": [

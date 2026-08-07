@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "suite_id": "static-showcase",
+  "suite_revision": 2,
+  "memoryforge_commit": "a84f777f3e701aa5f67175445c20a3b656bcac0a",
+  "memoryforge_worktree_dirty": false,
+  "development": {
+    "path": "demo/evaluation/static_showcase_development.json",
+    "sha256": "773ceef802964b197bab56cf7fbfadd255f32bce776e1c99029bec9b23c91cf6",
+    "test_file": {
+      "path": "tests/test_showcase.py",
+      "sha256": "1353c6e571df641617a6f906dcf5f6afcc1e61d9409d1392c3aee1be593fb0ec"
+    },
+    "case_count": 4,
+    "pytest": {
+      "passed": 0,
+      "failed": 4,
+      "errors": 0,
+      "exit_code": 1
+    },
+    "failures": [
+      {
+        "case_id": "complete-public-readonly-snapshot",
+        "classification": "FIXTURE_PRECONDITION",
+        "detail": "Local import fixture was outside the command's allowed source root"
+      },
+      {
+        "case_id": "owned-deterministic-rebuild",
+        "classification": "FIXTURE_PRECONDITION",
+        "detail": "Local import fixture was outside the command's allowed source root"
+      },
+      {
+        "case_id": "unsafe-output-rejection",
+        "classification": "FIXTURE_PRECONDITION",
+        "detail": "Local import fixture was outside the command's allowed source root"
+      },
+      {
+        "case_id": "zero-key-nested-cli",
+        "classification": "FIXTURE_PRECONDITION",
+        "detail": "Local import fixture was outside the command's allowed source root"
+      }
+    ]
+  },
+  "confirmation": {
+    "path": "demo/evaluation/static_showcase_confirmation.json",
+    "sha256": "cdc59f2eccfe920204be0a5875dbbaf3eefb2d517ff098419bed6d47ecb8e0d8",
+    "status": "not_run"
+  },
+  "passed": false
+}

@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "suite_id": "static-showcase",
+  "suite_revision": 3,
+  "status": "not_run",
+  "cases": [
+    {
+      "id": "mixed-public-local-history",
+      "expected": "historical local-only versions remain redacted from a mixed source"
+    },
+    {
+      "id": "html-and-json-injection",
+      "expected": "source, query, Citation, diff, and Mermaid text cannot escape HTML or JSON"
+    },
+    {
+      "id": "interrupted-owned-rebuild",
+      "expected": "failed replacement keeps the previous complete owned Showcase"
+    }
+  ],
+  "expected_metrics": {
+    "pass_rate": 100.0,
+    "failed_cases": 0,
+    "local_detail_leaks": 0,
+    "workspace_mutations": 0,
+    "deterministic_replay": true
+  }
+}

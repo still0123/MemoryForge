@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "suite_id": "static-showcase",
+  "suite_revision": 3,
+  "memoryforge_commit": "c07d2d275caa4449ffc6cc20f3a709ebf4c59b0b",
+  "memoryforge_worktree_dirty": false,
+  "development": {
+    "path": "demo/evaluation/static_showcase_development.json",
+    "sha256": "e3839b86256b8cb6275f4afb5ac3bf1da5a4e0adb66e18fc1c1fcc89d0721e17",
+    "test_file": {
+      "path": "tests/test_showcase.py",
+      "sha256": "11ca2dd0dbe3bac7b9e8fedbda0a40655e6a76269cf48feb003ce6470ffa33f5"
+    },
+    "case_count": 4,
+    "evaluation": {
+      "case_count": 4,
+      "metrics": {
+        "pass_rate": 100.0,
+        "failed_cases": 0,
+        "required_sections": 8,
+        "local_detail_leaks": 0,
+        "workspace_mutations": 0
+      },
+      "cases": [
+        {
+          "id": "complete-public-readonly-snapshot",
+          "pytest_node": "tests/test_showcase.py::test_showcase_builds_complete_public_snapshot_without_mutating_workspace",
+          "status": "passed",
+          "error_classification": "none"
+        },
+        {
+          "id": "owned-deterministic-rebuild",
+          "pytest_node": "tests/test_showcase.py::test_showcase_rebuild_is_deterministic_and_replaces_only_owned_output",
+          "status": "passed",
+          "error_classification": "none"
+        },
+        {
+          "id": "unsafe-output-rejection",
+          "pytest_node": "tests/test_showcase.py::test_showcase_rejects_unsafe_or_workspace_internal_output",
+          "status": "passed",
+          "error_classification": "none"
+        },
+        {
+          "id": "zero-key-nested-cli",
+          "pytest_node": "tests/test_showcase.py::test_showcase_nested_cli_builds_without_model_credentials",
+          "status": "passed",
+          "error_classification": "none"
+        }
+      ]
+    }
+  },
+  "confirmation": {
+    "path": "demo/evaluation/static_showcase_confirmation.json",
+    "sha256": "4c64d073a2a1af46a068219af158ed77bc1e99a1b4de6601e01634d63140166e",
+    "status": "not_run"
+  },
+  "runs": [
+    {
+      "name": "first",
+      "evaluation_sha256": "8aa4853a0642d91f0756ca02679995e7f85836789a28c28cf53606913b4f40ad"
+    },
+    {
+      "name": "second",
+      "evaluation_sha256": "8aa4853a0642d91f0756ca02679995e7f85836789a28c28cf53606913b4f40ad"
+    }
+  ],
+  "gates": {
+    "pass_rate": true,
+    "failed_cases": true,
+    "required_sections": true,
+    "local_detail_leaks": true,
+    "workspace_mutations": true,
+    "deterministic_replay": true,
+    "stable_memoryforge_commit": true,
+    "clean_worktree_after_run": true,
+    "confirmation_not_run": true
+  },
+  "passed": true
+}

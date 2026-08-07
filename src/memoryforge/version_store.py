@@ -3,17 +3,19 @@
 from __future__ import annotations
 
 import os
+import re
 import stat
 import subprocess
 import tempfile
 from contextlib import suppress
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from memoryforge.errors import WorkspaceError
 
 BASELINE_COMMIT_MESSAGE = "chore: initialize MemoryForge workspace"
 FALLBACK_AUTHOR_NAME = "MemoryForge"
 FALLBACK_AUTHOR_EMAIL = "memoryforge@localhost"
+_COMMIT_ID = re.compile(r"^[a-f0-9]{40,64}$")
 
 
 class GitVersionStore:
@@ -138,6 +140,35 @@ class GitVersionStore:
         tracked = set(completed.stdout.splitlines())
         return all(path in tracked for path in paths)
 
+    def read_text_at(self, commit: str, path: str) -> str | None:
+        """Read one stable Wiki file at a fixed Commit without changing the worktree."""
+        parts = PurePosixPath(path).parts
+        if (
+            not parts
+            or parts[0] != "wiki"
+            or any(part in {"", ".", ".."} for part in parts)
+            or "\\" in path
+            or str(PurePosixPath(path)) != path
+        ):
+            raise WorkspaceError("invalid historical Wiki file identity")
+        self._require_commit(commit)
+        if self._run(["cat-file", "-e", f"{commit}:{path}"], check=False).returncode != 0:
+            return None
+        completed = self._run(["show", f"{commit}:{path}"], check=True)
+        return completed.stdout
+
+    def is_ancestor(self, ancestor: str, descendant: str) -> bool:
+        """Return whether two validated Commits form the expected history chain."""
+        self._require_commit(ancestor)
+        self._require_commit(descendant)
+        return (
+            self._run(
+                ["merge-base", "--is-ancestor", ancestor, descendant],
+                check=False,
+            ).returncode
+            == 0
+        )
+
     def commit_paths(self, paths: tuple[str, ...], message: str) -> str:
         """Commit only the stable Wiki paths produced by one approved ChangeSet."""
         if not paths:
@@ -180,6 +211,13 @@ class GitVersionStore:
             return None
         value = completed.stdout.strip()
         return value or None
+
+    def _require_commit(self, commit: str) -> None:
+        if (
+            _COMMIT_ID.fullmatch(commit) is None
+            or self._run(["cat-file", "-e", f"{commit}^{{commit}}"], check=False).returncode != 0
+        ):
+            raise WorkspaceError("historical Wiki Commit does not exist")
 
     def _run(
         self,

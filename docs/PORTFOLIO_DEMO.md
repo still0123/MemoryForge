@@ -32,6 +32,21 @@ CLI / MiniClaude Agent / 飞书机器人
 
 ### 2. 跑公开端到端 Demo
 
+最快路径不依赖外部仓库或模型 Key：
+
+```bash
+.venv/bin/python demo/run_showcase_demo.py \
+  --workdir /private/tmp/memoryforge-showcase-demo \
+  --output /private/tmp/memoryforge-showcase
+open /private/tmp/memoryforge-showcase/index.html
+```
+
+按页面顺序展示来源版本、Wiki 树、ChangeSet Diff、`review → approve → apply`、Query/Citation
+Trace、正向指标、Click 外部失败、正确拒答和 Code Wiki Mermaid。页面为只读静态文件，不依赖
+正在运行的服务。
+
+完整文档 Wiki 复现仍可使用已存在的公开 Git checkout：
+
 准备一个已经存在的公开 Git checkout，然后执行：
 
 ```bash
@@ -110,9 +125,9 @@ memoryforge agent-clear interview \
 session 只保存最近 3 轮的有限文本和引用片段，保存在 Workspace 的 `.memoryforge/sessions/`，
 不进入公开 Wiki 或 Git 提交。飞书服务按 `chat_id` 隔离会话；拿不到稳定会话标识时自动使用单轮模式。
 
-### 5. 最后展示飞书入口
+### 5. 可选展示飞书入口
 
-飞书只作为交互和展示层，Wiki 真值仍保存在本地 Workspace。纯确定性模式：
+飞书只作为可选交互层，Wiki 真值和静态 Showcase 都保存在本地。纯确定性模式：
 
 ```bash
 memoryforge feishu-serve \

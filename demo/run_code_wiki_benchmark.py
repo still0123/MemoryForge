@@ -39,11 +39,22 @@ def main(argv: list[str] | None = None) -> None:
     print(f"Wrote code Wiki evidence to {output}")
 
 
-def build_evidence(workdir: Path) -> dict[str, Any]:
+def build_evidence(
+    workdir: Path,
+    *,
+    include_sample_query: bool = False,
+) -> dict[str, Any]:
     source_repo = workdir / "source"
     workspace = workdir / "workspace"
     shutil.copytree(FIXTURE, source_repo)
     _git(source_repo, "init")
+    _git(
+        source_repo,
+        "remote",
+        "add",
+        "origin",
+        "https://example.invalid/memoryforge-showcase-fixture.git",
+    )
     _git(source_repo, "config", "user.email", "benchmark@example.com")
     _git(source_repo, "config", "user.name", "MemoryForge Benchmark")
     _git(source_repo, "add", ".")
@@ -66,6 +77,19 @@ def build_evidence(workdir: Path) -> dict[str, Any]:
     applied = _cli_json("apply", ingest["changeset_id"], *_ws(workspace))
     lint = _cli_json("lint", *_ws(workspace))
     evaluation = run_code_evaluation(workspace, repository_id, SUITE)
+    sample_query = None
+    if include_sample_query:
+        sample_query = _cli_json(
+            "ask",
+            "Which module does ts.service import?",
+            "--debug",
+            "--verify",
+            "--repository",
+            repository_id,
+            *_ws(workspace),
+        )
+        if sample_query.get("status") != "answered" or not sample_query.get("citations"):
+            raise RuntimeError("fixed Code Wiki Showcase query was not answered")
 
     suite = CodeEvaluationSuite.model_validate_json(SUITE.read_text(encoding="utf-8"))
     incremental = suite.incremental
@@ -125,7 +149,7 @@ def build_evidence(workdir: Path) -> dict[str, Any]:
         and changed_page_ratio <= incremental.max_changed_page_ratio
         and incremental_result["stable_symbol_ids"]
     )
-    return {
+    evidence = {
         "schema_version": 1,
         "memoryforge_commit": _git_output(REPO_ROOT, "rev-parse", "HEAD"),
         "memoryforge_worktree_dirty": bool(_git_output(REPO_ROOT, "status", "--porcelain")),
@@ -144,6 +168,14 @@ def build_evidence(workdir: Path) -> dict[str, Any]:
         "evaluation": evaluation,
         "incremental": incremental_result,
     }
+    if sample_query is not None:
+        evidence["sample_query"] = {
+            "question": "Which module does ts.service import?",
+            "answer": sample_query["answer"],
+            "citations": sample_query["citations"],
+            "trace": sample_query.get("trace", []),
+        }
+    return evidence
 
 
 def _flatten_modules(modules: tuple[ModuleNode, ...]) -> tuple[ModuleNode, ...]:
