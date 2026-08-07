@@ -76,34 +76,35 @@ def sync_folder(
         sensitivity=sensitivity,
     )
 
-    register_folder_import(opened, folder_id)
-    counts = {"created": 0, "updated": 0, "unchanged": 0}
-    documents = []
-    for item in scanned:
-        imported = import_local_document(
-            opened.root,
-            item.document,
-            source_id=item.source_id,
-        )
-        record_folder_source_version(
-            opened,
-            folder_id=folder_id,
-            source_id=imported.source_id,
-            relative_path=item.relative_path,
-        )
-        counts[imported.status] += 1
-        documents.append(
-            FolderDocumentSyncResult(
+    with opened.exclusive_lock():
+        register_folder_import(opened, folder_id)
+        counts = {"created": 0, "updated": 0, "unchanged": 0}
+        documents = []
+        for item in scanned:
+            imported = import_local_document(
+                opened.root,
+                item.document,
+                source_id=item.source_id,
+            )
+            record_folder_source_version(
+                opened,
+                folder_id=folder_id,
                 source_id=imported.source_id,
                 relative_path=item.relative_path,
-                status=imported.status,
             )
+            counts[imported.status] += 1
+            documents.append(
+                FolderDocumentSyncResult(
+                    source_id=imported.source_id,
+                    relative_path=item.relative_path,
+                    status=imported.status,
+                )
+            )
+        deleted = reconcile_folder_sources(
+            opened,
+            folder_id=folder_id,
+            current_paths={item.relative_path for item in scanned},
         )
-    deleted = reconcile_folder_sources(
-        opened,
-        folder_id=folder_id,
-        current_paths={item.relative_path for item in scanned},
-    )
     return FolderSyncResult(
         folder_id=folder_id,
         created=counts["created"],
