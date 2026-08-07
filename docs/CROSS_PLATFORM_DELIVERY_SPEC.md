@@ -2,7 +2,7 @@
 
 ## Status
 
-`FROZEN_BASELINE_REJECTED`
+`DEVELOPMENT_PASS_REGRESSION_PENDING`
 
 ## Base
 
@@ -51,6 +51,29 @@ changes. Confirmation must not run during development.
 All seven cases fail during collection because
 `memoryforge.platform_lock` does not exist. The exact root error is
 `ModuleNotFoundError: No module named 'memoryforge.platform_lock'`.
+
+## Candidate 1 Result
+
+- Evidence:
+  `demo/results/cross_platform_delivery_candidate_1.json`
+- MemoryForge Commit:
+  `96c720cf49ed0bfc97fd765e9af025ab6f4ae9ea`
+- Evidence SHA256:
+  `f2bd8afa6759c3d1ddbc796444cfb58d968fbab82818c27f1c0f24590013801e`
+- Result: `DEVELOPMENT_PASS_REGRESSION_PENDING`
+- Development pass rate: 100.0%
+- Failed cases: 0
+- Deterministic evaluation SHA256:
+  `04e69c51fd4ca959da432fc501db91c06bfcc3d1ef04002042dee5fa147b3f54`
+- Focused regression: 63 passed
+- Full pytest: 526 passed
+- Ruff, format, strict Mypy, registry, and portable smoke: passed
+- Confirmation status: `not_run`
+
+The native Windows type audit leaves 27 errors in the documented POSIX
+directory-descriptor and `fchmod` paths. It reports no error in
+`platform_lock.py`. This is retained as a negative portability boundary and
+is not represented as native Windows confirmation.
 
 ## Goal
 

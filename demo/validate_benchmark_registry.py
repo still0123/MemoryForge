@@ -247,6 +247,20 @@ REQUIRED_EXPERIMENT_EVIDENCE = {
             "12d0ecadb4d8d310e2fa3b22f71dbfe770bd2567",
         ),
     },
+    "cross-platform-delivery": {
+        _RESULTS + "cross_platform_delivery_baseline_rejected.json": (
+            1,
+            "rejected",
+            "f169486f1fc757abaaf3728187703834510726c2cae11736c2e82ba220e369ac",
+            "bef6c7e35e9d8e282d2b3b0e0c4b3874a12f9e8a",
+        ),
+        _RESULTS + "cross_platform_delivery_candidate_1.json": (
+            2,
+            "accepted_development_superseded",
+            "f2bd8afa6759c3d1ddbc796444cfb58d968fbab82818c27f1c0f24590013801e",
+            "96c720cf49ed0bfc97fd765e9af025ab6f4ae9ea",
+        ),
+    },
 }
 STATIC_SHOWCASE_REJECTED_CONTRACTS = {
     _RESULTS + "static_showcase_baseline_rejected.json": {
@@ -308,6 +322,7 @@ REQUIRED_REGRESSION_EVIDENCE = {
     "folder-import-lifecycle": {},
     "github-thread-import-lifecycle": {},
     "static-showcase": {},
+    "cross-platform-delivery": {},
 }
 REQUIRED_ACCEPTANCE_EVIDENCE = {
     "exact-symbol-routing.learn-claude-code": {
@@ -402,6 +417,7 @@ REQUIRED_ACCEPTANCE_EVIDENCE = {
             "5c719c387addc6a415658727597400cfd1af7846",
         ),
     },
+    "cross-platform-delivery": {},
 }
 FINAL_ACCEPTANCE_REGISTRY_COUNTS = {
     "exact-symbol-routing.learn-claude-code": {
@@ -568,6 +584,18 @@ FINAL_EXPERIMENT_GATE_KEYS = {
         "clean_worktree_after_run",
         "confirmation_not_run",
     },
+    "cross-platform-delivery": {
+        "pass_rate",
+        "failed_cases",
+        "direct_platform_imports",
+        "windows_lock_offset",
+        "windows_lock_bytes",
+        "local_smoke",
+        "deterministic_replay",
+        "stable_memoryforge_commit",
+        "clean_worktree_after_run",
+        "confirmation_not_run",
+    },
 }
 LOCAL_GATE_KEYS = {
     "command",
@@ -630,6 +658,17 @@ STATIC_SHOWCASE_REPOSITORY = {
         "tests/test_showcase.py",
         "demo/evaluation/static_showcase_development.json",
         "demo/evaluation/static_showcase_confirmation.json",
+    ],
+}
+CROSS_PLATFORM_REPOSITORY = {
+    "repository": "still0123/MemoryForge",
+    "remote_url": "https://github.com/still0123/MemoryForge.git",
+    "commit": "bef6c7e35e9d8e282d2b3b0e0c4b3874a12f9e8a",
+    "license": "MIT",
+    "source_paths": [
+        "tests/test_cross_platform_delivery.py",
+        "demo/evaluation/cross_platform_delivery_development.json",
+        "demo/evaluation/cross_platform_delivery_confirmation.json",
     ],
 }
 
@@ -802,6 +841,8 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
             _validate_github_thread_experiment_metadata(experiment)
         elif suite_id == "static-showcase":
             _validate_static_showcase_experiment_metadata(experiment)
+        elif suite_id == "cross-platform-delivery":
+            _validate_cross_platform_experiment_metadata(experiment)
 
         repositories = experiment.get("repositories")
         if not isinstance(repositories, list) or not repositories:
@@ -814,6 +855,7 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
             "folder-import-lifecycle",
             "github-thread-import-lifecycle",
             "static-showcase",
+            "cross-platform-delivery",
         }:
             if "source_manifest" in experiment:
                 raise ValueError(f"component experiment cannot declare source manifest: {suite_id}")
@@ -987,6 +1029,7 @@ def _validate_experiment_payload(
     if experiment["suite_id"] in {
         "folder-import-lifecycle",
         "github-thread-import-lifecycle",
+        "cross-platform-delivery",
     }:
         _validate_pytest_component_experiment_payload(
             experiment,
@@ -1161,6 +1204,21 @@ def _validate_pytest_component_experiment_payload(
         "sha256": development.get("test_sha256"),
     }
     _validate_artifact(test_artifact, str(experiment["suite_id"]))
+    development_payload = payload.get("development", {})
+    if experiment["suite_id"] == "cross-platform-delivery":
+        test_binding_valid = (
+            development_payload.get("test_file")
+            == {
+                "path": development["test_file"],
+                "sha256": development["test_sha256"],
+            }
+            and "test_sha256" not in development_payload
+        )
+    else:
+        test_binding_valid = (
+            development_payload.get("test_file") == development["test_file"]
+            and development_payload.get("test_sha256") == development["test_sha256"]
+        )
     if (
         payload.get("schema_version") != 1
         or set(payload) != MULTI_SOURCE_DEVELOPMENT_EVIDENCE_KEYS
@@ -1171,8 +1229,7 @@ def _validate_pytest_component_experiment_payload(
         or payload.get("passed") is not artifact["passed"]
         or payload.get("development", {}).get("path") != development["path"]
         or payload.get("development", {}).get("sha256") != development["sha256"]
-        or payload.get("development", {}).get("test_file") != development["test_file"]
-        or payload.get("development", {}).get("test_sha256") != development["test_sha256"]
+        or not test_binding_valid
         or payload.get("development", {}).get("case_count") != development["case_count"]
         or not isinstance(evaluation, dict)
         or set(evaluation) != {"case_count", "metrics", "cases"}
@@ -1214,7 +1271,35 @@ def _validate_pytest_component_experiment_payload(
     metrics = evaluation.get("metrics")
     if not isinstance(metrics, dict):
         raise ValueError("pytest component experiment metrics missing")
+    if experiment["suite_id"] == "cross-platform-delivery":
+        expected_status = "failed" if artifact["status"] == "rejected" else "passed"
+        expected_classification = "pytest_failure" if artifact["status"] == "rejected" else "none"
+        expected_cases = [
+            {
+                "id": case["id"],
+                "pytest_node": (f"tests/test_cross_platform_delivery.py::{case['test']}"),
+                "status": expected_status,
+                "error_classification": expected_classification,
+            }
+            for case in frozen["cases"]
+        ]
+        expected_metrics = (
+            {
+                "pass_rate": 0.0,
+                "failed_cases": 7,
+                "direct_platform_imports": 2,
+                "windows_lock_offset": -1,
+                "windows_lock_bytes": 0,
+                "local_smoke": "failed",
+            }
+            if artifact["status"] == "rejected"
+            else experiment["expected_metrics"]["development"]
+        )
+        if cases != expected_cases or not _strict_mapping(metrics, expected_metrics):
+            raise ValueError("cross-platform delivery case Evidence changed")
     for metric, expected in experiment["expected_metrics"]["development"].items():
+        if artifact["status"] == "rejected":
+            break
         if metrics.get(metric) != expected:
             raise ValueError(f"pytest component experiment metric mismatch: {metric}")
 
@@ -1397,6 +1482,17 @@ def _validate_static_showcase_experiment_metadata(experiment: dict[str, Any]) ->
         or experiment.get("repositories") != [STATIC_SHOWCASE_REPOSITORY]
     ):
         raise ValueError("static-Showcase experiment metadata changed")
+
+
+def _validate_cross_platform_experiment_metadata(experiment: dict[str, Any]) -> None:
+    if (
+        experiment.get("suite_revision") != 1
+        or experiment.get("suite_type") != "source_lifecycle"
+        or experiment.get("evaluator") != "demo.run_cross_platform_delivery_benchmark"
+        or experiment.get("max_wiki_pages") != 3
+        or experiment.get("repositories") != [CROSS_PLATFORM_REPOSITORY]
+    ):
+        raise ValueError("cross-platform delivery experiment metadata changed")
 
 
 def _validate_regression_evidence(

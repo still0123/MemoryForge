@@ -792,6 +792,77 @@
           "passed": true
         }
       ]
+    },
+    {
+      "suite_id": "cross-platform-delivery",
+      "suite_revision": 1,
+      "suite_type": "source_lifecycle",
+      "evaluator": "demo.run_cross_platform_delivery_benchmark",
+      "model_judge": false,
+      "max_wiki_pages": 3,
+      "required_evidence_statuses": [
+        "rejected",
+        "accepted_development_superseded"
+      ],
+      "repositories": [
+        {
+          "repository": "still0123/MemoryForge",
+          "remote_url": "https://github.com/still0123/MemoryForge.git",
+          "commit": "bef6c7e35e9d8e282d2b3b0e0c4b3874a12f9e8a",
+          "license": "MIT",
+          "source_paths": [
+            "tests/test_cross_platform_delivery.py",
+            "demo/evaluation/cross_platform_delivery_development.json",
+            "demo/evaluation/cross_platform_delivery_confirmation.json"
+          ]
+        }
+      ],
+      "splits": {
+        "development": {
+          "path": "demo/evaluation/cross_platform_delivery_development.json",
+          "sha256": "0082594121022f6f97b6eae3d4106819794c0b988f531a02e51b9ec2194fb6ff",
+          "test_file": "tests/test_cross_platform_delivery.py",
+          "test_sha256": "08601b7effba8271ac318a58a5b0906b934bdeaa4564edcd0ec5738e61618ac3",
+          "case_count": 7
+        },
+        "confirmation": {
+          "path": "demo/evaluation/cross_platform_delivery_confirmation.json",
+          "sha256": "200074acfb79979bf4663b97ae25e9dd62fa0f94359b8aa0d39c4250256660fc",
+          "case_count": 3,
+          "status": "not_run"
+        },
+        "holdout": null
+      },
+      "expected_metrics": {
+        "development": {
+          "pass_rate": 100.0,
+          "failed_cases": 0,
+          "direct_platform_imports": 0,
+          "windows_lock_offset": 0,
+          "windows_lock_bytes": 1,
+          "local_smoke": "passed"
+        }
+      },
+      "evidence": [
+        {
+          "split": "development",
+          "evidence_revision": 1,
+          "status": "rejected",
+          "path": "demo/results/cross_platform_delivery_baseline_rejected.json",
+          "sha256": "f169486f1fc757abaaf3728187703834510726c2cae11736c2e82ba220e369ac",
+          "memoryforge_commit": "bef6c7e35e9d8e282d2b3b0e0c4b3874a12f9e8a",
+          "passed": false
+        },
+        {
+          "split": "development",
+          "evidence_revision": 2,
+          "status": "accepted_development_superseded",
+          "path": "demo/results/cross_platform_delivery_candidate_1.json",
+          "sha256": "f2bd8afa6759c3d1ddbc796444cfb58d968fbab82818c27f1c0f24590013801e",
+          "memoryforge_commit": "96c720cf49ed0bfc97fd765e9af025ab6f4ae9ea",
+          "passed": true
+        }
+      ]
     }
   ],
   "suites": [

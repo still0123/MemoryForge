@@ -20,8 +20,8 @@ def test_benchmark_registry_binds_all_release_artifacts() -> None:
     assert summary == {
         "status": "valid",
         "suite_count": 12,
-        "experiment_count": 6,
-        "evidence_count": 71,
+        "experiment_count": 7,
+        "evidence_count": 73,
         "qa_case_count": 121,
         "qa_case_types_present": [
             "code_behavior",
@@ -200,6 +200,66 @@ def test_benchmark_registry_pins_static_showcase_repository_commit(tmp_path: Pat
 
     with pytest.raises(ValueError, match="metadata changed"):
         validator.validate_registry(path)
+
+
+def test_benchmark_registry_cannot_drop_cross_platform_baseline(tmp_path: Path) -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "cross-platform-delivery"
+    )
+    experiment["evidence"] = [
+        artifact for artifact in experiment["evidence"] if artifact["status"] != "rejected"
+    ]
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps(registry), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="experiment Evidence history is incomplete"):
+        validator.validate_registry(path)
+
+
+def test_benchmark_registry_pins_cross_platform_repository_commit(tmp_path: Path) -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "cross-platform-delivery"
+    )
+    experiment["repositories"][0]["commit"] = "0" * 40
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps(registry), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="metadata changed"):
+        validator.validate_registry(path)
+
+
+def test_benchmark_registry_rejects_contradictory_cross_platform_case_evidence() -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "cross-platform-delivery"
+    )
+    artifact = next(
+        item
+        for item in experiment["evidence"]
+        if item["status"] == "accepted_development_superseded"
+    )
+    payload = json.loads((validator.REPO_ROOT / artifact["path"]).read_text(encoding="utf-8"))
+    payload["development"]["evaluation"]["cases"][0]["status"] = "failed"
+    evaluation_sha256 = hashlib.sha256(
+        json.dumps(
+            payload["development"]["evaluation"],
+            sort_keys=True,
+            ensure_ascii=False,
+        ).encode()
+    ).hexdigest()
+    for run in payload["runs"]:
+        run["evaluation_sha256"] = evaluation_sha256
+
+    with pytest.raises(ValueError, match="cross-platform delivery case Evidence changed"):
+        validator._validate_pytest_component_experiment_payload(
+            experiment,
+            artifact,
+            payload,
+            experiment["splits"]["development"],
+            experiment["splits"]["confirmation"],
+        )
 
 
 def test_benchmark_registry_rejects_contradictory_showcase_case_evidence() -> None:
