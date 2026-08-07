@@ -2,7 +2,7 @@
 
 ## Status
 
-`INPUTS_FROZEN_BASELINE_PENDING`
+`BASELINE_REJECTED_IMPLEMENTATION_PENDING`
 
 ## Base
 
@@ -59,6 +59,28 @@ Contract test:
 The contract test may run during development because it only hashes, parses,
 and proves absence of result files. It does not execute confirmation or
 holdout cases.
+
+## Baseline Result
+
+- Evidence: `demo/results/release_candidate_baseline_rejected.json`
+- Evidence SHA256:
+  `2e2674ce071489f92d4a480b4f0c0018e0b416764e9a2df1a7ff8a2fc7640740`
+- MemoryForge Commit:
+  `4d834679ec61355e285fb36a0cceef8f489a9083`
+- Result: `REJECTED`
+- Development pass rate: 16.7%
+- Failed cases: 5
+- Confirmation status: `not_run`
+- Holdout status: `not_run`
+
+The only passing case proved that both frozen result paths remained absent.
+Failures are retained with deterministic classifications:
+
+- `version_mismatch`;
+- `benchmark_summary_mismatch`;
+- `artifact_missing`;
+- `workspace_drill_failure`;
+- `release_document_mismatch`.
 
 ## Confirmation Components
 
