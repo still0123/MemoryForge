@@ -123,6 +123,7 @@ def test_lint_reports_page_without_citation(tmp_path: Path, monkeypatch) -> None
 
     assert result.exit_code == 0, result.output
     assert [issue["code"] for issue in json.loads(result.stdout)["issues"]] == [
+        "fact_index_page_mismatch",
         "missing_citation",
         "missing_source_citation",
     ]
@@ -185,7 +186,10 @@ def test_lint_rejects_reversed_citation_range(tmp_path: Path, monkeypatch) -> No
     result = runner.invoke(app, ["lint", "--workspace", str(workspace)])
 
     assert result.exit_code == 0, result.output
-    assert [issue["code"] for issue in json.loads(result.stdout)["issues"]] == ["invalid_citation"]
+    assert [issue["code"] for issue in json.loads(result.stdout)["issues"]] == [
+        "fact_index_page_mismatch",
+        "invalid_citation",
+    ]
 
 
 def test_lint_reports_each_declared_source_without_a_citation(

@@ -10,6 +10,8 @@ from pathlib import Path, PurePosixPath
 from typing import Literal, NotRequired, TypedDict
 
 from memoryforge.provider import OpenAICompatibleProvider, ProviderUnavailableError
+from memoryforge.wiki_facts import CitationPayload
+from memoryforge.wiki_facts import parse_page_citations as _page_citations
 from memoryforge.workspace import (
     find_applied_page_paths,
     is_public_source_version,
@@ -17,24 +19,10 @@ from memoryforge.workspace import (
     repository_page_paths,
 )
 
-_FACT = re.compile(r"^- (?P<quote>.+?) \[\^(?P<footnote>[^\]]+)\]$", re.MULTILINE)
-_RELATION_FACT = re.compile(
-    r"^(?P<route>`[^`]+` \([a-z_]+\)): "
-    r'(?P<evidence>"(?:\\.|[^"\\])*")$'
-)
-_FOOTNOTE = re.compile(
-    r"^\[\^(?P<footnote>[^\]]+)\]: source "
-    r"`(?P<source_id>[a-f0-9]{64})` · "
-    r"revision `(?P<source_version>\d+)` · "
-    r"`(?P<locator>chars:\d+-\d+)`$",
-    re.MULTILINE,
-)
 _INDEX_ENTRY = re.compile(
     r"^- \[(?P<title>(?:\\.|[^\]])+)\]\((?P<path>[^)]+)\) — (?P<summary>.+)$",
     re.MULTILINE,
 )
-_FRONTMATTER = re.compile(r"\A---\n(?P<fields>.*?)\n---\n", re.DOTALL)
-_FACT_SECTION = re.compile(r"^#{3,6} (?P<section>.+?)\s*$", re.MULTILINE)
 _WORDS = re.compile(r"[a-z0-9]+|[\u4e00-\u9fff]+", re.IGNORECASE)
 _CAMEL_CASE_PARTS = re.compile(r"[A-Z]+(?=[A-Z][a-z]|$)|[A-Z]?[a-z]+")
 _CJK = re.compile(r"^[\u4e00-\u9fff]+$")
@@ -77,16 +65,6 @@ _CODE_QUERY_EXPANSIONS = {
 }
 _ENVIRONMENT_ASSIGNMENT = re.compile(r"\b(?:export\s+)?[A-Z][A-Z0-9_]{2,}=")
 _CODE_FACT = re.compile(r"^(?:package|type|func|class|def)\b")
-
-
-class CitationPayload(TypedDict):
-    source_id: str
-    source_version: int
-    locator: str
-    quote: str
-    section_path: NotRequired[str]
-    routing_text: NotRequired[str]
-    is_summary: NotRequired[bool]
 
 
 class EvidencePayload(CitationPayload):
@@ -976,63 +954,6 @@ def _safe_wiki_page(workspace_root: Path, page: Path) -> Path | None:
     return page
 
 
-def _page_citations(content: str) -> list[CitationPayload]:
-    if not _page_matches_frontmatter(content):
-        return []
-    section_matches = re.finditer(
-        r"^## (?P<name>Verified facts|Verified symbols|Verified dependencies)\s*$"
-        r"\n(?P<section>.*?)(?=^## |\Z)",
-        content,
-        re.MULTILINE | re.DOTALL,
-    )
-
-    footnotes = {
-        match.group("footnote"): match.groupdict() for match in _FOOTNOTE.finditer(content)
-    }
-    citations: list[CitationPayload] = []
-    for section_match in section_matches:
-        section_name = section_match.group("name")
-        section_text = section_match.group("section")
-        for fact_index, fact in enumerate(_FACT.finditer(section_text)):
-            footnote = footnotes.get(fact.group("footnote"))
-            if footnote is None:
-                continue
-            quote = fact.group("quote")
-            relation_fact = _RELATION_FACT.fullmatch(quote)
-            if section_name == "Verified dependencies":
-                if relation_fact is None:
-                    continue
-                try:
-                    evidence = json.loads(relation_fact.group("evidence"))
-                except json.JSONDecodeError:
-                    continue
-                if not isinstance(evidence, str):
-                    continue
-                quote = evidence
-            citation: CitationPayload = {
-                "source_id": footnote["source_id"],
-                "source_version": int(footnote["source_version"]),
-                "locator": footnote["locator"],
-                "quote": quote,
-            }
-            if relation_fact is not None:
-                citation["routing_text"] = relation_fact.group("route")
-            if section_name != "Verified dependencies" and fact_index == 0:
-                citation["is_summary"] = True
-            section = next(
-                (
-                    match.group("section")
-                    for match in reversed(list(_FACT_SECTION.finditer(section_text)))
-                    if match.start() <= fact.start()
-                ),
-                "",
-            )
-            if section:
-                citation["section_path"] = section
-            citations.append(citation)
-    return citations
-
-
 def _citation_terms(citation: CitationPayload) -> set[str]:
     return _terms(
         f"{citation.get('section_path', '')} {citation.get('routing_text', '')} {citation['quote']}"
@@ -1124,19 +1045,6 @@ def _has_direct_evidence(question_terms: set[str], citation: CitationPayload) ->
             )
         )
     return bool(direct_overlap)
-
-
-def _page_matches_frontmatter(content: str) -> bool:
-    match = _FRONTMATTER.match(content)
-    if match is None:
-        return True
-    fields = {
-        key.strip(): value.strip()
-        for line in match.group("fields").splitlines()
-        for key, separator, value in (line.partition(":"),)
-        if separator
-    }
-    return fields.get("type") in {"entity", "concept", "synthesis"}
 
 
 def _unescape_link_text(value: str) -> str:

@@ -648,6 +648,77 @@
       ]
     },
     {
+      "suite_id": "wiki-fact-index.public-structure",
+      "suite_revision": 1,
+      "suite_type": "code_wiki_structure",
+      "evaluator": "demo.run_wiki_fact_index_benchmark",
+      "model_judge": false,
+      "source_manifest": {
+        "path": "demo/evaluation/wiki_fact_index_sources.json",
+        "sha256": "ee337432eb8ac87dd1376edea889190ee98e68cc40fa115301e74de7d9042d99"
+      },
+      "repositories": [
+        {
+          "repository": "shareAI-lab/learn-claude-code",
+          "remote_url": "https://github.com/shareAI-lab/learn-claude-code.git",
+          "commit": "7b564c3ee6996039cb4e13a53024dfe2d4388d35",
+          "license": "MIT",
+          "license_sha256": "204ff5ee216c8f895268a23b66d959f82aa4d868e871e0690fbf2844eff8a26b",
+          "source_paths": [
+            "s01_agent_loop/code.py",
+            "s03_permission/code.py",
+            "s05_todo_write/code.py",
+            "s06_subagent/code.py",
+            "s12_task_system/code.py"
+          ]
+        },
+        {
+          "repository": "colinhacks/zod",
+          "remote_url": "https://github.com/colinhacks/zod.git",
+          "commit": "912f0f51b0ced654d0069741e7160834dca742ee",
+          "license": "MIT",
+          "license_sha256": "3f1189b28e3866e0d979968d466b78f813f76827cfdca1fbb124cc0a5c8841f8",
+          "source_paths": [
+            "packages/zod/src/v4/core"
+          ]
+        }
+      ],
+      "splits": {
+        "development": {
+          "path": "demo/evaluation/wiki_fact_index_sources.json",
+          "sha256": "ee337432eb8ac87dd1376edea889190ee98e68cc40fa115301e74de7d9042d99",
+          "case_count": 39
+        },
+        "confirmation": null,
+        "holdout": null
+      },
+      "expected_metrics": {
+        "development": {
+          "facts": 1356,
+          "pages_with_facts": 39,
+          "symbols": 1270,
+          "relations": 86,
+          "structural_benchmark": true,
+          "fact_rows_match_fts": true,
+          "facts_use_applied_source_versions": true,
+          "metadata_round_trip": true,
+          "symbol_metadata_present": true,
+          "relation_metadata_present": true,
+          "deterministic_replay": true,
+          "passed": true
+        }
+      },
+      "evidence": [
+        {
+          "split": "development",
+          "evidence_revision": 1,
+          "path": "demo/results/wiki_fact_index_baseline.json",
+          "sha256": "57343945d9f4c9db48a7e2990b4e0cf49ac5ac8623e4f40c7f763a4abca6f8ec",
+          "memoryforge_commit": "523a2f1a7092b8e66895600a65286f79a6f62320"
+        }
+      ]
+    },
+    {
       "suite_id": "source-lifecycle.local-git",
       "suite_revision": 1,
       "suite_type": "source_lifecycle",

@@ -31,6 +31,12 @@ from memoryforge.models import (
     SourceVersionManifest,
 )
 from memoryforge.version_store import GitVersionStore
+from memoryforge.wiki_facts import (
+    IndexedWikiFact,
+    WikiFact,
+    WikiFactSearchResult,
+    parse_page_facts,
+)
 
 DATABASE_RELATIVE_PATH = Path(".memoryforge/index.sqlite")
 RAW_CATEGORIES = ("design", "postmortem", "summary", "notes", "refs")
@@ -115,6 +121,17 @@ CREATE VIRTUAL TABLE IF NOT EXISTS source_fts USING fts5(
     search_terms,
     tokenize='unicode61'
 )"""
+_WIKI_FACT_FTS_SCHEMA_STATEMENT = """
+CREATE VIRTUAL TABLE IF NOT EXISTS wiki_fact_fts USING fts5(
+    section_path,
+    quote,
+    routing_text,
+    symbol,
+    relation_type,
+    content='wiki_facts',
+    content_rowid='id',
+    tokenize='unicode61'
+)"""
 
 _SCHEMA_STATEMENTS = (
     """
@@ -172,6 +189,31 @@ CREATE TABLE IF NOT EXISTS page_sources (
 CREATE INDEX IF NOT EXISTS idx_page_sources_source_id
 ON page_sources(source_id, page_path)""",
     """
+CREATE TABLE IF NOT EXISTS wiki_facts (
+    id INTEGER PRIMARY KEY,
+    fact_id TEXT NOT NULL UNIQUE,
+    page_path TEXT NOT NULL,
+    repository_id TEXT REFERENCES git_repositories(repository_id),
+    source_id TEXT NOT NULL REFERENCES sources(source_id),
+    source_version INTEGER NOT NULL REFERENCES source_versions(id),
+    locator TEXT NOT NULL,
+    section_path TEXT NOT NULL,
+    quote TEXT NOT NULL,
+    routing_text TEXT NOT NULL,
+    symbol TEXT,
+    relation_type TEXT,
+    UNIQUE(page_path, fact_id)
+)""",
+    """
+CREATE INDEX IF NOT EXISTS idx_wiki_facts_page
+ON wiki_facts(page_path, id)""",
+    """
+CREATE INDEX IF NOT EXISTS idx_wiki_facts_source
+ON wiki_facts(source_id, source_version)""",
+    """
+CREATE INDEX IF NOT EXISTS idx_wiki_facts_repository
+ON wiki_facts(repository_id, page_path)""",
+    """
 CREATE TABLE IF NOT EXISTS git_repositories (
     repository_id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -204,6 +246,38 @@ CREATE TABLE IF NOT EXISTS git_code_modules (
     PRIMARY KEY(repository_id, relative_path)
 )""",
     _SOURCE_FTS_SCHEMA_STATEMENT,
+    _WIKI_FACT_FTS_SCHEMA_STATEMENT,
+    """
+CREATE TRIGGER IF NOT EXISTS wiki_facts_ai AFTER INSERT ON wiki_facts BEGIN
+  INSERT INTO wiki_fact_fts(
+    rowid, section_path, quote, routing_text, symbol, relation_type
+  ) VALUES (
+    new.id, new.section_path, new.quote, new.routing_text, new.symbol, new.relation_type
+  );
+END""",
+    """
+CREATE TRIGGER IF NOT EXISTS wiki_facts_ad AFTER DELETE ON wiki_facts BEGIN
+  INSERT INTO wiki_fact_fts(
+    wiki_fact_fts, rowid, section_path, quote, routing_text, symbol, relation_type
+  ) VALUES (
+    'delete', old.id, old.section_path, old.quote, old.routing_text, old.symbol,
+    old.relation_type
+  );
+END""",
+    """
+CREATE TRIGGER IF NOT EXISTS wiki_facts_au AFTER UPDATE ON wiki_facts BEGIN
+  INSERT INTO wiki_fact_fts(
+    wiki_fact_fts, rowid, section_path, quote, routing_text, symbol, relation_type
+  ) VALUES (
+    'delete', old.id, old.section_path, old.quote, old.routing_text, old.symbol,
+    old.relation_type
+  );
+  INSERT INTO wiki_fact_fts(
+    rowid, section_path, quote, routing_text, symbol, relation_type
+  ) VALUES (
+    new.id, new.section_path, new.quote, new.routing_text, new.symbol, new.relation_type
+  );
+END""",
 )
 
 
@@ -466,6 +540,130 @@ class Workspace:
                     (page_path, source_id)
                     for page_path, source_ids in restored.items()
                     for source_id in source_ids
+                ),
+            )
+
+    def replace_applied_page_facts(
+        self,
+        page_facts: Mapping[str, tuple[WikiFact, ...]],
+    ) -> dict[str, tuple[IndexedWikiFact, ...]]:
+        """Replace grounded facts for stable Wiki pages and return prior rows."""
+        normalized = _normalize_page_facts(page_facts)
+        paths = tuple(sorted(normalized))
+        if not paths:
+            return {}
+        placeholders = ", ".join("?" for _ in paths)
+        with _connect(self.index_path) as connection:
+            previous_rows = _indexed_facts(
+                connection.execute(
+                    f"""
+                    SELECT
+                        fact_id, page_path, repository_id, source_id, source_version,
+                        locator, section_path, quote, routing_text, symbol, relation_type
+                    FROM wiki_facts
+                    WHERE page_path IN ({placeholders})
+                    ORDER BY page_path, id
+                    """,
+                    paths,
+                ).fetchall()
+            )
+            previous = {path: previous_rows.get(path, ()) for path in paths}
+            repositories: dict[tuple[str, int], str | None] = {}
+            for facts in normalized.values():
+                for fact in facts:
+                    key = (fact.source_id, fact.source_version)
+                    if key in repositories:
+                        continue
+                    row = connection.execute(
+                        """
+                        SELECT revisions.repository_id
+                        FROM sources
+                        JOIN source_versions
+                          ON source_versions.source_id = sources.id
+                        JOIN applied_source_versions
+                          ON applied_source_versions.source_id = sources.source_id
+                         AND applied_source_versions.source_version_id = source_versions.id
+                        LEFT JOIN git_source_revisions AS revisions
+                          ON revisions.source_version_id = source_versions.id
+                        WHERE sources.source_id = ? AND source_versions.id = ?
+                        """,
+                        key,
+                    ).fetchone()
+                    if row is None:
+                        raise WorkspaceIntegrityError(
+                            "Wiki fact does not identify an applied SourceVersion"
+                        )
+                    repositories[key] = (
+                        str(row["repository_id"]) if row["repository_id"] is not None else None
+                    )
+            connection.executemany(
+                "DELETE FROM wiki_facts WHERE page_path = ?",
+                ((path,) for path in paths),
+            )
+            connection.executemany(
+                """
+                INSERT INTO wiki_facts(
+                    fact_id, page_path, repository_id, source_id, source_version,
+                    locator, section_path, quote, routing_text, symbol, relation_type
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    (
+                        fact.fact_id,
+                        fact.page_path,
+                        repositories[(fact.source_id, fact.source_version)],
+                        fact.source_id,
+                        fact.source_version,
+                        fact.locator,
+                        fact.section_path,
+                        fact.quote,
+                        fact.routing_text,
+                        fact.symbol,
+                        fact.relation_type,
+                    )
+                    for path in paths
+                    for fact in normalized[path]
+                ),
+            )
+        return previous
+
+    def restore_applied_page_facts(
+        self,
+        previous: Mapping[str, tuple[IndexedWikiFact, ...]],
+    ) -> None:
+        """Restore fact rows after a failed apply."""
+        paths = tuple(sorted(previous))
+        if not paths:
+            return
+        _validate_stable_page_paths(paths)
+        with _connect(self.index_path) as connection:
+            connection.executemany(
+                "DELETE FROM wiki_facts WHERE page_path = ?",
+                ((path,) for path in paths),
+            )
+            connection.executemany(
+                """
+                INSERT INTO wiki_facts(
+                    fact_id, page_path, repository_id, source_id, source_version,
+                    locator, section_path, quote, routing_text, symbol, relation_type
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    (
+                        fact.fact_id,
+                        fact.page_path,
+                        fact.repository_id,
+                        fact.source_id,
+                        fact.source_version,
+                        fact.locator,
+                        fact.section_path,
+                        fact.quote,
+                        fact.routing_text,
+                        fact.symbol,
+                        fact.relation_type,
+                    )
+                    for path in paths
+                    for fact in previous[path]
                 ),
             )
 
@@ -1579,6 +1777,85 @@ def find_applied_page_paths(
     return tuple(paths)
 
 
+def search_wiki_facts(
+    workspace: Path,
+    query: str,
+    *,
+    limit: int = 10,
+    repository_id: str | None = None,
+    page_paths: Iterable[str] | None = None,
+) -> tuple[WikiFactSearchResult, ...]:
+    """Search grounded facts from applied Wiki pages with optional scopes."""
+    if not query.strip():
+        raise ValueError("fact search query must not be empty")
+    if limit < 1 or limit > 100:
+        raise ValueError("fact search limit must be between 1 and 100")
+    paths = tuple(sorted(set(page_paths))) if page_paths is not None else ()
+    if page_paths is not None:
+        _validate_stable_page_paths(paths)
+        if not paths:
+            return ()
+
+    opened = Workspace.open_readonly(workspace)
+    with _connect_readonly(opened.index_path) as connection:
+        parameters: list[object] = [_wiki_fact_fts_query(query)]
+        repository_filter = ""
+        if repository_id is not None:
+            _validate_repository_scope(connection, repository_id)
+            repository_filter = "AND facts.repository_id = ?"
+            parameters.append(repository_id)
+        page_filter = ""
+        if paths:
+            page_filter = "AND facts.page_path IN ({})".format(", ".join("?" for _ in paths))
+            parameters.extend(paths)
+        parameters.append(limit)
+        rows = connection.execute(
+            f"""
+            SELECT
+                facts.fact_id,
+                facts.page_path,
+                facts.repository_id,
+                facts.source_id,
+                facts.source_version,
+                facts.locator,
+                facts.section_path,
+                facts.quote,
+                facts.routing_text,
+                facts.symbol,
+                facts.relation_type,
+                bm25(wiki_fact_fts) AS rank
+            FROM wiki_fact_fts
+            JOIN wiki_facts AS facts ON facts.id = wiki_fact_fts.rowid
+            JOIN applied_source_versions AS applied
+              ON applied.source_id = facts.source_id
+             AND applied.source_version_id = facts.source_version
+            WHERE wiki_fact_fts MATCH ?
+              {repository_filter}
+              {page_filter}
+            ORDER BY rank, facts.page_path, facts.id
+            LIMIT ?
+            """,
+            tuple(parameters),
+        ).fetchall()
+    return tuple(
+        WikiFactSearchResult(
+            fact_id=str(row["fact_id"]),
+            page_path=str(row["page_path"]),
+            repository_id=(str(row["repository_id"]) if row["repository_id"] is not None else None),
+            source_id=str(row["source_id"]),
+            source_version=int(row["source_version"]),
+            locator=str(row["locator"]),
+            section_path=str(row["section_path"]),
+            quote=str(row["quote"]),
+            routing_text=str(row["routing_text"]),
+            symbol=str(row["symbol"]) if row["symbol"] is not None else None,
+            relation_type=(str(row["relation_type"]) if row["relation_type"] is not None else None),
+            rank=float(row["rank"]),
+        )
+        for row in rows
+    )
+
+
 def repository_page_paths(workspace: Path, repository_id: str) -> tuple[str, ...]:
     """Return applied Wiki pages backed by one registered Git repository."""
     opened = Workspace.open_readonly(workspace)
@@ -1820,6 +2097,62 @@ def _normalize_page_sources(
     return normalized
 
 
+def _normalize_page_facts(
+    page_facts: Mapping[str, tuple[WikiFact, ...]],
+) -> dict[str, tuple[WikiFact, ...]]:
+    normalized: dict[str, tuple[WikiFact, ...]] = {}
+    _validate_stable_page_paths(page_facts)
+    for page_path, facts in page_facts.items():
+        if any(fact.page_path != page_path for fact in facts):
+            raise ValueError("Wiki fact page path does not match its mapping")
+        if len({fact.fact_id for fact in facts}) != len(facts):
+            raise ValueError(f"Wiki facts must have unique identities: {page_path}")
+        for fact in facts:
+            if _CONTENT_SHA256.fullmatch(fact.fact_id) is None:
+                raise ValueError("Wiki fact identity must be a SHA-256 digest")
+            if _CONTENT_SHA256.fullmatch(fact.source_id) is None:
+                raise ValueError("Wiki fact source identity must be a SHA-256 digest")
+            if fact.source_version < 1:
+                raise ValueError("Wiki fact SourceVersion must be positive")
+            if _CHAR_LOCATOR.fullmatch(fact.locator) is None:
+                raise ValueError("Wiki fact locator must be a character range")
+            if not fact.quote:
+                raise ValueError("Wiki fact quote must not be empty")
+        normalized[page_path] = tuple(sorted(facts, key=lambda fact: fact.fact_id))
+    return normalized
+
+
+def _validate_stable_page_paths(page_paths: Iterable[str]) -> None:
+    if any(not _is_stable_wiki_page_path(path) for path in page_paths):
+        raise ValueError("Wiki fact mappings must stay below wiki/pages/")
+
+
+def _indexed_facts(rows: Iterable[sqlite3.Row]) -> dict[str, tuple[IndexedWikiFact, ...]]:
+    facts: dict[str, list[IndexedWikiFact]] = {}
+    for row in rows:
+        page_path = str(row["page_path"])
+        facts.setdefault(page_path, []).append(
+            IndexedWikiFact(
+                fact_id=str(row["fact_id"]),
+                page_path=page_path,
+                repository_id=(
+                    str(row["repository_id"]) if row["repository_id"] is not None else None
+                ),
+                source_id=str(row["source_id"]),
+                source_version=int(row["source_version"]),
+                locator=str(row["locator"]),
+                section_path=str(row["section_path"]),
+                quote=str(row["quote"]),
+                routing_text=str(row["routing_text"]),
+                symbol=str(row["symbol"]) if row["symbol"] is not None else None,
+                relation_type=(
+                    str(row["relation_type"]) if row["relation_type"] is not None else None
+                ),
+            )
+        )
+    return {path: tuple(records) for path, records in facts.items()}
+
+
 def _is_stable_wiki_page_path(path: str) -> bool:
     parts = PurePosixPath(path).parts
     return (
@@ -1969,14 +2302,14 @@ def _migrate_database(database_path: Path) -> None:
             if "source_documents" in tables:
                 _migrate_origin_main_schema(connection, root, created_blob_hashes)
             else:
-                _migrate_unified_schema(connection)
+                _migrate_unified_schema(connection, root)
     except Exception:
         for content_sha256 in created_blob_hashes:
             _unlink_blob(root, content_sha256)
         raise
 
 
-def _migrate_unified_schema(connection: sqlite3.Connection) -> None:
+def _migrate_unified_schema(connection: sqlite3.Connection, root: Path) -> None:
     repository_columns = {
         str(row["name"])
         for row in connection.execute("PRAGMA table_info(git_repositories)").fetchall()
@@ -2003,6 +2336,7 @@ def _migrate_unified_schema(connection: sqlite3.Connection) -> None:
     }
     if not columns:
         _apply_schema(connection)
+        _backfill_wiki_facts(connection, root)
         return
     if "sensitivity" not in columns:
         connection.execute(
@@ -2024,6 +2358,7 @@ def _migrate_unified_schema(connection: sqlite3.Connection) -> None:
         (SourceCategory.NOTES.value, *RAW_CATEGORIES),
     )
     _apply_schema(connection)
+    _backfill_wiki_facts(connection, root)
 
 
 def _migrate_origin_main_schema(
@@ -2134,6 +2469,7 @@ def _migrate_origin_main_schema(
     connection.execute(_SOURCE_FTS_SCHEMA_STATEMENT)
     _rebuild_origin_main_fts(connection, root)
     connection.execute("DROP TABLE source_documents")
+    _backfill_wiki_facts(connection, root)
 
 
 def _apply_schema_without_source_fts(connection: sqlite3.Connection) -> None:
@@ -2224,6 +2560,71 @@ def _safe_legacy_tags(value: object) -> str:
 def _apply_schema(connection: sqlite3.Connection) -> None:
     for statement in _SCHEMA_STATEMENTS:
         connection.execute(statement)
+
+
+def _backfill_wiki_facts(connection: sqlite3.Connection, root: Path) -> None:
+    fact_count = int(connection.execute("SELECT COUNT(*) FROM wiki_facts").fetchone()[0])
+    fts_count = int(connection.execute("SELECT COUNT(*) FROM wiki_fact_fts_docsize").fetchone()[0])
+    if fact_count:
+        if fts_count != fact_count:
+            connection.execute("INSERT INTO wiki_fact_fts(wiki_fact_fts) VALUES ('rebuild')")
+        return
+    if fts_count:
+        connection.execute("INSERT INTO wiki_fact_fts(wiki_fact_fts) VALUES ('delete-all')")
+    pages_root = root / "wiki/pages"
+    if not pages_root.exists():
+        return
+    if pages_root.is_symlink() or not pages_root.is_dir():
+        raise WorkspaceSecurityError("Wiki fact backfill requires a real pages directory")
+    page_facts: dict[str, tuple[WikiFact, ...]] = {}
+    for page in sorted(pages_root.rglob("*.md")):
+        if page.is_symlink() or not page.is_file():
+            raise WorkspaceSecurityError("Wiki fact backfill rejects unsafe page paths")
+        relative = page.relative_to(root).as_posix()
+        page_facts[relative] = parse_page_facts(relative, page.read_text(encoding="utf-8"))
+    normalized = _normalize_page_facts(page_facts)
+    for path in sorted(normalized):
+        for fact in normalized[path]:
+            row = connection.execute(
+                """
+                SELECT revisions.repository_id
+                FROM sources
+                JOIN source_versions
+                  ON source_versions.source_id = sources.id
+                JOIN applied_source_versions
+                  ON applied_source_versions.source_id = sources.source_id
+                 AND applied_source_versions.source_version_id = source_versions.id
+                LEFT JOIN git_source_revisions AS revisions
+                  ON revisions.source_version_id = source_versions.id
+                WHERE sources.source_id = ? AND source_versions.id = ?
+                """,
+                (fact.source_id, fact.source_version),
+            ).fetchone()
+            if row is None:
+                raise WorkspaceIntegrityError(
+                    "Wiki fact backfill found a non-applied SourceVersion"
+                )
+            connection.execute(
+                """
+                INSERT INTO wiki_facts(
+                    fact_id, page_path, repository_id, source_id, source_version,
+                    locator, section_path, quote, routing_text, symbol, relation_type
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    fact.fact_id,
+                    fact.page_path,
+                    str(row["repository_id"]) if row["repository_id"] is not None else None,
+                    fact.source_id,
+                    fact.source_version,
+                    fact.locator,
+                    fact.section_path,
+                    fact.quote,
+                    fact.routing_text,
+                    fact.symbol,
+                    fact.relation_type,
+                ),
+            )
 
 
 def _upgrade_workspace_contract(root: Path) -> None:
@@ -2600,6 +3001,14 @@ def _fts_query(query: str, *, require_all_terms: bool = True) -> str:
     escaped = [term.replace('"', '""') for term in terms]
     operator = " AND " if require_all_terms else " OR "
     return "search_terms : (" + operator.join(f'"{term}"' for term in escaped) + ")"
+
+
+def _wiki_fact_fts_query(query: str) -> str:
+    terms = _search_terms(query).split()
+    if not terms:
+        raise ValueError("fact search query must contain a word or number")
+    escaped = [term.replace('"', '""') for term in terms]
+    return " OR ".join(f'"{term}"' for term in escaped)
 
 
 def _make_snippet(content: str, query: str, *, max_chars: int = 240) -> str:

@@ -11,6 +11,7 @@ import stat
 from pathlib import Path, PurePosixPath
 from typing import Literal, TypedDict
 
+from memoryforge.wiki_facts import parse_page_facts
 from memoryforge.workspace import (
     WorkspaceIntegrityError,
     WorkspaceSecurityError,
@@ -92,6 +93,7 @@ def lint_workspace(workspace_root: Path) -> LintPayload:
             )
         )
     page_paths = {str(path.relative_to(workspace_root)) for path in pages}
+    _lint_fact_index(index, page_paths, issues)
     linked_paths: set[str] = set()
     for path in pages:
         relative_path = str(path.relative_to(workspace_root))
@@ -117,6 +119,7 @@ def lint_workspace(workspace_root: Path) -> LintPayload:
                     )
                 )
                 continue
+            _lint_page_facts(index, relative_path, content, issues)
             if is_generated_navigation_page(content):
                 _lint_related_page_links(relative_path, content, page_paths, issues)
                 if relative_path not in indexed_paths:
@@ -442,6 +445,8 @@ def _open_readonly_index(workspace_root: Path) -> sqlite3.Connection:
         connection.execute("PRAGMA query_only = ON")
         connection.execute("SELECT 1 FROM page_sources LIMIT 1").fetchone()
         connection.execute("SELECT 1 FROM sources LIMIT 1").fetchone()
+        connection.execute("SELECT 1 FROM wiki_facts LIMIT 1").fetchone()
+        connection.execute("SELECT 1 FROM wiki_fact_fts LIMIT 1").fetchone()
     except Exception:
         connection.close()
         raise
@@ -459,6 +464,58 @@ def _source_ids_for_page(index: sqlite3.Connection, page_path: str) -> tuple[str
         (page_path,),
     ).fetchall()
     return tuple(str(row["source_id"]) for row in rows)
+
+
+def _lint_fact_index(
+    index: sqlite3.Connection,
+    page_paths: set[str],
+    issues: list[LintIssue],
+) -> None:
+    fact_count = int(index.execute("SELECT COUNT(*) FROM wiki_facts").fetchone()[0])
+    fts_count = int(index.execute("SELECT COUNT(*) FROM wiki_fact_fts_docsize").fetchone()[0])
+    if fact_count != fts_count:
+        issues.append(
+            _issue(
+                "fact_index_count_mismatch",
+                ".memoryforge/index.sqlite",
+                "Wiki fact rows and FTS rows have different counts",
+            )
+        )
+    indexed_pages = {
+        str(row[0]) for row in index.execute("SELECT DISTINCT page_path FROM wiki_facts").fetchall()
+    }
+    for page_path in sorted(indexed_pages - page_paths):
+        issues.append(
+            _issue(
+                "fact_index_missing_page",
+                page_path,
+                "Wiki fact index references a missing page",
+            )
+        )
+
+
+def _lint_page_facts(
+    index: sqlite3.Connection,
+    page_path: str,
+    content: str,
+    issues: list[LintIssue],
+) -> None:
+    expected = {fact.fact_id for fact in parse_page_facts(page_path, content)}
+    actual = {
+        str(row[0])
+        for row in index.execute(
+            "SELECT fact_id FROM wiki_facts WHERE page_path = ?",
+            (page_path,),
+        ).fetchall()
+    }
+    if expected != actual:
+        issues.append(
+            _issue(
+                "fact_index_page_mismatch",
+                page_path,
+                "Wiki page facts do not match the applied fact index",
+            )
+        )
 
 
 def _validate_citation_excerpt(

@@ -39,6 +39,7 @@ from memoryforge.workspace import (
     register_git_checkout,
     register_git_code_module,
     search_sources,
+    search_wiki_facts,
     sync_git_checkout,
 )
 
@@ -694,6 +695,7 @@ def test_deleted_git_document_generates_reviewable_archive_and_apply_removes_pag
     )
     page_path = workspace / "wiki/pages" / f"{source_id}.md"
     assert page_path.is_file()
+    assert len(search_wiki_facts(workspace, "Retired documentation")) == 1
 
     (checkout / "README.md").unlink()
     _commit_all(checkout, "Remove documentation")
@@ -719,6 +721,7 @@ def test_deleted_git_document_generates_reviewable_archive_and_apply_removes_pag
     )
     assert applied.exit_code == 0, applied.output
     assert not page_path.exists()
+    assert search_wiki_facts(workspace, "Retired documentation") == ()
     assert _source_version_count(workspace, source_id) == 1
     assert _current_version_count(workspace, source_id) == 0
     assert lint_workspace(workspace)["status"] == "clean"

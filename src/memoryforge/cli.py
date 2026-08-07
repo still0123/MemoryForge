@@ -35,6 +35,7 @@ from memoryforge.query import answer_question
 from memoryforge.refresh import refresh_workspace
 from memoryforge.sessions import SessionStore
 from memoryforge.web_adapter import WebPageError, import_html_file, import_web_page
+from memoryforge.wiki_facts import IndexedWikiFact, parse_page_facts
 from memoryforge.workspace import (
     Workspace,
     WorkspaceIntegrityError,
@@ -887,16 +888,25 @@ def apply(
             opened.require_current_source_versions(stored.changeset.source_versions)
             page_sources = candidate_page_sources(stored.candidate_files)
             validate_changeset_page_sources(page_sources, stored.changeset.source_ids)
+            page_facts = {
+                path: parse_page_facts(path, content)
+                for path, content in stored.candidate_files.items()
+                if path.startswith("wiki/pages/") and path.endswith(".md")
+            }
+            page_facts.update({path: () for path in archive_paths})
             previous_source_versions = opened.record_applied_source_versions(
                 stored.changeset.source_versions
             )
             previous_page_sources: dict[str, tuple[str, ...]] = {}
+            previous_page_facts: dict[str, tuple[IndexedWikiFact, ...]] = {}
             try:
                 previous_page_sources = opened.replace_applied_page_sources(page_sources)
                 previous_page_sources.update(opened.remove_applied_page_sources(archive_paths))
+                previous_page_facts = opened.replace_applied_page_facts(page_facts)
             except Exception:
                 opened.restore_applied_source_versions(previous_source_versions)
                 opened.restore_applied_page_sources(previous_page_sources)
+                opened.restore_applied_page_facts(previous_page_facts)
                 raise
             previous_files: dict[Path, str | None] = {}
             try:
@@ -923,6 +933,7 @@ def apply(
                         destination.write_text(previous, encoding="utf-8")
                 opened.restore_applied_source_versions(previous_source_versions)
                 opened.restore_applied_page_sources(previous_page_sources)
+                opened.restore_applied_page_facts(previous_page_facts)
                 with suppress(MemoryForgeError):
                     opened.version_store.reset_paths(paths)
                 raise

@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "memoryforge_commit": "523a2f1a7092b8e66895600a65286f79a6f62320",
+  "memoryforge_worktree_dirty": false,
+  "source_manifest": {
+    "path": "demo/evaluation/wiki_fact_index_sources.json",
+    "sha256": "ee337432eb8ac87dd1376edea889190ee98e68cc40fa115301e74de7d9042d99"
+  },
+  "source_repositories": [
+    {
+      "name": "learn_claude_code",
+      "remote_url": "https://github.com/shareAI-lab/learn-claude-code.git",
+      "commit": "7b564c3ee6996039cb4e13a53024dfe2d4388d35"
+    },
+    {
+      "name": "zod",
+      "remote_url": "https://github.com/colinhacks/zod.git",
+      "commit": "912f0f51b0ced654d0069741e7160834dca742ee"
+    }
+  ],
+  "counts": {
+    "facts": 1356,
+    "pages_with_facts": 39,
+    "symbols": 1270,
+    "relations": 86
+  },
+  "canonical_rows_sha256": "9f909105161623b6cbcae96b5c2e7140daa119fadb3ec24f20c2e095fe51d40d",
+  "sample_exact_symbol_search": [
+    {
+      "page_path": "wiki/pages/code/f9618a931031/s03-permission/code.md",
+      "source_id": "99da238036b4e6bc10099e2a486c7625507975f06928fa5f2a3990a5efc4d007",
+      "source_version": 46,
+      "locator": "chars:6533-6955",
+      "symbol": "s03_permission.code.check_permission"
+    }
+  ],
+  "runs": [
+    {
+      "name": "first",
+      "structural_passed": true,
+      "fact_evidence": {
+        "learn_claude_code": {
+          "fact_count": 72,
+          "fts_count": 72,
+          "applied_source_version_fact_count": 72,
+          "page_count": 5,
+          "symbol_count": 72,
+          "relation_count": 0,
+          "invalid_metadata_count": 0,
+          "canonical_rows_sha256": "bd879c285f19574b74361d7706072f3e1e01f5df656ee62be9c58a06c19db283",
+          "sample_exact_symbol_search": [
+            {
+              "page_path": "wiki/pages/code/f9618a931031/s03-permission/code.md",
+              "source_id": "99da238036b4e6bc10099e2a486c7625507975f06928fa5f2a3990a5efc4d007",
+              "source_version": 46,
+              "locator": "chars:6533-6955",
+              "symbol": "s03_permission.code.check_permission"
+            }
+          ]
+        },
+        "zod": {
+          "fact_count": 1284,
+          "fts_count": 1284,
+          "applied_source_version_fact_count": 1284,
+          "page_count": 34,
+          "symbol_count": 1198,
+          "relation_count": 86,
+          "invalid_metadata_count": 0,
+          "canonical_rows_sha256": "44babaf33edddfae6c5f4deb83bfe8fd0318c11a8ab6555ca7aad6ff664f0e61",
+          "sample_exact_symbol_search": []
+        }
+      }
+    },
+    {
+      "name": "second",
+      "structural_passed": true,
+      "fact_evidence": {
+        "learn_claude_code": {
+          "fact_count": 72,
+          "fts_count": 72,
+          "applied_source_version_fact_count": 72,
+          "page_count": 5,
+          "symbol_count": 72,
+          "relation_count": 0,
+          "invalid_metadata_count": 0,
+          "canonical_rows_sha256": "bd879c285f19574b74361d7706072f3e1e01f5df656ee62be9c58a06c19db283",
+          "sample_exact_symbol_search": [
+            {
+              "page_path": "wiki/pages/code/f9618a931031/s03-permission/code.md",
+              "source_id": "99da238036b4e6bc10099e2a486c7625507975f06928fa5f2a3990a5efc4d007",
+              "source_version": 46,
+              "locator": "chars:6533-6955",
+              "symbol": "s03_permission.code.check_permission"
+            }
+          ]
+        },
+        "zod": {
+          "fact_count": 1284,
+          "fts_count": 1284,
+          "applied_source_version_fact_count": 1284,
+          "page_count": 34,
+          "symbol_count": 1198,
+          "relation_count": 86,
+          "invalid_metadata_count": 0,
+          "canonical_rows_sha256": "44babaf33edddfae6c5f4deb83bfe8fd0318c11a8ab6555ca7aad6ff664f0e61",
+          "sample_exact_symbol_search": []
+        }
+      }
+    }
+  ],
+  "gates": {
+    "structural_benchmark": true,
+    "fact_rows_match_fts": true,
+    "facts_use_applied_source_versions": true,
+    "metadata_round_trip": true,
+    "symbol_metadata_present": true,
+    "relation_metadata_present": true,
+    "deterministic_replay": true
+  },
+  "passed": true
+}

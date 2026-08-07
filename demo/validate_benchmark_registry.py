@@ -200,6 +200,15 @@ def _suite_cases(split: dict[str, Any]) -> tuple[int, set[str], set[str]]:
             {str(case["category"]) for case in artifact["cases"] if "category" in case},
             {str(case["id"]) for case in artifact["cases"]},
         )
+    repositories = artifact.get("repositories")
+    if isinstance(repositories, list) and all(
+        isinstance(repository.get("expected_source_count"), int) for repository in repositories
+    ):
+        return (
+            sum(int(repository["expected_source_count"]) for repository in repositories),
+            set(),
+            set(),
+        )
     source_count = len(artifact["expected_source_paths"])
     return (
         source_count
@@ -232,6 +241,12 @@ def _evidence_metrics(payload: dict[str, Any], repository_commit: str) -> dict[s
         return cast(dict[str, Any], payload["memoryforge"])
     if isinstance(payload.get("metrics"), dict):
         return cast(dict[str, Any], payload["metrics"])
+    if isinstance(payload.get("gates"), dict):
+        return {
+            **cast(dict[str, Any], payload.get("counts", {})),
+            **cast(dict[str, Any], payload["gates"]),
+            "passed": payload.get("passed"),
+        }
     for repository in payload.get("repositories", []):
         if repository.get("commit") == repository_commit:
             return cast(dict[str, Any], repository["evaluation"]["metrics"])
