@@ -70,7 +70,7 @@ DOCUMENT_CLAIMS = {
         "原生 Windows confirmation",
     ),
     DOCUMENTS[4]: (
-        "LOCAL_GATES_ACCEPTED_FINAL_REVIEW_PENDING",
+        "DEVELOPMENT_ACCEPTED_LOCAL_GATES_PENDING",
         "583 passed",
         "580 passed, 3 skipped",
         "Confirmation status: `not_run`",
@@ -79,6 +79,7 @@ DOCUMENT_CLAIMS = {
 }
 RELEASE_CLAIM_MARKER = (
     "<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; "
+    "active_candidate=3; platform_gate_candidate=2; platform_gate_status=superseded; "
     "macos_passed=583; linux_passed=580; linux_skipped=3; "
     "windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->"
 )

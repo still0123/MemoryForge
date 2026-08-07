@@ -1,10 +1,10 @@
 # v0.3.0 Release Candidate Specification
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; macos_passed=583; linux_passed=580; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=3; platform_gate_candidate=2; platform_gate_status=superseded; macos_passed=583; linux_passed=580; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 ## Status
 
-`LOCAL_GATES_ACCEPTED_FINAL_REVIEW_PENDING`
+`DEVELOPMENT_ACCEPTED_LOCAL_GATES_PENDING`
 
 ## Base
 
@@ -144,14 +144,14 @@ The strict sdist import-ownership probe exposed the macOS `/var` to
 `/private/var` alias. The fix canonicalizes the environment path and keeps the
 ownership check; it does not weaken the gate.
 
-## Accepted Development Candidate 2
+## Superseded Development Candidate 2
 
 - Evidence: `demo/results/release_candidate_development_candidate_2.json`
 - Evidence SHA256:
   `84a5a2e3eefb6894d512a0aea6ccc4626844ceaaab55a28b3a96f733f84b0792`
 - MemoryForge Commit:
   `4972b3c2223c5e6fe7248090a9d8ee006c1c271b`
-- Result: `ACCEPTED_DEVELOPMENT`
+- Result: `ACCEPTED_DEVELOPMENT_SUPERSEDED`
 - Development pass rate: 100.0%
 - Failed cases: 0
 - Reproducible Wheel/sdist: true
@@ -164,7 +164,7 @@ Commit binding, independent sdist clean-room installation, deterministic
 malformed-artifact classification, structured document boundaries, and atomic
 release publication.
 
-## Accepted Candidate 2 Local Gates
+## Superseded Candidate 2 Local Gates
 
 - Evidence: `demo/results/release_candidate_candidate_2_local_gates.json`
 - Evidence SHA256:
@@ -182,6 +182,45 @@ Both platforms passed the complete local gate. Actual artifacts and
 per-platform provenance are retained under
 `demo/results/artifacts/release_candidate_delivery_candidate_2/`.
 Final static review must pass before confirmation authorization.
+
+## Rejected Candidate 2 Static Review
+
+- Evidence:
+  `demo/results/release_candidate_candidate_2_static_review_rejected.json`
+- Evidence SHA256:
+  `475b6e5981bc43438107c67a7fd3ab05fc95888bfb30c391f2e7ae2275c23d45`
+- Reviewed Commit:
+  `433f33c001c963cd69dd507346ac836895b7c36b`
+- Result: `REJECTED`
+- P0: 0
+- P1: 5
+- P2: 1
+- Confirmation status: `not_run`
+- Holdout status: `not_run`
+
+The review found remaining gaps between release claims and independently
+retained Evidence. Candidate 2 remains visible but no longer authorizes
+confirmation.
+
+## Accepted Development Candidate 3
+
+- Evidence: `demo/results/release_candidate_development_candidate_3.json`
+- Evidence SHA256:
+  `c61e5817c9a55e2bda780a7381512087c0a37943d8d34bb0e0a54a880a074349`
+- MemoryForge Commit:
+  `5005f1511301797d7d1a9ce25c3a885ab6ba85ba`
+- Result: `ACCEPTED_DEVELOPMENT`
+- Development pass rate: 100.0%
+- Failed cases: 0
+- Reproducible Wheel/sdist: true
+- Private detail leaks: 0
+- Confirmation status: `not_run`
+- Holdout status: `not_run`
+
+Candidate 3 retains both isolated build outputs, binds a structured release
+claim across public documents, rejects non-executed clean-room checks, scans
+secret-bearing provenance keys, and rechecks summary source identity.
+Candidate 3 macOS/Linux gates and final static review remain pending.
 
 ## Confirmation Components
 

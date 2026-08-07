@@ -24,7 +24,7 @@ def test_benchmark_registry_binds_all_release_artifacts() -> None:
         "status": "valid",
         "suite_count": 12,
         "experiment_count": 8,
-        "evidence_count": 101,
+        "evidence_count": 103,
         "qa_case_count": 121,
         "qa_case_types_present": [
             "code_behavior",
@@ -350,6 +350,26 @@ def test_benchmark_registry_retains_release_sdist_regression() -> None:
     payload["release_build"]["output_created"] = True
 
     with pytest.raises(ValueError, match="sdist regression Evidence changed"):
+        validator._validate_release_sdist_regression(
+            experiment,
+            artifact,
+            payload,
+            experiment["splits"]["confirmation"],
+            regression["memoryforge_commit"],
+        )
+
+
+def test_benchmark_registry_retains_release_static_review_regression() -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "release-candidate-delivery"
+    )
+    artifact = experiment["evidence"][3]
+    regression = artifact["regression_evidence"]
+    payload = json.loads((validator.REPO_ROOT / regression["path"]).read_text(encoding="utf-8"))
+    payload["review"]["p1"] = 4
+
+    with pytest.raises(ValueError, match="static review Evidence changed"):
         validator._validate_release_sdist_regression(
             experiment,
             artifact,

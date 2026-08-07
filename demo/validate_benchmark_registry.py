@@ -326,9 +326,15 @@ REQUIRED_EXPERIMENT_EVIDENCE = {
         ),
         _RESULTS + "release_candidate_development_candidate_2.json": (
             3,
-            "accepted_development",
+            "accepted_development_superseded",
             "84a5a2e3eefb6894d512a0aea6ccc4626844ceaaab55a28b3a96f733f84b0792",
             "4972b3c2223c5e6fe7248090a9d8ee006c1c271b",
+        ),
+        _RESULTS + "release_candidate_development_candidate_3.json": (
+            4,
+            "accepted_development",
+            "c61e5817c9a55e2bda780a7381512087c0a37943d8d34bb0e0a54a880a074349",
+            "5005f1511301797d7d1a9ce25c3a885ab6ba85ba",
         ),
     },
 }
@@ -398,6 +404,11 @@ REQUIRED_REGRESSION_EVIDENCE = {
             _RESULTS + "release_candidate_sdist_probe_regression_rejected.json",
             "b0c18c7e2d23d47e3cb8cb1200c3511dc9a4bb560ac81e531e4492c5f1353d5b",
             "94b136e0ddda947c14e4ab0297b6505e00b9c63f",
+        ),
+        _RESULTS + "release_candidate_development_candidate_3.json": (
+            _RESULTS + "release_candidate_candidate_2_static_review_rejected.json",
+            "475b6e5981bc43438107c67a7fd3ab05fc95888bfb30c391f2e7ae2275c23d45",
+            "433f33c001c963cd69dd507346ac836895b7c36b",
         ),
     },
 }
@@ -2416,6 +2427,14 @@ def _validate_release_sdist_regression(
     confirmation: dict[str, Any],
     commit: str,
 ) -> int:
+    if payload.get("candidate") == "release-development-candidate-2":
+        return _validate_release_static_review_regression(
+            experiment,
+            development_artifact,
+            payload,
+            confirmation,
+            commit,
+        )
     holdout = experiment["splits"]["holdout"]
     if (
         set(payload)
@@ -2478,6 +2497,85 @@ def _validate_release_sdist_regression(
         or payload.get("passed") is not False
     ):
         raise ValueError("release-candidate sdist regression Evidence changed")
+    return 1
+
+
+def _validate_release_static_review_regression(
+    experiment: dict[str, Any],
+    development_artifact: dict[str, Any],
+    payload: dict[str, Any],
+    confirmation: dict[str, Any],
+    commit: str,
+) -> int:
+    holdout = experiment["splits"]["holdout"]
+    if (
+        set(payload)
+        != {
+            "schema_version",
+            "suite_id",
+            "suite_revision",
+            "memoryforge_commit",
+            "memoryforge_worktree_dirty",
+            "candidate",
+            "review",
+            "root_cause",
+            "confirmation",
+            "holdout",
+            "passed",
+        }
+        or type(payload.get("schema_version")) is not int
+        or payload.get("schema_version") != 1
+        or payload.get("suite_id") != experiment["suite_id"]
+        or type(payload.get("suite_revision")) is not int
+        or payload.get("suite_revision") != experiment["suite_revision"]
+        or payload.get("memoryforge_commit") != commit
+        or payload.get("memoryforge_worktree_dirty") is not False
+        or not _git_commit_descends_from(development_artifact["memoryforge_commit"], commit)
+        or payload.get("candidate") != "release-development-candidate-2"
+        or payload.get("review")
+        != {
+            "scope": "origin/main...HEAD",
+            "status": "failed",
+            "p0": 0,
+            "p1": 5,
+            "p2": 1,
+            "failures": [
+                "benchmark_summary_source_race",
+                "isolated_build_evidence_duplication",
+                "document_claim_contradiction",
+                "clean_room_not_run",
+                "secret_key_privacy",
+                "acceptance_boolean_identity",
+            ],
+        }
+        or payload.get("root_cause")
+        != {
+            "summary": (
+                "Release Evidence checks still allowed claims stronger than retained "
+                "independently verifiable data."
+            ),
+            "fix": (
+                "Retain both isolated builds, bind a structured release claim, require exact "
+                "clean-room checks, scan secret-valued keys, and recheck source identity before "
+                "summary publication."
+            ),
+        }
+        or payload.get("confirmation")
+        != {
+            "path": confirmation["path"],
+            "sha256": confirmation["sha256"],
+            "status": "not_run",
+        }
+        or not isinstance(holdout, dict)
+        or payload.get("holdout")
+        != {
+            "path": holdout["path"],
+            "sha256": holdout["sha256"],
+            "status": "not_run",
+        }
+        or payload.get("passed") is not False
+    ):
+        raise ValueError("release-candidate static review Evidence changed")
     return 1
 
 
