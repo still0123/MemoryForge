@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import io
 import json
 import os
+import tarfile
 from pathlib import Path
 
 import pytest
@@ -514,7 +516,11 @@ def test_benchmark_registry_hashes_bound_gate_artifact_bytes(
     provenance = tmp_path / "release-provenance.json"
     sums = tmp_path / "SHA256SUMS"
     wheel.write_bytes(b"wheel")
-    sdist.write_bytes(b"sdist")
+    with tarfile.open(sdist, "w:gz") as archive:
+        payload = b"[project]\nname = 'memoryforge'\n"
+        member = tarfile.TarInfo("memoryforge-0.2.1/pyproject.toml")
+        member.size = len(payload)
+        archive.addfile(member, io.BytesIO(payload))
     wheel_sha256 = hashlib.sha256(wheel.read_bytes()).hexdigest()
     sdist_sha256 = hashlib.sha256(sdist.read_bytes()).hexdigest()
     provenance.write_text(
@@ -555,10 +561,44 @@ def test_benchmark_registry_hashes_bound_gate_artifact_bytes(
     }
     monkeypatch.setattr(validator, "REPO_ROOT", tmp_path)
 
-    assert validator._validate_bound_gate_artifacts(files, digests, commit)
+    assert validator._validate_bound_gate_artifacts(
+        files,
+        digests,
+        commit,
+        require_clean_sdist=True,
+    )
+    with tarfile.open(sdist, "w:gz") as archive:
+        payload = b"nested wheel"
+        member = tarfile.TarInfo(
+            "memoryforge-0.2.1/demo/results/artifacts/candidate/memoryforge.whl"
+        )
+        member.size = len(payload)
+        archive.addfile(member, io.BytesIO(payload))
+    digests["sdist_sha256"] = hashlib.sha256(sdist.read_bytes()).hexdigest()
+    files["sdist"]["sha256"] = digests["sdist_sha256"]
+    sums.write_text(
+        f"{wheel_sha256}  dist/{wheel.name}\n"
+        f"{digests['sdist_sha256']}  dist/{sdist.name}\n"
+        f"{provenance_sha256}  release-provenance.json\n",
+        encoding="ascii",
+    )
+    digests["sha256sums_sha256"] = hashlib.sha256(sums.read_bytes()).hexdigest()
+    files["sha256sums"]["sha256"] = digests["sha256sums_sha256"]
+    assert not validator._validate_bound_gate_artifacts(
+        files,
+        digests,
+        commit,
+        require_clean_sdist=True,
+    )
+
     wheel.write_bytes(b"tampered")
     with pytest.raises(ValueError, match="SHA256 mismatch"):
-        validator._validate_bound_gate_artifacts(files, digests, commit)
+        validator._validate_bound_gate_artifacts(
+            files,
+            digests,
+            commit,
+            require_clean_sdist=True,
+        )
 
 
 def test_benchmark_registry_rejects_contradictory_showcase_case_evidence() -> None:

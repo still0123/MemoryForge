@@ -9,6 +9,7 @@ import importlib.util
 import json
 import re
 import subprocess
+import tarfile
 from pathlib import Path
 from typing import Any, cast
 
@@ -707,6 +708,7 @@ LINUX_EVIDENCE_CONTRACTS = {
             "coverage_percent": 88,
         },
         "bound_artifacts": True,
+        "clean_sdist": True,
     },
 }
 FINAL_ACCEPTANCE_REGISTRY_COUNTS = {
@@ -1837,6 +1839,8 @@ def _validate_bound_gate_artifacts(
     artifact_files: object,
     artifact_digests: object,
     gate_commit: str,
+    *,
+    require_clean_sdist: bool = False,
 ) -> bool:
     digest_fields = {
         "wheel": "wheel_sha256",
@@ -1874,6 +1878,18 @@ def _validate_bound_gate_artifacts(
         or package.get("import_from_fresh_venv") is not True
     ):
         return False
+
+    if require_clean_sdist:
+        try:
+            with tarfile.open(paths["sdist"], "r:gz") as archive:
+                members = archive.getnames()
+        except (OSError, tarfile.TarError):
+            return False
+        if any(
+            "/demo/results/artifacts/" in f"/{name}" or name.endswith((".whl", ".tar.gz"))
+            for name in members
+        ):
+            return False
 
     sums: dict[str, str] = {}
     for line in paths["sha256sums"].read_text(encoding="ascii").splitlines():
@@ -2195,6 +2211,7 @@ def _validate_linux_evidence(
                 local_gate.get("artifact_files"),
                 local_gate.get("artifacts"),
                 commit,
+                require_clean_sdist=contract.get("clean_sdist") is True,
             )
         )
         or payload.get("confirmation")
@@ -2343,6 +2360,7 @@ def _validate_acceptance_evidence(
                 local_gate.get("artifact_files"),
                 artifacts,
                 commit,
+                require_clean_sdist=development_artifact["evidence_revision"] >= 10,
             )
         )
         or payload.get("confirmation", {}).get("path") != confirmation["path"]
