@@ -367,6 +367,17 @@ MULTI_SOURCE_SUPPORT_REGRESSION = (
     "1fb2a1263f82ac9720b49543d177345567505c6d",
     "1403431c27d6e1928699b868a285a932ed3a3ee84961c83f1f5e1ff8016eaa96",
 )
+MULTI_SOURCE_REPOSITORY = {
+    "repository": "still0123/MemoryForge",
+    "remote_url": "https://github.com/still0123/MemoryForge.git",
+    "commit": "79c41bc5fdb08de18351546f7869b8083da3a1b2",
+    "license": "MIT",
+    "source_paths": [
+        "src/memoryforge/query.py",
+        "demo/evaluation/multi_source_coverage_development.json",
+        "demo/evaluation/multi_source_coverage_confirmation.json",
+    ],
+}
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -529,6 +540,8 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
             raise ValueError(f"invalid experiment suite_type: {suite_id}")
         if experiment.get("model_judge") is not False:
             raise ValueError(f"experiment model judge must be disabled: {suite_id}")
+        if suite_id == "multi-source-coverage-selection":
+            _validate_multi_source_experiment_metadata(experiment)
 
         repositories = experiment.get("repositories")
         if not isinstance(repositories, list) or not repositories:
@@ -537,7 +550,7 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
             _validate_repository(suite_id, repository)
         source_manifest = experiment.get("source_manifest")
         if suite_id == "multi-source-coverage-selection":
-            if source_manifest is not None:
+            if "source_manifest" in experiment:
                 raise ValueError(f"component experiment cannot declare source manifest: {suite_id}")
         else:
             if not isinstance(source_manifest, dict):
@@ -840,6 +853,15 @@ def _validate_multi_source_experiment_payload(
     for metric, expected in experiment["expected_metrics"]["development"].items():
         if metrics.get(metric) != expected:
             raise ValueError(f"multi-source experiment metric mismatch: {metric}")
+
+
+def _validate_multi_source_experiment_metadata(experiment: dict[str, Any]) -> None:
+    if (
+        experiment.get("evaluator") != "demo.run_multi_source_coverage_benchmark"
+        or experiment.get("max_wiki_pages") != 3
+        or experiment.get("repositories") != [MULTI_SOURCE_REPOSITORY]
+    ):
+        raise ValueError("multi-source experiment metadata changed")
 
 
 def _validate_regression_evidence(

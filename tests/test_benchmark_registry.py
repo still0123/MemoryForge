@@ -98,6 +98,21 @@ def test_benchmark_registry_cannot_drop_multi_source_baseline(tmp_path: Path) ->
         validator.validate_registry(path)
 
 
+def test_benchmark_registry_pins_multi_source_repository_commit(tmp_path: Path) -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item
+        for item in registry["experiments"]
+        if item["suite_id"] == "multi-source-coverage-selection"
+    )
+    experiment["repositories"][0]["commit"] = "0" * 40
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps(registry), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="metadata changed"):
+        validator.validate_registry(path)
+
+
 def test_benchmark_registry_requires_local_gate_for_acceptance(tmp_path: Path) -> None:
     registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
     experiment = next(
