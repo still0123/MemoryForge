@@ -20,7 +20,7 @@ from typing import Any, cast
 from pydantic import ValidationError
 
 from memoryforge.errors import MemoryForgeError
-from memoryforge.models import StagedChangeSet
+from memoryforge.models import ApprovalReceipt, ChangeSetStatus, ReviewReceipt, StagedChangeSet
 from memoryforge.query import answer_question
 from memoryforge.workspace import Workspace
 
@@ -247,18 +247,33 @@ def _changeset_snapshot(
             record = StagedChangeSet.model_validate_json(record_payload)
         except ValidationError as exc:
             raise ShowcaseBuildError("Applied ChangeSet metadata is invalid") from exc
+        if record.changeset.status is not ChangeSetStatus.PROPOSED:
+            raise ShowcaseBuildError("Applied ChangeSet proposal status is invalid")
         source_ids = set(record.changeset.source_ids)
         source_versions = set(record.changeset.source_versions.items())
         if not include_local and (
             not source_versions or not source_versions <= public_source_versions
         ):
             continue
-        review = _read_optional_hashed_json(entry, "review.json", "review.sha256")
-        approval = _read_optional_hashed_json(entry, "approval.json", "approval.sha256")
+        proposal_sha256 = hashlib.sha256(record_payload).hexdigest()
+        review_payload = _read_optional_hashed_file(entry, "review.json", "review.sha256")
+        approval_payload = _read_optional_hashed_file(
+            entry,
+            "approval.json",
+            "approval.sha256",
+        )
+        review = _validate_review(review_payload, record, proposal_sha256)
+        approval = _validate_approval(
+            approval_payload,
+            review_payload,
+            record,
+            proposal_sha256,
+        )
         receipt = _read_json_file(entry / "receipt.json")
         if (
             receipt.get("status") != "APPLIED"
             or receipt.get("changeset_id") != record.changeset.changeset_id
+            or re.fullmatch(r"[a-f0-9]{40,64}", str(receipt.get("commit", ""))) is None
         ):
             raise ShowcaseBuildError("Applied ChangeSet receipt is invalid")
         diffs = []
@@ -416,6 +431,8 @@ def _benchmark_snapshot(evidence: dict[str, Any] | None) -> dict[str, Any]:
 def _rejection_snapshot(workspace: Workspace) -> dict[str, Any]:
     question = "zzqvnoevidence7f4c2a9d"
     result = answer_question(workspace.root, question, debug=True)
+    if result["status"] != "unknown":
+        raise ShowcaseBuildError("deterministic rejection probe unexpectedly matched")
     return {
         "question": question,
         "status": result["status"],
@@ -713,7 +730,10 @@ def _architecture_svg(nodes: list[dict[str, str]], edges: list[dict[str, str]]) 
 
 
 def _read_evidence(path: Path) -> dict[str, Any]:
-    payload = _read_regular_file(path.resolve(strict=True), max_bytes=_MAX_EVIDENCE_BYTES)
+    payload = _read_regular_file(
+        path.expanduser().absolute(),
+        max_bytes=_MAX_EVIDENCE_BYTES,
+    )
     try:
         parsed = json.loads(payload)
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -724,7 +744,7 @@ def _read_evidence(path: Path) -> dict[str, Any]:
 
 
 def _query_rows(workspace: Workspace, statement: str) -> list[sqlite3.Row]:
-    uri = f"{workspace.index_path.as_uri()}?mode=ro&immutable=1"
+    uri = f"{workspace.index_path.as_uri()}?mode=ro"
     try:
         with closing(sqlite3.connect(uri, uri=True)) as connection:
             connection.row_factory = sqlite3.Row
@@ -741,18 +761,60 @@ def _read_hashed_file(directory: Path, name: str, digest_name: str) -> bytes:
     return payload
 
 
-def _read_optional_hashed_json(
+def _read_optional_hashed_file(
     directory: Path,
     name: str,
     digest_name: str,
-) -> dict[str, Any] | None:
+) -> bytes | None:
     path = directory / name
     digest_path = directory / digest_name
     if not path.exists() and not digest_path.exists():
         return None
     if not path.exists() or not digest_path.exists():
         raise ShowcaseBuildError("Applied ChangeSet lifecycle receipt is incomplete")
-    return _parse_json(_read_hashed_file(directory, name, digest_name))
+    return _read_hashed_file(directory, name, digest_name)
+
+
+def _validate_review(
+    payload: bytes | None,
+    record: StagedChangeSet,
+    proposal_sha256: str,
+) -> ReviewReceipt | None:
+    if payload is None:
+        return None
+    try:
+        review = ReviewReceipt.model_validate_json(payload)
+    except ValidationError as exc:
+        raise ShowcaseBuildError("Applied ChangeSet review receipt is invalid") from exc
+    if (
+        review.changeset_id != record.changeset.changeset_id
+        or review.proposal_sha256 != proposal_sha256
+    ):
+        raise ShowcaseBuildError("Applied ChangeSet review binding is invalid")
+    return review
+
+
+def _validate_approval(
+    payload: bytes | None,
+    review_payload: bytes | None,
+    record: StagedChangeSet,
+    proposal_sha256: str,
+) -> ApprovalReceipt | None:
+    if payload is None:
+        return None
+    if review_payload is None:
+        raise ShowcaseBuildError("Applied ChangeSet approval lacks a review")
+    try:
+        approval = ApprovalReceipt.model_validate_json(payload)
+    except ValidationError as exc:
+        raise ShowcaseBuildError("Applied ChangeSet approval receipt is invalid") from exc
+    if (
+        approval.changeset_id != record.changeset.changeset_id
+        or approval.proposal_sha256 != proposal_sha256
+        or approval.review_sha256 != hashlib.sha256(review_payload).hexdigest()
+    ):
+        raise ShowcaseBuildError("Applied ChangeSet approval binding is invalid")
+    return approval
 
 
 def _read_json_file(path: Path) -> dict[str, Any]:
@@ -771,6 +833,7 @@ def _parse_json(payload: bytes) -> dict[str, Any]:
 
 def _read_regular_file(path: Path, *, max_bytes: int) -> bytes:
     try:
+        _require_no_symlink_components(path)
         if path.is_symlink():
             raise ShowcaseBuildError("Showcase input must not be a symbolic link")
         descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
@@ -860,8 +923,6 @@ def _publish(destination: Path, *, payload: bytes, page: bytes) -> None:
     finally:
         if temporary.exists():
             shutil.rmtree(temporary)
-        if backup.exists():
-            shutil.rmtree(backup)
 
 
 def _write_new_file(path: Path, payload: bytes) -> None:
@@ -880,18 +941,12 @@ def _write_new_file(path: Path, payload: bytes) -> None:
 
 
 def _require_no_symlink_components(path: Path) -> None:
-    existing = path
-    while not existing.exists():
-        if existing.parent == existing:
-            break
-        existing = existing.parent
-    current = existing
-    if current.is_symlink():
-        raise ShowcaseBuildError("Showcase output path contains a symbolic link")
-    for part in path.relative_to(existing).parts:
+    absolute = path.absolute()
+    current = Path(absolute.anchor)
+    for part in absolute.parts[1:]:
         current /= part
-        if current.exists() and current.is_symlink():
-            raise ShowcaseBuildError("Showcase output path contains a symbolic link")
+        if current.is_symlink():
+            raise ShowcaseBuildError("Showcase path contains a symbolic link")
 
 
 def _require_real_directory(path: Path) -> None:
