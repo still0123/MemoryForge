@@ -2,7 +2,7 @@
 
 ## Status
 
-`PREREGISTERED_BASELINE_PENDING`
+`BASELINE_RECORDED_DEVELOPMENT_OPEN`
 
 ## Base
 
@@ -32,6 +32,23 @@
 
 The development test and both suite files are frozen before production code
 changes. Confirmation must not run during development.
+
+## Baseline Result
+
+- Evidence:
+  `demo/results/folder_import_baseline_rejected.json`
+- MemoryForge Commit:
+  `9242478a7108e001bf6fafbd5567a01718f51716`
+- Evidence SHA256:
+  `6dee68b6723d483fc308a6f09dbc5a1e06e58b7d5793eca92ec5ab08c53481ec`
+- Result: `REJECTED`
+- Development pass rate: 0.0%
+- Failed cases: 5
+- Deterministic replay: passed
+- Confirmation status: `not_run`
+
+All five cases fail because the preregistered connector, command, result
+models, and folder membership schema do not exist at the baseline Commit.
 
 ## Goal
 
