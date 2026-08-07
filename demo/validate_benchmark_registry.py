@@ -304,9 +304,41 @@ REQUIRED_ACCEPTANCE_EVIDENCE = {
     "github-thread-import-lifecycle": {
         _RESULTS + "github_thread_import_development_candidate_3.json": (
             _RESULTS + "github_thread_import_candidate_3_local_gate.json",
-            "3ac62bce930b487822beb7d399d54d20108d147cd8f7bd6a6cab51abebb43ef0",
-            "9acfd27d1ff6181308b39310efacfd3cd7b55da3",
+            "ce8496e9f5c92f588a0a25bf16cc6a8023b349e6d3696169b062bec433c66baf",
+            "81ed329f12de7077daee39f8e419a17c1ddb1d9e",
         ),
+    },
+}
+FINAL_ACCEPTANCE_REGISTRY_COUNTS = {
+    "exact-symbol-routing.learn-claude-code": {
+        "suite_count": 12,
+        "experiment_count": 1,
+        "evidence_count": 20,
+        "qa_case_count": 121,
+    },
+    "support-score.learn-claude-code": {
+        "suite_count": 12,
+        "experiment_count": 2,
+        "evidence_count": 47,
+        "qa_case_count": 121,
+    },
+    "multi-source-coverage-selection": {
+        "suite_count": 12,
+        "experiment_count": 2,
+        "evidence_count": 49,
+        "qa_case_count": 121,
+    },
+    "folder-import-lifecycle": {
+        "suite_count": 12,
+        "experiment_count": 3,
+        "evidence_count": 53,
+        "qa_case_count": 121,
+    },
+    "github-thread-import-lifecycle": {
+        "suite_count": 12,
+        "experiment_count": 5,
+        "evidence_count": 62,
+        "qa_case_count": 121,
     },
 }
 DEVELOPMENT_EVIDENCE_KEYS = {
@@ -1179,6 +1211,10 @@ def _validate_acceptance_evidence(
         or any(
             isinstance(value, bool) or not isinstance(value, int) or value < 1
             for value in registry_result.values()
+        )
+        or (
+            development_artifact.get("status") == "accepted_development"
+            and registry_result != FINAL_ACCEPTANCE_REGISTRY_COUNTS.get(str(experiment["suite_id"]))
         )
         or local_gate.get("dependency_check") != "passed"
         or not isinstance(pytest_result.get("passed"), int)

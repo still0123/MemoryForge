@@ -654,8 +654,8 @@
           "memoryforge_commit": "c6f329152dac002ecead2f8d8bebcb002865aff6",
           "acceptance_evidence": {
             "path": "demo/results/github_thread_import_candidate_3_local_gate.json",
-            "sha256": "3ac62bce930b487822beb7d399d54d20108d147cd8f7bd6a6cab51abebb43ef0",
-            "memoryforge_commit": "9acfd27d1ff6181308b39310efacfd3cd7b55da3",
+            "sha256": "ce8496e9f5c92f588a0a25bf16cc6a8023b349e6d3696169b062bec433c66baf",
+            "memoryforge_commit": "81ed329f12de7077daee39f8e419a17c1ddb1d9e",
             "passed": true
           },
           "passed": true

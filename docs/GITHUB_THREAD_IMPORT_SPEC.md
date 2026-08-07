@@ -111,16 +111,16 @@ Candidate 3 binds each contribution kind and ID to its exact GitHub fragment:
 ## Candidate 3 Full Local Gate
 
 - Gate Commit:
-  `9acfd27d1ff6181308b39310efacfd3cd7b55da3`
+  `81ed329f12de7077daee39f8e419a17c1ddb1d9e`
 - Acceptance Evidence:
   `demo/results/github_thread_import_candidate_3_local_gate.json`
 - Acceptance Evidence SHA256:
-  `3ac62bce930b487822beb7d399d54d20108d147cd8f7bd6a6cab51abebb43ef0`
+  `ce8496e9f5c92f588a0a25bf16cc6a8023b349e6d3696169b062bec433c66baf`
 - Ruff check without cache and format: passed
 - Strict Mypy: passed
 - Registry validation: passed
 - Dependency check: passed
-- Pytest: 503 passed
+- Pytest: 505 passed
 - Coverage: 88%
 - Wheel clean-room: passed
 - sdist clean-room: passed
