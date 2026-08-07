@@ -723,6 +723,17 @@ def _support_score(
         )
         covered_terms.update(matching)
         per_fact_coverage.append(len(matching))
+    identifier_terms = {
+        term for identifier in _explicit_code_identifiers(question) for term in _terms(identifier)
+    }
+    for page_path in dict.fromkeys(page_path for page_path, _ in selected):
+        page = _safe_wiki_page(workspace_root, workspace_root / page_path)
+        if page is not None:
+            covered_terms.update(
+                core_terms
+                & identifier_terms
+                & _terms(_code_fact_text(page.read_text(encoding="utf-8")))
+            )
     core_coverage = len(covered_terms) / len(core_terms) if core_terms else 1.0
 
     exact_identifier_coverage = (
