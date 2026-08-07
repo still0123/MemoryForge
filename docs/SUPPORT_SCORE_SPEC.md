@@ -2,7 +2,7 @@
 
 ## Status
 
-`CANDIDATE_12_DEVELOPMENT_PASSED_REGRESSION_PENDING`
+`ACCEPTED_DEVELOPMENT_AND_LOCAL_REGRESSION`
 
 ## Frozen Inputs
 
@@ -641,7 +641,28 @@ gate.
 Candidate 12 retains 100.0% Answer, route, Source, fact, Citation,
 multi-source, abstention, selective, and repository-isolation metrics with
 90.0% coverage and 0.0% risk. Both structural and evaluation payloads are
-deterministic across clean runs. Full local regression is pending.
+deterministic across clean runs. Confirmation remains `not_run`.
+
+## Candidate 12 Full Local Gate
+
+- Gate Commit:
+  `83f39183e68c9d7ebd4c3f8e80e063555cfcb460`;
+- acceptance Evidence:
+  `demo/results/support_score_candidate_12_local_gate.json`;
+- acceptance Evidence SHA256:
+  `633021bf534670cb78aca392815799d1d1ca60624049fba09fae0796c4122de9`;
+- Ruff check and format: passed;
+- strict Mypy: passed;
+- registry: 12 release suites, two experiments, 43 Evidence artifacts, and 121
+  QA cases;
+- dependency check: passed;
+- pytest: 481 passed;
+- coverage: 88%;
+- Wheel clean-room: passed;
+- sdist clean-room: passed;
+- `pip check` and CLI version smoke test: passed.
+
+Candidate 12 is the accepted development and local-regression result.
 Confirmation remains `not_run`.
 
 ## Forbidden
