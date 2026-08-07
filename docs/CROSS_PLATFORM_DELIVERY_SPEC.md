@@ -2,7 +2,7 @@
 
 ## Status
 
-`CANDIDATE_9_LOCAL_GATES_PASS_REVIEW_PENDING`
+`CANDIDATE_9_ACCEPTED_DEVELOPMENT_WINDOWS_CONFIRMATION_FROZEN`
 
 ## Base
 
@@ -504,8 +504,19 @@ artifacts:
   `demo/results/artifacts/cross_platform_delivery_candidate_9/`
 
 The sdist contains no retained artifact directory, Wheel, or nested sdist.
-Candidate 9 is the accepted development result pending final closure review.
-Native Windows confirmation remains frozen at `not_run` and is not claimed.
+
+## Candidate 9 Final Review
+
+- Result: `ACCEPTED_DEVELOPMENT`
+- Final validator Commit:
+  `8fba20089c67a61971ed8569be3fbf4e07eb7c68`
+- P0-P2 findings after closure: 0
+- Exact-HEAD pytest: 559 passed
+- Registry: 12 suites / 7 experiments / 95 Evidence / 121 QA
+- Confirmation status: `not_run`
+
+Candidate 9 is the accepted development result. Native Windows confirmation
+remains frozen until the release-candidate gate and is not claimed.
 
 ## Goal
 
