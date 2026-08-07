@@ -802,8 +802,7 @@
       "max_wiki_pages": 3,
       "required_evidence_statuses": [
         "rejected",
-        "accepted_development_superseded",
-        "accepted_development"
+        "accepted_development_superseded"
       ],
       "repositories": [
         {
@@ -866,7 +865,7 @@
         {
           "split": "development",
           "evidence_revision": 3,
-          "status": "accepted_development",
+          "status": "accepted_development_superseded",
           "path": "demo/results/cross_platform_delivery_candidate_2.json",
           "sha256": "22a309f133008268e857e4331f70967d58f0c06adc45ab1988f8a99ee3c34775",
           "memoryforge_commit": "7d0a296ffbbb73863b63ec732608a6e3c0bab35b",

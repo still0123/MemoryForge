@@ -262,7 +262,7 @@ REQUIRED_EXPERIMENT_EVIDENCE = {
         ),
         _RESULTS + "cross_platform_delivery_candidate_2.json": (
             3,
-            "accepted_development",
+            "accepted_development_superseded",
             "22a309f133008268e857e4331f70967d58f0c06adc45ab1988f8a99ee3c34775",
             "7d0a296ffbbb73863b63ec732608a6e3c0bab35b",
         ),
@@ -502,6 +502,7 @@ MULTI_SOURCE_DEVELOPMENT_EVIDENCE_KEYS = {
     "gates",
     "passed",
 }
+CROSS_PLATFORM_DEVELOPMENT_EVIDENCE_KEYS = MULTI_SOURCE_DEVELOPMENT_EVIDENCE_KEYS | {"runtime"}
 LOCAL_GATE_EVIDENCE_KEYS = {
     "schema_version",
     "suite_id",
@@ -1209,6 +1210,8 @@ def _validate_pytest_component_experiment_payload(
     development: dict[str, Any],
     confirmation: dict[str, Any],
 ) -> None:
+    cross_platform = experiment["suite_id"] == "cross-platform-delivery"
+    modern_cross_platform = cross_platform and artifact["evidence_revision"] >= 4
     evaluation = payload.get("development", {}).get("evaluation", {})
     cases = evaluation.get("cases", {}) if isinstance(evaluation, dict) else {}
     frozen = json.loads((REPO_ROOT / development["path"]).read_text(encoding="utf-8"))
@@ -1223,7 +1226,7 @@ def _validate_pytest_component_experiment_payload(
     }
     _validate_artifact(test_artifact, str(experiment["suite_id"]))
     development_payload = payload.get("development", {})
-    if experiment["suite_id"] == "cross-platform-delivery":
+    if cross_platform:
         test_binding_valid = (
             development_payload.get("test_file")
             == {
@@ -1237,10 +1240,29 @@ def _validate_pytest_component_experiment_payload(
             development_payload.get("test_file") == development["test_file"]
             and development_payload.get("test_sha256") == development["test_sha256"]
         )
+    expected_payload_keys = (
+        CROSS_PLATFORM_DEVELOPMENT_EVIDENCE_KEYS
+        if modern_cross_platform
+        else MULTI_SOURCE_DEVELOPMENT_EVIDENCE_KEYS
+    )
+    runtime = payload.get("runtime")
+    runtime_valid = not modern_cross_platform or (
+        isinstance(runtime, dict)
+        and set(runtime) == {"implementation", "python", "system", "machine"}
+        and runtime.get("implementation") == "CPython"
+        and isinstance(runtime.get("python"), str)
+        and re.fullmatch(r"3\.11\.\d+", runtime["python"]) is not None
+        and isinstance(runtime.get("system"), str)
+        and bool(runtime["system"])
+        and isinstance(runtime.get("machine"), str)
+        and bool(runtime["machine"])
+    )
     if (
-        payload.get("schema_version") != 1
-        or set(payload) != MULTI_SOURCE_DEVELOPMENT_EVIDENCE_KEYS
+        type(payload.get("schema_version")) is not int
+        or payload.get("schema_version") != 1
+        or set(payload) != expected_payload_keys
         or payload.get("suite_id") != experiment["suite_id"]
+        or type(payload.get("suite_revision")) is not int
         or payload.get("suite_revision") != experiment["suite_revision"]
         or payload.get("memoryforge_commit") != artifact["memoryforge_commit"]
         or payload.get("memoryforge_worktree_dirty") is not False
@@ -1248,9 +1270,11 @@ def _validate_pytest_component_experiment_payload(
         or payload.get("development", {}).get("path") != development["path"]
         or payload.get("development", {}).get("sha256") != development["sha256"]
         or not test_binding_valid
+        or type(payload.get("development", {}).get("case_count")) is not int
         or payload.get("development", {}).get("case_count") != development["case_count"]
         or not isinstance(evaluation, dict)
         or set(evaluation) != {"case_count", "metrics", "cases"}
+        or type(evaluation.get("case_count")) is not int
         or evaluation.get("case_count") != development["case_count"]
         or not isinstance(cases, list)
         or [case.get("id") for case in cases] != frozen_ids
@@ -1268,6 +1292,7 @@ def _validate_pytest_component_experiment_payload(
         or payload.get("confirmation", {}).get("path") != confirmation["path"]
         or payload.get("confirmation", {}).get("sha256") != confirmation["sha256"]
         or payload.get("confirmation", {}).get("status") != "not_run"
+        or not runtime_valid
     ):
         raise ValueError("pytest component experiment Evidence contract failed")
     gates = payload.get("gates")
@@ -1276,20 +1301,10 @@ def _validate_pytest_component_experiment_payload(
         or set(gates) != FINAL_EXPERIMENT_GATE_KEYS[experiment["suite_id"]]
     ):
         raise ValueError("pytest component experiment gates are invalid")
-    if artifact["status"] == "rejected":
-        if artifact["passed"] is not False or all(gates.values()):
-            raise ValueError("rejected pytest component Evidence must fail")
-        return
-    if (
-        artifact["status"] not in {"accepted_development", "accepted_development_superseded"}
-        or artifact["passed"] is not True
-        or not all(value is True for value in gates.values())
-    ):
-        raise ValueError("accepted pytest component Evidence gates failed")
     metrics = evaluation.get("metrics")
     if not isinstance(metrics, dict):
         raise ValueError("pytest component experiment metrics missing")
-    if experiment["suite_id"] == "cross-platform-delivery":
+    if cross_platform:
         expected_status = "failed" if artifact["status"] == "rejected" else "passed"
         expected_classification = "pytest_failure" if artifact["status"] == "rejected" else "none"
         expected_cases = [
@@ -1297,6 +1312,7 @@ def _validate_pytest_component_experiment_payload(
                 "id": case["id"],
                 "pytest_node": (f"tests/test_cross_platform_delivery.py::{case['test']}"),
                 "status": expected_status,
+                **({"return_code": 0} if modern_cross_platform else {}),
                 "error_classification": expected_classification,
             }
             for case in frozen["cases"]
@@ -1313,11 +1329,39 @@ def _validate_pytest_component_experiment_payload(
             if artifact["status"] == "rejected"
             else experiment["expected_metrics"]["development"]
         )
-        if cases != expected_cases or not _strict_mapping(metrics, expected_metrics):
+        expected_gates = (
+            {
+                "pass_rate": False,
+                "failed_cases": False,
+                "direct_platform_imports": False,
+                "windows_lock_offset": False,
+                "windows_lock_bytes": False,
+                "local_smoke": False,
+                "deterministic_replay": True,
+                "stable_memoryforge_commit": True,
+                "clean_worktree_after_run": True,
+                "confirmation_not_run": True,
+            }
+            if artifact["status"] == "rejected"
+            else {key: True for key in FINAL_EXPERIMENT_GATE_KEYS[experiment["suite_id"]]}
+        )
+        if (
+            cases != expected_cases
+            or not _strict_mapping(metrics, expected_metrics)
+            or not _strict_mapping(gates, expected_gates)
+        ):
             raise ValueError("cross-platform delivery case Evidence changed")
+    if artifact["status"] == "rejected":
+        if artifact["passed"] is not False or all(gates.values()):
+            raise ValueError("rejected pytest component Evidence must fail")
+        return
+    if (
+        artifact["status"] not in {"accepted_development", "accepted_development_superseded"}
+        or artifact["passed"] is not True
+        or not all(value is True for value in gates.values())
+    ):
+        raise ValueError("accepted pytest component Evidence gates failed")
     for metric, expected in experiment["expected_metrics"]["development"].items():
-        if artifact["status"] == "rejected":
-            break
         if metrics.get(metric) != expected:
             raise ValueError(f"pytest component experiment metric mismatch: {metric}")
 
@@ -1783,8 +1827,24 @@ def _validate_repository(suite_id: str, repository: dict[str, Any]) -> None:
 
 
 def _validate_artifact(artifact: dict[str, Any], suite_id: str) -> None:
-    path = REPO_ROOT / str(artifact.get("path", ""))
-    if not path.is_file() or not path.is_relative_to(REPO_ROOT):
+    relative = Path(str(artifact.get("path", "")))
+    if (
+        relative.is_absolute()
+        or not relative.parts
+        or any(part in {"", ".", ".."} for part in relative.parts)
+    ):
+        raise ValueError(f"registered artifact path is unsafe: {suite_id}")
+    candidate = REPO_ROOT.joinpath(*relative.parts)
+    current = REPO_ROOT
+    for part in relative.parts:
+        current /= part
+        if current.is_symlink():
+            raise ValueError(f"registered artifact path is unsafe: {suite_id}")
+    try:
+        path = candidate.resolve(strict=True)
+    except OSError:
+        raise ValueError(f"registered artifact missing: {suite_id}") from None
+    if not path.is_file() or not path.is_relative_to(REPO_ROOT.resolve()):
         raise ValueError(f"registered artifact missing: {suite_id}")
     expected_sha = str(artifact.get("sha256"))
     if SHA256.fullmatch(expected_sha) is None:

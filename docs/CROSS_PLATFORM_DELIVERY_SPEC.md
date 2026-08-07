@@ -2,7 +2,7 @@
 
 ## Status
 
-`ACCEPTED_DEVELOPMENT_AND_LOCAL_REGRESSION`
+`DEVELOPMENT_PASS_REVIEW_FIX_PENDING`
 
 ## Base
 
@@ -102,8 +102,21 @@ is not represented as native Windows confirmation.
 - CLI version smoke: passed
 - Confirmation status: `not_run`
 
-Candidate 2 is accepted for development and local regression. Native Windows
-confirmation and Linux full-gate evidence remain open release-delivery work.
+Candidate 2 passed development and the local gate, then became superseded when
+static review reproduced these P1 defects:
+
+- replacing the separate ChangeSet lock-file inode split serialization;
+- repository-controlled pytest loading could bypass frozen tests;
+- a hanging lock test could prevent negative Evidence from being written;
+- rejected Evidence skipped strict case and metric validation;
+- artifact paths could escape the repository;
+- the PowerShell sdist probe could import the source checkout.
+
+The fix candidate returns ChangeSet serialization to the opened staging
+directory descriptor, isolates pytest startup, adds process-tree timeouts and
+runtime provenance, hardens artifact paths and rejected Evidence, and isolates
+the PowerShell sdist probe. Native Windows confirmation and Linux full-gate
+evidence remain open release-delivery work.
 
 ## Goal
 
@@ -133,8 +146,8 @@ local PowerShell and native smoke entry points.
 ## Integration Contract
 
 - `Workspace.exclusive_lock` delegates to `exclusive_file_lock`;
-- `ChangeSetStore` serializes mutations through
-  `.memoryforge/index.sqlite.changesets.lock`;
+- `ChangeSetStore` serializes mutations by locking its opened staging
+  directory through the platform descriptor API;
 - `workspace.py` and `changesets.py` contain no direct platform lock imports;
 - existing Workspace security errors stay fail-closed;
 - no database, SourceVersion, Citation, ChangeSet, or public payload schema

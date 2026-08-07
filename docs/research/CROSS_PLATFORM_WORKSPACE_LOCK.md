@@ -104,10 +104,11 @@ exclusive_file_lock(path)
 - The caller keeps descriptor ownership.
 - `exclusive_file_lock` opens one regular file, verifies path/descriptor
   identity, acquires, yields, unlocks, and closes.
-- `Workspace.exclusive_lock` and `ChangeSetStore` reuse the module.
-- ChangeSet serialization uses the stable, already ignored regular file
-  `.memoryforge/index.sqlite.changesets.lock` instead of trying to lock a
-  directory descriptor on Windows.
+- `Workspace.exclusive_lock` uses the path-level helper.
+- `ChangeSetStore` uses the same descriptor API on its already-open staging
+  directory, preserving the existing POSIX inode/namespace serialization.
+- ChangeSet directory operations remain outside the native Windows claim;
+  replacing their `dir_fd` security model is separate work.
 
 The native Windows smoke deliberately covers package import, CLI, Workspace
 initialization/open, lock use, and an empty-workspace `unknown` query. It does

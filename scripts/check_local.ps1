@@ -5,12 +5,12 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$Root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-Set-Location $Root
+$Root = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
+Set-Location -LiteralPath $Root
 
 if ($env:PYTHON_BIN) {
     $Python = $env:PYTHON_BIN
-} elseif (Test-Path (Join-Path $Root ".venv\Scripts\python.exe")) {
+} elseif (Test-Path -LiteralPath (Join-Path $Root ".venv\Scripts\python.exe")) {
     $Python = Join-Path $Root ".venv\Scripts\python.exe"
 } else {
     $PythonCommand = Get-Command python -ErrorAction Stop
@@ -22,7 +22,7 @@ if (-not $Output) {
     $Output = Join-Path $Root "local-evidence\$Timestamp"
 }
 $Output = [IO.Path]::GetFullPath($Output)
-if (Test-Path $Output) {
+if (Test-Path -LiteralPath $Output) {
     throw "output already exists: $Output"
 }
 
@@ -30,8 +30,8 @@ $Workdir = Join-Path ([IO.Path]::GetTempPath()) (
     "memoryforge-local-check." + [Guid]::NewGuid().ToString("N")
 )
 $Dist = Join-Path $Output "dist"
-New-Item -ItemType Directory -Path $Dist -Force | Out-Null
-New-Item -ItemType Directory -Path $Workdir -Force | Out-Null
+[IO.Directory]::CreateDirectory($Dist) | Out-Null
+[IO.Directory]::CreateDirectory($Workdir) | Out-Null
 
 function Invoke-External {
     param(
@@ -49,7 +49,7 @@ function Get-SingleArtifact {
         [string]$Directory,
         [string]$Filter
     )
-    $Artifacts = @(Get-ChildItem -Path $Directory -Filter $Filter -File)
+    $Artifacts = @(Get-ChildItem -LiteralPath $Directory -Filter $Filter -File)
     if ($Artifacts.Count -ne 1) {
         throw "expected one $Filter artifact, found $($Artifacts.Count)"
     }
@@ -149,18 +149,52 @@ try {
         "-c", (Join-Path $Root "constraints\dev.txt"),
         "--no-build-isolation", $Sdist
     )
-    # Contract: pip check
-    Invoke-External $SdistPython @("-m", "pip", "check")
-    Invoke-External $SdistPython @("-m", "memoryforge", "--version")
+    $PreviousPythonPath = $env:PYTHONPATH
+    $PreviousNoUserSite = $env:PYTHONNOUSERSITE
+    Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
+    $env:PYTHONNOUSERSITE = "1"
+    Push-Location -LiteralPath $Workdir
+    try {
+        # Contract: pip check
+        Invoke-External $SdistPython @("-I", "-m", "pip", "check")
+        $ImportPath = & $SdistPython -I -c "import memoryforge; print(memoryforge.__file__)"
+        if ($LASTEXITCODE -ne 0) {
+            throw "sdist import probe failed"
+        }
+        $ResolvedImport = (Resolve-Path -LiteralPath $ImportPath.Trim()).Path
+        $SdistPrefix = (Resolve-Path -LiteralPath $SdistEnvironment).Path.TrimEnd("\", "/")
+        $SdistPrefix += [IO.Path]::DirectorySeparatorChar
+        if (-not $ResolvedImport.StartsWith(
+            $SdistPrefix,
+            [StringComparison]::OrdinalIgnoreCase
+        )) {
+            throw "sdist import escaped clean environment: $ResolvedImport"
+        }
+        Invoke-External $SdistPython @("-I", "-m", "memoryforge", "--version")
+    } finally {
+        Pop-Location
+        if ($null -eq $PreviousPythonPath) {
+            Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
+        } else {
+            $env:PYTHONPATH = $PreviousPythonPath
+        }
+        if ($null -eq $PreviousNoUserSite) {
+            Remove-Item Env:PYTHONNOUSERSITE -ErrorAction SilentlyContinue
+        } else {
+            $env:PYTHONNOUSERSITE = $PreviousNoUserSite
+        }
+    }
 
     $HashTargets = @(
-        Get-ChildItem -Path $Dist -File | Sort-Object Name
+        Get-ChildItem -LiteralPath $Dist -File | Sort-Object Name
     )
-    $HashTargets += Get-Item (Join-Path $Output "platform-smoke.json")
-    $HashTargets += Get-Item (Join-Path $Output "release-provenance.json")
+    $HashTargets += Get-Item -LiteralPath (Join-Path $Output "platform-smoke.json")
+    $HashTargets += Get-Item -LiteralPath (Join-Path $Output "release-provenance.json")
     $Lines = foreach ($Artifact in $HashTargets) {
         # Contract: Get-FileHash and SHA256SUMS
-        $Digest = (Get-FileHash -Algorithm SHA256 $Artifact.FullName).Hash.ToLowerInvariant()
+        $Digest = (
+            Get-FileHash -Algorithm SHA256 -LiteralPath $Artifact.FullName
+        ).Hash.ToLowerInvariant()
         $Prefix = $Output.TrimEnd("\", "/") + [IO.Path]::DirectorySeparatorChar
         if (-not $Artifact.FullName.StartsWith($Prefix, [StringComparison]::OrdinalIgnoreCase)) {
             throw "artifact escaped evidence directory: $($Artifact.FullName)"
@@ -169,12 +203,14 @@ try {
         "$Digest  $Relative"
     }
     $Sums = Join-Path $Output "SHA256SUMS"
-    Set-Content -Path $Sums -Value $Lines -Encoding ascii
+    Set-Content -LiteralPath $Sums -Value $Lines -Encoding ascii
 
     foreach ($Line in $Lines) {
         $Parts = $Line -split "  ", 2
         $Artifact = Join-Path $Output $Parts[1]
-        $Actual = (Get-FileHash -Algorithm SHA256 $Artifact).Hash.ToLowerInvariant()
+        $Actual = (
+            Get-FileHash -Algorithm SHA256 -LiteralPath $Artifact
+        ).Hash.ToLowerInvariant()
         if ($Actual -ne $Parts[0]) {
             throw "SHA256 verification failed: $($Parts[1])"
         }

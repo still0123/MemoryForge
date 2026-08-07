@@ -27,7 +27,7 @@ from memoryforge.models import (
     StagedChangeSet,
     StagedWikiFile,
 )
-from memoryforge.platform_lock import exclusive_file_lock
+from memoryforge.platform_lock import lock_descriptor, unlock_descriptor
 from memoryforge.workspace import Workspace, WorkspaceIntegrityError
 
 CHANGESET_ID_PATTERN = re.compile(r"^chg_[A-Za-z0-9_-]+$")
@@ -562,11 +562,16 @@ class ChangeSetStore:
     @contextmanager
     def _locked_staging(self) -> Iterator[int]:
         self.workspace.validate_internal_directory(self.staging_dir)
-        lock_path = self.workspace.internal_dir / "index.sqlite.changesets.lock"
-        with exclusive_file_lock(lock_path):
-            descriptor = self._open_staging()
+        descriptor = self._open_staging()
+        locked = False
+        try:
+            lock_descriptor(descriptor)
+            locked = True
+            yield descriptor
+        finally:
             try:
-                yield descriptor
+                if locked:
+                    unlock_descriptor(descriptor)
             finally:
                 os.close(descriptor)
 

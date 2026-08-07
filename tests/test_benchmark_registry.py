@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -259,6 +260,72 @@ def test_benchmark_registry_rejects_contradictory_cross_platform_case_evidence()
             payload,
             experiment["splits"]["development"],
             experiment["splits"]["confirmation"],
+        )
+
+
+def test_benchmark_registry_binds_rejected_cross_platform_cases() -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "cross-platform-delivery"
+    )
+    artifact = next(item for item in experiment["evidence"] if item["status"] == "rejected")
+    payload = json.loads((validator.REPO_ROOT / artifact["path"]).read_text(encoding="utf-8"))
+    payload["development"]["evaluation"]["cases"][0]["status"] = "passed"
+    payload["development"]["evaluation"]["metrics"] = experiment["expected_metrics"]["development"]
+    evaluation_sha256 = hashlib.sha256(
+        json.dumps(
+            payload["development"]["evaluation"],
+            sort_keys=True,
+            ensure_ascii=False,
+        ).encode()
+    ).hexdigest()
+    for run in payload["runs"]:
+        run["evaluation_sha256"] = evaluation_sha256
+
+    with pytest.raises(ValueError, match="cross-platform delivery case Evidence changed"):
+        validator._validate_pytest_component_experiment_payload(
+            experiment,
+            artifact,
+            payload,
+            experiment["splits"]["development"],
+            experiment["splits"]["confirmation"],
+        )
+
+
+def test_benchmark_registry_rejects_loose_cross_platform_json_types() -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "cross-platform-delivery"
+    )
+    artifact = next(item for item in experiment["evidence"] if item["evidence_revision"] == 3)
+    payload = json.loads((validator.REPO_ROOT / artifact["path"]).read_text(encoding="utf-8"))
+    payload["schema_version"] = True
+    payload["suite_revision"] = True
+    payload["development"]["case_count"] = 7.0
+    payload["development"]["evaluation"]["case_count"] = 7.0
+
+    with pytest.raises(ValueError, match="pytest component experiment Evidence contract failed"):
+        validator._validate_pytest_component_experiment_payload(
+            experiment,
+            artifact,
+            payload,
+            experiment["splits"]["development"],
+            experiment["splits"]["confirmation"],
+        )
+
+
+def test_benchmark_registry_rejects_artifact_outside_repository(tmp_path: Path) -> None:
+    outside = tmp_path / "outside.json"
+    outside.write_text("{}\n", encoding="utf-8")
+    relative = os.path.relpath(outside, validator.REPO_ROOT)
+
+    with pytest.raises(ValueError, match="artifact path is unsafe"):
+        validator._validate_artifact(
+            {
+                "path": relative,
+                "sha256": hashlib.sha256(outside.read_bytes()).hexdigest(),
+            },
+            "outside",
         )
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -7,6 +8,7 @@ import pytest
 from memoryforge.changesets import ChangeSetStore
 from memoryforge.errors import ChangeSetStoreError
 from memoryforge.models import ChangeOperation, ChangeOperationType, ChangeSet, ChangeSetStatus
+from memoryforge.platform_lock import try_lock_descriptor
 from memoryforge.workspace import Workspace, WorkspaceSecurityError
 
 
@@ -95,6 +97,21 @@ def test_changeset_store_rejects_staging_symlink_replacement(tmp_path: Path) -> 
             _page_changeset(workspace),
             {"wiki/adrs/cache-key.md": "# Cache key\n"},
         )
+
+
+def test_changeset_store_serializes_on_the_staging_directory(tmp_path: Path) -> None:
+    workspace = Workspace.initialize(tmp_path / "wiki")
+    store = ChangeSetStore(workspace)
+
+    with store._locked_staging():
+        contender = os.open(
+            workspace.staging_dir,
+            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+        )
+        try:
+            assert try_lock_descriptor(contender) is False
+        finally:
+            os.close(contender)
 
 
 def _page_changeset(workspace: Workspace, base_commit: str | None = None) -> ChangeSet:
