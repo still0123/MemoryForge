@@ -38,7 +38,10 @@ Evidence is written under the ignored `local-evidence/<UTC timestamp>/`
 directory. Pass an explicit output path when preparing a named release:
 
 ```bash
-./scripts/check_local.sh local-evidence/v0.2.2
+./scripts/check_local.sh local-evidence/v0.3.0
+
+python scripts/build_release.py \
+  --output local-evidence/v0.3.0-release
 ```
 
 The directory contains:
@@ -57,15 +60,16 @@ gate and must record its exact runtime and Wheel SHA256.
 After the local gate passes on a clean exact Commit:
 
 ```bash
-git tag -a v0.2.2 -m "MemoryForge v0.2.2"
-git push origin v0.2.2
+git tag -a v0.3.0 -m "MemoryForge v0.3.0"
+git push origin v0.3.0
 
-gh release create v0.2.2 --verify-tag --generate-notes
-gh release upload v0.2.2 \
-  local-evidence/v0.2.2/dist/memoryforge-*.whl \
-  local-evidence/v0.2.2/dist/memoryforge-*.tar.gz \
-  local-evidence/v0.2.2/release-provenance.json \
-  local-evidence/v0.2.2/SHA256SUMS
+gh release create v0.3.0 --verify-tag --generate-notes
+gh release upload v0.3.0 \
+  local-evidence/v0.3.0-release/memoryforge-*.whl \
+  local-evidence/v0.3.0-release/memoryforge-*.tar.gz \
+  local-evidence/v0.3.0-release/release-provenance.json \
+  local-evidence/v0.3.0-release/benchmark-summary.json \
+  local-evidence/v0.3.0-release/SHA256SUMS
 ```
 
 GitHub CLI and GitHub Releases are used manually; no hosted runner or paid

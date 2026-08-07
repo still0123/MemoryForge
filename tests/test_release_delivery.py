@@ -22,6 +22,10 @@ workspace_drill = _module("run_release_workspace_drill", "demo/run_release_works
 release_builder = _module("build_release", "scripts/build_release.py")
 
 
+def test_release_builder_reads_version_from_current_source() -> None:
+    assert release_builder._source_cli_version() == "0.3.0"
+
+
 def test_benchmark_summary_reports_macro_per_suite_and_negatives() -> None:
     summary = summary_builder.build_summary()
 
@@ -54,6 +58,21 @@ def test_workspace_release_drill_runs_real_public_workflow(tmp_path: Path) -> No
         "query",
         "showcase",
     }
+
+
+def test_workspace_release_drill_binds_cli_to_current_source(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured = {}
+
+    def run(command, **kwargs):
+        captured.update(kwargs)
+        return workspace_drill.subprocess.CompletedProcess(command, 0, "0.3.0\n", "")
+
+    monkeypatch.setattr(workspace_drill.subprocess, "run", run)
+
+    assert workspace_drill._cli("--version") == "0.3.0\n"
+    assert captured["env"]["PYTHONPATH"] == str(workspace_drill.SOURCE_ROOT)
 
 
 def test_release_builder_rejects_nested_artifacts(tmp_path: Path) -> None:

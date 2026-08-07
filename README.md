@@ -52,8 +52,10 @@ Wiki 树、Diff、Citation Trace、Benchmark、保留的失败案例、正确拒
 | --- | ---: | --- |
 | 三语言 Code Wiki | Symbol / core Relation / Mermaid / Citation 均为 **100%** | 固定公开夹具 |
 | AgentSkill-Eval 文档 Wiki | Answer **96.7%**，Citation **100%** | 单一公开仓库 30 题 |
+| learn-claude-code support score development | Answer / selective accuracy **100%**，coverage **90%**，risk **0%** | 10 题；confirmation 未运行 |
 | Click 外部迁移 | development / holdout Answer **10% / 0%** | 真实负结果，未隐藏 |
 | Static Showcase development | **4/4**，本地详情泄漏 **0**，Workspace 变更 **0** | confirmation 未运行 |
+| 跨平台本地门禁 | macOS **559 passed**；Debian **556 passed / 3 skipped** | 原生 Windows confirmation 未运行 |
 
 ## 它解决了什么问题？
 
@@ -237,7 +239,7 @@ Demo。脚本会拒绝从源码 checkout 导入 `memoryforge`：
 ```bash
 uv build --wheel --out-dir dist
 .venv/bin/python demo/run_release_check.py \
-  --wheel dist/memoryforge-0.2.1-py3-none-any.whl \
+  --wheel dist/memoryforge-0.3.0-py3-none-any.whl \
   --workdir /private/tmp/memoryforge-release-check \
   --output /private/tmp/memoryforge-release-provenance.json \
   --code-evidence-output demo/results/code_wiki_public.json \
@@ -247,8 +249,8 @@ uv build --wheel --out-dir dist
 
 公开仓库必须 checkout 到 `93f5dc05229da250b041850ad8deeeec886ef304`。提交的
 [`release_provenance.json`](demo/results/release_provenance.json) 是 v0.2.0 的历史发布证据。
-v0.2.1 的实际 import 路径、依赖版本、Wheel/sdist SHA256 和 tag Commit 以 GitHub Release 中的
-`release-provenance.json` 与 `SHA256SUMS` 为准。
+v0.3.0 的实际 import 路径、依赖版本、Wheel/sdist SHA256 和 tag Commit 以最终 GitHub Release
+中的 `release-provenance.json` 与 `SHA256SUMS` 为准；release-candidate 阶段不提前宣称已发布。
 
 ### 本地零付费门禁
 
@@ -257,6 +259,10 @@ Evidence 在本机执行：
 
 ```bash
 ./scripts/check_local.sh
+
+# release-candidate 双隔离构建
+python scripts/build_release.py \
+  --output /private/tmp/memoryforge-v0.3.0-release
 ```
 
 Windows PowerShell 使用同一门禁契约：

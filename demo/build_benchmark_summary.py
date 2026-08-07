@@ -7,11 +7,10 @@ import argparse
 import importlib.util
 import json
 import subprocess
+import tomllib
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
-
-import memoryforge
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 REGISTRY = REPO_ROOT / "demo/evaluation/registry.json"
@@ -42,11 +41,12 @@ def main(argv: list[str] | None = None) -> None:
 def build_summary() -> dict[str, Any]:
     registry = json.loads(REGISTRY.read_text(encoding="utf-8"))
     registry_summary = validator.validate_registry()
+    project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     suites = [_suite_summary(suite) for suite in registry["suites"]]
     experiments = [_experiment_summary(experiment) for experiment in registry["experiments"]]
     return {
         "schema_version": 1,
-        "package_version": memoryforge.__version__,
+        "package_version": project["project"]["version"],
         "memoryforge_commit": _git("rev-parse", "HEAD"),
         "registry": registry_summary,
         "macro": _macro_metrics(suites),

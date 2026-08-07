@@ -74,8 +74,13 @@ Answer accuracy 只有 10%/0%，尽管 Citation grounding 都是 100%。这说�
 再打开 [`code_wiki_public.json`](../demo/results/code_wiki_public.json) 和
 [`release_provenance.json`](../demo/results/release_provenance.json)：前者证明三语言 Symbol、
 Relation、Module、Mermaid edge 和 Citation 指标均为 100%，单文件更新只影响 20% 的源码模块页；
-后者是 v0.2.0 的历史发布证据。v0.2.1 的 Wheel/sdist、SHA256 和 provenance 以 GitHub Release
-资产为准；后续版本使用本地门禁生成相同类型的 Evidence。
+后者是 v0.2.0 的历史发布证据。v0.3.0 的 Wheel/sdist、SHA256、benchmark summary 和
+provenance 由双隔离本地构建生成；原生 Windows confirmation、holdout 与最终 tag 完成前只称
+release candidate，不称已发布。
+
+随后展示 support-score development：Answer 与 Selective Accuracy 为 100%，Coverage 为 90%，
+Risk 为 0%；同时明确 confirmation 尚未运行。这样可以说明“有正向指标，但不越过冻结 split
+提前外推”。
 
 ### 3. 展示带引用的回答
 

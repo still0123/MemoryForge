@@ -1,9 +1,20 @@
 # Changelog
 
-## Unreleased
+## v0.3.0 — Release Candidate
 
 - 关闭 GitHub Actions 并移除 hosted CI/Release workflow；
 - 新增本地零付费质量门禁，覆盖 Ruff、Mypy、pytest、Wheel/sdist 双 clean-room 和 SHA256。
+- 建立 12 Suite / 8 Experiment 的严格 Benchmark Registry，分离 package version、
+  suite revision 与 Evidence revision，并保留全部 rejected/superseded Evidence；
+- 增加 SQLite FTS5 Wiki Fact 索引、精确 Code Index 路由、覆盖式多来源选择与可解释
+  support score；development Answer/Selective Accuracy 为 100%，Coverage 为 90%，Risk 为 0%；
+- 增加递归 Folder Import、单个公开 GitHub Issue/PR Thread Import 与离线 JSON 重放；
+- 增加零 Key 只读静态 Showcase，展示 SourceVersion、Wiki、ChangeSet、Citation Trace、
+  Benchmark、拒答案例与 Mermaid 架构；
+- 增加 POSIX `fcntl` / Windows `msvcrt` 锁边界、PowerShell 本地门禁与 Linux clean-room
+  Evidence；原生 Windows confirmation 仍冻结为 `not_run`；
+- 增加双隔离 release build、Workspace backup/restore drill、benchmark summary 与本地
+  provenance；retained artifacts 不进入 sdist。
 - 强化回答准确率契约，要求关键事实和冻结来源同时命中；AgentSkill-Eval 30 题严格 Answer 为
   96.7%，Citation grounding 为 100%，Source recall@3 为 96.2%；
 - 追加独立 Click 20 题复评；回答准确率 5.0%、来源召回 16.7%，再次确认外部有效性缺口；
@@ -14,6 +25,8 @@
 - 增加候选页内英文词形匹配和 page-aware fact 排序；Watchfiles grounded Answer 从 20% 提升至
   80%，Structlog confirmation 为 66.7%，Citation grounding 均为 100%。
 - 关闭只读 Workspace 与 Source Manifest 校验连接，并让本地门禁拒绝未关闭资源警告。
+
+Release Candidate 尚未完成原生 Windows confirmation、单次 holdout、最终 tag 与 Release 上传。
 
 ## v0.2.1 — 2026-08-06
 

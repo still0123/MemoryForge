@@ -14,12 +14,12 @@ run_release_check = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(run_release_check)
 
 
-def test_package_and_cli_versions_match_v021() -> None:
+def test_package_and_cli_versions_match_v030() -> None:
     root = Path(__file__).resolve().parent.parent
     project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
 
-    assert project["project"]["version"] == "0.2.1"
-    assert memoryforge.__version__ == "0.2.1"
+    assert project["project"]["version"] == "0.3.0"
+    assert memoryforge.__version__ == "0.3.0"
     assert project["tool"]["hatch"]["build"]["targets"]["sdist"]["exclude"] == [
         "/demo/results/artifacts"
     ]

@@ -18,9 +18,8 @@ import venv
 from pathlib import Path
 from typing import Any
 
-import memoryforge
-
 REPO_ROOT = Path(__file__).resolve().parent.parent
+SOURCE_ROOT = REPO_ROOT / "src"
 TARGET_VERSION = "0.3.0"
 CONSTRAINTS = REPO_ROOT / "constraints/dev.txt"
 FORBIDDEN_SDIST_PARTS = ("/demo/results/artifacts/",)
@@ -215,10 +214,22 @@ def _require_version() -> None:
     project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     versions = {
         str(project["project"]["version"]),
-        memoryforge.__version__,
+        _source_cli_version(),
     }
     if versions != {TARGET_VERSION}:
         raise SystemExit(f"release version must be {TARGET_VERSION}: {sorted(versions)}")
+
+
+def _source_cli_version() -> str:
+    environment = {**os.environ, "PYTHONPATH": str(SOURCE_ROOT)}
+    return subprocess.run(
+        [sys.executable, "-m", "memoryforge", "--version"],
+        cwd=REPO_ROOT,
+        env=environment,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
 
 
 def _single(directory: Path, pattern: str) -> Path:

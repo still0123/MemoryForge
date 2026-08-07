@@ -7,15 +7,15 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 import tomllib
 from pathlib import Path
 from typing import Any, cast
 
-import memoryforge
-
 REPO_ROOT = Path(__file__).resolve().parent.parent
+SOURCE_ROOT = REPO_ROOT / "src"
 DEVELOPMENT = REPO_ROOT / "demo/evaluation/release_candidate_development.json"
 CONFIRMATION = REPO_ROOT / "demo/evaluation/release_candidate_confirmation.json"
 HOLDOUT = REPO_ROOT / "demo/evaluation/release_candidate_holdout.json"
@@ -170,7 +170,6 @@ def _check_versions(release_dir: Path) -> dict[str, object]:
     provenance = _load_json(release_dir / "release-provenance.json")
     versions = {
         str(project.get("project", {}).get("version", "")),
-        memoryforge.__version__,
         _cli_version(),
         str(provenance.get("package", {}).get("version", "")),
     }
@@ -324,9 +323,11 @@ def _load_json(path: Path) -> dict[str, Any]:
 
 
 def _cli_version() -> str:
+    environment = {**os.environ, "PYTHONPATH": str(SOURCE_ROOT)}
     completed = subprocess.run(
         [sys.executable, "-m", "memoryforge", "--version"],
         cwd=REPO_ROOT,
+        env=environment,
         check=True,
         capture_output=True,
         text=True,

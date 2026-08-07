@@ -12,9 +12,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from memoryforge.showcase import build_showcase
-
 REPO_ROOT = Path(__file__).resolve().parent.parent
+SOURCE_ROOT = REPO_ROOT / "src"
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -38,6 +37,9 @@ def main(argv: list[str] | None = None) -> None:
 
 
 def run_drill(workdir: Path) -> dict[str, Any]:
+    sys.path.insert(0, str(SOURCE_ROOT))
+    from memoryforge.showcase import build_showcase
+
     source = workdir / "source"
     source.mkdir()
     source_code = source / "src" / "service.py"
@@ -187,7 +189,7 @@ def run_drill(workdir: Path) -> dict[str, Any]:
 
 def _cli(*args: str) -> str:
     environment = dict(os.environ)
-    environment.pop("PYTHONPATH", None)
+    environment["PYTHONPATH"] = str(SOURCE_ROOT)
     completed = subprocess.run(
         [sys.executable, "-m", "memoryforge", *args],
         cwd=REPO_ROOT,
