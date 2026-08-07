@@ -2,7 +2,7 @@
 
 ## Status
 
-`FROZEN_BASELINE_PENDING`
+`FROZEN_BASELINE_REJECTED`
 
 ## Base
 
@@ -33,6 +33,24 @@
 
 The development test and both suite files are frozen before production code
 changes. Confirmation must not run during development.
+
+## Baseline Result
+
+- Evidence:
+  `demo/results/cross_platform_delivery_baseline_rejected.json`
+- MemoryForge Commit:
+  `bef6c7e35e9d8e282d2b3b0e0c4b3874a12f9e8a`
+- Evidence SHA256:
+  `f169486f1fc757abaaf3728187703834510726c2cae11736c2e82ba220e369ac`
+- Result: `REJECTED`
+- Development pass rate: 0.0%
+- Failed cases: 7
+- Deterministic replay: passed
+- Confirmation status: `not_run`
+
+All seven cases fail during collection because
+`memoryforge.platform_lock` does not exist. The exact root error is
+`ModuleNotFoundError: No module named 'memoryforge.platform_lock'`.
 
 ## Goal
 

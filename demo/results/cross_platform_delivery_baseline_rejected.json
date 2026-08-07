@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "suite_id": "cross-platform-delivery",
+  "suite_revision": 1,
+  "memoryforge_commit": "bef6c7e35e9d8e282d2b3b0e0c4b3874a12f9e8a",
+  "memoryforge_worktree_dirty": false,
+  "development": {
+    "path": "demo/evaluation/cross_platform_delivery_development.json",
+    "sha256": "0082594121022f6f97b6eae3d4106819794c0b988f531a02e51b9ec2194fb6ff",
+    "test_file": {
+      "path": "tests/test_cross_platform_delivery.py",
+      "sha256": "08601b7effba8271ac318a58a5b0906b934bdeaa4564edcd0ec5738e61618ac3"
+    },
+    "case_count": 7,
+    "evaluation": {
+      "case_count": 7,
+      "metrics": {
+        "pass_rate": 0.0,
+        "failed_cases": 7,
+        "direct_platform_imports": 2,
+        "windows_lock_offset": -1,
+        "windows_lock_bytes": 0,
+        "local_smoke": "failed"
+      },
+      "cases": [
+        {
+          "id": "descriptor-round-trip-contention",
+          "pytest_node": "tests/test_cross_platform_delivery.py::test_descriptor_lock_round_trip_and_contention",
+          "status": "failed",
+          "error_classification": "pytest_failure"
+        },
+        {
+          "id": "blocking-wait",
+          "pytest_node": "tests/test_cross_platform_delivery.py::test_descriptor_lock_blocking_waits_for_release",
+          "status": "failed",
+          "error_classification": "pytest_failure"
+        },
+        {
+          "id": "windows-byte-zero-contract",
+          "pytest_node": "tests/test_cross_platform_delivery.py::test_windows_backend_locks_byte_zero_and_restores_position",
+          "status": "failed",
+          "error_classification": "pytest_failure"
+        },
+        {
+          "id": "safe-stable-lock-file",
+          "pytest_node": "tests/test_cross_platform_delivery.py::test_exclusive_file_lock_preserves_content_and_rejects_symlink",
+          "status": "failed",
+          "error_classification": "pytest_failure"
+        },
+        {
+          "id": "single-platform-boundary",
+          "pytest_node": "tests/test_cross_platform_delivery.py::test_workspace_and_changesets_have_no_direct_platform_lock_imports",
+          "status": "failed",
+          "error_classification": "pytest_failure"
+        },
+        {
+          "id": "powershell-local-gate",
+          "pytest_node": "tests/test_cross_platform_delivery.py::test_powershell_local_gate_matches_release_contract",
+          "status": "failed",
+          "error_classification": "pytest_failure"
+        },
+        {
+          "id": "portable-empty-demo",
+          "pytest_node": "tests/test_cross_platform_delivery.py::test_cross_platform_smoke_runs_cli_workspace_and_unknown_demo",
+          "status": "failed",
+          "error_classification": "pytest_failure"
+        }
+      ]
+    }
+  },
+  "confirmation": {
+    "path": "demo/evaluation/cross_platform_delivery_confirmation.json",
+    "sha256": "200074acfb79979bf4663b97ae25e9dd62fa0f94359b8aa0d39c4250256660fc",
+    "status": "not_run"
+  },
+  "runs": [
+    {
+      "name": "first",
+      "evaluation_sha256": "f4c37276763d0e631a86f1637aaa4f86cc0e4e5e6b18411890175317e279aa65"
+    },
+    {
+      "name": "second",
+      "evaluation_sha256": "f4c37276763d0e631a86f1637aaa4f86cc0e4e5e6b18411890175317e279aa65"
+    }
+  ],
+  "gates": {
+    "pass_rate": false,
+    "failed_cases": false,
+    "direct_platform_imports": false,
+    "windows_lock_offset": false,
+    "windows_lock_bytes": false,
+    "local_smoke": false,
+    "deterministic_replay": true,
+    "stable_memoryforge_commit": true,
+    "clean_worktree_after_run": true,
+    "confirmation_not_run": true
+  },
+  "passed": false
+}
