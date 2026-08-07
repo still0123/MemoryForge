@@ -2,7 +2,7 @@
 
 ## Status
 
-`CANDIDATE_14_DEVELOPMENT_PASSED_REGRESSION_PENDING`
+`ACCEPTED_DEVELOPMENT_AND_LOCAL_REGRESSION`
 
 ## Frozen Inputs
 
@@ -742,7 +742,28 @@ free paraphrasing for deterministic, local, auditable final-answer grounding.
 Candidate 14 retains all accepted development metrics: 100.0% Answer,
 selective, route, Source, fact, Citation, multi-source, abstention, and
 repository-isolation metrics; coverage remains 90.0% and risk remains 0.0%.
-Full local regression is pending. Confirmation remains `not_run`.
+
+## Candidate 14 Full Local Gate
+
+- Gate Commit:
+  `8d5b9cbf297b8f45f209096021360f6c8e37c5bf`;
+- acceptance Evidence:
+  `demo/results/support_score_candidate_14_local_gate.json`;
+- acceptance Evidence SHA256:
+  `6f36800dbb453fec0b066fae3ecf72d16f1e5ce87822e53c248257e6b26b9b83`;
+- Ruff check and format: passed;
+- strict Mypy: passed;
+- registry: 12 release suites, two experiments, 47 Evidence artifacts, and 121
+  QA cases;
+- dependency check: passed;
+- pytest: 481 passed;
+- coverage: 88%;
+- Wheel clean-room: passed;
+- sdist clean-room: passed;
+- `pip check` and CLI version smoke test: passed.
+
+Candidate 14 is the accepted development and local-regression result.
+Confirmation remains `not_run`.
 
 ## Forbidden
 
