@@ -77,6 +77,18 @@ DOCUMENT_CLAIMS = {
         "Holdout status: `not_run`",
     ),
 }
+RELEASE_CLAIM_MARKER = (
+    "<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; "
+    "macos_passed=583; linux_passed=580; linux_skipped=3; "
+    "windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->"
+)
+FORBIDDEN_RELEASE_CLAIMS = (
+    "v0.3.0 已发布",
+    "v0.3.0 is released",
+    "原生 Windows confirmation 已完成",
+    "Windows confirmation passed",
+    "v0.3.0 holdout 已完成",
+)
 WORKSPACE_CHECKS = {
     "refresh",
     "review",
@@ -88,6 +100,18 @@ WORKSPACE_CHECKS = {
     "restore",
     "query",
     "showcase",
+}
+WHEEL_CLEAN_ROOM_CHECKS = {
+    "pip_check": "passed",
+    "cli_help": "passed",
+    "code_wiki_benchmark": "passed",
+    "public_demo": "not_run",
+}
+SDIST_CLEAN_ROOM_CHECKS = {
+    "install": "passed",
+    "pip_check": "passed",
+    "import": "passed",
+    "cli_version": "passed",
 }
 _REGISTRY_SCRIPT = REPO_ROOT / "demo/validate_benchmark_registry.py"
 _REGISTRY_SPEC = importlib.util.spec_from_file_location(
@@ -266,6 +290,7 @@ def _check_reproducible_artifacts(release_dir: Path) -> dict[str, object]:
         },
     }
     identities = []
+    retained_paths: set[str] = set()
     for index, build in enumerate(builds):
         if not isinstance(build, dict) or build.get("name") != ("first", "second")[index]:
             return _check(False, "artifact_contract_invalid")
@@ -273,8 +298,24 @@ def _check_reproducible_artifacts(release_dir: Path) -> dict[str, object]:
         sdist = build.get("sdist")
         if not isinstance(wheel, dict) or not isinstance(sdist, dict):
             return _check(False, "artifact_contract_invalid")
-        if wheel != actual["wheel"] or sdist != actual["sdist"]:
-            return _check(False, "artifact_reproducibility_failure")
+        for kind, record in (("wheel", wheel), ("sdist", sdist)):
+            if (
+                set(record) != {"path", "sha256", "size", "retained_path"}
+                or {key: record[key] for key in ("path", "sha256", "size")} != actual[kind]
+            ):
+                return _check(False, "artifact_reproducibility_failure")
+            retained_name = record.get("retained_path")
+            if not isinstance(retained_name, str) or retained_name in retained_paths:
+                return _check(False, "artifact_contract_invalid")
+            retained = (release_dir / retained_name).resolve()
+            if (
+                not retained.is_relative_to(release_dir.resolve())
+                or not retained.is_file()
+                or _sha256(retained) != record["sha256"]
+                or retained.stat().st_size != record["size"]
+            ):
+                return _check(False, "artifact_reproducibility_failure")
+            retained_paths.add(retained_name)
         identities.append((wheel.get("sha256"), sdist.get("sha256")))
     passed = (
         identities[0] == identities[1]
@@ -317,14 +358,18 @@ def _check_documents(release_dir: Path) -> dict[str, object]:
             all(claim in texts[path] for claim in claims)
             for path, claims in DOCUMENT_CLAIMS.items()
         )
+        and all(text.count(RELEASE_CLAIM_MARKER) == 1 for text in texts.values())
+        and not any(
+            forbidden in text for text in texts.values() for forbidden in FORBIDDEN_RELEASE_CLAIMS
+        )
         and isinstance(package, dict)
         and package.get("version") == TARGET_VERSION
         and isinstance(checks, dict)
         and checks.get("workspace_drill") == "passed"
         and checks.get("benchmark_summary") == "passed"
         and checks.get("sdist_members") == "passed"
-        and _clean_room_passed(checks.get("wheel_clean_room"))
-        and _clean_room_passed(checks.get("sdist_clean_room"))
+        and _clean_room_passed(checks.get("wheel_clean_room"), WHEEL_CLEAN_ROOM_CHECKS)
+        and _clean_room_passed(checks.get("sdist_clean_room"), SDIST_CLEAN_ROOM_CHECKS)
         and provenance.get("memoryforge_commit") == _git("rev-parse", "HEAD")
         and provenance.get("confirmation") == {"status": "not_run"}
         and provenance.get("holdout") == {"status": "not_run"}
@@ -384,12 +429,8 @@ def _sdist_version(path: Path) -> str:
     return str(metadata.get("Version", ""))
 
 
-def _clean_room_passed(value: object) -> bool:
-    return (
-        isinstance(value, dict)
-        and bool(value)
-        and all(status in {"passed", "not_run"} for status in value.values())
-    )
+def _clean_room_passed(value: object, expected: dict[str, str]) -> bool:
+    return isinstance(value, dict) and value == expected
 
 
 def _check_splits_closed(

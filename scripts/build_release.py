@@ -61,6 +61,14 @@ def main(argv: list[str] | None = None) -> None:
             sdist = staging / sdist_name
             shutil.copy2(first_root / wheel_name, wheel)
             shutil.copy2(first_root / sdist_name, sdist)
+            for build in builds:
+                retained = staging / "reproducibility" / str(build["name"])
+                retained.mkdir(parents=True)
+                for kind in ("wheel", "sdist"):
+                    name = str(build[kind]["path"])
+                    retained_artifact = retained / name
+                    shutil.copy2(workdir / str(build["name"]) / "dist" / name, retained_artifact)
+                    build[kind]["retained_path"] = retained_artifact.relative_to(staging).as_posix()
 
             wheel_check = workdir / "wheel-check.json"
             _run(
@@ -322,8 +330,8 @@ def _single(directory: Path, pattern: str) -> Path:
 
 
 def _write_sha256sums(root: Path) -> None:
-    paths = sorted(path for path in root.iterdir() if path.name != "SHA256SUMS")
-    lines = [f"{_sha256(path)}  {path.name}" for path in paths]
+    paths = sorted(path for path in root.rglob("*") if path.is_file() and path.name != "SHA256SUMS")
+    lines = [f"{_sha256(path)}  {path.relative_to(root).as_posix()}" for path in paths]
     (root / "SHA256SUMS").write_text("\n".join(lines) + "\n", encoding="ascii")
     for line in lines:
         digest, name = line.split("  ", 1)

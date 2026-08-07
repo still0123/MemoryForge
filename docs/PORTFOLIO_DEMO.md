@@ -1,5 +1,7 @@
 # 秋招演示与面试说明
 
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; macos_passed=583; linux_passed=580; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+
 这份文档用于把 MemoryForge 讲成一个完整项目。演示只使用公开的 `AgentSkill-Eval` 文档，不使用公司代码、真实飞书正文、Token 或 App Secret。
 
 ## 一句话介绍

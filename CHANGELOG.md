@@ -1,5 +1,7 @@
 # Changelog
 
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; macos_passed=583; linux_passed=580; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+
 ## v0.3.0 — Release Candidate
 
 - 关闭 GitHub Actions 并移除 hosted CI/Release workflow；

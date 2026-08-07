@@ -1,5 +1,7 @@
 # MemoryForge
 
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; macos_passed=583; linux_passed=580; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+
 > 把散落在代码仓库、设计文档和飞书里的技术资料，编译成一套可维护、可追溯、可以直接在飞书提问的个人技术 Wiki。
 
 ![MemoryForge 工作流](assets/memoryforge-flow.svg)

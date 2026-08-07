@@ -1,5 +1,7 @@
 # v0.3.0 Release Candidate Specification
 
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; macos_passed=583; linux_passed=580; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+
 ## Status
 
 `LOCAL_GATES_ACCEPTED_FINAL_REVIEW_PENDING`

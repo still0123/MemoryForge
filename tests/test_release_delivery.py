@@ -27,8 +27,9 @@ def test_release_builder_reads_version_from_current_source() -> None:
 
 
 def test_benchmark_summary_reports_macro_per_suite_and_negatives() -> None:
-    summary = summary_builder.build_summary()
+    summary = summary_builder.build_summary(memoryforge_commit="1" * 40)
 
+    assert summary["memoryforge_commit"] == "1" * 40
     assert summary["registry"]["qa_case_count"] == 121
     assert len(summary["suites"]) == 12
     assert any(

@@ -2049,12 +2049,16 @@ def _git_commit_descends_from(commit: str, ancestor: str) -> bool:
 def _payload_private_detail_leaks(payload: object) -> int:
     prefixes = ("/Users/", "/home/", "/private/var/", "C:\\Users\\")
     secrets = ("api_key", "token=", "password=", "secret=")
+    secret_keys = ("api_key", "token", "password", "secret")
     leaks = 0
 
     def visit(value: object) -> None:
         nonlocal leaks
         if isinstance(value, dict):
-            for item in value.values():
+            for key, item in value.items():
+                lowered_key = str(key).casefold()
+                if any(secret in lowered_key for secret in secret_keys):
+                    leaks += 1
                 visit(item)
         elif isinstance(value, list):
             for item in value:
@@ -2836,8 +2840,10 @@ def _validate_release_candidate_acceptance_evidence(
             "holdout",
             "passed",
         }
+        or type(payload.get("schema_version")) is not int
         or payload.get("schema_version") != 1
         or payload.get("suite_id") != experiment["suite_id"]
+        or type(payload.get("suite_revision")) is not int
         or payload.get("suite_revision") != experiment["suite_revision"]
         or COMMIT.fullmatch(commit) is None
         or payload.get("memoryforge_worktree_dirty") is not False

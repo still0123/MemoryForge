@@ -27,9 +27,12 @@ def main(argv: list[str] | None = None) -> None:
     output = args.output.resolve()
     if output.is_relative_to(REPO_ROOT):
         raise SystemExit("--output must remain outside the repository")
+    commit = _git("rev-parse", "HEAD")
     if _git("status", "--porcelain"):
         raise SystemExit("MemoryForge worktree must be clean")
-    summary = build_summary()
+    summary = build_summary(memoryforge_commit=commit)
+    if _git("rev-parse", "HEAD") != commit or _git("status", "--porcelain"):
+        raise SystemExit("benchmark summary source changed during generation")
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(
         json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
@@ -38,7 +41,7 @@ def main(argv: list[str] | None = None) -> None:
     print(f"Wrote benchmark summary to {output}")
 
 
-def build_summary() -> dict[str, Any]:
+def build_summary(*, memoryforge_commit: str | None = None) -> dict[str, Any]:
     registry = json.loads(REGISTRY.read_text(encoding="utf-8"))
     registry_summary = validator.validate_registry()
     project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
@@ -47,7 +50,7 @@ def build_summary() -> dict[str, Any]:
     return {
         "schema_version": 1,
         "package_version": project["project"]["version"],
-        "memoryforge_commit": _git("rev-parse", "HEAD"),
+        "memoryforge_commit": memoryforge_commit or _git("rev-parse", "HEAD"),
         "registry": registry_summary,
         "macro": _macro_metrics(suites),
         "suites": suites,

@@ -88,6 +88,19 @@ def test_release_document_claims_are_explicit() -> None:
     for path, claims in benchmark.DOCUMENT_CLAIMS.items():
         text = path.read_text(encoding="utf-8")
         assert all(claim in text for claim in claims)
+        assert text.count(benchmark.RELEASE_CLAIM_MARKER) == 1
+        assert not any(claim in text for claim in benchmark.FORBIDDEN_RELEASE_CLAIMS)
+
+
+def test_release_clean_room_checks_cannot_be_not_run() -> None:
+    assert benchmark._clean_room_passed(
+        benchmark.WHEEL_CLEAN_ROOM_CHECKS,
+        benchmark.WHEEL_CLEAN_ROOM_CHECKS,
+    )
+    assert not benchmark._clean_room_passed(
+        {key: "not_run" for key in benchmark.SDIST_CLEAN_ROOM_CHECKS},
+        benchmark.SDIST_CLEAN_ROOM_CHECKS,
+    )
 
 
 def _release_artifacts(root: Path) -> dict:
@@ -115,6 +128,27 @@ def _release_artifacts(root: Path) -> dict:
             "size": sdist.stat().st_size,
         },
     }
+    builds = []
+    for name in ("first", "second"):
+        retained = root / "reproducibility" / name
+        retained.mkdir(parents=True)
+        retained_wheel = retained / wheel.name
+        retained_sdist = retained / sdist.name
+        retained_wheel.write_bytes(wheel.read_bytes())
+        retained_sdist.write_bytes(sdist.read_bytes())
+        builds.append(
+            {
+                "name": name,
+                "wheel": {
+                    **artifacts["wheel"],
+                    "retained_path": retained_wheel.relative_to(root).as_posix(),
+                },
+                "sdist": {
+                    **artifacts["sdist"],
+                    "retained_path": retained_sdist.relative_to(root).as_posix(),
+                },
+            }
+        )
     return {
         "memoryforge_commit": benchmark._git("rev-parse", "HEAD"),
         "memoryforge_worktree_dirty": False,
@@ -125,13 +159,6 @@ def _release_artifacts(root: Path) -> dict:
             "sdist": sdist.name,
             "sdist_sha256": artifacts["sdist"]["sha256"],
         },
-        "builds": [
-            {
-                "name": name,
-                "wheel": dict(artifacts["wheel"]),
-                "sdist": dict(artifacts["sdist"]),
-            }
-            for name in ("first", "second")
-        ],
+        "builds": builds,
         "reproducible_artifacts": True,
     }

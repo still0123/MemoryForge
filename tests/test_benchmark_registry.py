@@ -392,6 +392,27 @@ def test_benchmark_registry_binds_release_candidate_platform_results() -> None:
         )
 
 
+def test_benchmark_registry_rejects_boolean_release_acceptance_identities() -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "release-candidate-delivery"
+    )
+    artifact = experiment["evidence"][2]
+    payload = json.loads(
+        (validator.REPO_ROOT / artifact["acceptance_evidence"]["path"]).read_text(encoding="utf-8")
+    )
+    payload["schema_version"] = True
+    payload["suite_revision"] = True
+
+    with pytest.raises(ValueError, match="local gate Evidence contract failed"):
+        validator._validate_release_candidate_acceptance_evidence(
+            experiment,
+            artifact,
+            payload,
+            experiment["splits"]["confirmation"],
+        )
+
+
 def test_benchmark_registry_rejects_contradictory_cross_platform_case_evidence() -> None:
     registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
     experiment = next(
@@ -811,6 +832,12 @@ def test_benchmark_registry_rejects_private_or_failed_provenance() -> None:
             {"note": "artifact", "checks": {"pip_check": "failed"}}
         )
         == 0
+    )
+    assert (
+        validator._payload_private_detail_leaks(
+            {"credentials": {"api_key": "sk-live-private-value"}}
+        )
+        == 1
     )
 
 
