@@ -2,7 +2,7 @@
 
 ## Status
 
-`BASELINE_RECORDED_DEVELOPMENT_OPEN`
+`CANDIDATE_1_DEVELOPMENT_PASS_REGRESSION_PENDING`
 
 ## Frozen Inputs
 
@@ -42,6 +42,23 @@ The confirmation split must not run during development.
 The baseline failed four source-quota cases:
 `new-source-wins-rank-tie`, `source-quota-precedes-extra-terms`,
 `three-source-quota`, and `source-version-is-part-of-identity`.
+
+## Candidate 1 Result
+
+- Evidence:
+  `demo/results/multi_source_coverage_development_candidate_1.json`
+- MemoryForge Commit:
+  `4303c159caac6c8bded2eeb9e0e3cba625f61dc2`
+- Evidence SHA256:
+  `ef584ff97687ff4a09644f203b9b8d135c420918e4a19e27a8f7354a3e9b5197`
+- Result: `DEVELOPMENT_PASS_REGRESSION_PENDING`
+- Selection accuracy: 100.0%
+- Source coverage accuracy: 100.0%
+- Term coverage accuracy: 100.0%
+- Single-source rank preservation: 100.0%
+- Duplicate source rate: 0.0%
+- Deterministic replay: passed
+- Confirmation status: `not_run`
 
 ## Problem
 
