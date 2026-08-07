@@ -248,6 +248,42 @@ REQUIRED_EXPERIMENT_EVIDENCE = {
         ),
     },
 }
+STATIC_SHOWCASE_REJECTED_CONTRACTS = {
+    _RESULTS + "static_showcase_baseline_rejected.json": {
+        "suite_revision": 1,
+        "development_sha256": "ff6e74e31ac0ce4891e04c4320874e503ec6dd935bf55da29ecf0243f24bf63f",
+        "test_sha256": "5ac08a2fc24e005737eddc094ef372baa317775b58a88e067d20e93287ab33ae",
+        "confirmation_sha256": "1a75c146f884459a7bad5a995bda9eed32b91f043332d3ce735aadc73ccdf555",
+        "pytest": {"passed": 0, "failed": 0, "errors": 1, "exit_code": 2},
+        "failures": [("test-collection", "FEATURE_NOT_IMPLEMENTED")],
+    },
+    _RESULTS + "static_showcase_candidate_0_fixture_rejected.json": {
+        "suite_revision": 1,
+        "development_sha256": "ff6e74e31ac0ce4891e04c4320874e503ec6dd935bf55da29ecf0243f24bf63f",
+        "test_sha256": "5ac08a2fc24e005737eddc094ef372baa317775b58a88e067d20e93287ab33ae",
+        "confirmation_sha256": "1a75c146f884459a7bad5a995bda9eed32b91f043332d3ce735aadc73ccdf555",
+        "pytest": {"passed": 0, "failed": 4, "errors": 0, "exit_code": 1},
+        "failures": [
+            ("complete-public-readonly-snapshot", "FIXTURE_PRECONDITION"),
+            ("owned-deterministic-rebuild", "FIXTURE_PRECONDITION"),
+            ("unsafe-output-rejection", "FIXTURE_PRECONDITION"),
+            ("zero-key-nested-cli", "FIXTURE_PRECONDITION"),
+        ],
+    },
+    _RESULTS + "static_showcase_candidate_1_fixture_rejected.json": {
+        "suite_revision": 2,
+        "development_sha256": "773ceef802964b197bab56cf7fbfadd255f32bce776e1c99029bec9b23c91cf6",
+        "test_sha256": "1353c6e571df641617a6f906dcf5f6afcc1e61d9409d1392c3aee1be593fb0ec",
+        "confirmation_sha256": "cdc59f2eccfe920204be0a5875dbbaf3eefb2d517ff098419bed6d47ecb8e0d8",
+        "pytest": {"passed": 0, "failed": 4, "errors": 0, "exit_code": 1},
+        "failures": [
+            ("complete-public-readonly-snapshot", "FIXTURE_PRECONDITION"),
+            ("owned-deterministic-rebuild", "FIXTURE_PRECONDITION"),
+            ("unsafe-output-rejection", "FIXTURE_PRECONDITION"),
+            ("zero-key-nested-cli", "FIXTURE_PRECONDITION"),
+        ],
+    },
+}
 REQUIRED_REGRESSION_EVIDENCE = {
     "exact-symbol-routing.learn-claude-code": {
         _RESULTS + "exact_symbol_routing_development.json": (
@@ -1200,10 +1236,23 @@ def _validate_static_showcase_experiment_payload(
     ):
         raise ValueError("static-Showcase experiment Evidence contract failed")
     if artifact["status"] == "rejected":
+        contract = STATIC_SHOWCASE_REJECTED_CONTRACTS.get(str(artifact["path"]))
+        development_payload = payload.get("development", {})
+        confirmation_payload = payload.get("confirmation", {})
         pytest_result = payload.get("development", {}).get("pytest", {})
         failures = payload.get("development", {}).get("failures")
+        failure_identities = (
+            [
+                (failure.get("case_id"), failure.get("classification"))
+                for failure in failures
+                if isinstance(failure, dict)
+            ]
+            if isinstance(failures, list)
+            else []
+        )
         if (
-            set(payload)
+            contract is None
+            or set(payload)
             != {
                 "schema_version",
                 "suite_id",
@@ -1214,18 +1263,25 @@ def _validate_static_showcase_experiment_payload(
                 "confirmation",
                 "passed",
             }
-            or payload.get("suite_revision") not in {1, 2}
+            or payload.get("suite_revision") != contract["suite_revision"]
             or artifact["passed"] is not False
-            or not isinstance(pytest_result, dict)
-            or pytest_result.get("exit_code") not in {1, 2}
-            or not isinstance(failures, list)
-            or not failures
-            or any(
-                not isinstance(failure, dict)
-                or not isinstance(failure.get("classification"), str)
-                or not failure["classification"]
-                for failure in failures
-            )
+            or not isinstance(development_payload, dict)
+            or set(development_payload)
+            != {"path", "sha256", "test_file", "case_count", "pytest", "failures"}
+            or development_payload.get("path") != "demo/evaluation/static_showcase_development.json"
+            or development_payload.get("sha256") != contract["development_sha256"]
+            or development_payload.get("test_file")
+            != {"path": "tests/test_showcase.py", "sha256": contract["test_sha256"]}
+            or development_payload.get("case_count") != 4
+            or pytest_result != contract["pytest"]
+            or failure_identities != contract["failures"]
+            or not isinstance(confirmation_payload, dict)
+            or confirmation_payload
+            != {
+                "path": "demo/evaluation/static_showcase_confirmation.json",
+                "sha256": contract["confirmation_sha256"],
+                "status": "not_run",
+            }
         ):
             raise ValueError("rejected static-Showcase Evidence must retain failures")
         return
@@ -1234,7 +1290,19 @@ def _validate_static_showcase_experiment_payload(
     runs = payload.get("runs")
     gates = payload.get("gates")
     frozen = json.loads((REPO_ROOT / development["path"]).read_text(encoding="utf-8"))
-    frozen_ids = [case.get("id") for case in frozen.get("cases", [])]
+    frozen_cases = frozen.get("cases", [])
+    expected_cases = [
+        {
+            "id": case.get("id"),
+            "pytest_node": f"tests/test_showcase.py::{case.get('test')}",
+            "status": "passed",
+            "error_classification": "none",
+        }
+        for case in frozen_cases
+        if isinstance(case, dict)
+    ]
+    actual_cases = evaluation.get("cases") if isinstance(evaluation, dict) else None
+    metrics = evaluation.get("metrics") if isinstance(evaluation, dict) else None
     evaluation_sha256 = hashlib.sha256(
         json.dumps(evaluation, sort_keys=True, ensure_ascii=False).encode("utf-8")
     ).hexdigest()
@@ -1249,9 +1317,11 @@ def _validate_static_showcase_experiment_payload(
         or not isinstance(evaluation, dict)
         or set(evaluation) != {"case_count", "metrics", "cases"}
         or evaluation.get("case_count") != development["case_count"]
-        or not isinstance(evaluation.get("cases"), list)
-        or [case.get("id") for case in evaluation["cases"]] != frozen_ids
-        or len(set(frozen_ids)) != len(frozen_ids)
+        or actual_cases != expected_cases
+        or len(expected_cases) != development["case_count"]
+        or not isinstance(metrics, dict)
+        or metrics.get("pass_rate") != 100.0
+        or metrics.get("failed_cases") != 0
         or not isinstance(runs, list)
         or [run.get("name") for run in runs if isinstance(run, dict)] != ["first", "second"]
         or any(
@@ -1269,9 +1339,6 @@ def _validate_static_showcase_experiment_payload(
         or artifact["passed"] is not True
     ):
         raise ValueError("accepted static-Showcase Evidence contract failed")
-    metrics = evaluation.get("metrics")
-    if not isinstance(metrics, dict):
-        raise ValueError("static-Showcase metrics are missing")
     for metric, expected in experiment["expected_metrics"]["development"].items():
         if metrics.get(metric) != expected:
             raise ValueError(f"static-Showcase metric mismatch: {metric}")

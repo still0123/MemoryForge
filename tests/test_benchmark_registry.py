@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -199,6 +200,57 @@ def test_benchmark_registry_pins_static_showcase_repository_commit(tmp_path: Pat
 
     with pytest.raises(ValueError, match="metadata changed"):
         validator.validate_registry(path)
+
+
+def test_benchmark_registry_rejects_contradictory_showcase_case_evidence() -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "static-showcase"
+    )
+    artifact = next(
+        item for item in experiment["evidence"] if item["status"] == "accepted_development"
+    )
+    payload = json.loads((validator.REPO_ROOT / artifact["path"]).read_text(encoding="utf-8"))
+    payload["development"]["evaluation"]["cases"][0]["status"] = "failed"
+    payload["development"]["evaluation"]["cases"][0]["error_classification"] = "ASSERTION_FAILURE"
+    evaluation_sha256 = hashlib.sha256(
+        json.dumps(
+            payload["development"]["evaluation"],
+            sort_keys=True,
+            ensure_ascii=False,
+        ).encode()
+    ).hexdigest()
+    for run in payload["runs"]:
+        run["evaluation_sha256"] = evaluation_sha256
+
+    with pytest.raises(ValueError, match="accepted static-Showcase Evidence contract failed"):
+        validator._validate_static_showcase_experiment_payload(
+            experiment,
+            artifact,
+            payload,
+            experiment["splits"]["development"],
+            experiment["splits"]["confirmation"],
+        )
+
+
+def test_benchmark_registry_binds_rejected_showcase_split_identity() -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "static-showcase"
+    )
+    artifact = next(item for item in experiment["evidence"] if item["evidence_revision"] == 1)
+    payload = json.loads((validator.REPO_ROOT / artifact["path"]).read_text(encoding="utf-8"))
+    payload["development"]["sha256"] = "0" * 64
+    payload["confirmation"]["sha256"] = "1" * 64
+
+    with pytest.raises(ValueError, match="rejected static-Showcase Evidence"):
+        validator._validate_static_showcase_experiment_payload(
+            experiment,
+            artifact,
+            payload,
+            experiment["splits"]["development"],
+            experiment["splits"]["confirmation"],
+        )
 
 
 def test_benchmark_registry_requires_local_gate_for_acceptance(tmp_path: Path) -> None:
