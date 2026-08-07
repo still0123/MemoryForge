@@ -2,7 +2,7 @@
 
 ## Status
 
-`PREREGISTERED_DATA_LAYER`
+`IMPLEMENTED_DATA_LAYER`
 
 ## Goal
 
@@ -80,6 +80,23 @@ called by `answer_question` in this phase.
 - existing QA and structural benchmarks do not change;
 - Ruff, format, strict Mypy, full pytest, coverage, Wheel/sdist, and clean-room
   checks pass.
+
+## Public Evidence
+
+`demo/results/wiki_fact_index_baseline.json` records two clean deterministic
+replays against:
+
+- `shareAI-lab/learn-claude-code@7b564c3ee6996039cb4e13a53024dfe2d4388d35`;
+- `colinhacks/zod@912f0f51b0ced654d0069741e7160834dca742ee`.
+
+The result contains 1,356 Facts across 39 pages, including 1,270 Symbol facts
+and 86 Relation facts. Both runs produced canonical row SHA256
+`9f909105161623b6cbcae96b5c2e7140daa119fadb3ec24f20c2e095fe51d40d`.
+The Evidence artifact SHA256 is
+`0d440baccbb5cc7e2a0595320034de46536e600e174235539c6ec7c46ef934e2`.
+
+This Evidence proves the data-layer and replay contracts only. It does not
+claim improved page routing, fact selection, or Answer accuracy.
 
 ## Deferred
 

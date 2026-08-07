@@ -18,8 +18,8 @@ def test_benchmark_registry_binds_all_release_artifacts() -> None:
 
     assert summary == {
         "status": "valid",
-        "suite_count": 11,
-        "evidence_count": 15,
+        "suite_count": 12,
+        "evidence_count": 16,
         "qa_case_count": 121,
         "qa_case_types_present": [
             "code_behavior",
