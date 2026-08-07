@@ -16,12 +16,19 @@ def test_explicit_code_identifiers_preserve_symbol_boundaries() -> None:
         "agent_loop",
         "run",
     )
+    assert query_module._explicit_code_identifiers(
+        "foo_bar foo_bar foo_bar foo_bar foo_bar foo_bar foo_bar foo_bar target_symbol $fetch"
+    ) == ("foo_bar", "target_symbol", "$fetch")
     assert (
         query_module._explicit_code_identifiers(
             "Which function stores embeddings in a vector database?"
         )
         == ()
     )
+    assert query_module._requested_symbol_kinds("Which function is Client.run?") == {
+        "function",
+        "method",
+    }
 
 
 def test_unscoped_symbol_routes_fail_closed_across_repositories(

@@ -27,7 +27,7 @@ _INDEX_ENTRY = re.compile(
 _WORDS = re.compile(r"[a-z0-9]+|[\u4e00-\u9fff]+", re.IGNORECASE)
 _CAMEL_CASE_PARTS = re.compile(r"[A-Z]+(?=[A-Z][a-z]|$)|[A-Z]?[a-z]+")
 _CJK = re.compile(r"^[\u4e00-\u9fff]+$")
-_EXPLICIT_CODE_IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*")
+_EXPLICIT_CODE_IDENTIFIER = re.compile(r"[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*")
 _SYMBOL_FACT_KIND = re.compile(r"^`[^`]+` \((?P<kind>[a-z_]+)\):")
 _REPOSITORY_OVERVIEW_LINK = re.compile(r"^pages/repository-[a-f0-9]{12}\.md$")
 _NEGATION_CUES = ("不", "无", "未", "没", "避免", "拒绝")
@@ -559,7 +559,7 @@ def _explicit_code_identifiers(question: str) -> tuple[str, ...]:
     backticked = {
         match.group("identifier")
         for match in re.finditer(
-            r"`(?P<identifier>[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)`",
+            r"`(?P<identifier>[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*)`",
             question,
         )
     }
@@ -570,13 +570,14 @@ def _explicit_code_identifiers(question: str) -> tuple[str, ...]:
             identifier in backticked
             or "." in identifier
             or "_" in identifier
+            or "$" in identifier
             or (
                 any(character.islower() for character in identifier)
                 and any(character.isupper() for character in identifier[1:])
             )
         ):
             identifiers.append(identifier)
-    return tuple(dict.fromkeys(identifiers[:8]))
+    return tuple(dict.fromkeys(identifiers))[:8]
 
 
 def _requested_symbol_kinds(question: str) -> set[str]:
@@ -604,8 +605,8 @@ def _requested_symbol_kinds(question: str) -> set[str]:
     ):
         if marker in question:
             kinds.add(kind)
-    if "method" in kinds:
-        kinds.add("function")
+    if kinds & {"function", "method"}:
+        kinds.update({"function", "method"})
     return kinds
 
 

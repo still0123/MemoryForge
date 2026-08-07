@@ -289,6 +289,14 @@ def test_code_wiki_fact_index_round_trips_symbol_and_relation_metadata(
         ("run",),
         repository_id=repository.repository_id,
     )
+    assert (
+        find_applied_code_symbol_facts(
+            workspace,
+            ("$fetch",),
+            repository_id=repository.repository_id,
+        )
+        == ()
+    )
     answer = answer_question(
         workspace,
         "What is the signature of src.service.run?",
