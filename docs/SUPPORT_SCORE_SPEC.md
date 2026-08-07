@@ -2,7 +2,7 @@
 
 ## Status
 
-`PREREGISTERED_DEVELOPMENT_ONLY`
+`DEVELOPMENT_PASSED_REGRESSION_PENDING`
 
 ## Frozen Inputs
 
@@ -75,7 +75,7 @@ Rules:
 5. a multi-source request requires the requested Citation count;
 6. every selected Citation must identify the currently applied
    SourceVersion;
-7. Code Wiki answers require score >= 75 and no failed hard gate;
+7. Code Wiki file-page answers require score >= 75 and no failed hard gate;
 8. insufficient support returns `unknown`;
 9. non-Code Wiki answers expose the score but are not rejected in this focused
    candidate.
@@ -112,6 +112,36 @@ Accept only if:
   Wheel, and sdist gates pass.
 
 Any failed gate rejects production integration and retains its Evidence.
+
+## Development Result
+
+- Candidate Commit:
+  `99d20a259350693292ada852f3b18ab98aa1c172`;
+- Evidence:
+  `demo/results/support_score_development.json`;
+- Evidence SHA256:
+  `d6699dd57109b5bbc573fdf17355084a3ac045e43f5766f4c539c42621208a75`;
+- deterministic evaluation SHA256:
+  `a6c1fd8685dc4877a4f828da4eafba32344ee8cb3833a28434467da816e0e2ef`.
+
+Development metrics:
+
+- Answer accuracy: 100.0%;
+- selective accuracy: 100.0%;
+- coverage: 90.0%;
+- risk: 0.0%;
+- abstention accuracy: 100.0%;
+- page route recall@3: 100.0%;
+- Source recall@3: 100.0%;
+- fact selection accuracy: 100.0%;
+- Citation grounding: 100.0%;
+- multi-source coverage: 100.0%;
+- repository path isolation: 100.0%.
+
+The unsupported vector-database case scores 55.0 against threshold 75.0 and
+returns `unknown`. All answerable cases score from 85.0 to 91.2.
+
+Confirmation remains `not_run`.
 
 ## Forbidden
 

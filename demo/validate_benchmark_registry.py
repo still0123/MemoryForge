@@ -222,6 +222,20 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
         evidence = experiment.get("evidence")
         if not isinstance(evidence, list) or not evidence:
             raise ValueError(f"experiment requires generated evidence: {suite_id}")
+        required_statuses = experiment.get("required_evidence_statuses")
+        allowed_statuses = {
+            "rejected",
+            "development_passed_regression_failed",
+            "accepted_development_superseded",
+            "accepted_development",
+        }
+        if (
+            not isinstance(required_statuses, list)
+            or not required_statuses
+            or any(status not in allowed_statuses for status in required_statuses)
+            or len(required_statuses) != len(set(required_statuses))
+        ):
+            raise ValueError(f"invalid required experiment Evidence statuses: {suite_id}")
         revisions: set[int] = set()
         statuses: set[str] = set()
         for artifact in evidence:
@@ -236,12 +250,7 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
                 raise ValueError(f"invalid experiment evidence revision: {suite_id}")
             revisions.add(evidence_revision)
             status = str(artifact.get("status"))
-            if status not in {
-                "rejected",
-                "development_passed_regression_failed",
-                "accepted_development_superseded",
-                "accepted_development",
-            }:
+            if status not in allowed_statuses:
                 raise ValueError(f"invalid experiment evidence status: {suite_id}")
             statuses.add(status)
             commit = str(artifact.get("memoryforge_commit"))
@@ -265,12 +274,7 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
                     confirmation,
                 )
             evidence_count += 1
-        if statuses != {
-            "rejected",
-            "development_passed_regression_failed",
-            "accepted_development_superseded",
-            "accepted_development",
-        }:
+        if statuses != set(required_statuses):
             raise ValueError(f"experiment must retain rejected and accepted Evidence: {suite_id}")
     return evidence_count
 
