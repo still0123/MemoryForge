@@ -2,7 +2,7 @@
 
 ## Status
 
-`ACCEPTED_DEVELOPMENT_AND_LOCAL_REGRESSION`
+`CANDIDATE_6_DEVELOPMENT_PASSED_REGRESSION_PENDING`
 
 ## Frozen Inputs
 
@@ -309,6 +309,32 @@ of 35.0. Both clean runs are deterministic. Confirmation remains `not_run`.
 
 The registry now requires machine-readable local-gate Evidence for each final
 `accepted_development` artifact. Confirmation remains `not_run`.
+
+Follow-up review found two P1 production defects after Candidate 5's local
+gate:
+
+- the citation budget was also treated as the minimum required source count;
+- page-level identifier fallback compared case-folded names even though Python,
+  Go, and TypeScript identifiers are case-sensitive.
+
+Candidate 5 is superseded.
+
+## Candidate 6 Development Result
+
+Candidate 6 separates `max_citations` from explicit `min_source_count` and
+preserves identifier case during exact support checks.
+
+- Candidate Commit:
+  `f080b3a71132a453b61420e1fae1ab333824bc46`;
+- Evidence:
+  `demo/results/support_score_development_candidate_6.json`;
+- Evidence SHA256:
+  `f872d3e3a7fe1cf2a18f9740734c0d560e2413188d9b8984c89b6d4ecb31af2b`;
+- deterministic evaluation SHA256:
+  `1403431c27d6e1928699b868a285a932ed3a3ee84961c83f1f5e1ff8016eaa96`.
+
+Candidate 6 retains all accepted development metrics and the unsupported score
+of 35.0. Both clean runs are deterministic. Confirmation remains `not_run`.
 
 ## Forbidden
 
