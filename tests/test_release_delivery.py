@@ -32,10 +32,12 @@ def test_benchmark_summary_reports_macro_per_suite_and_negatives() -> None:
     assert summary["memoryforge_commit"] == "1" * 40
     assert summary["registry"]["qa_case_count"] == 121
     assert len(summary["suites"]) == 12
-    assert any(
-        experiment["suite_id"] == "release-candidate-delivery" and experiment["accepted_evidence"]
+    release = next(
+        experiment
         for experiment in summary["experiments"]
+        if experiment["suite_id"] == "release-candidate-delivery"
     )
+    assert release["accepted_evidence"] == []
     assert summary["macro"]["citation_grounding_accuracy"] > 90
     assert any(
         result["suite_id"] == "doc-wiki-qa.click" and result["status"] == "retained_metric_gap"
@@ -44,6 +46,8 @@ def test_benchmark_summary_reports_macro_per_suite_and_negatives() -> None:
     assert any(
         result["suite_id"] == "release-candidate-delivery"
         and result["status"] == "regression_rejected"
+        and result["path"]
+        == "demo/results/release_candidate_candidate_5_static_review_rejected.json"
         for result in summary["negative_results"]
     )
 

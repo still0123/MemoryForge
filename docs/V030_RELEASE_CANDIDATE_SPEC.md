@@ -1,10 +1,10 @@
 # v0.3.0 Release Candidate Specification
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=5; platform_gate_candidate=5; platform_gate_status=accepted; macos_passed=586; linux_passed=583; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=5; platform_gate_candidate=5; platform_gate_status=accepted; review_status=rejected; macos_passed=586; linux_passed=583; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 ## Status
 
-`LOCAL_GATES_ACCEPTED_FINAL_REVIEW_PENDING`
+`LOCAL_GATES_ACCEPTED_FINAL_REVIEW_REJECTED`
 
 ## Base
 
@@ -295,8 +295,29 @@ Both isolated build byte sets are registered.
 
 Both platforms passed Ruff, formatting, strict Mypy, Registry validation,
 dependency checks, the full pytest suite, Wheel clean-room, sdist clean-room,
-`pip check`, and CLI version smoke. Final static review remains required
-before confirmation authorization.
+`pip check`, and CLI version smoke.
+
+## Rejected Candidate 5 Static Review
+
+- Evidence:
+  `demo/results/release_candidate_candidate_5_static_review_rejected.json`
+- Evidence SHA256:
+  `7973225fac1123040b93674bbcb2d5df38872229772e9711015af064cbd39913`
+- Reviewed Commit:
+  `26767333bc20a6367bc87f239cdc956cd40e7f4e`
+- Result: `REJECTED`
+- P0: 0
+- P1: 10
+- P2: 2
+- Confirmation status: `not_run`
+- Holdout status: `not_run`
+
+The review found remaining bypasses in source snapshot identity, package and
+provenance schema, SHA256SUMS closure, retained artifact ownership, Registry
+Commit binding, document claims, and Showcase privacy measurement. Raw
+findings and the review Top 5 report remain under
+`demo/results/artifacts/release_candidate_review_candidate_5/`.
+Candidate 5 no longer authorizes confirmation.
 
 ## Confirmation Components
 

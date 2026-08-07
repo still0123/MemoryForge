@@ -344,7 +344,7 @@ REQUIRED_EXPERIMENT_EVIDENCE = {
         ),
         _RESULTS + "release_candidate_development_candidate_5.json": (
             6,
-            "accepted_development",
+            "development_passed_regression_failed",
             "a64d26d8103c5bc7c0e2f61627fe978f57920a31d4be5252866cbbe354e6d861",
             "b42d6a887053464f138f87dd45922d22dc58baa0",
         ),
@@ -433,6 +433,11 @@ REQUIRED_REGRESSION_EVIDENCE = {
             _RESULTS + "release_candidate_candidate_2_static_review_rejected.json",
             "475b6e5981bc43438107c67a7fd3ab05fc95888bfb30c391f2e7ae2275c23d45",
             "433f33c001c963cd69dd507346ac836895b7c36b",
+        ),
+        _RESULTS + "release_candidate_development_candidate_5.json": (
+            _RESULTS + "release_candidate_candidate_5_static_review_rejected.json",
+            "7973225fac1123040b93674bbcb2d5df38872229772e9711015af064cbd39913",
+            "26767333bc20a6367bc87f239cdc956cd40e7f4e",
         ),
     },
 }
@@ -1886,7 +1891,12 @@ def _validate_release_candidate_experiment_payload(
         return
 
     if (
-        artifact["status"] not in {"accepted_development", "accepted_development_superseded"}
+        artifact["status"]
+        not in {
+            "accepted_development",
+            "accepted_development_superseded",
+            "development_passed_regression_failed",
+        }
         or artifact["passed"] is not True
         or not _strict_mapping(metrics, experiment["expected_metrics"]["development"])
         or any(
@@ -2561,7 +2571,10 @@ def _validate_release_sdist_regression(
     confirmation: dict[str, Any],
     commit: str,
 ) -> int:
-    if payload.get("candidate") == "release-development-candidate-2":
+    if payload.get("candidate") in {
+        "release-development-candidate-2",
+        "release-development-candidate-5",
+    }:
         return _validate_release_static_review_regression(
             experiment,
             development_artifact,
@@ -2642,6 +2655,105 @@ def _validate_release_static_review_regression(
     commit: str,
 ) -> int:
     holdout = experiment["splits"]["holdout"]
+    candidate = payload.get("candidate")
+    if candidate == "release-development-candidate-2":
+        expected_review = {
+            "scope": "origin/main...HEAD",
+            "status": "failed",
+            "p0": 0,
+            "p1": 5,
+            "p2": 1,
+            "failures": [
+                "benchmark_summary_source_race",
+                "isolated_build_evidence_duplication",
+                "document_claim_contradiction",
+                "clean_room_not_run",
+                "secret_key_privacy",
+                "acceptance_boolean_identity",
+            ],
+        }
+        expected_root_cause = {
+            "summary": (
+                "Release Evidence checks still allowed claims stronger than retained "
+                "independently verifiable data."
+            ),
+            "fix": (
+                "Retain both isolated builds, bind a structured release claim, require exact "
+                "clean-room checks, scan secret-valued keys, and recheck source identity before "
+                "summary publication."
+            ),
+        }
+        review_ancestry_valid = _git_commit_descends_from(
+            development_artifact["memoryforge_commit"],
+            commit,
+        )
+    elif candidate == "release-development-candidate-5":
+        expected_review = {
+            "scope": "origin/main...HEAD",
+            "status": "failed",
+            "p0": 0,
+            "p1": 10,
+            "p2": 2,
+            "failures": [
+                "source_snapshot_toctou",
+                "showcase_privacy_not_measured",
+                "benchmark_summary_content",
+                "sha256sums_contract",
+                "retained_path_alias",
+                "package_identity",
+                "document_claim_contradiction",
+                "reproducibility_binding",
+                "acceptance_commit_binding",
+                "evidence_type_strictness",
+                "retained_support_artifacts",
+                "provenance_schema",
+            ],
+            "artifacts": {
+                "raw_findings": {
+                    "path": (
+                        "demo/results/artifacts/release_candidate_review_candidate_5/comments.jsonl"
+                    ),
+                    "sha256": ("3b20a97512440e1d5a71f3d5f7cab15358442c81e3520dedb7b744a8f3a8e821"),
+                },
+                "top_findings": {
+                    "path": (
+                        "demo/results/artifacts/release_candidate_review_candidate_5/"
+                        "final_comments.json"
+                    ),
+                    "sha256": ("34f1263129d1e3f421c26007e47a1ce87e0e7ecbb41b7092c8825e2164a2f459"),
+                },
+                "html_report": {
+                    "path": (
+                        "demo/results/artifacts/release_candidate_review_candidate_5/report.html"
+                    ),
+                    "sha256": ("0020c7214756fc82b2ab5065c1a5466b17406a96231ff5b0ef303001b614399f"),
+                },
+                "markdown_report": {
+                    "path": (
+                        "demo/results/artifacts/release_candidate_review_candidate_5/report.md"
+                    ),
+                    "sha256": ("07847196414e274eb961ab1e092de1e80076b638be9ae1a1d7568884b8086dc4"),
+                },
+            },
+        }
+        expected_root_cause = {
+            "summary": (
+                "Release gates still allowed artifact, provenance, Commit, summary, and privacy "
+                "claims stronger than retained independently verifiable data."
+            ),
+            "fix": (
+                "Build from a fixed source snapshot and enforce exact package, provenance, "
+                "SHA256SUMS, summary, artifact, Commit, document, privacy, and JSON type contracts."
+            ),
+        }
+        for artifact in expected_review["artifacts"].values():
+            _validate_artifact(artifact, "release-candidate static review")
+        review_ancestry_valid = _git_commit_descends_from(
+            commit,
+            development_artifact["memoryforge_commit"],
+        )
+    else:
+        raise ValueError("unknown release-candidate static review Evidence")
     if (
         set(payload)
         != {
@@ -2664,36 +2776,9 @@ def _validate_release_static_review_regression(
         or payload.get("suite_revision") != experiment["suite_revision"]
         or payload.get("memoryforge_commit") != commit
         or payload.get("memoryforge_worktree_dirty") is not False
-        or not _git_commit_descends_from(development_artifact["memoryforge_commit"], commit)
-        or payload.get("candidate") != "release-development-candidate-2"
-        or payload.get("review")
-        != {
-            "scope": "origin/main...HEAD",
-            "status": "failed",
-            "p0": 0,
-            "p1": 5,
-            "p2": 1,
-            "failures": [
-                "benchmark_summary_source_race",
-                "isolated_build_evidence_duplication",
-                "document_claim_contradiction",
-                "clean_room_not_run",
-                "secret_key_privacy",
-                "acceptance_boolean_identity",
-            ],
-        }
-        or payload.get("root_cause")
-        != {
-            "summary": (
-                "Release Evidence checks still allowed claims stronger than retained "
-                "independently verifiable data."
-            ),
-            "fix": (
-                "Retain both isolated builds, bind a structured release claim, require exact "
-                "clean-room checks, scan secret-valued keys, and recheck source identity before "
-                "summary publication."
-            ),
-        }
+        or not review_ancestry_valid
+        or not _strict_mapping(payload.get("review"), expected_review)
+        or not _strict_mapping(payload.get("root_cause"), expected_root_cause)
         or payload.get("confirmation")
         != {
             "path": confirmation["path"],

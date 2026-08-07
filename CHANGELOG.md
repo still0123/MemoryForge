@@ -1,6 +1,6 @@
 # Changelog
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=5; platform_gate_candidate=5; platform_gate_status=accepted; macos_passed=586; linux_passed=583; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=5; platform_gate_candidate=5; platform_gate_status=accepted; review_status=rejected; macos_passed=586; linux_passed=583; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 ## v0.3.0 — Release Candidate
 
@@ -24,6 +24,7 @@
   不删除或改写旧的 macOS/Linux 计数。
 - Candidate 5 development 6/6；macOS 586 passed、Linux 583 passed / 3 skipped，
   coverage 均为 88%，Wheel/sdist 跨平台 SHA256 一致。
+- Candidate 5 最终静态审查发现 0 P0 / 10 P1 / 2 P2，结果 rejected；原始与 Top 5 报告均保留。
 - 强化回答准确率契约，要求关键事实和冻结来源同时命中；AgentSkill-Eval 30 题严格 Answer 为
   96.7%，Citation grounding 为 100%，Source recall@3 为 96.2%；
 - 追加独立 Click 20 题复评；回答准确率 5.0%、来源召回 16.7%，再次确认外部有效性缺口；
