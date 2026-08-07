@@ -87,6 +87,14 @@ that its own offline path rejected.
 Candidate 2 applies the same 5 MiB ceiling to normalized saved JSON and
 rendered Markdown before either artifact is written.
 
+## Frozen Test Lint Exception
+
+The preregistered test was formatted before
+`memoryforge.github_thread_adapter` existed. Its byte identity remains frozen,
+so `pyproject.toml` exempts only `I001` for that file. Ruff now declares
+`memoryforge` as first-party globally, preventing future preregistered tests
+from changing classification when their production module is later added.
+
 ## Goal
 
 Import exactly one public GitHub Issue or Pull Request thread as an immutable,
