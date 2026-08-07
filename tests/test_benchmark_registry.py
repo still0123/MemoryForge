@@ -300,6 +300,45 @@ def test_benchmark_registry_binds_rejected_release_candidate_cases() -> None:
         )
 
 
+def test_benchmark_registry_binds_rejected_release_candidate_gates() -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "release-candidate-delivery"
+    )
+    artifact = experiment["evidence"][0]
+    payload = json.loads((validator.REPO_ROOT / artifact["path"]).read_text(encoding="utf-8"))
+    payload["gates"]["failed_cases"] = True
+
+    with pytest.raises(ValueError, match="rejected release-candidate Evidence changed"):
+        validator._validate_release_candidate_experiment_payload(
+            experiment,
+            artifact,
+            payload,
+            experiment["splits"]["development"],
+            experiment["splits"]["confirmation"],
+        )
+
+
+def test_benchmark_registry_rejects_release_candidate_boolean_identities() -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "release-candidate-delivery"
+    )
+    artifact = experiment["evidence"][0]
+    payload = json.loads((validator.REPO_ROOT / artifact["path"]).read_text(encoding="utf-8"))
+    payload["schema_version"] = True
+    payload["suite_revision"] = True
+
+    with pytest.raises(ValueError, match="release-candidate experiment Evidence contract failed"):
+        validator._validate_release_candidate_experiment_payload(
+            experiment,
+            artifact,
+            payload,
+            experiment["splits"]["development"],
+            experiment["splits"]["confirmation"],
+        )
+
+
 def test_benchmark_registry_requires_release_candidate_local_gates(tmp_path: Path) -> None:
     registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
     experiment = next(
@@ -629,9 +668,22 @@ def test_benchmark_registry_hashes_bound_gate_artifact_bytes(
                 "memoryforge_commit": commit,
                 "memoryforge_worktree_dirty": False,
                 "package": {
+                    "version": "0.2.1",
                     "wheel": wheel.name,
                     "wheel_sha256": wheel_sha256,
                     "import_from_fresh_venv": True,
+                    "dependencies": {},
+                },
+                "runtime": {
+                    "implementation": "CPython",
+                    "python": "3.11.15",
+                    "platform": "test-platform",
+                },
+                "checks": {
+                    "pip_check": "passed",
+                    "cli_help": "passed",
+                    "code_wiki_benchmark": "passed",
+                    "public_demo": "not_run",
                 },
             }
         ),
@@ -667,6 +719,32 @@ def test_benchmark_registry_hashes_bound_gate_artifact_bytes(
         commit,
         require_clean_sdist=True,
     )
+    provenance_payload = json.loads(provenance.read_text(encoding="utf-8"))
+    provenance_payload["checks"]["pip_check"] = "failed"
+    provenance_payload["note"] = "copied from /Users/private/workspace"
+    provenance.write_text(json.dumps(provenance_payload), encoding="utf-8")
+    digests["provenance_sha256"] = hashlib.sha256(provenance.read_bytes()).hexdigest()
+    files["provenance"]["sha256"] = digests["provenance_sha256"]
+    sums.write_text(
+        f"{wheel_sha256}  dist/{wheel.name}\n"
+        f"{sdist_sha256}  dist/{sdist.name}\n"
+        f"{digests['provenance_sha256']}  release-provenance.json\n",
+        encoding="ascii",
+    )
+    digests["sha256sums_sha256"] = hashlib.sha256(sums.read_bytes()).hexdigest()
+    files["sha256sums"]["sha256"] = digests["sha256sums_sha256"]
+    assert not validator._validate_bound_gate_artifacts(
+        files,
+        digests,
+        commit,
+        require_clean_sdist=True,
+    )
+    provenance_payload["checks"]["pip_check"] = "passed"
+    provenance_payload.pop("note")
+    provenance.write_text(json.dumps(provenance_payload), encoding="utf-8")
+    provenance_sha256 = hashlib.sha256(provenance.read_bytes()).hexdigest()
+    digests["provenance_sha256"] = provenance_sha256
+    files["provenance"]["sha256"] = provenance_sha256
     with tarfile.open(sdist, "w:gz") as archive:
         payload = b"nested wheel"
         member = tarfile.TarInfo(
@@ -699,6 +777,21 @@ def test_benchmark_registry_hashes_bound_gate_artifact_bytes(
             commit,
             require_clean_sdist=True,
         )
+
+
+def test_benchmark_registry_rejects_private_or_failed_provenance() -> None:
+    assert (
+        validator._payload_private_detail_leaks(
+            {"note": "artifact copied from /Users/private/workspace"}
+        )
+        == 1
+    )
+    assert (
+        validator._payload_private_detail_leaks(
+            {"note": "artifact", "checks": {"pip_check": "failed"}}
+        )
+        == 0
+    )
 
 
 def test_benchmark_registry_rejects_contradictory_showcase_case_evidence() -> None:

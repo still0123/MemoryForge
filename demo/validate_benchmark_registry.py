@@ -1720,8 +1720,10 @@ def _validate_release_candidate_experiment_payload(
     ).hexdigest()
     if (
         set(payload) != RELEASE_CANDIDATE_DEVELOPMENT_EVIDENCE_KEYS
+        or type(payload.get("schema_version")) is not int
         or payload.get("schema_version") != 1
         or payload.get("suite_id") != experiment["suite_id"]
+        or type(payload.get("suite_revision")) is not int
         or payload.get("suite_revision") != experiment["suite_revision"]
         or payload.get("memoryforge_commit") != artifact["memoryforge_commit"]
         or payload.get("memoryforge_worktree_dirty") is not False
@@ -1784,6 +1786,17 @@ def _validate_release_candidate_experiment_payload(
             ("release-document-consistency", "failed", "release_document_mismatch"),
             ("frozen-splits-remain-closed", "passed", "none"),
         ]
+        expected_gates = {
+            "pass_rate": False,
+            "failed_cases": False,
+            "reproducible_artifacts": False,
+            "private_detail_leaks": True,
+            "confirmation_not_run": True,
+            "holdout_not_run": True,
+            "deterministic_replay": True,
+            "stable_memoryforge_commit": True,
+            "clean_worktree_after_run": True,
+        }
         actual_cases = [
             (case["id"], case["status"], case["error_classification"]) for case in cases
         ]
@@ -1791,7 +1804,7 @@ def _validate_release_candidate_experiment_payload(
             artifact["passed"] is not False
             or not _strict_mapping(metrics, expected_metrics)
             or actual_cases != expected_cases
-            or all(value is True for value in gates.values())
+            or not _strict_mapping(gates, expected_gates)
         ):
             raise ValueError("rejected release-candidate Evidence changed")
         return
@@ -2016,6 +2029,30 @@ def _git_commit_descends_from(commit: str, ancestor: str) -> bool:
     )
 
 
+def _payload_private_detail_leaks(payload: object) -> int:
+    prefixes = ("/Users/", "/home/", "/private/var/", "C:\\Users\\")
+    secrets = ("api_key", "token=", "password=", "secret=")
+    leaks = 0
+
+    def visit(value: object) -> None:
+        nonlocal leaks
+        if isinstance(value, dict):
+            for item in value.values():
+                visit(item)
+        elif isinstance(value, list):
+            for item in value:
+                visit(item)
+        elif isinstance(value, str):
+            lowered = value.casefold()
+            if any(prefix in value for prefix in prefixes) or any(
+                secret in lowered for secret in secrets
+            ):
+                leaks += 1
+
+    visit(payload)
+    return leaks
+
+
 def _validate_bound_gate_artifacts(
     artifact_files: object,
     artifact_digests: object,
@@ -2047,16 +2084,36 @@ def _validate_bound_gate_artifacts(
         _validate_artifact(artifact, "cross-platform gate artifact")
         paths[name] = REPO_ROOT / str(artifact["path"])
 
-    provenance = json.loads(paths["provenance"].read_text(encoding="utf-8"))
+    try:
+        provenance = json.loads(paths["provenance"].read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
     package = provenance.get("package", {}) if isinstance(provenance, dict) else {}
+    runtime = provenance.get("runtime", {}) if isinstance(provenance, dict) else {}
+    checks = provenance.get("checks", {}) if isinstance(provenance, dict) else {}
+    package_version = package.get("version") if isinstance(package, dict) else None
     if (
         not isinstance(provenance, dict)
+        or _payload_private_detail_leaks(provenance) != 0
         or provenance.get("memoryforge_commit") != gate_commit
         or provenance.get("memoryforge_worktree_dirty") is not False
         or not isinstance(package, dict)
+        or not isinstance(package_version, str)
+        or not paths["wheel"].name.startswith(f"memoryforge-{package_version}-")
         or package.get("wheel") != paths["wheel"].name
         or package.get("wheel_sha256") != artifact_digests.get("wheel_sha256")
         or package.get("import_from_fresh_venv") is not True
+        or not isinstance(package.get("dependencies"), dict)
+        or not isinstance(runtime, dict)
+        or not all(
+            isinstance(runtime.get(key), str) and runtime[key]
+            for key in ("implementation", "python", "platform")
+        )
+        or not isinstance(checks, dict)
+        or checks.get("pip_check") != "passed"
+        or checks.get("cli_help") != "passed"
+        or checks.get("code_wiki_benchmark") != "passed"
+        or any(status not in {"passed", "not_run"} for status in checks.values())
     ):
         return False
 
@@ -2722,9 +2779,60 @@ def _validate_release_candidate_acceptance_evidence(
                 commit,
                 require_clean_sdist=True,
             )
+            or not _release_provenance_matches(local_gate, contract["runtime"])
         ):
             raise ValueError(f"release-candidate {name} local gate Evidence changed")
     return 1
+
+
+def _release_provenance_matches(
+    local_gate: dict[str, Any],
+    expected_runtime: dict[str, Any],
+) -> bool:
+    artifact_files = local_gate.get("artifact_files")
+    if not isinstance(artifact_files, dict):
+        return False
+    provenance_artifact = artifact_files.get("provenance")
+    if not isinstance(provenance_artifact, dict):
+        return False
+    try:
+        provenance = json.loads(
+            (REPO_ROOT / str(provenance_artifact["path"])).read_text(encoding="utf-8")
+        )
+    except (KeyError, OSError, json.JSONDecodeError):
+        return False
+    runtime = provenance.get("runtime") if isinstance(provenance, dict) else None
+    package = provenance.get("package") if isinstance(provenance, dict) else None
+    checks = provenance.get("checks") if isinstance(provenance, dict) else None
+    platform_name = runtime.get("platform") if isinstance(runtime, dict) else None
+    if "system" in expected_runtime:
+        platform_valid = (
+            isinstance(platform_name, str)
+            and platform_name.startswith("macOS-")
+            and expected_runtime["machine"] in platform_name
+        )
+    else:
+        kernel = str(expected_runtime["kernel"]).removeprefix("Linux ")
+        platform_valid = isinstance(platform_name, str) and platform_name.startswith(
+            f"Linux-{kernel}-{expected_runtime['architecture']}"
+        )
+    return (
+        isinstance(runtime, dict)
+        and runtime.get("implementation") == expected_runtime["implementation"]
+        and runtime.get("python") == expected_runtime["python"]
+        and platform_valid
+        and isinstance(package, dict)
+        and package.get("version") == "0.3.0"
+        and _strict_mapping(
+            checks,
+            {
+                "pip_check": "passed",
+                "cli_help": "passed",
+                "code_wiki_benchmark": "passed",
+                "public_demo": "not_run",
+            },
+        )
+    )
 
 
 def _validate_multi_source_support_regression(artifact: object) -> None:

@@ -42,9 +42,14 @@ def test_benchmark_summary_reports_macro_per_suite_and_negatives() -> None:
     )
 
 
-def test_workspace_release_drill_runs_real_public_workflow(tmp_path: Path) -> None:
+def test_workspace_release_drill_runs_real_public_workflow(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     workdir = tmp_path / "drill"
     workdir.mkdir()
+    commit = workspace_drill._git_output(workspace_drill.REPO_ROOT, "rev-parse", "HEAD")
+    monkeypatch.setattr(workspace_drill, "_source_identity", lambda: (commit, False))
 
     evidence = workspace_drill.run_drill(workdir)
 
@@ -77,6 +82,16 @@ def test_workspace_release_drill_binds_cli_to_current_source(
 
     assert workspace_drill._cli("--version") == "0.3.0\n"
     assert captured["env"]["PYTHONPATH"] == str(workspace_drill.SOURCE_ROOT)
+
+
+def test_workspace_release_drill_rejects_dirty_source(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(workspace_drill, "_source_identity", lambda: ("1" * 40, True))
+
+    with pytest.raises(RuntimeError, match="clean source worktree"):
+        workspace_drill.run_drill(tmp_path)
 
 
 def test_release_builder_rejects_nested_artifacts(tmp_path: Path) -> None:

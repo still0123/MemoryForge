@@ -8,9 +8,14 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
+import tarfile
 import tomllib
+import zipfile
+from email.parser import BytesParser
+from email.policy import default
 from pathlib import Path
 from typing import Any, cast
 
@@ -23,6 +28,7 @@ DEVELOPMENT_SHA256 = "8d9fe33359b71ac0b86b6fa42b0bc5ee34080126af3ae0b9bf2fa2c012
 CONFIRMATION_SHA256 = "3eed08e04592b614a709cd18c6a92951b5da145d7dab4b9997824cd4e002e805"
 HOLDOUT_SHA256 = "b466644bef2748a96d598540c54633fe49770af97fc71ce6e62e18eda687e8f8"
 TARGET_VERSION = "0.3.0"
+SHA256 = re.compile(r"^[a-f0-9]{64}$")
 RESULT_PATHS = (
     REPO_ROOT / "demo/results/release_candidate_confirmation.json",
     REPO_ROOT / "demo/results/release_candidate_holdout.json",
@@ -32,7 +38,45 @@ DOCUMENTS = (
     REPO_ROOT / "CHANGELOG.md",
     REPO_ROOT / "docs/EVIDENCE_CLAIMS.md",
     REPO_ROOT / "docs/PORTFOLIO_DEMO.md",
+    REPO_ROOT / "docs/V030_RELEASE_CANDIDATE_SPEC.md",
 )
+DOCUMENT_CLAIMS = {
+    DOCUMENTS[0]: (
+        "v0.3.0",
+        "10% / 0%",
+        "574 passed",
+        "571 passed / 3 skipped",
+        "原生 Windows confirmation 未运行",
+    ),
+    DOCUMENTS[1]: (
+        "v0.3.0 — Release Candidate",
+        "574 passed",
+        "571 passed / 3 skipped",
+        "原生 Windows confirmation",
+        "单次 holdout",
+    ),
+    DOCUMENTS[2]: (
+        "v0.3.0 RC",
+        "10%/0%",
+        "574 passed",
+        "571 passed / 3 skipped",
+        "不等于原生 Windows confirmation",
+    ),
+    DOCUMENTS[3]: (
+        "release candidate",
+        "10%/0%",
+        "574 passed",
+        "571 passed / 3 skipped",
+        "原生 Windows confirmation",
+    ),
+    DOCUMENTS[4]: (
+        "DEVELOPMENT_ACCEPTED_CONFIRMATION_PENDING",
+        "574 passed",
+        "571 passed, 3 skipped",
+        "Confirmation status: `not_run`",
+        "Holdout status: `not_run`",
+    ),
+}
 WORKSPACE_CHECKS = {
     "refresh",
     "review",
@@ -168,10 +212,18 @@ def _run_suite(
 def _check_versions(release_dir: Path) -> dict[str, object]:
     project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     provenance = _load_json(release_dir / "release-provenance.json")
+    package = provenance.get("package")
+    artifacts = _artifact_paths(release_dir, package)
+    if not isinstance(package, dict) or artifacts is None:
+        return _check(False, "version_mismatch")
+    wheel, sdist = artifacts
     versions = {
         str(project.get("project", {}).get("version", "")),
+        _source_module_version(),
         _cli_version(),
-        str(provenance.get("package", {}).get("version", "")),
+        str(package.get("version", "")),
+        _wheel_version(wheel),
+        _sdist_version(sdist),
     }
     passed = versions == {TARGET_VERSION}
     return _check(passed, "none" if passed else "version_mismatch")
@@ -193,21 +245,46 @@ def _check_benchmark_summary(release_dir: Path) -> dict[str, object]:
 
 def _check_reproducible_artifacts(release_dir: Path) -> dict[str, object]:
     provenance = _load_json(release_dir / "release-provenance.json")
+    package = provenance.get("package")
     builds = provenance.get("builds")
-    if not isinstance(builds, list) or len(builds) != 2:
+    artifacts = _artifact_paths(release_dir, package)
+    if artifacts is None:
         return _check(False, "artifact_missing")
+    if not isinstance(builds, list) or len(builds) != 2:
+        return _check(False, "artifact_contract_invalid")
+    wheel_path, sdist_path = artifacts
+    actual = {
+        "wheel": {
+            "path": wheel_path.name,
+            "sha256": _sha256(wheel_path),
+            "size": wheel_path.stat().st_size,
+        },
+        "sdist": {
+            "path": sdist_path.name,
+            "sha256": _sha256(sdist_path),
+            "size": sdist_path.stat().st_size,
+        },
+    }
     identities = []
-    for build in builds:
-        if not isinstance(build, dict):
+    for index, build in enumerate(builds):
+        if not isinstance(build, dict) or build.get("name") != ("first", "second")[index]:
             return _check(False, "artifact_contract_invalid")
         wheel = build.get("wheel")
         sdist = build.get("sdist")
         if not isinstance(wheel, dict) or not isinstance(sdist, dict):
             return _check(False, "artifact_contract_invalid")
+        if wheel != actual["wheel"] or sdist != actual["sdist"]:
+            return _check(False, "artifact_reproducibility_failure")
         identities.append((wheel.get("sha256"), sdist.get("sha256")))
     passed = (
         identities[0] == identities[1]
-        and all(isinstance(value, str) and len(value) == 64 for value in identities[0])
+        and all(SHA256.fullmatch(str(value)) is not None for value in identities[0])
+        and isinstance(package, dict)
+        and package.get("version") == TARGET_VERSION
+        and package.get("wheel_sha256") == actual["wheel"]["sha256"]
+        and package.get("sdist_sha256") == actual["sdist"]["sha256"]
+        and provenance.get("memoryforge_commit") == _git("rev-parse", "HEAD")
+        and provenance.get("memoryforge_worktree_dirty") is False
         and provenance.get("reproducible_artifacts") is True
     )
     return _check(passed, "none" if passed else "artifact_reproducibility_failure")
@@ -231,14 +308,88 @@ def _check_workspace_drill(release_dir: Path) -> dict[str, object]:
 def _check_documents(release_dir: Path) -> dict[str, object]:
     provenance = _load_json(release_dir / "release-provenance.json")
     summary = _load_json(release_dir / "benchmark-summary.json")
-    texts = [path.read_text(encoding="utf-8") for path in DOCUMENTS]
+    drill = _load_json(release_dir / "workspace-drill.json")
+    package = provenance.get("package")
+    checks = provenance.get("checks")
+    texts = {path: path.read_text(encoding="utf-8") for path in DOCUMENTS}
     passed = (
-        all("v0.3.0" in text or "0.3.0" in text for text in texts)
-        and provenance.get("package", {}).get("version") == TARGET_VERSION
+        all(
+            all(claim in texts[path] for claim in claims)
+            for path, claims in DOCUMENT_CLAIMS.items()
+        )
+        and isinstance(package, dict)
+        and package.get("version") == TARGET_VERSION
+        and isinstance(checks, dict)
+        and checks.get("workspace_drill") == "passed"
+        and checks.get("benchmark_summary") == "passed"
+        and checks.get("sdist_members") == "passed"
+        and _clean_room_passed(checks.get("wheel_clean_room"))
+        and _clean_room_passed(checks.get("sdist_clean_room"))
+        and provenance.get("memoryforge_commit") == _git("rev-parse", "HEAD")
+        and provenance.get("confirmation") == {"status": "not_run"}
+        and provenance.get("holdout") == {"status": "not_run"}
         and summary.get("package_version") == TARGET_VERSION
-        and any("10% / 0%" in text or "10%/0%" in text for text in texts)
+        and summary.get("memoryforge_commit") == _git("rev-parse", "HEAD")
+        and summary.get("registry") == registry_validator.validate_registry()
+        and drill.get("memoryforge_commit") == _git("rev-parse", "HEAD")
+        and drill.get("passed") is True
     )
     return _check(passed, "none" if passed else "release_document_mismatch")
+
+
+def _artifact_paths(
+    release_dir: Path,
+    package: object,
+) -> tuple[Path, Path] | None:
+    if not isinstance(package, dict):
+        return None
+    names = (package.get("wheel"), package.get("sdist"))
+    if any(not isinstance(name, str) or not name or Path(name).name != name for name in names):
+        return None
+    wheel = release_dir / str(names[0])
+    sdist = release_dir / str(names[1])
+    if not wheel.is_file() or not sdist.is_file():
+        return None
+    return wheel, sdist
+
+
+def _wheel_version(path: Path) -> str:
+    try:
+        with zipfile.ZipFile(path) as archive:
+            names = [name for name in archive.namelist() if name.endswith(".dist-info/METADATA")]
+            if len(names) != 1:
+                return ""
+            metadata = BytesParser(policy=default).parsebytes(archive.read(names[0]))
+    except (OSError, KeyError, zipfile.BadZipFile):
+        return ""
+    return str(metadata.get("Version", ""))
+
+
+def _sdist_version(path: Path) -> str:
+    try:
+        with tarfile.open(path, "r:gz") as archive:
+            members = [
+                member
+                for member in archive.getmembers()
+                if member.isfile() and member.name.endswith("/PKG-INFO")
+            ]
+            if len(members) != 1:
+                return ""
+            extracted = archive.extractfile(members[0])
+            if extracted is None:
+                return ""
+            metadata = BytesParser(policy=default).parsebytes(extracted.read())
+    except (OSError, tarfile.TarError):
+        return ""
+    return str(metadata.get("Version", ""))
+
+
+def _clean_room_passed(value: object) -> bool:
+    return (
+        isinstance(value, dict)
+        and bool(value)
+        and all(status in {"passed", "not_run"} for status in value.values())
+    )
 
 
 def _check_splits_closed(
@@ -273,7 +424,9 @@ def _private_detail_leaks(payloads: list[dict[str, Any]]) -> int:
                 visit(item)
         elif isinstance(value, str):
             lowered = value.casefold()
-            if value.startswith(prefixes) or any(secret in lowered for secret in secrets):
+            if any(prefix in value for prefix in prefixes) or any(
+                secret in lowered for secret in secrets
+            ):
                 leaks += 1
 
     for payload in payloads:
@@ -333,6 +486,27 @@ def _cli_version() -> str:
         text=True,
     )
     return completed.stdout.strip()
+
+
+def _source_module_version() -> str:
+    environment = {**os.environ, "PYTHONPATH": str(SOURCE_ROOT)}
+    completed = subprocess.run(
+        [sys.executable, "-c", "import memoryforge; print(memoryforge.__version__)"],
+        cwd=REPO_ROOT,
+        env=environment,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return completed.stdout.strip()
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as artifact:
+        for block in iter(lambda: artifact.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 def _payload_sha256(payload: object) -> str:

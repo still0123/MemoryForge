@@ -37,6 +37,9 @@ def main(argv: list[str] | None = None) -> None:
 
 
 def run_drill(workdir: Path) -> dict[str, Any]:
+    source_commit, source_dirty = _source_identity()
+    if source_dirty:
+        raise RuntimeError("Workspace release drill requires a clean source worktree")
     sys.path.insert(0, str(SOURCE_ROOT))
     from memoryforge.showcase import build_showcase
 
@@ -178,9 +181,12 @@ def run_drill(workdir: Path) -> dict[str, Any]:
     passed = (
         all(value == "passed" for value in checks.values()) and restored_lint["status"] == "clean"
     )
+    final_commit, final_dirty = _source_identity()
+    if final_commit != source_commit or final_dirty:
+        raise RuntimeError("Workspace release drill changed the source Commit or worktree")
     return {
         "schema_version": 1,
-        "memoryforge_commit": _git_output(REPO_ROOT, "rev-parse", "HEAD"),
+        "memoryforge_commit": source_commit,
         "checks": checks,
         "private_detail_leaks": 0,
         "passed": passed,
@@ -232,6 +238,13 @@ def _git_output(root: Path, *args: str) -> str:
         capture_output=True,
         text=True,
     ).stdout.strip()
+
+
+def _source_identity() -> tuple[str, bool]:
+    return (
+        _git_output(REPO_ROOT, "rev-parse", "HEAD"),
+        bool(_git_output(REPO_ROOT, "status", "--porcelain")),
+    )
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:

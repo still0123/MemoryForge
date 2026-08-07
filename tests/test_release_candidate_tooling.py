@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
+import io
 import json
+import tarfile
+import zipfile
 from pathlib import Path
 
 _SCRIPT = Path(__file__).resolve().parent.parent / "demo/run_release_candidate_benchmark.py"
@@ -30,19 +34,7 @@ def test_release_candidate_runner_binds_frozen_inputs() -> None:
 def test_release_candidate_reproducibility_requires_two_matching_builds(
     tmp_path: Path,
 ) -> None:
-    provenance = {
-        "builds": [
-            {
-                "wheel": {"sha256": "1" * 64},
-                "sdist": {"sha256": "2" * 64},
-            },
-            {
-                "wheel": {"sha256": "1" * 64},
-                "sdist": {"sha256": "2" * 64},
-            },
-        ],
-        "reproducible_artifacts": True,
-    }
+    provenance = _release_artifacts(tmp_path)
     (tmp_path / "release-provenance.json").write_text(
         json.dumps(provenance),
         encoding="utf-8",
@@ -58,6 +50,25 @@ def test_release_candidate_reproducibility_requires_two_matching_builds(
         "passed": False,
         "error_classification": "artifact_reproducibility_failure",
     }
+    (tmp_path / provenance["package"]["wheel"]).unlink()
+    assert benchmark._check_reproducible_artifacts(tmp_path) == {
+        "passed": False,
+        "error_classification": "artifact_missing",
+    }
+
+
+def test_release_candidate_versions_read_both_artifact_metadata(tmp_path: Path) -> None:
+    provenance = _release_artifacts(tmp_path)
+    path = tmp_path / "release-provenance.json"
+    path.write_text(json.dumps(provenance), encoding="utf-8")
+
+    assert benchmark._check_versions(tmp_path)["passed"] is True
+    provenance["package"] = []
+    path.write_text(json.dumps(provenance), encoding="utf-8")
+    assert benchmark._check_versions(tmp_path) == {
+        "passed": False,
+        "error_classification": "version_mismatch",
+    }
 
 
 def test_release_candidate_privacy_scan_rejects_paths_and_secrets() -> None:
@@ -65,9 +76,62 @@ def test_release_candidate_privacy_scan_rejects_paths_and_secrets() -> None:
     assert (
         benchmark._private_detail_leaks(
             [
-                {"path": "/Users/private/workspace"},
+                {"path": "prefix:/Users/private/workspace"},
                 {"detail": "api_key=not-public"},
             ]
         )
         == 2
     )
+
+
+def test_release_document_claims_are_explicit() -> None:
+    for path, claims in benchmark.DOCUMENT_CLAIMS.items():
+        text = path.read_text(encoding="utf-8")
+        assert all(claim in text for claim in claims)
+
+
+def _release_artifacts(root: Path) -> dict:
+    wheel = root / "memoryforge-0.3.0-py3-none-any.whl"
+    sdist = root / "memoryforge-0.3.0.tar.gz"
+    with zipfile.ZipFile(wheel, "w") as archive:
+        archive.writestr(
+            "memoryforge-0.3.0.dist-info/METADATA",
+            "Metadata-Version: 2.3\nName: memoryforge\nVersion: 0.3.0\n",
+        )
+    payload = b"Metadata-Version: 2.3\nName: memoryforge\nVersion: 0.3.0\n"
+    with tarfile.open(sdist, "w:gz") as archive:
+        member = tarfile.TarInfo("memoryforge-0.3.0/PKG-INFO")
+        member.size = len(payload)
+        archive.addfile(member, io.BytesIO(payload))
+    artifacts = {
+        "wheel": {
+            "path": wheel.name,
+            "sha256": hashlib.sha256(wheel.read_bytes()).hexdigest(),
+            "size": wheel.stat().st_size,
+        },
+        "sdist": {
+            "path": sdist.name,
+            "sha256": hashlib.sha256(sdist.read_bytes()).hexdigest(),
+            "size": sdist.stat().st_size,
+        },
+    }
+    return {
+        "memoryforge_commit": benchmark._git("rev-parse", "HEAD"),
+        "memoryforge_worktree_dirty": False,
+        "package": {
+            "version": "0.3.0",
+            "wheel": wheel.name,
+            "wheel_sha256": artifacts["wheel"]["sha256"],
+            "sdist": sdist.name,
+            "sdist_sha256": artifacts["sdist"]["sha256"],
+        },
+        "builds": [
+            {
+                "name": name,
+                "wheel": dict(artifacts["wheel"]),
+                "sdist": dict(artifacts["sdist"]),
+            }
+            for name in ("first", "second")
+        ],
+        "reproducible_artifacts": True,
+    }
