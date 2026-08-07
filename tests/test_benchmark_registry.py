@@ -59,3 +59,23 @@ def test_benchmark_registry_rejects_artifact_hash_drift(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="SHA256 mismatch"):
         validator.validate_registry(path)
+
+
+def test_benchmark_registry_cannot_self_drop_negative_evidence(tmp_path: Path) -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item
+        for item in registry["experiments"]
+        if item["suite_id"] == "support-score.learn-claude-code"
+    )
+    experiment["required_evidence_statuses"] = ["accepted_development"]
+    experiment["evidence"] = [
+        artifact
+        for artifact in experiment["evidence"]
+        if artifact["status"] == "accepted_development"
+    ]
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps(registry), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="invalid required experiment Evidence statuses"):
+        validator.validate_registry(path)

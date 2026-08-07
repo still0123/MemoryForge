@@ -221,7 +221,7 @@ def answer_question(
             or "generated: code_wiki" in prefix
             or "generated: code_module_overview" in prefix
         )
-        if code_page and _is_code_file_page(page):
+        if code_page and _is_code_file_content(content):
             code_page_paths.add(page_path)
             code_page_fact_terms[page_path] = _terms(_code_fact_text(content))
         if not any(_CJK.fullmatch(term) for term in question_terms) and not code_page:
@@ -718,8 +718,10 @@ def _support_score(
         question_terms - _SUPPORT_CODE_KIND_TERMS - _RANKING_STOP_WORDS - _QUESTION_NOISE_TERMS
     )
     covered_terms: set[str] = set()
+    selected_fact_terms: set[str] = set()
     per_fact_coverage = []
     for _page_path, citation in selected:
+        selected_fact_terms.update(_citation_terms(citation))
         matching = _local_english_matching_terms(
             core_terms,
             citation,
@@ -730,35 +732,44 @@ def _support_score(
     identifier_terms = {
         term for identifier in _explicit_code_identifiers(question) for term in _terms(identifier)
     }
+    selected_page_fact_terms: set[str] = set()
     for page_path in dict.fromkeys(page_path for page_path, _ in selected):
+        selected_page_fact_terms.update((code_page_fact_terms or {}).get(page_path, set()))
         covered_terms.update(
             core_terms & identifier_terms & (code_page_fact_terms or {}).get(page_path, set())
         )
     core_coverage = len(covered_terms) / len(core_terms) if core_terms else 1.0
 
+    explicit_identifiers = _explicit_code_identifiers(question)
     exact_identifier_coverage = (
         1.0
-        if not symbol_matches
+        if not explicit_identifiers
         or any(
             _citation_fact_key(page_path, citation) in exact_symbol_fact_keys
             for page_path, citation in selected
         )
+        or identifier_terms <= selected_fact_terms | selected_page_fact_terms
         else 0.0
     )
-    fact_co_location = float(
-        not core_terms or max(per_fact_coverage, default=0) >= min(2, len(core_terms))
-    )
+    conditional = _has_support_condition(question)
+    if conditional:
+        fact_co_location = float(
+            not core_terms or any(coverage == len(core_terms) for coverage in per_fact_coverage)
+        )
+    else:
+        fact_co_location = float(
+            not core_terms or max(per_fact_coverage, default=0) >= min(2, len(core_terms))
+        )
     question_has_negation = _has_support_negation(question)
     negation_alignment = float(
         not question_has_negation
         or any(_has_support_negation(citation["quote"]) for _, citation in selected)
     )
-    citation_identities = {
-        (citation["source_id"], citation["source_version"], citation["locator"])
-        for _, citation in selected
+    citation_sources = {
+        (citation["source_id"], citation["source_version"]) for _, citation in selected
     }
     multi_source_coverage = (
-        min(1.0, len(citation_identities) / required_citations) if required_citations > 1 else 1.0
+        min(1.0, len(citation_sources) / required_citations) if required_citations > 1 else 1.0
     )
     real_workspace = (workspace_root / "raw").is_dir() and (
         workspace_root / ".memoryforge" / "index.sqlite"
@@ -797,9 +808,11 @@ def _support_score(
     enforced = any(page_path in code_page_paths for page_path, _ in selected)
     failed_hard_gates = []
     if enforced:
+        if explicit_identifiers and exact_identifier_coverage < 1:
+            failed_hard_gates.append("exact_identifier_not_covered")
         if score < _SUPPORT_THRESHOLD:
             failed_hard_gates.append("score_below_threshold")
-        if _has_support_condition(question) and not fact_co_location:
+        if conditional and not fact_co_location:
             failed_hard_gates.append("condition_not_co_located")
         if question_has_negation and not negation_alignment:
             failed_hard_gates.append("negation_not_aligned")
@@ -1056,7 +1069,11 @@ def _is_code_page(page: Path) -> bool:
 
 
 def _is_code_file_page(page: Path) -> bool:
-    prefix = page.read_text(encoding="utf-8")[:400]
+    return _is_code_file_content(page.read_text(encoding="utf-8"))
+
+
+def _is_code_file_content(content: str) -> bool:
+    prefix = content[:400]
     return (
         'title: "Code: ' in prefix and 'title: "Code module:' not in prefix
     ) or "generated: code_wiki" in prefix

@@ -234,6 +234,8 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
             or not required_statuses
             or any(status not in allowed_statuses for status in required_statuses)
             or len(required_statuses) != len(set(required_statuses))
+            or "accepted_development" not in required_statuses
+            or not {"rejected", "development_passed_regression_failed"} & set(required_statuses)
         ):
             raise ValueError(f"invalid required experiment Evidence statuses: {suite_id}")
         revisions: set[int] = set()

@@ -25,6 +25,9 @@ _SPEC.loader.exec_module(external_benchmark)
 
 def main(argv: list[str] | None = None) -> None:
     args = _parse_args(argv)
+    memoryforge_commit = _git("rev-parse", "HEAD")
+    if _git("status", "--porcelain"):
+        raise SystemExit("MemoryForge worktree must be clean")
     manifest = cast(dict[str, Any], json.loads(MANIFEST.read_text(encoding="utf-8")))
     for key in ("development", "baseline_evidence", "confirmation"):
         _validate_artifact(cast(dict[str, Any], manifest[key]))
@@ -86,21 +89,24 @@ def main(argv: list[str] | None = None) -> None:
         "repository_path_isolation_accuracy": (
             metrics["repository_path_isolation_accuracy"] == 100.0
         ),
-        "per_case_support": all(isinstance(case["memoryforge"]["support"], dict) for case in cases),
+        "per_case_support": all(_valid_case_support(case, threshold) for case in cases),
         "unsupported_question_abstains": (
             unsupported["memoryforge"]["answer_status"] == "unknown"
+            and isinstance(unsupported["memoryforge"]["support"], dict)
             and unsupported["memoryforge"]["support"]["score"] < threshold
         ),
         "no_failed_cases": not failures,
         "deterministic_replay": runs[0]["evaluation_sha256"] == runs[1]["evaluation_sha256"],
+        "stable_memoryforge_commit": _git("rev-parse", "HEAD") == memoryforge_commit,
+        "clean_worktree_after_run": not bool(_git("status", "--porcelain")),
         "confirmation_not_run": manifest["confirmation"]["status"] == "not_run",
     }
     evidence = {
         "schema_version": 1,
         "suite_id": manifest["suite_id"],
         "suite_revision": manifest["suite_revision"],
-        "memoryforge_commit": _git("rev-parse", "HEAD"),
-        "memoryforge_worktree_dirty": bool(_git("status", "--porcelain")),
+        "memoryforge_commit": memoryforge_commit,
+        "memoryforge_worktree_dirty": False,
         "source_manifest": {
             "path": str(MANIFEST.relative_to(REPO_ROOT)),
             "sha256": hashlib.sha256(MANIFEST.read_bytes()).hexdigest(),
@@ -145,6 +151,56 @@ def _validate_artifact(artifact: dict[str, Any]) -> None:
     path = REPO_ROOT / str(artifact["path"])
     if hashlib.sha256(path.read_bytes()).hexdigest() != artifact["sha256"]:
         raise ValueError(f"frozen artifact SHA256 mismatch: {artifact['path']}")
+
+
+def _valid_support_payload(payload: object, threshold: float) -> bool:
+    if not isinstance(payload, dict) or set(payload) != {
+        "score",
+        "threshold",
+        "sufficient",
+        "enforced",
+        "components",
+        "failed_hard_gates",
+    }:
+        return False
+    score = payload["score"]
+    components = payload["components"]
+    failed_hard_gates = payload["failed_hard_gates"]
+    return (
+        isinstance(score, (int, float))
+        and not isinstance(score, bool)
+        and 0 <= score <= 100
+        and payload["threshold"] == threshold
+        and isinstance(payload["sufficient"], bool)
+        and isinstance(payload["enforced"], bool)
+        and isinstance(components, dict)
+        and set(components)
+        == {
+            "exact_identifier_coverage",
+            "core_term_coverage",
+            "fact_co_location",
+            "negation_alignment",
+            "multi_source_coverage",
+            "current_source_versions",
+        }
+        and all(
+            isinstance(value, (int, float)) and not isinstance(value, bool) and 0 <= value <= 1
+            for value in components.values()
+        )
+        and isinstance(failed_hard_gates, list)
+        and all(isinstance(gate, str) and gate for gate in failed_hard_gates)
+        and len(failed_hard_gates) == len(set(failed_hard_gates))
+    )
+
+
+def _valid_case_support(case: dict[str, Any], threshold: float) -> bool:
+    memoryforge = case.get("memoryforge")
+    if not isinstance(memoryforge, dict):
+        return False
+    support = memoryforge.get("support")
+    return (
+        support is None and memoryforge.get("answer_status") == "unknown"
+    ) or _valid_support_payload(support, threshold)
 
 
 def _git(*args: str) -> str:
