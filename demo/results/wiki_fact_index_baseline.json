@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "memoryforge_commit": "a773fe58b076750224cfb573fc3324496839636c",
+  "memoryforge_commit": "523a2f1a7092b8e66895600a65286f79a6f62320",
   "memoryforge_worktree_dirty": false,
   "source_manifest": {
     "path": "demo/evaluation/wiki_fact_index_sources.json",

@@ -93,7 +93,7 @@ The result contains 1,356 Facts across 39 pages, including 1,270 Symbol facts
 and 86 Relation facts. Both runs produced canonical row SHA256
 `9f909105161623b6cbcae96b5c2e7140daa119fadb3ec24f20c2e095fe51d40d`.
 The Evidence artifact SHA256 is
-`0d440baccbb5cc7e2a0595320034de46536e600e174235539c6ec7c46ef934e2`.
+`57343945d9f4c9db48a7e2990b4e0cf49ac5ac8623e4f40c7f763a4abca6f8ec`.
 
 This Evidence proves the data-layer and replay contracts only. It does not
 claim improved page routing, fact selection, or Answer accuracy.

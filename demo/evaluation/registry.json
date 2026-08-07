@@ -713,8 +713,8 @@
           "split": "development",
           "evidence_revision": 1,
           "path": "demo/results/wiki_fact_index_baseline.json",
-          "sha256": "0d440baccbb5cc7e2a0595320034de46536e600e174235539c6ec7c46ef934e2",
-          "memoryforge_commit": "a773fe58b076750224cfb573fc3324496839636c"
+          "sha256": "57343945d9f4c9db48a7e2990b4e0cf49ac5ac8623e4f40c7f763a4abca6f8ec",
+          "memoryforge_commit": "523a2f1a7092b8e66895600a65286f79a6f62320"
         }
       ]
     },
