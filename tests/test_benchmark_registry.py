@@ -22,7 +22,7 @@ def test_benchmark_registry_binds_all_release_artifacts() -> None:
         "status": "valid",
         "suite_count": 12,
         "experiment_count": 7,
-        "evidence_count": 84,
+        "evidence_count": 86,
         "qa_case_count": 121,
         "qa_case_types_present": [
             "code_behavior",
@@ -336,7 +336,7 @@ def test_benchmark_registry_cannot_drop_cross_platform_linux_evidence(
     experiment = next(
         item for item in registry["experiments"] if item["suite_id"] == "cross-platform-delivery"
     )
-    candidate = next(item for item in experiment["evidence"] if item["evidence_revision"] == 4)
+    candidate = next(item for item in experiment["evidence"] if item["evidence_revision"] == 7)
     del candidate["linux_evidence"]
     path = tmp_path / "registry.json"
     path.write_text(json.dumps(registry), encoding="utf-8")
@@ -350,7 +350,7 @@ def test_benchmark_registry_binds_linux_runtime(monkeypatch: pytest.MonkeyPatch)
     experiment = next(
         item for item in registry["experiments"] if item["suite_id"] == "cross-platform-delivery"
     )
-    candidate = next(item for item in experiment["evidence"] if item["evidence_revision"] == 4)
+    candidate = next(item for item in experiment["evidence"] if item["evidence_revision"] == 7)
     linux = candidate["linux_evidence"]
     payload = json.loads((validator.REPO_ROOT / linux["path"]).read_text(encoding="utf-8"))
     payload["runtime"]["hosted_runner"] = True
@@ -369,7 +369,7 @@ def test_benchmark_registry_binds_final_development_runtime() -> None:
     experiment = next(
         item for item in registry["experiments"] if item["suite_id"] == "cross-platform-delivery"
     )
-    candidate = next(item for item in experiment["evidence"] if item["evidence_revision"] == 6)
+    candidate = next(item for item in experiment["evidence"] if item["evidence_revision"] == 7)
     payload = json.loads((validator.REPO_ROOT / candidate["path"]).read_text(encoding="utf-8"))
     payload["runtime"]["system"] = "Windows"
 
@@ -390,7 +390,7 @@ def test_benchmark_registry_binds_final_macos_gate_runtime(
     experiment = next(
         item for item in registry["experiments"] if item["suite_id"] == "cross-platform-delivery"
     )
-    candidate = next(item for item in experiment["evidence"] if item["evidence_revision"] == 6)
+    candidate = next(item for item in experiment["evidence"] if item["evidence_revision"] == 7)
     acceptance = candidate["acceptance_evidence"]
     payload = json.loads((validator.REPO_ROOT / acceptance["path"]).read_text(encoding="utf-8"))
     payload["runtime"]["hosted_runner"] = True

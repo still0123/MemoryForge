@@ -2,7 +2,7 @@
 
 ## Status
 
-`CANDIDATE_6_DEVELOPMENT_PASS_FINAL_GATES_PENDING`
+`CANDIDATE_6_LOCAL_GATES_PASS_REVIEW_PENDING`
 
 ## Base
 
@@ -253,8 +253,45 @@ not claimed.
 - Confirmation status: `not_run`
 
 Candidate 6 closes the two cross-group findings while preserving the frozen
-7-case development and 3-case confirmation inputs. Final macOS and local Linux
-gates remain pending; this Evidence is not yet the accepted development result.
+7-case development and 3-case confirmation inputs.
+
+## Candidate 6 Final Local Gates
+
+macOS acceptance:
+
+- Gate Commit:
+  `271a788b51ce1e5a6072362d7dea0a13e1c31fad`
+- Acceptance Evidence:
+  `demo/results/cross_platform_delivery_candidate_6_local_gate.json`
+- Acceptance Evidence SHA256:
+  `21e0c9f5752030fc7e3a94bedb45c2868d803c50b93d67866e2af2bd554dd593`
+- Runtime: Darwin arm64, CPython 3.11.15, hosted runner false
+- Pytest: 547 passed
+- Coverage: 88%
+- Registry at gate: 12 suites / 7 experiments / 84 Evidence / 121 QA
+
+Linux acceptance:
+
+- Evidence:
+  `demo/results/cross_platform_delivery_candidate_6_linux_gate.json`
+- Evidence SHA256:
+  `ef31991c6efc21cbdeec6ab656937961e0df3bfbcecaf4b92de6f97c8b59575f`
+- Runtime: local Lima 2.2.0 VM, Debian 12 aarch64, CPython 3.11.2
+- Pytest: 545 passed, 2 macOS-only cases skipped, 0 failed
+- Coverage: 88%
+- Registry at gate: 12 suites / 7 experiments / 84 Evidence / 121 QA
+
+Both gates passed Ruff, format, strict Mypy, dependency checks, Wheel and
+sdist clean-room installs, `pip check`, CLI smoke, and Code Wiki release
+checks. Both produced byte-identical artifacts:
+
+- Wheel SHA256:
+  `e794f6d0d0e43d4e06cfd9a382003c45a18e0e7b4795ff0cb5925df401c3c3c4`
+- sdist SHA256:
+  `eca169f278c89e5499e521e9864679ce796b931746e84ec9c7a09a6b1f68edc0`
+
+Candidate 6 is the accepted development result pending final static review.
+Native Windows confirmation remains frozen at `not_run` and is not claimed.
 
 ## Goal
 
