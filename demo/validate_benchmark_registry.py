@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import re
 from pathlib import Path
@@ -36,6 +37,58 @@ REQUIRED_EXPERIMENT_EVIDENCE_PATHS = {
         "demo/results/support_score_development_candidate_4.json",
         "demo/results/support_score_development_candidate_5.json",
     },
+}
+FINAL_EXPERIMENT_GATE_KEYS = {
+    "exact-symbol-routing.learn-claude-code": {
+        "answer_accuracy_at_least_90",
+        "citation_grounding_accuracy",
+        "confirmation_not_run",
+        "deferred_abstention_gap_visible",
+        "deterministic_replay",
+        "exact_symbol_answer_accuracy",
+        "fact_selection_accuracy",
+        "multi_source_coverage",
+        "page_route_recall_at_3",
+        "repository_path_isolation_accuracy",
+        "source_recall_at_3",
+        "structural_benchmark",
+    },
+    "support-score.learn-claude-code": {
+        "abstention_accuracy",
+        "answer_accuracy",
+        "citation_grounding_accuracy",
+        "clean_source_worktree_after_run",
+        "clean_worktree_after_run",
+        "confirmation_not_run",
+        "coverage",
+        "deterministic_replay",
+        "fact_selection_accuracy",
+        "multi_source_coverage",
+        "no_failed_cases",
+        "page_route_recall_at_3",
+        "per_case_support",
+        "repository_path_isolation_accuracy",
+        "risk",
+        "selective_accuracy",
+        "source_recall_at_3",
+        "stable_memoryforge_commit",
+        "stable_source_commit",
+        "structural_benchmark",
+        "unsupported_question_abstains",
+    },
+}
+LOCAL_GATE_KEYS = {
+    "command",
+    "ruff_check",
+    "ruff_format",
+    "strict_mypy",
+    "registry_validation",
+    "dependency_check",
+    "pytest",
+    "wheel_clean_room",
+    "sdist_clean_room",
+    "pip_check",
+    "cli_version_smoke",
 }
 
 
@@ -341,6 +394,26 @@ def _validate_experiment_payload(
         return
     if artifact["passed"] is not True:
         raise ValueError("accepted experiment Evidence must pass")
+    if artifact["status"] == "accepted_development":
+        gates = payload.get("gates")
+        required_gates = FINAL_EXPERIMENT_GATE_KEYS.get(str(experiment["suite_id"]))
+        if (
+            required_gates is None
+            or not isinstance(gates, dict)
+            or set(gates) != required_gates
+            or not all(value is True for value in gates.values())
+        ):
+            raise ValueError(f"experiment Evidence gates failed: {experiment['suite_id']}")
+        if experiment["suite_id"] == "support-score.learn-claude-code":
+            cases = payload.get("development", {}).get("evaluation", {}).get("cases")
+            if not isinstance(cases, list) or len(cases) != development["case_count"]:
+                raise ValueError("support-score case Evidence is incomplete")
+            for case in cases:
+                if not _support_benchmark_module()._valid_case_support(
+                    case,
+                    float(payload["development"]["support_threshold"]),
+                ):
+                    raise ValueError("support-score case Evidence contract failed")
     actual = payload["development"]["metrics"]
     for metric, expected in experiment["expected_metrics"]["development"].items():
         if actual.get(metric) != expected:
@@ -407,6 +480,10 @@ def _validate_acceptance_evidence(
     )
     local_gate = payload.get("local_gate", {})
     pytest_result = local_gate.get("pytest", {})
+    registry_result = local_gate.get("registry_validation", {})
+    artifacts = local_gate.get("artifacts")
+    requires_artifacts = experiment["suite_id"] == "support-score.learn-claude-code"
+    expected_local_gate_keys = LOCAL_GATE_KEYS | ({"artifacts"} if requires_artifacts else set())
     if (
         payload.get("suite_id") != experiment["suite_id"]
         or payload.get("suite_revision") != experiment["suite_revision"]
@@ -417,19 +494,47 @@ def _validate_acceptance_evidence(
         or payload.get("development_evidence", {}).get("memoryforge_commit")
         != development_artifact["memoryforge_commit"]
         or payload.get("development_evidence", {}).get("passed") is not True
+        or not isinstance(local_gate, dict)
+        or set(local_gate) != expected_local_gate_keys
         or local_gate.get("command") != "scripts/check_local.sh"
         or local_gate.get("ruff_check") != "passed"
         or local_gate.get("ruff_format") != "passed"
         or local_gate.get("strict_mypy") != "passed"
+        or not isinstance(registry_result, dict)
+        or set(registry_result)
+        != {"suite_count", "experiment_count", "evidence_count", "qa_case_count"}
+        or any(
+            isinstance(value, bool) or not isinstance(value, int) or value < 1
+            for value in registry_result.values()
+        )
         or local_gate.get("dependency_check") != "passed"
         or not isinstance(pytest_result.get("passed"), int)
+        or isinstance(pytest_result.get("passed"), bool)
         or pytest_result["passed"] < 1
+        or not isinstance(pytest_result.get("failed"), int)
+        or isinstance(pytest_result.get("failed"), bool)
         or pytest_result.get("failed") != 0
         or not isinstance(pytest_result.get("coverage_percent"), int)
+        or isinstance(pytest_result.get("coverage_percent"), bool)
+        or not 0 <= pytest_result["coverage_percent"] <= 100
         or local_gate.get("wheel_clean_room") != "passed"
         or local_gate.get("sdist_clean_room") != "passed"
         or local_gate.get("pip_check") != "passed"
         or local_gate.get("cli_version_smoke") != "passed"
+        or (
+            requires_artifacts
+            and (
+                not isinstance(artifacts, dict)
+                or set(artifacts)
+                != {
+                    "wheel_sha256",
+                    "sdist_sha256",
+                    "provenance_sha256",
+                    "sha256sums_sha256",
+                }
+                or any(SHA256.fullmatch(str(value)) is None for value in artifacts.values())
+            )
+        )
         or payload.get("confirmation", {}).get("path") != confirmation["path"]
         or payload.get("confirmation", {}).get("sha256") != confirmation["sha256"]
         or payload.get("confirmation", {}).get("status") != "not_run"
@@ -439,6 +544,16 @@ def _validate_acceptance_evidence(
             f"experiment acceptance Evidence contract failed: {experiment['suite_id']}"
         )
     return 1
+
+
+def _support_benchmark_module() -> Any:
+    script = REPO_ROOT / "demo/run_support_score_benchmark.py"
+    spec = importlib.util.spec_from_file_location("run_support_score_benchmark", script)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("could not load support-score benchmark")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def _validate_repository(suite_id: str, repository: dict[str, Any]) -> None:

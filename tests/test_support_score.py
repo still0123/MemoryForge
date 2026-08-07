@@ -226,6 +226,32 @@ def test_support_benchmark_validates_complete_and_optional_unknown_payloads() ->
         {"memoryforge": {"answer_status": "answered", "support": None}},
         75.0,
     )
+    missing_score_gate = {
+        **support,
+        "score": 35.0,
+        "components": {
+            "exact_identifier_coverage": 0.0,
+            "core_term_coverage": 0.0,
+            "fact_co_location": 0.0,
+            "negation_alignment": 1.0,
+            "multi_source_coverage": 1.0,
+            "current_source_versions": 1.0,
+        },
+        "sufficient": True,
+        "enforced": True,
+        "failed_hard_gates": [],
+    }
+    assert not runner._valid_case_support(
+        {
+            "category": "unanswerable",
+            "question": "Which function stores embeddings?",
+            "memoryforge": {
+                "answer_status": "answered",
+                "support": missing_score_gate,
+            },
+        },
+        75.0,
+    )
 
 
 def _citation(quote: str) -> CitationPayload:

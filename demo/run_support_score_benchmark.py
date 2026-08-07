@@ -12,6 +12,11 @@ from pathlib import Path
 from typing import Any, cast
 
 from memoryforge.evaluation import run_evaluation
+from memoryforge.query import (
+    _explicit_code_identifiers,
+    _has_support_condition,
+    _has_support_negation,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = REPO_ROOT / "demo/evaluation/support_score_sources.json"
@@ -221,10 +226,30 @@ def _valid_case_support(case: dict[str, Any], threshold: float) -> bool:
     if not isinstance(memoryforge, dict):
         return False
     support = memoryforge.get("support")
-    return (support is None and memoryforge.get("answer_status") == "unknown") or (
-        _valid_support_payload(support, threshold)
-        and support["enforced"] is True
-        and support["sufficient"] is (memoryforge.get("answer_status") == "answered")
+    if support is None:
+        return memoryforge.get("answer_status") == "unknown"
+    if not _valid_support_payload(support, threshold) or support["enforced"] is not True:
+        return False
+    components = support["components"]
+    failed_hard_gates = []
+    question = str(case.get("question", ""))
+    if _explicit_code_identifiers(question) and components["exact_identifier_coverage"] < 1:
+        failed_hard_gates.append("exact_identifier_not_covered")
+    if support["score"] < threshold:
+        failed_hard_gates.append("score_below_threshold")
+    if _has_support_condition(question) and components["fact_co_location"] < 1:
+        failed_hard_gates.append("condition_not_co_located")
+    if _has_support_negation(question) and components["negation_alignment"] < 1:
+        failed_hard_gates.append("negation_not_aligned")
+    if (
+        case.get("category") in {"multi_source", "cross_repository"}
+        and components["multi_source_coverage"] < 1
+    ):
+        failed_hard_gates.append("multi_source_incomplete")
+    if components["current_source_versions"] < 1:
+        failed_hard_gates.append("citation_not_current")
+    return support["failed_hard_gates"] == failed_hard_gates and support["sufficient"] is (
+        memoryforge.get("answer_status") == "answered"
     )
 
 
