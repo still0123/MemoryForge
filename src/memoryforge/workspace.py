@@ -2079,6 +2079,28 @@ def is_public_source_version(
     return row is not None
 
 
+def is_applied_source_version(
+    workspace: Path,
+    *,
+    source_id: str,
+    source_version: int,
+) -> bool:
+    """Return whether one immutable SourceVersion is currently applied."""
+    if _CONTENT_SHA256.fullmatch(source_id) is None or source_version < 1:
+        return False
+    opened = Workspace.open_readonly(workspace)
+    with _connect_readonly(opened.index_path) as connection:
+        row = connection.execute(
+            """
+            SELECT 1
+            FROM applied_source_versions
+            WHERE source_id = ? AND source_version_id = ?
+            """,
+            (source_id, source_version),
+        ).fetchone()
+    return row is not None
+
+
 @contextmanager
 def _connect(database_path: Path) -> Iterator[sqlite3.Connection]:
     connection = sqlite3.connect(database_path, timeout=30)

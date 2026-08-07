@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "suite_id": "support-score.learn-claude-code",
+  "suite_revision": 1,
+  "memoryforge_commit": "e41bb48a63d40e9bcecab74c25a8a7061f2464a5",
+  "memoryforge_worktree_dirty": false,
+  "development_evidence": {
+    "path": "demo/results/support_score_development.json",
+    "sha256": "d6699dd57109b5bbc573fdf17355084a3ac045e43f5766f4c539c42621208a75",
+    "memoryforge_commit": "99d20a259350693292ada852f3b18ab98aa1c172",
+    "passed": true
+  },
+  "regression": {
+    "command": "scripts/check_local.sh",
+    "ruff_check": "passed",
+    "ruff_format": "passed",
+    "strict_mypy": "passed",
+    "registry_validation": "passed",
+    "dependency_check": "passed",
+    "pytest": {
+      "passed": 457,
+      "failed": 1,
+      "coverage_percent": 88,
+      "failed_node": "tests/test_git_sync.py::test_code_symbol_queries_answer_methods_and_struct_fields",
+      "expected_answer_status": "answered",
+      "actual_answer_status": "unknown",
+      "support_score": 72.8,
+      "support_threshold": 75.0
+    },
+    "wheel_sdist_clean_room": "not_run_after_pytest_failure"
+  },
+  "root_cause": "Expanded field-kind synonyms and Chinese query scaffolding diluted core-term coverage, so valid page-local FileSystem field Facts scored 72.8 below the frozen threshold.",
+  "confirmation": {
+    "path": "demo/evaluation/learn_claude_code_qa_confirm_v031.json",
+    "sha256": "b86fe1f7999c09af9bf7c6bed4951c1c4c565318c39192bea1831d942466c117",
+    "status": "not_run"
+  },
+  "passed": false
+}

@@ -97,6 +97,17 @@ def test_eval_compares_wiki_answers_with_raw_fts(tmp_path: Path, monkeypatch) ->
         "citation_grounding_accuracy": 100.0,
         "multi_source_coverage": 0.0,
         "abstention_accuracy": 0.0,
+        "selective_accuracy": 100.0,
+        "coverage": 100.0,
+        "risk": 0.0,
+        "risk_coverage": [
+            {
+                "threshold": 75.0,
+                "coverage": 100.0,
+                "selective_accuracy": 100.0,
+                "risk": 0.0,
+            }
+        ],
         "repository_path_isolation_accuracy": 0.0,
         "average_wiki_pages_read": 1.0,
         "average_raw_sources_read": 0.0,

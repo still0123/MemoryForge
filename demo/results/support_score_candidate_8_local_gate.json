@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "suite_id": "support-score.learn-claude-code",
+  "suite_revision": 1,
+  "memoryforge_commit": "dc6c70efa3edec8782b9514764efbf37cf20e22b",
+  "memoryforge_worktree_dirty": false,
+  "development_evidence": {
+    "path": "demo/results/support_score_development_candidate_8.json",
+    "sha256": "e8c3da42d39ab2ce3ff471761cd32a06f79a5e0ad330589c97da509cc8457ed7",
+    "memoryforge_commit": "9667b0585a865ba6af9ef13f5eafb674b0c52026",
+    "passed": true
+  },
+  "local_gate": {
+    "command": "scripts/check_local.sh",
+    "ruff_check": "passed",
+    "ruff_format": "passed",
+    "strict_mypy": "passed",
+    "registry_validation": {
+      "suite_count": 12,
+      "experiment_count": 2,
+      "evidence_count": 34,
+      "qa_case_count": 121
+    },
+    "dependency_check": "passed",
+    "pytest": {
+      "passed": 470,
+      "failed": 0,
+      "coverage_percent": 88
+    },
+    "wheel_clean_room": "passed",
+    "sdist_clean_room": "passed",
+    "pip_check": "passed",
+    "cli_version_smoke": "passed",
+    "artifacts": {
+      "wheel_sha256": "2dd07e1109c966732c5c81575bae01cd26818bbe0ddcf3160cbcea88a253cca8",
+      "sdist_sha256": "adf60a00bd02bac2d46a31ad8a3bc30e3b40e2b6514bf11955648378dc1a61b5",
+      "provenance_sha256": "995fb61502b4c82b2fe8c67040ea8fed5f7331962d74992e6e9a426b1661fc49",
+      "sha256sums_sha256": "0e9af3e6a79e2081c6be1aa0df75244104a76fe92726f0178f1e7c486773d8d7"
+    }
+  },
+  "confirmation": {
+    "path": "demo/evaluation/learn_claude_code_qa_confirm_v031.json",
+    "sha256": "b86fe1f7999c09af9bf7c6bed4951c1c4c565318c39192bea1831d942466c117",
+    "status": "not_run"
+  },
+  "passed": true
+}
