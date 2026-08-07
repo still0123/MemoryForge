@@ -2,7 +2,7 @@
 
 ## Status
 
-`ACCEPTED_DEVELOPMENT_AND_LOCAL_REGRESSION`
+`CANDIDATE_14_IMPLEMENTED_DEVELOPMENT_PENDING`
 
 ## Frozen Inputs
 
@@ -714,6 +714,18 @@ repository-isolation metrics; coverage remains 90.0% and risk remains 0.0%.
 
 Candidate 13 is the accepted development and local-regression result.
 Confirmation remains `not_run`.
+
+## Candidate 14 Fail-Closed Contract
+
+Candidate 13 re-review showed that heuristic entailment remained open-ended:
+substring matching accepted truncated identifiers, while unenumerated
+coordination boundaries could still reassign semantic roles.
+
+Candidate 14 removes heuristic paraphrase entailment. An Agent answer clause is
+accepted only when its normalized text equals one complete Citation sentence or
+coordination segment with matching negation polarity. This deliberately trades
+free paraphrasing for deterministic, local, auditable final-answer grounding.
+Candidate 14 development is pending. Confirmation remains `not_run`.
 
 ## Forbidden
 

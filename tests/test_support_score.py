@@ -386,6 +386,18 @@ def test_agent_answer_requires_each_clause_in_one_citation() -> None:
         "Administrators clear caches.",
         [_citation("Administrators revoke sessions and users clear caches.")],
     )
+    assert not query_module.answer_is_supported(
+        "Cache",
+        [_citation("CacheManager returns value.")],
+    )
+    assert not query_module.answer_is_supported(
+        "Administrators clear caches.",
+        [_citation("Administrators revoke sessions but users clear caches.")],
+    )
+    assert not query_module.answer_is_supported(
+        "Administrators clear caches.",
+        [_citation("Administrators revoke sessions, users clear caches.")],
+    )
 
 
 def test_support_benchmark_requires_an_external_output_path(tmp_path: Path) -> None:

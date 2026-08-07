@@ -26,10 +26,6 @@ _INDEX_ENTRY = re.compile(
     re.MULTILINE,
 )
 _WORDS = re.compile(r"[a-z0-9]+|[\u4e00-\u9fff]+", re.IGNORECASE)
-_ORDERED_WORDS = re.compile(
-    r"[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*"
-    r"|[0-9]+|[\u4e00-\u9fff]+"
-)
 _CAMEL_CASE_PARTS = re.compile(r"[A-Z]+(?=[A-Z][a-z]|$)|[A-Z]?[a-z]+")
 _CJK = re.compile(r"^[\u4e00-\u9fff]+$")
 _EXPLICIT_CODE_IDENTIFIER = re.compile(r"[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*")
@@ -1430,39 +1426,23 @@ def answer_is_supported(answer: str, citations: list[CitationPayload]) -> bool:
 
 
 def _answer_clause_is_supported(clause: str, evidence: str) -> bool:
-    if _normalise_support_text(clause).casefold() in _normalise_support_text(
-        evidence
-    ).casefold() and _has_support_negation(clause) == _has_support_negation(evidence):
-        return True
-    return any(
-        _ordered_clause_is_supported(clause, segment)
-        for segment in re.split(
-            r"[.!?。！？;\n]+|\b(?:and|or)\b|以及|并且",
+    normalised_clause = _normalise_support_text(clause)
+    return bool(normalised_clause) and any(
+        normalised_clause == _normalise_support_text(segment)
+        and _has_support_negation(clause) == _has_support_negation(segment)
+        for segment in (
             evidence,
-            flags=re.IGNORECASE,
+            *re.split(
+                r"[.!?。！？;,\n，]+|\b(?:and|or|but|while|whereas)\b|以及|并且|但是|而",
+                evidence,
+                flags=re.IGNORECASE,
+            ),
         )
-        if segment.strip()
     )
 
 
-def _ordered_clause_is_supported(clause: str, evidence: str) -> bool:
-    answer_terms = [term for term in _ordered_terms(clause) if term not in {"and", "or"}]
-    evidence_terms = _ordered_terms(evidence)
-    if not answer_terms or _has_support_negation(clause) != _has_support_negation(evidence):
-        return False
-    position = 0
-    for answer_term in answer_terms:
-        for index in range(position, len(evidence_terms)):
-            if _local_english_forms(answer_term) & _local_english_forms(evidence_terms[index]):
-                position = index + 1
-                break
-        else:
-            return False
-    return True
-
-
 def _normalise_support_text(text: str) -> str:
-    return re.sub(r"\s+", " ", text).strip()
+    return re.sub(r"\s+", " ", text).strip(" \t.!?。！？;,，").casefold()
 
 
 def _matching_terms(question_terms: set[str], citation: CitationPayload) -> set[str]:
@@ -1573,19 +1553,6 @@ def _terms(text: str) -> set[str]:
             parts = _CAMEL_CASE_PARTS.findall(raw_token)
             if len(parts) > 1:
                 terms.update("".join(parts[index:]).lower() for index in range(1, len(parts) - 1))
-    return terms
-
-
-def _ordered_terms(text: str) -> list[str]:
-    terms: list[str] = []
-    for match in _ORDERED_WORDS.finditer(text):
-        token = match.group().lower()
-        if token in _STOP_WORDS:
-            continue
-        if _CJK.fullmatch(token) and len(token) > 1:
-            terms.extend(token[index : index + 2] for index in range(len(token) - 1))
-        else:
-            terms.append(token)
     return terms
 
 
