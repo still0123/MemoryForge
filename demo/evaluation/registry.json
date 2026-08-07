@@ -314,7 +314,7 @@
         {
           "split": "development",
           "evidence_revision": 8,
-          "status": "accepted_development",
+          "status": "accepted_development_superseded",
           "path": "demo/results/support_score_development_candidate_8.json",
           "sha256": "e8c3da42d39ab2ce3ff471761cd32a06f79a5e0ad330589c97da509cc8457ed7",
           "memoryforge_commit": "9667b0585a865ba6af9ef13f5eafb674b0c52026",
@@ -322,6 +322,21 @@
             "path": "demo/results/support_score_candidate_8_local_gate.json",
             "sha256": "2396ca6b9b4bfd401d313e96d1551bf24dd94aabd3a4c24d37048fc0f8c61ae0",
             "memoryforge_commit": "dc6c70efa3edec8782b9514764efbf37cf20e22b",
+            "passed": true
+          },
+          "passed": true
+        },
+        {
+          "split": "development",
+          "evidence_revision": 9,
+          "status": "accepted_development",
+          "path": "demo/results/support_score_development_candidate_9.json",
+          "sha256": "e3eb0f0568b5688442be314abe3b81b3d9a69f48787c78afea92f61fd993640a",
+          "memoryforge_commit": "63972b0eee534c258a4054f40876de4da7f54880",
+          "acceptance_evidence": {
+            "path": "demo/results/support_score_candidate_9_local_gate.json",
+            "sha256": "2939506d21e3ffd42777ebc1ac7cfb0f4ae3f13bbcbe51cdcf2415f5ab141d9c",
+            "memoryforge_commit": "fc2f15f7da52703061b31705d553e211deaa4e97",
             "passed": true
           },
           "passed": true

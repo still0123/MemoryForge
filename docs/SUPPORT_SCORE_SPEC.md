@@ -2,7 +2,7 @@
 
 ## Status
 
-`CANDIDATE_9_DEVELOPMENT_PASSED_REGRESSION_PENDING`
+`ACCEPTED_DEVELOPMENT_AND_LOCAL_REGRESSION`
 
 ## Frozen Inputs
 
@@ -468,6 +468,28 @@ Evidence schemas.
 
 Candidate 9 retains all accepted development metrics and the unsupported score
 of 35.0. Both clean runs are deterministic. Confirmation remains `not_run`.
+
+## Candidate 9 Full Local Gate
+
+- Gate Commit:
+  `fc2f15f7da52703061b31705d553e211deaa4e97`;
+- acceptance Evidence:
+  `demo/results/support_score_candidate_9_local_gate.json`;
+- acceptance Evidence SHA256:
+  `2939506d21e3ffd42777ebc1ac7cfb0f4ae3f13bbcbe51cdcf2415f5ab141d9c`;
+- Ruff check and format: passed;
+- strict Mypy: passed;
+- registry: 12 release suites, two experiments, 38 Evidence artifacts, and 121
+  QA cases;
+- dependency check: passed;
+- pytest: 470 passed;
+- coverage: 88%;
+- Wheel clean-room: passed;
+- sdist clean-room: passed;
+- `pip check` and CLI version smoke test: passed.
+
+Candidate 9 is the accepted development and local-regression result.
+Confirmation remains `not_run`.
 
 ## Forbidden
 

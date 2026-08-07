@@ -39,6 +39,7 @@ REQUIRED_EXPERIMENT_EVIDENCE_PATHS = {
         "demo/results/support_score_development_candidate_6.json",
         "demo/results/support_score_development_candidate_7.json",
         "demo/results/support_score_development_candidate_8.json",
+        "demo/results/support_score_development_candidate_9.json",
     },
 }
 _RESULTS = "demo/results/"
@@ -52,7 +53,7 @@ REQUIRED_ACCEPTANCE_EVIDENCE_PATHS = {
         _RESULTS + f"support_score_development_candidate_{revision}.json": (
             _RESULTS + f"support_score_candidate_{revision}_local_gate.json"
         )
-        for revision in (3, 4, 5, 6, 7, 8)
+        for revision in (3, 4, 5, 6, 7, 8, 9)
     },
 }
 DEVELOPMENT_EVIDENCE_KEYS = {
