@@ -2,7 +2,7 @@
 
 ## Status
 
-`DEVELOPMENT_PASSED_REGRESSION_PENDING`
+`ACCEPTED_DEVELOPMENT_AND_LOCAL_REGRESSION`
 
 ## Frozen Inputs
 
@@ -183,6 +183,33 @@ SHA256
 Candidate 3 keeps Relation questions on Relation evidence. Its two clean
 development runs retain Candidate 2's accepted development metrics and
 evaluation SHA256 while the focused Relation regression test passes.
+
+## Full Local Gate
+
+- Gate Commit:
+  `9f0b370b1a9599885c04eb818306076cf622c4ea`;
+- Ruff check and format: passed;
+- strict Mypy: passed;
+- registry: 12 release suites, one experiment, 20 Evidence artifacts, and 121
+  QA cases;
+- dependency check: passed;
+- pytest: 455 passed;
+- coverage: 88%;
+- Wheel clean-room: passed;
+- sdist clean-room: passed;
+- `pip check` and CLI version smoke test: passed.
+
+Local artifact SHA256 values:
+
+- Wheel:
+  `3911fa9605431a430ae9fd07c0d4f20739113630d19e5e461095c0386747679c`;
+- sdist:
+  `871f5dbcd70abca0b0d32f45bfce5075b0a8cda6a79f59a8cd5dce4bffa27b31`;
+- release provenance:
+  `7da0cf89c5084a4efeece1c2ab86f0d3b3bdb6b4ef7690abecc062f5f7dfb523`.
+
+These are local phase-gate artifacts for package 0.2.1, not the final v0.3.0
+release assets.
 
 Confirmation remains `not_run`.
 
