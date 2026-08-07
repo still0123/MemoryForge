@@ -48,7 +48,13 @@ def build_evidence(
     workspace = workdir / "workspace"
     shutil.copytree(FIXTURE, source_repo)
     _git(source_repo, "init")
-    _git(source_repo, "remote", "add", "origin", "file:///memoryforge-showcase-fixture")
+    _git(
+        source_repo,
+        "remote",
+        "add",
+        "origin",
+        "https://example.invalid/memoryforge-showcase-fixture.git",
+    )
     _git(source_repo, "config", "user.email", "benchmark@example.com")
     _git(source_repo, "config", "user.name", "MemoryForge Benchmark")
     _git(source_repo, "add", ".")
