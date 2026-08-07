@@ -2,7 +2,7 @@
 
 ## Status
 
-`CANDIDATE_7_REVIEW_REJECTED_CANDIDATE_8_PENDING`
+`CANDIDATE_8_DEVELOPMENT_PASS_FINAL_GATES_PENDING`
 
 ## Base
 
@@ -384,6 +384,23 @@ user, denying every POSIX Workspace and ChangeSet lock for the victim UID.
 Candidate 8 moves this directory under the `pwd`-resolved, owner-controlled
 home directory. Native Windows confirmation remains frozen at `not_run` and is
 not claimed.
+
+## Candidate 8 Development Result
+
+- Development Evidence:
+  `demo/results/cross_platform_delivery_candidate_8.json`
+- Development Evidence SHA256:
+  `e86b08906ddd99bf8cf14089cc9e2e873c902d6855c33596c2cc973352f2d106`
+- MemoryForge Commit:
+  `beb4bd0f41afc804136ce1e96b8b9857d88be30b`
+- Runtime: CPython 3.11.15 / Darwin arm64
+- Development pass rate: 100.0%
+- Deterministic evaluation SHA256:
+  `03879bd4165a21543fadd0ecd237d5976c6b19330bc0bab7d321a84ee1ec92f1`
+- Full pytest: 558 passed
+- Confirmation status: `not_run`
+
+Final macOS and local Linux gates remain pending.
 
 ## Goal
 

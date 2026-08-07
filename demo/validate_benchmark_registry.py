@@ -293,9 +293,15 @@ REQUIRED_EXPERIMENT_EVIDENCE = {
         ),
         _RESULTS + "cross_platform_delivery_candidate_7.json": (
             8,
-            "accepted_development",
+            "accepted_development_superseded",
             "dd48d59e149f9195410f793edacacb8ca90c899ee4691b6e214fcb8ebedc567a",
             "5e7c50ca377622a21600a7fa877046af92fefc4c",
+        ),
+        _RESULTS + "cross_platform_delivery_candidate_8.json": (
+            9,
+            "accepted_development_superseded",
+            "e86b08906ddd99bf8cf14089cc9e2e873c902d6855c33596c2cc973352f2d106",
+            "beb4bd0f41afc804136ce1e96b8b9857d88be30b",
         ),
     },
 }
@@ -727,6 +733,12 @@ CROSS_PLATFORM_DEVELOPMENT_RUNTIME_CONTRACTS = {
         "machine": "arm64",
     },
     _RESULTS + "cross_platform_delivery_candidate_7.json": {
+        "implementation": "CPython",
+        "python": "3.11.15",
+        "system": "Darwin",
+        "machine": "arm64",
+    },
+    _RESULTS + "cross_platform_delivery_candidate_8.json": {
         "implementation": "CPython",
         "python": "3.11.15",
         "system": "Darwin",

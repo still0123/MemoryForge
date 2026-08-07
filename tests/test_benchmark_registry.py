@@ -22,7 +22,7 @@ def test_benchmark_registry_binds_all_release_artifacts() -> None:
         "status": "valid",
         "suite_count": 12,
         "experiment_count": 7,
-        "evidence_count": 89,
+        "evidence_count": 90,
         "qa_case_count": 121,
         "qa_case_types_present": [
             "code_behavior",
@@ -319,7 +319,7 @@ def test_benchmark_registry_rejects_cross_platform_case_bool_int_aliases() -> No
     experiment = next(
         item for item in registry["experiments"] if item["suite_id"] == "cross-platform-delivery"
     )
-    artifact = next(item for item in experiment["evidence"] if item["evidence_revision"] == 8)
+    artifact = next(item for item in experiment["evidence"] if item["evidence_revision"] == 9)
     payload = json.loads((validator.REPO_ROOT / artifact["path"]).read_text(encoding="utf-8"))
     case = payload["development"]["evaluation"]["cases"][0]
     case["return_code"] = False
@@ -426,7 +426,7 @@ def test_benchmark_registry_binds_final_development_runtime() -> None:
     experiment = next(
         item for item in registry["experiments"] if item["suite_id"] == "cross-platform-delivery"
     )
-    candidate = next(item for item in experiment["evidence"] if item["evidence_revision"] == 8)
+    candidate = next(item for item in experiment["evidence"] if item["evidence_revision"] == 9)
     payload = json.loads((validator.REPO_ROOT / candidate["path"]).read_text(encoding="utf-8"))
     payload["runtime"]["system"] = "Windows"
 
