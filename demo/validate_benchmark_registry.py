@@ -38,6 +38,7 @@ REQUIRED_EXPERIMENT_EVIDENCE_PATHS = {
         "demo/results/support_score_development_candidate_5.json",
         "demo/results/support_score_development_candidate_6.json",
         "demo/results/support_score_development_candidate_7.json",
+        "demo/results/support_score_development_candidate_8.json",
     },
 }
 FINAL_EXPERIMENT_GATE_KEYS = {

@@ -2,7 +2,7 @@
 
 ## Status
 
-`CANDIDATE_8_DEVELOPMENT_PASSED_REGRESSION_PENDING`
+`ACCEPTED_DEVELOPMENT_AND_LOCAL_REGRESSION`
 
 ## Frozen Inputs
 
@@ -419,6 +419,28 @@ threshold from the validated source manifest.
 
 Candidate 8 retains all accepted development metrics and the unsupported score
 of 35.0. Both clean runs are deterministic. Confirmation remains `not_run`.
+
+## Candidate 8 Full Local Gate
+
+- Gate Commit:
+  `dc6c70efa3edec8782b9514764efbf37cf20e22b`;
+- acceptance Evidence:
+  `demo/results/support_score_candidate_8_local_gate.json`;
+- acceptance Evidence SHA256:
+  `2396ca6b9b4bfd401d313e96d1551bf24dd94aabd3a4c24d37048fc0f8c61ae0`;
+- Ruff check and format: passed;
+- strict Mypy: passed;
+- registry: 12 release suites, two experiments, 34 Evidence artifacts, and 121
+  QA cases;
+- dependency check: passed;
+- pytest: 470 passed;
+- coverage: 88%;
+- Wheel clean-room: passed;
+- sdist clean-room: passed;
+- `pip check` and CLI version smoke test: passed.
+
+Candidate 8 is the accepted development and local-regression result.
+Confirmation remains `not_run`.
 
 ## Forbidden
 
