@@ -236,7 +236,11 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
                 raise ValueError(f"invalid experiment evidence revision: {suite_id}")
             revisions.add(evidence_revision)
             status = str(artifact.get("status"))
-            if status not in {"rejected", "accepted_development"}:
+            if status not in {
+                "rejected",
+                "development_passed_regression_failed",
+                "accepted_development",
+            }:
                 raise ValueError(f"invalid experiment evidence status: {suite_id}")
             statuses.add(status)
             commit = str(artifact.get("memoryforge_commit"))
@@ -253,8 +257,18 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
                 development,
                 confirmation,
             )
+            if status == "development_passed_regression_failed":
+                evidence_count += _validate_regression_evidence(
+                    experiment,
+                    artifact,
+                    confirmation,
+                )
             evidence_count += 1
-        if statuses != {"rejected", "accepted_development"}:
+        if statuses != {
+            "rejected",
+            "development_passed_regression_failed",
+            "accepted_development",
+        }:
             raise ValueError(f"experiment must retain rejected and accepted Evidence: {suite_id}")
     return evidence_count
 
@@ -294,6 +308,46 @@ def _validate_experiment_payload(
             raise ValueError(
                 f"experiment metric mismatch: {experiment['suite_id']}/development/{metric}"
             )
+
+
+def _validate_regression_evidence(
+    experiment: dict[str, Any],
+    development_artifact: dict[str, Any],
+    confirmation: dict[str, Any],
+) -> int:
+    artifact = development_artifact.get("regression_evidence")
+    if not isinstance(artifact, dict):
+        raise ValueError("regression-rejected experiment requires regression Evidence")
+    _validate_artifact(artifact, str(experiment["suite_id"]))
+    commit = str(artifact.get("memoryforge_commit"))
+    if COMMIT.fullmatch(commit) is None or artifact.get("passed") is not False:
+        raise ValueError("invalid experiment regression Evidence identity")
+    payload = cast(
+        dict[str, Any],
+        json.loads((REPO_ROOT / artifact["path"]).read_text(encoding="utf-8")),
+    )
+    pytest_result = payload.get("regression", {}).get("pytest", {})
+    if (
+        payload.get("suite_id") != experiment["suite_id"]
+        or payload.get("suite_revision") != experiment["suite_revision"]
+        or payload.get("memoryforge_commit") != commit
+        or payload.get("memoryforge_worktree_dirty") is not False
+        or payload.get("development_evidence", {}).get("path") != development_artifact["path"]
+        or payload.get("development_evidence", {}).get("sha256") != development_artifact["sha256"]
+        or payload.get("development_evidence", {}).get("memoryforge_commit")
+        != development_artifact["memoryforge_commit"]
+        or payload.get("development_evidence", {}).get("passed") is not True
+        or not isinstance(pytest_result.get("failed"), int)
+        or pytest_result["failed"] < 1
+        or payload.get("confirmation", {}).get("path") != confirmation["path"]
+        or payload.get("confirmation", {}).get("sha256") != confirmation["sha256"]
+        or payload.get("confirmation", {}).get("status") != "not_run"
+        or payload.get("passed") is not False
+    ):
+        raise ValueError(
+            f"experiment regression Evidence contract failed: {experiment['suite_id']}"
+        )
+    return 1
 
 
 def _validate_repository(suite_id: str, repository: dict[str, Any]) -> None:

@@ -136,7 +136,7 @@ definitions without using the two explicit module contexts. A module Symbol
 also displaced the requested class Fact. The production candidate was not
 accepted.
 
-### Candidate 2: Development Passed
+### Candidate 2: Development Passed, Regression Rejected
 
 - Commit:
   `8af4198e8bc625a52c5016f5cd3b19f7c790f653`
@@ -158,6 +158,31 @@ disambiguation. Both clean development runs produced evaluation SHA256
 `58583d94b3cd97d90b62e38ed50e6c16b6b558be0fb0db07f6c07dc8ba732588`.
 All four exact-symbol cases pass. The unsupported vector-database case remains
 the only failure and is classified `wrong_abstention`.
+
+The full local gate then found:
+
+- failed node:
+  `tests/test_code_wiki_compiler.py::test_code_wiki_dependencies_are_queryable_and_grounded`;
+- 453 tests passed and one failed;
+- the exact module Symbol displaced the required `imports` Relation Fact.
+
+Regression Evidence:
+`demo/results/exact_symbol_routing_candidate_2_regression_rejected.json`,
+SHA256
+`d07b5a54ec11dc044fbb091b7372461885a02e68fde0803b004dbe8cf3fb60f8`.
+
+### Candidate 3: Development Passed
+
+- Commit:
+  `8e95ddb8aa7b29b97a5c6aa884f715c3b2006051`;
+- Evidence:
+  `demo/results/exact_symbol_routing_development_accepted.json`;
+- Evidence SHA256:
+  `748e9fd7bf76c7ca1a7a3e5d4416db8f357fe363efd77df86c1894e5f53c9145`.
+
+Candidate 3 keeps Relation questions on Relation evidence. Its two clean
+development runs retain Candidate 2's accepted development metrics and
+evaluation SHA256 while the focused Relation regression test passes.
 
 Confirmation remains `not_run`.
 

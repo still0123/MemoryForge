@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "suite_id": "exact-symbol-routing.learn-claude-code",
+  "suite_revision": 1,
+  "memoryforge_commit": "9956343013d33531560a437fc61fef3f864ec319",
+  "memoryforge_worktree_dirty": false,
+  "development_evidence": {
+    "path": "demo/results/exact_symbol_routing_development.json",
+    "sha256": "3769f91c17687228f4a509f5b7ecc49b5fa23b10b5cb17fdfe8475d1e770d2b8",
+    "memoryforge_commit": "8af4198e8bc625a52c5016f5cd3b19f7c790f653",
+    "passed": true
+  },
+  "regression": {
+    "command": "scripts/check_local.sh",
+    "ruff_check": "passed",
+    "ruff_format": "passed",
+    "strict_mypy": "passed",
+    "registry_validation": "passed",
+    "dependency_check": "passed",
+    "pytest": {
+      "passed": 453,
+      "failed": 1,
+      "coverage_percent": 88,
+      "failed_node": "tests/test_code_wiki_compiler.py::test_code_wiki_dependencies_are_queryable_and_grounded",
+      "expected_answer_accuracy": 100.0,
+      "actual_answer_accuracy": 0.0
+    },
+    "wheel_sdist_clean_room": "not_run_after_pytest_failure"
+  },
+  "root_cause": "An exact module Symbol route displaced the required imports Relation Fact.",
+  "confirmation": {
+    "path": "demo/evaluation/learn_claude_code_qa_confirm_v031.json",
+    "sha256": "b86fe1f7999c09af9bf7c6bed4951c1c4c565318c39192bea1831d942466c117",
+    "status": "not_run"
+  },
+  "passed": false
+}
