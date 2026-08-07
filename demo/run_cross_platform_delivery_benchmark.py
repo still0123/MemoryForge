@@ -1,0 +1,247 @@
+#!/usr/bin/env python3
+"""Run the frozen cross-platform delivery development cases twice."""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any, cast
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+DEVELOPMENT = REPO_ROOT / "demo/evaluation/cross_platform_delivery_development.json"
+CONFIRMATION = REPO_ROOT / "demo/evaluation/cross_platform_delivery_confirmation.json"
+TEST_FILE = REPO_ROOT / "tests/test_cross_platform_delivery.py"
+DEVELOPMENT_SHA256 = "0082594121022f6f97b6eae3d4106819794c0b988f531a02e51b9ec2194fb6ff"
+CONFIRMATION_SHA256 = "200074acfb79979bf4663b97ae25e9dd62fa0f94359b8aa0d39c4250256660fc"
+TEST_SHA256 = "08601b7effba8271ac318a58a5b0906b934bdeaa4564edcd0ec5738e61618ac3"
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = _parse_args(argv)
+    output = args.output.resolve()
+    if output.is_relative_to(REPO_ROOT):
+        raise SystemExit("--output must be outside the MemoryForge repository")
+    memoryforge_commit = _git("rev-parse", "HEAD")
+    if _git("status", "--porcelain"):
+        raise SystemExit("MemoryForge worktree must be clean")
+    _validate_artifact(DEVELOPMENT, DEVELOPMENT_SHA256)
+    _validate_artifact(CONFIRMATION, CONFIRMATION_SHA256)
+    _validate_artifact(TEST_FILE, TEST_SHA256)
+    development = cast(dict[str, Any], json.loads(DEVELOPMENT.read_text(encoding="utf-8")))
+    confirmation = cast(dict[str, Any], json.loads(CONFIRMATION.read_text(encoding="utf-8")))
+    _validate_development(development)
+    _validate_confirmation(confirmation)
+
+    first = _run_suite(development)
+    second = _run_suite(development)
+    runs = (
+        {"name": "first", "evaluation_sha256": _payload_sha256(first)},
+        {"name": "second", "evaluation_sha256": _payload_sha256(second)},
+    )
+    metrics = cast(dict[str, object], first["metrics"])
+    gates = {
+        "pass_rate": metrics["pass_rate"] == 100.0,
+        "failed_cases": metrics["failed_cases"] == 0,
+        "direct_platform_imports": metrics["direct_platform_imports"] == 0,
+        "windows_lock_offset": metrics["windows_lock_offset"] == 0,
+        "windows_lock_bytes": metrics["windows_lock_bytes"] == 1,
+        "local_smoke": metrics["local_smoke"] == "passed",
+        "deterministic_replay": runs[0]["evaluation_sha256"] == runs[1]["evaluation_sha256"],
+        "stable_memoryforge_commit": _git("rev-parse", "HEAD") == memoryforge_commit,
+        "clean_worktree_after_run": not bool(_git("status", "--porcelain")),
+        "confirmation_not_run": confirmation["status"] == "not_run",
+    }
+    evidence = {
+        "schema_version": 1,
+        "suite_id": development["suite_id"],
+        "suite_revision": development["suite_revision"],
+        "memoryforge_commit": memoryforge_commit,
+        "memoryforge_worktree_dirty": False,
+        "development": {
+            "path": str(DEVELOPMENT.relative_to(REPO_ROOT)),
+            "sha256": DEVELOPMENT_SHA256,
+            "test_file": development["test_file"],
+            "case_count": len(development["cases"]),
+            "evaluation": first,
+        },
+        "confirmation": {
+            "path": str(CONFIRMATION.relative_to(REPO_ROOT)),
+            "sha256": CONFIRMATION_SHA256,
+            "status": "not_run",
+        },
+        "runs": list(runs),
+        "gates": gates,
+        "passed": all(gates.values()),
+    }
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
+    print(f"Wrote cross-platform delivery evidence to {output}")
+    if not evidence["passed"]:
+        raise SystemExit("cross-platform delivery benchmark failed")
+
+
+def _run_suite(suite: dict[str, Any]) -> dict[str, Any]:
+    cases = [_run_case(case) for case in suite["cases"]]
+    passed = sum(case["status"] == "passed" for case in cases)
+    status_by_id = {case["id"]: case["status"] for case in cases}
+    windows_contract = status_by_id["windows-byte-zero-contract"] == "passed"
+    boundary = status_by_id["single-platform-boundary"] == "passed"
+    smoke = status_by_id["portable-empty-demo"] == "passed"
+    return {
+        "case_count": len(cases),
+        "metrics": {
+            "pass_rate": round(100 * passed / len(cases), 1),
+            "failed_cases": len(cases) - passed,
+            "direct_platform_imports": 0 if boundary else 2,
+            "windows_lock_offset": 0 if windows_contract else -1,
+            "windows_lock_bytes": 1 if windows_contract else 0,
+            "local_smoke": "passed" if smoke else "failed",
+        },
+        "cases": cases,
+    }
+
+
+def _run_case(case: dict[str, str]) -> dict[str, str]:
+    environment = dict(os.environ)
+    environment["PYTHONPATH"] = str(REPO_ROOT / "src")
+    environment.pop("PYTEST_ADDOPTS", None)
+    environment["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
+    node = f"tests/test_cross_platform_delivery.py::{case['test']}"
+    completed = subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", node],
+        cwd=REPO_ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+    )
+    status = "passed" if completed.returncode == 0 and "1 passed" in completed.stdout else "failed"
+    return {
+        "id": case["id"],
+        "pytest_node": node,
+        "status": status,
+        "error_classification": "none" if status == "passed" else "pytest_failure",
+    }
+
+
+def _validate_development(suite: dict[str, Any]) -> None:
+    if (
+        set(suite)
+        != {
+            "schema_version",
+            "suite_id",
+            "suite_revision",
+            "test_file",
+            "cases",
+            "expected_metrics",
+        }
+        or suite.get("schema_version") != 1
+        or suite.get("suite_id") != "cross-platform-delivery"
+        or suite.get("suite_revision") != 1
+        or suite.get("test_file")
+        != {"path": "tests/test_cross_platform_delivery.py", "sha256": TEST_SHA256}
+        or suite.get("expected_metrics")
+        != {
+            "pass_rate": 100.0,
+            "failed_cases": 0,
+            "direct_platform_imports": 0,
+            "windows_lock_offset": 0,
+            "windows_lock_bytes": 1,
+            "local_smoke": "passed",
+            "confirmation_not_run": True,
+        }
+    ):
+        raise ValueError("invalid cross-platform delivery development suite")
+    cases = suite.get("cases")
+    if not isinstance(cases, list) or len(cases) != 7:
+        raise ValueError("cross-platform delivery development suite requires seven cases")
+    _validate_case_ids(cases)
+    for case in cases:
+        if (
+            set(case) != {"id", "test", "expected"}
+            or not isinstance(case["test"], str)
+            or not case["test"].startswith("test_")
+            or not isinstance(case["expected"], str)
+            or not case["expected"]
+        ):
+            raise ValueError("invalid cross-platform delivery development case")
+
+
+def _validate_confirmation(suite: dict[str, Any]) -> None:
+    if (
+        set(suite)
+        != {
+            "schema_version",
+            "suite_id",
+            "suite_revision",
+            "status",
+            "required_runtime",
+            "cases",
+            "expected_metrics",
+        }
+        or suite.get("schema_version") != 1
+        or suite.get("suite_id") != "cross-platform-delivery"
+        or suite.get("suite_revision") != 1
+        or suite.get("status") != "not_run"
+        or suite.get("required_runtime")
+        != {"os_name": "nt", "implementation": "CPython", "python": "3.11"}
+        or suite.get("expected_metrics")
+        != {
+            "pass_rate": 100.0,
+            "failed_cases": 0,
+            "native_windows_smoke": "passed",
+            "wheel_import_from_fresh_venv": True,
+            "github_actions_enabled": False,
+        }
+    ):
+        raise ValueError("invalid cross-platform delivery confirmation suite")
+    cases = suite.get("cases")
+    if not isinstance(cases, list) or len(cases) != 3:
+        raise ValueError("cross-platform delivery confirmation suite requires three cases")
+    _validate_case_ids(cases)
+    for case in cases:
+        if set(case) != {"id", "expected"} or not isinstance(case["expected"], str):
+            raise ValueError("invalid cross-platform delivery confirmation case")
+
+
+def _validate_case_ids(cases: list[dict[str, Any]]) -> None:
+    identifiers = [case.get("id") for case in cases]
+    if any(not isinstance(identifier, str) or not identifier for identifier in identifiers) or len(
+        identifiers
+    ) != len(set(identifiers)):
+        raise ValueError("cross-platform delivery case IDs must be unique")
+
+
+def _validate_artifact(path: Path, expected_sha256: str) -> None:
+    if hashlib.sha256(path.read_bytes()).hexdigest() != expected_sha256:
+        raise ValueError(f"frozen artifact SHA256 mismatch: {path.relative_to(REPO_ROOT)}")
+
+
+def _payload_sha256(payload: object) -> str:
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")
+    ).hexdigest()
+
+
+def _git(*args: str) -> str:
+    return subprocess.run(
+        ["git", *args],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
+def _parse_args(argv: list[str] | None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", type=Path, required=True)
+    return parser.parse_args(argv)
+
+
+if __name__ == "__main__":
+    main()

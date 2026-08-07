@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "suite_id": "cross-platform-delivery",
+  "suite_revision": 1,
+  "status": "not_run",
+  "required_runtime": {
+    "os_name": "nt",
+    "implementation": "CPython",
+    "python": "3.11"
+  },
+  "cases": [
+    {
+      "id": "native-windows-process-contention",
+      "expected": "two native Windows processes serialize on one Workspace lock"
+    },
+    {
+      "id": "native-windows-close-release",
+      "expected": "closing a held descriptor releases its byte-range lock for a new process"
+    },
+    {
+      "id": "native-windows-wheel-cli-workspace-demo",
+      "expected": "clean Wheel import, CLI help/version, Workspace init/open/lock, and empty unknown Demo pass"
+    }
+  ],
+  "expected_metrics": {
+    "pass_rate": 100.0,
+    "failed_cases": 0,
+    "native_windows_smoke": "passed",
+    "wheel_import_from_fresh_venv": true,
+    "github_actions_enabled": false
+  }
+}
