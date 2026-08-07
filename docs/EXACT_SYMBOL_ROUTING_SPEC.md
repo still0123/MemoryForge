@@ -2,7 +2,7 @@
 
 ## Status
 
-`PREREGISTERED_DEVELOPMENT_ONLY`
+`DEVELOPMENT_PASSED_REGRESSION_PENDING`
 
 ## Frozen Inputs
 
@@ -114,6 +114,52 @@ Accept this focused routing phase only if:
   lint, type, test, coverage, Wheel, and sdist gates do not regress.
 
 Any failed gate rejects the production integration while retaining the report.
+
+## Development Results
+
+### Candidate 1: Rejected
+
+- Commit:
+  `1cf35d67b5eb53255399dbf3bd0217dfb0937402`
+- Evidence:
+  `demo/results/exact_symbol_routing_candidate_1_rejected.json`
+- Evidence SHA256:
+  `6dad9f745ec4477dbb5990113f043a0cffa47e14cc0ccf1490854100789e89e1`
+- Answer accuracy: 70.0%;
+- page route recall@3: 88.9%;
+- fact selection accuracy: 77.8%;
+- Citation grounding: 88.9%;
+- multi-source coverage: 0.0%.
+
+The exact-symbol subset passed, but unqualified `agent_loop` matched five
+definitions without using the two explicit module contexts. A module Symbol
+also displaced the requested class Fact. The production candidate was not
+accepted.
+
+### Candidate 2: Development Passed
+
+- Commit:
+  `8af4198e8bc625a52c5016f5cd3b19f7c790f653`
+- Evidence:
+  `demo/results/exact_symbol_routing_development.json`
+- Evidence SHA256:
+  `3769f91c17687228f4a509f5b7ecc49b5fa23b10b5cb17fdfe8475d1e770d2b8`
+- Answer accuracy: 90.0%;
+- page route recall@3: 100.0%;
+- Source recall@3: 100.0%;
+- fact selection accuracy: 100.0%;
+- Citation grounding: 100.0%;
+- multi-source coverage: 100.0%;
+- repository path isolation: 100.0%;
+- abstention accuracy: 0.0%.
+
+Candidate 2 adds generic module-context and requested-Symbol-kind
+disambiguation. Both clean development runs produced evaluation SHA256
+`58583d94b3cd97d90b62e38ed50e6c16b6b558be0fb0db07f6c07dc8ba732588`.
+All four exact-symbol cases pass. The unsupported vector-database case remains
+the only failure and is classified `wrong_abstention`.
+
+Confirmation remains `not_run`.
 
 ## Deferred
 
