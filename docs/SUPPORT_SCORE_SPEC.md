@@ -2,7 +2,7 @@
 
 ## Status
 
-`ACCEPTED_DEVELOPMENT_AND_LOCAL_REGRESSION`
+`CANDIDATE_12_IMPLEMENTED_DEVELOPMENT_PENDING`
 
 ## Frozen Inputs
 
@@ -597,6 +597,35 @@ runs.
 Candidate 11 is the accepted development and local-regression result.
 Candidate 10 remains registered as rejected Evidence. Confirmation remains
 `not_run`.
+
+## Candidate 12 Audit Fix
+
+Final static review found one remaining P1: clause validation required all
+terms to occur in one Citation but did not preserve their order. Evidence
+stating `Administrators revoke active sessions` could therefore support the
+inverted claim `Active sessions revoke administrators`.
+
+Parallel review then found five related P1 gaps:
+
+- splitting on conjunctions could assign a subjectless predicate to a different
+  Citation;
+- Agent final validation accepted a strict subset of the Citations required by
+  the original question;
+- snake_case identifiers were split into reusable component terms;
+- ignored work directories inside a repository bypassed clean-worktree gates;
+- registry validation trusted the deterministic replay gate without comparing
+  the recorded run hashes.
+
+Candidate 12 requires answer terms to form an ordered, identifier-preserving,
+morphology-aware subsequence of one Citation; requires the complete verified
+Citation set; keeps coordinated claims intact; requires both work and output
+paths outside source repositories; and independently compares structural and
+evaluation hashes in the accepted Evidence. Cross-language translation remains
+conservative: without a deterministic local translation proof, the Agent must
+quote or paraphrase in the Citation language instead of bypassing the evidence
+gate.
+
+Candidate 12 development is pending. Confirmation remains `not_run`.
 
 ## Forbidden
 

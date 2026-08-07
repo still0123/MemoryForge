@@ -171,3 +171,16 @@ def test_benchmark_registry_rejects_duplicate_support_case_identities() -> None:
         [cases[0] for _ in cases],
         experiment["splits"]["development"],
     )
+
+
+def test_benchmark_registry_recomputes_support_replay_hashes() -> None:
+    evidence = json.loads(
+        (
+            validator.REPO_ROOT / "demo/results/support_score_development_candidate_11.json"
+        ).read_text(encoding="utf-8")
+    )
+    runs = evidence["runs"]
+
+    assert validator._support_runs_are_deterministic(runs)
+    runs[1]["structural_sha256"] = "0" * 64
+    assert not validator._support_runs_are_deterministic(runs)

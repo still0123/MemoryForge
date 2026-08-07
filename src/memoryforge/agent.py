@@ -482,7 +482,7 @@ def _final_answer_is_supported(
         (citation["source_id"], citation["source_version"], citation["locator"])
         for citation in citations
     }
-    return selected <= verified_citations and answer_is_supported(answer, citations)
+    return selected == verified_citations and answer_is_supported(answer, citations)
 
 
 def _json_tool_result(result: AskPayload) -> dict[str, object]:

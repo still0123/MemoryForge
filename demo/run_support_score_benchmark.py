@@ -44,6 +44,7 @@ def main(argv: list[str] | None = None) -> None:
     workdir = args.workdir.resolve()
     output = args.output.resolve()
     _require_external_output(output, REPO_ROOT, source)
+    _require_external_output(workdir, REPO_ROOT, source)
     if workdir.exists() and any(workdir.iterdir()):
         raise SystemExit(f"--workdir must be absent or empty: {workdir}")
 

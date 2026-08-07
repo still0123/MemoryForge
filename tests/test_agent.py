@@ -529,7 +529,7 @@ def test_agent_reads_multiple_citations_within_budget(tmp_path: Path, monkeypatc
                 AgentStep(action="read_evidence", citation_index=1),
                 AgentStep(
                     action="final",
-                    answer="first fact and second fact",
+                    answer="first fact. second fact.",
                     citation_indexes=(0, 1),
                 ),
             ]
@@ -540,6 +540,43 @@ def test_agent_reads_multiple_citations_within_budget(tmp_path: Path, monkeypatc
     assert len(result["citations"]) == 2
     assert len(result["evidence"]) == 2
     assert captured["max_citations"] == 6
+
+
+def test_agent_final_requires_the_complete_verified_citation_set(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    citations = [
+        {
+            "source_id": "a" * 64,
+            "source_version": 1,
+            "locator": "chars:0-8",
+            "quote": "Cache entries expire after sixty seconds.",
+        },
+        {
+            "source_id": "b" * 64,
+            "source_version": 1,
+            "locator": "chars:0-9",
+            "quote": "Administrators revoke active sessions.",
+        },
+    ]
+    monkeypatch.setattr(
+        agent_module,
+        "answer_question",
+        lambda *_args, **_kwargs: {
+            "status": "answered",
+            "citations": citations,
+        },
+    )
+
+    assert not agent_module._final_answer_is_supported(
+        tmp_path,
+        "How do cache expiry and session revocation work?",
+        "Cache entries expire after sixty seconds.",
+        [citations[0]],
+        max_pages=3,
+        repository_id=None,
+    )
 
 
 def test_agent_enforces_three_page_limit(tmp_path: Path, monkeypatch) -> None:

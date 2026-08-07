@@ -653,6 +653,8 @@ def _validate_experiment_payload(
                 or payload.get("development", {}).get("support_threshold") != threshold
             ):
                 raise ValueError("support-score threshold does not match frozen manifest")
+            if not _support_runs_are_deterministic(payload.get("runs")):
+                raise ValueError("support-score deterministic replay Evidence is invalid")
             cases = payload.get("development", {}).get("evaluation", {}).get("cases")
             if (
                 not isinstance(cases, list)
@@ -828,6 +830,30 @@ def _support_case_identities_match(
         if isinstance(case, dict)
     ]
     return actual == expected and len({identity[0] for identity in actual}) == len(actual)
+
+
+def _support_runs_are_deterministic(payload: object) -> bool:
+    if not isinstance(payload, list) or len(payload) != 2:
+        return False
+    expected_keys = {
+        "name",
+        "structural_passed",
+        "structural_sha256",
+        "evaluation_sha256",
+        "metrics",
+    }
+    first, second = payload
+    return (
+        all(isinstance(run, dict) and set(run) == expected_keys for run in payload)
+        and [run["name"] for run in payload] == ["first", "second"]
+        and all(run["structural_passed"] is True for run in payload)
+        and all(
+            SHA256.fullmatch(str(run[key])) is not None
+            for run in payload
+            for key in ("structural_sha256", "evaluation_sha256")
+        )
+        and all(first[key] == second[key] for key in ("structural_sha256", "evaluation_sha256"))
+    )
 
 
 def _validate_repository(suite_id: str, repository: dict[str, Any]) -> None:

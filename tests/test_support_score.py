@@ -370,6 +370,18 @@ def test_agent_answer_requires_each_clause_in_one_citation() -> None:
         "Cache entries expire after sixty seconds. Administrators revoke active sessions.",
         citations,
     )
+    assert not query_module.answer_is_supported(
+        "Active sessions revoke administrators.",
+        [citations[1]],
+    )
+    assert not query_module.answer_is_supported(
+        "Cache entries expire after sixty seconds and revoke active sessions.",
+        citations,
+    )
+    assert not query_module.answer_is_supported(
+        "check_permission",
+        [_citation("check_deny_permission")],
+    )
 
 
 def test_support_benchmark_requires_an_external_output_path(tmp_path: Path) -> None:
