@@ -2,7 +2,7 @@
 
 ## Status
 
-`CANDIDATE_13_DEVELOPMENT_PASSED_REGRESSION_PENDING`
+`ACCEPTED_DEVELOPMENT_AND_LOCAL_REGRESSION`
 
 ## Frozen Inputs
 
@@ -692,7 +692,28 @@ requires the full answer clause to be supported within one evidence segment.
 Candidate 13 retains all accepted development metrics: 100.0% Answer,
 selective, route, Source, fact, Citation, multi-source, abstention, and
 repository-isolation metrics; coverage remains 90.0% and risk remains 0.0%.
-Full local regression is pending. Confirmation remains `not_run`.
+
+## Candidate 13 Full Local Gate
+
+- Gate Commit:
+  `d950911524962e92e050e6a20734fe20d25c7b2a`;
+- acceptance Evidence:
+  `demo/results/support_score_candidate_13_local_gate.json`;
+- acceptance Evidence SHA256:
+  `636ca38fce142e379f2686d2f0be629666eb8221898ea4d1c9e54c22123e0bd6`;
+- Ruff check and format: passed;
+- strict Mypy: passed;
+- registry: 12 release suites, two experiments, 45 Evidence artifacts, and 121
+  QA cases;
+- dependency check: passed;
+- pytest: 481 passed;
+- coverage: 88%;
+- Wheel clean-room: passed;
+- sdist clean-room: passed;
+- `pip check` and CLI version smoke test: passed.
+
+Candidate 13 is the accepted development and local-regression result.
+Confirmation remains `not_run`.
 
 ## Forbidden
 

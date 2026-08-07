@@ -120,9 +120,15 @@ REQUIRED_EXPERIMENT_EVIDENCE = {
         ),
         _RESULTS + "support_score_development_candidate_12.json": (
             12,
-            "accepted_development",
+            "accepted_development_superseded",
             "9f0aa5793ad9cc846795b838922a1c0c9fe91ccce3a856adc4057f4ab38313c6",
             "3b7065856de66b9cf1c74b8f99637a07bfca387f",
+        ),
+        _RESULTS + "support_score_development_candidate_13.json": (
+            13,
+            "accepted_development",
+            "8b1d45c721b4ecf55a25510ee8851b7891474739186f0c428eb7098b0a894b34",
+            "3e20ad8ca0d54fa06fa8ca0aaed4dad959a63009",
         ),
     },
 }
@@ -200,6 +206,11 @@ REQUIRED_ACCEPTANCE_EVIDENCE = {
             _RESULTS + "support_score_candidate_12_local_gate.json",
             "633021bf534670cb78aca392815799d1d1ca60624049fba09fae0796c4122de9",
             "83f39183e68c9d7ebd4c3f8e80e063555cfcb460",
+        ),
+        _RESULTS + "support_score_development_candidate_13.json": (
+            _RESULTS + "support_score_candidate_13_local_gate.json",
+            "636ca38fce142e379f2686d2f0be629666eb8221898ea4d1c9e54c22123e0bd6",
+            "d950911524962e92e050e6a20734fe20d25c7b2a",
         ),
     },
 }

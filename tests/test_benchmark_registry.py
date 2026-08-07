@@ -20,7 +20,7 @@ def test_benchmark_registry_binds_all_release_artifacts() -> None:
         "status": "valid",
         "suite_count": 12,
         "experiment_count": 2,
-        "evidence_count": 45,
+        "evidence_count": 47,
         "qa_case_count": 121,
         "qa_case_types_present": [
             "code_behavior",
@@ -109,7 +109,7 @@ def test_benchmark_registry_rejects_reassigned_acceptance_status(tmp_path: Path)
         if item["suite_id"] == "support-score.learn-claude-code"
     )
     experiment["evidence"][4]["status"] = "accepted_development"
-    experiment["evidence"][11]["status"] = "accepted_development_superseded"
+    experiment["evidence"][12]["status"] = "accepted_development_superseded"
     path = tmp_path / "registry.json"
     path.write_text(json.dumps(registry), encoding="utf-8")
 
