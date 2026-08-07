@@ -13,6 +13,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+from contextlib import suppress
 from pathlib import Path
 from typing import Any, cast
 
@@ -24,6 +25,7 @@ DEVELOPMENT_SHA256 = "0082594121022f6f97b6eae3d4106819794c0b988f531a02e51b9ec219
 CONFIRMATION_SHA256 = "200074acfb79979bf4663b97ae25e9dd62fa0f94359b8aa0d39c4250256660fc"
 TEST_SHA256 = "08601b7effba8271ac318a58a5b0906b934bdeaa4564edcd0ec5738e61618ac3"
 CASE_TIMEOUT_SECONDS = 30
+CLEANUP_TIMEOUT_SECONDS = 5
 _PYTEST_FAILURE_CLASSIFICATIONS = {
     1: "pytest_failure",
     2: "pytest_interrupted",
@@ -194,20 +196,39 @@ def _run_isolated_pytest(
         output, _ = process.communicate(timeout=CASE_TIMEOUT_SECONDS)
     except subprocess.TimeoutExpired:
         _terminate_process_tree(process)
-        process.communicate()
+        try:
+            process.communicate(timeout=CLEANUP_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            with suppress(OSError):
+                process.kill()
+            try:
+                process.communicate(timeout=CLEANUP_TIMEOUT_SECONDS)
+            except subprocess.TimeoutExpired:
+                if process.stdout is not None:
+                    process.stdout.close()
+                with suppress(OSError, subprocess.TimeoutExpired):
+                    process.wait(timeout=CLEANUP_TIMEOUT_SECONDS)
         return -1, "", True
     return process.returncode, output, False
 
 
 def _terminate_process_tree(process: subprocess.Popen[str]) -> None:
     if os.name == "nt":
-        subprocess.run(
-            ["taskkill", "/F", "/T", "/PID", str(process.pid)],
-            check=False,
-            capture_output=True,
-        )
+        try:
+            completed = subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(process.pid)],
+                check=False,
+                capture_output=True,
+                timeout=CLEANUP_TIMEOUT_SECONDS,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            completed = None
+        if (completed is None or completed.returncode != 0) and process.poll() is None:
+            with suppress(OSError):
+                process.kill()
     else:
-        os.killpg(process.pid, signal.SIGKILL)
+        with suppress(ProcessLookupError):
+            os.killpg(process.pid, signal.SIGKILL)
 
 
 def _classify_pytest_result(
@@ -221,15 +242,18 @@ def _classify_pytest_result(
         return "none"
     if timed_out:
         return "pytest_timeout"
-    if "ModuleNotFoundError" in output:
+    collection_error = (
+        "ERROR collecting" in output or "ImportError while importing test module" in output
+    )
+    if collection_error and "ModuleNotFoundError" in output:
         return "pytest_collection_module_not_found"
     if "ImportError while importing test module" in output:
         return "pytest_collection_import_error"
-    if "SyntaxError" in output and "ERROR collecting" in output:
+    if collection_error and "SyntaxError" in output:
         return "pytest_collection_syntax_error"
-    if "ERROR collecting" in output:
+    if collection_error:
         return "pytest_collection_error"
-    if "AssertionError" in output or " failed" in output.lower():
+    if return_code == 1 and "AssertionError" in output:
         return "pytest_assertion_failure"
     return _PYTEST_FAILURE_CLASSIFICATIONS.get(return_code, "pytest_process_error")
 

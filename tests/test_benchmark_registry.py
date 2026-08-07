@@ -314,6 +314,63 @@ def test_benchmark_registry_rejects_loose_cross_platform_json_types() -> None:
         )
 
 
+def test_benchmark_registry_rejects_cross_platform_case_bool_int_aliases() -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "cross-platform-delivery"
+    )
+    artifact = next(item for item in experiment["evidence"] if item["evidence_revision"] == 7)
+    payload = json.loads((validator.REPO_ROOT / artifact["path"]).read_text(encoding="utf-8"))
+    case = payload["development"]["evaluation"]["cases"][0]
+    case["return_code"] = False
+    case["timed_out"] = 0
+    evaluation_sha256 = hashlib.sha256(
+        json.dumps(
+            payload["development"]["evaluation"],
+            sort_keys=True,
+            ensure_ascii=False,
+        ).encode()
+    ).hexdigest()
+    for run in payload["runs"]:
+        run["evaluation_sha256"] = evaluation_sha256
+
+    with pytest.raises(ValueError, match="cross-platform delivery case Evidence changed"):
+        validator._validate_pytest_component_experiment_payload(
+            experiment,
+            artifact,
+            payload,
+            experiment["splits"]["development"],
+            experiment["splits"]["confirmation"],
+        )
+
+
+def test_benchmark_registry_rejects_experiment_split_relabel(tmp_path: Path) -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "cross-platform-delivery"
+    )
+    experiment["evidence"][-1]["split"] = "confirmation"
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps(registry), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="experiment Evidence split changed"):
+        validator.validate_registry(path)
+
+
+def test_benchmark_registry_rejects_float_split_counts(tmp_path: Path) -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "cross-platform-delivery"
+    )
+    experiment["splits"]["development"]["case_count"] = 7.0
+    experiment["splits"]["confirmation"]["case_count"] = 3.0
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps(registry), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="experiment split contract failed"):
+        validator.validate_registry(path)
+
+
 def test_benchmark_registry_rejects_artifact_outside_repository(tmp_path: Path) -> None:
     outside = tmp_path / "outside.json"
     outside.write_text("{}\n", encoding="utf-8")
@@ -402,6 +459,106 @@ def test_benchmark_registry_binds_final_macos_gate_runtime(
             candidate,
             experiment["splits"]["confirmation"],
         )
+
+
+def test_benchmark_registry_binds_final_macos_gate_counts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "cross-platform-delivery"
+    )
+    candidate = next(item for item in experiment["evidence"] if item["evidence_revision"] == 7)
+    acceptance = candidate["acceptance_evidence"]
+    payload = json.loads((validator.REPO_ROOT / acceptance["path"]).read_text(encoding="utf-8"))
+    payload["local_gate"]["pytest"] = {
+        "passed": 1,
+        "failed": 0,
+        "coverage_percent": 0,
+    }
+
+    monkeypatch.setattr(validator.json, "loads", lambda _value: payload)
+    with pytest.raises(ValueError, match="acceptance Evidence contract failed"):
+        validator._validate_acceptance_evidence(
+            experiment,
+            candidate,
+            experiment["splits"]["confirmation"],
+        )
+
+
+def test_benchmark_registry_requires_cross_platform_gate_ancestry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "cross-platform-delivery"
+    )
+    candidate = next(item for item in experiment["evidence"] if item["evidence_revision"] == 7)
+    monkeypatch.setattr(validator, "_git_commit_descends_from", lambda _commit, _ancestor: False)
+
+    with pytest.raises(ValueError, match="acceptance Evidence contract failed"):
+        validator._validate_acceptance_evidence(
+            experiment,
+            candidate,
+            experiment["splits"]["confirmation"],
+        )
+
+
+def test_benchmark_registry_hashes_bound_gate_artifact_bytes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commit = "1" * 40
+    wheel = tmp_path / "memoryforge-0.2.1-py3-none-any.whl"
+    sdist = tmp_path / "memoryforge-0.2.1.tar.gz"
+    provenance = tmp_path / "release-provenance.json"
+    sums = tmp_path / "SHA256SUMS"
+    wheel.write_bytes(b"wheel")
+    sdist.write_bytes(b"sdist")
+    wheel_sha256 = hashlib.sha256(wheel.read_bytes()).hexdigest()
+    sdist_sha256 = hashlib.sha256(sdist.read_bytes()).hexdigest()
+    provenance.write_text(
+        json.dumps(
+            {
+                "memoryforge_commit": commit,
+                "memoryforge_worktree_dirty": False,
+                "package": {
+                    "wheel": wheel.name,
+                    "wheel_sha256": wheel_sha256,
+                    "import_from_fresh_venv": True,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    provenance_sha256 = hashlib.sha256(provenance.read_bytes()).hexdigest()
+    sums.write_text(
+        f"{wheel_sha256}  dist/{wheel.name}\n"
+        f"{sdist_sha256}  dist/{sdist.name}\n"
+        f"{provenance_sha256}  release-provenance.json\n",
+        encoding="ascii",
+    )
+    digests = {
+        "wheel_sha256": wheel_sha256,
+        "sdist_sha256": sdist_sha256,
+        "provenance_sha256": provenance_sha256,
+        "sha256sums_sha256": hashlib.sha256(sums.read_bytes()).hexdigest(),
+    }
+    files = {
+        name: {"path": path.name, "sha256": digests[f"{name}_sha256"]}
+        for name, path in {
+            "wheel": wheel,
+            "sdist": sdist,
+            "provenance": provenance,
+            "sha256sums": sums,
+        }.items()
+    }
+    monkeypatch.setattr(validator, "REPO_ROOT", tmp_path)
+
+    assert validator._validate_bound_gate_artifacts(files, digests, commit)
+    wheel.write_bytes(b"tampered")
+    with pytest.raises(ValueError, match="SHA256 mismatch"):
+        validator._validate_bound_gate_artifacts(files, digests, commit)
 
 
 def test_benchmark_registry_rejects_contradictory_showcase_case_evidence() -> None:

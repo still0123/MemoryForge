@@ -8,6 +8,7 @@ import hashlib
 import importlib.util
 import json
 import re
+import subprocess
 from pathlib import Path
 from typing import Any, cast
 
@@ -819,6 +820,34 @@ CROSS_PLATFORM_MAC_RUNTIME = {
     "python": "3.11.15",
     "hosted_runner": False,
 }
+CROSS_PLATFORM_MAC_GATE_CONTRACTS = {
+    _RESULTS + "cross_platform_delivery_candidate_5_local_gate.json": {
+        "registry_validation": {
+            "suite_count": 12,
+            "experiment_count": 7,
+            "evidence_count": 81,
+            "qa_case_count": 121,
+        },
+        "pytest": {
+            "passed": 544,
+            "failed": 0,
+            "coverage_percent": 88,
+        },
+    },
+    _RESULTS + "cross_platform_delivery_candidate_6_local_gate.json": {
+        "registry_validation": {
+            "suite_count": 12,
+            "experiment_count": 7,
+            "evidence_count": 84,
+            "qa_case_count": 121,
+        },
+        "pytest": {
+            "passed": 547,
+            "failed": 0,
+            "coverage_percent": 88,
+        },
+    },
+}
 MULTI_SOURCE_SUPPORT_REGRESSION = (
     _RESULTS + "support_score_multi_source_coverage_regression.json",
     "631d6aace75de30fa7c68badd8f040163f8480db7b7a40a1eb60eae5fabc0b88",
@@ -1085,7 +1114,9 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
         development_count, _, _ = _suite_cases(development)
         confirmation_count, _, _ = _suite_cases(confirmation)
         if (
-            development_count != development.get("case_count")
+            type(development.get("case_count")) is not int
+            or type(confirmation.get("case_count")) is not int
+            or development_count != development.get("case_count")
             or confirmation_count != confirmation.get("case_count")
             or confirmation.get("status") != "not_run"
             or splits["holdout"] is not None
@@ -1133,6 +1164,8 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
             raise ValueError(f"experiment acceptance Evidence history is missing: {suite_id}")
         for artifact in evidence:
             _validate_artifact(artifact, suite_id)
+            if artifact.get("split") != "development":
+                raise ValueError(f"experiment Evidence split changed: {suite_id}")
             evidence_revision = artifact.get("evidence_revision")
             if (
                 isinstance(evidence_revision, bool)
@@ -1560,7 +1593,7 @@ def _validate_pytest_component_experiment_payload(
             else {key: True for key in FINAL_EXPERIMENT_GATE_KEYS[experiment["suite_id"]]}
         )
         if (
-            cases != expected_cases
+            not _strict_json_value(cases, expected_cases)
             or not _strict_mapping(metrics, expected_metrics)
             or not _strict_mapping(gates, expected_gates)
         ):
@@ -1581,11 +1614,101 @@ def _validate_pytest_component_experiment_payload(
 
 
 def _strict_mapping(actual: object, expected: object) -> bool:
-    if not isinstance(actual, dict) or not isinstance(expected, dict):
-        return False
-    return set(actual) == set(expected) and all(
-        type(actual[key]) is type(value) and actual[key] == value for key, value in expected.items()
+    return (
+        isinstance(actual, dict)
+        and isinstance(expected, dict)
+        and _strict_json_value(actual, expected)
     )
+
+
+def _strict_json_value(actual: object, expected: object) -> bool:
+    if type(actual) is not type(expected):
+        return False
+    if isinstance(expected, dict):
+        return (
+            isinstance(actual, dict)
+            and set(actual) == set(expected)
+            and all(_strict_json_value(actual[key], value) for key, value in expected.items())
+        )
+    if isinstance(expected, list):
+        return (
+            isinstance(actual, list)
+            and len(actual) == len(expected)
+            and all(
+                _strict_json_value(actual_value, expected_value)
+                for actual_value, expected_value in zip(actual, expected, strict=True)
+            )
+        )
+    return actual == expected
+
+
+def _git_commit_descends_from(commit: str, ancestor: str) -> bool:
+    if COMMIT.fullmatch(commit) is None or COMMIT.fullmatch(ancestor) is None:
+        return False
+    return (
+        subprocess.run(
+            ["git", "merge-base", "--is-ancestor", ancestor, commit],
+            cwd=REPO_ROOT,
+            check=False,
+            capture_output=True,
+        ).returncode
+        == 0
+    )
+
+
+def _validate_bound_gate_artifacts(
+    artifact_files: object,
+    artifact_digests: object,
+    gate_commit: str,
+) -> bool:
+    digest_fields = {
+        "wheel": "wheel_sha256",
+        "sdist": "sdist_sha256",
+        "provenance": "provenance_sha256",
+        "sha256sums": "sha256sums_sha256",
+    }
+    if (
+        not isinstance(artifact_files, dict)
+        or set(artifact_files) != set(digest_fields)
+        or not isinstance(artifact_digests, dict)
+    ):
+        return False
+    paths: dict[str, Path] = {}
+    for name, digest_field in digest_fields.items():
+        artifact = artifact_files.get(name)
+        if (
+            not isinstance(artifact, dict)
+            or set(artifact) != {"path", "sha256"}
+            or artifact.get("sha256") != artifact_digests.get(digest_field)
+        ):
+            return False
+        _validate_artifact(artifact, "cross-platform gate artifact")
+        paths[name] = REPO_ROOT / str(artifact["path"])
+
+    provenance = json.loads(paths["provenance"].read_text(encoding="utf-8"))
+    package = provenance.get("package", {}) if isinstance(provenance, dict) else {}
+    if (
+        not isinstance(provenance, dict)
+        or provenance.get("memoryforge_commit") != gate_commit
+        or provenance.get("memoryforge_worktree_dirty") is not False
+        or not isinstance(package, dict)
+        or package.get("wheel") != paths["wheel"].name
+        or package.get("wheel_sha256") != artifact_digests.get("wheel_sha256")
+        or package.get("import_from_fresh_venv") is not True
+    ):
+        return False
+
+    sums: dict[str, str] = {}
+    for line in paths["sha256sums"].read_text(encoding="ascii").splitlines():
+        parts = line.split("  ", 1)
+        if len(parts) != 2 or parts[1] in sums:
+            return False
+        sums[parts[1]] = parts[0]
+    return sums == {
+        f"dist/{paths['wheel'].name}": artifact_digests["wheel_sha256"],
+        f"dist/{paths['sdist'].name}": artifact_digests["sdist_sha256"],
+        "release-provenance.json": artifact_digests["provenance_sha256"],
+    }
 
 
 def _validate_static_showcase_experiment_payload(
@@ -1825,7 +1948,11 @@ def _validate_linux_evidence(
         raise ValueError("cross-platform experiment requires Linux Evidence")
     _validate_artifact(artifact, str(experiment["suite_id"]))
     commit = str(artifact.get("memoryforge_commit"))
-    if COMMIT.fullmatch(commit) is None or artifact.get("passed") is not True:
+    if (
+        COMMIT.fullmatch(commit) is None
+        or artifact.get("passed") is not True
+        or not _git_commit_descends_from(commit, str(development_artifact["memoryforge_commit"]))
+    ):
         raise ValueError("invalid Linux Evidence identity")
     payload = cast(
         dict[str, Any],
@@ -1834,6 +1961,10 @@ def _validate_linux_evidence(
     contract = LINUX_EVIDENCE_CONTRACTS.get(str(artifact["path"]))
     local_gate = payload.get("local_gate")
     runtime = payload.get("runtime")
+    bound_artifacts = isinstance(contract, dict) and contract.get("bound_artifacts") is True
+    expected_local_gate_keys = (
+        LOCAL_GATE_KEYS | {"artifacts"} | ({"artifact_files"} if bound_artifacts else set())
+    )
     if (
         contract is None
         or type(payload.get("schema_version")) is not int
@@ -1857,7 +1988,7 @@ def _validate_linux_evidence(
         or payload.get("memoryforge_worktree_dirty") is not False
         or not _strict_mapping(runtime, contract["runtime"])
         or not isinstance(local_gate, dict)
-        or set(local_gate) != LOCAL_GATE_KEYS | {"artifacts"}
+        or set(local_gate) != expected_local_gate_keys
         or local_gate.get("command") != "scripts/check_local.sh"
         or local_gate.get("ruff_check") != "passed"
         or local_gate.get("ruff_format") != "passed"
@@ -1881,6 +2012,14 @@ def _validate_linux_evidence(
             "sha256sums_sha256",
         }
         or any(SHA256.fullmatch(str(value)) is None for value in local_gate["artifacts"].values())
+        or (
+            bound_artifacts
+            and not _validate_bound_gate_artifacts(
+                local_gate.get("artifact_files"),
+                local_gate.get("artifacts"),
+                commit,
+            )
+        )
         or payload.get("confirmation")
         != {
             "path": confirmation["path"],
@@ -1918,6 +2057,10 @@ def _validate_acceptance_evidence(
         experiment["suite_id"] == "cross-platform-delivery"
         and development_artifact["evidence_revision"] >= 6
     )
+    bound_artifacts = cross_platform_mac and development_artifact["evidence_revision"] >= 8
+    mac_contract = (
+        CROSS_PLATFORM_MAC_GATE_CONTRACTS.get(str(artifact["path"])) if cross_platform_mac else None
+    )
     requires_artifacts = experiment["suite_id"] in {
         "support-score.learn-claude-code",
         "multi-source-coverage-selection",
@@ -1931,7 +2074,11 @@ def _validate_acceptance_evidence(
     )
     if cross_platform_mac:
         expected_payload_keys.add("runtime")
-    expected_local_gate_keys = LOCAL_GATE_KEYS | ({"artifacts"} if requires_artifacts else set())
+    expected_local_gate_keys = (
+        LOCAL_GATE_KEYS
+        | ({"artifacts"} if requires_artifacts else set())
+        | ({"artifact_files"} if bound_artifacts else set())
+    )
     if (
         type(payload.get("schema_version")) is not int
         or payload.get("schema_version") != 1
@@ -1943,7 +2090,25 @@ def _validate_acceptance_evidence(
         or payload.get("memoryforge_worktree_dirty") is not False
         or (
             cross_platform_mac
+            and not _git_commit_descends_from(
+                commit,
+                str(development_artifact["memoryforge_commit"]),
+            )
+        )
+        or (
+            cross_platform_mac
             and not _strict_mapping(payload.get("runtime"), CROSS_PLATFORM_MAC_RUNTIME)
+        )
+        or (
+            cross_platform_mac
+            and (
+                mac_contract is None
+                or not _strict_mapping(
+                    registry_result,
+                    mac_contract["registry_validation"],
+                )
+                or not _strict_mapping(pytest_result, mac_contract["pytest"])
+            )
         )
         or payload.get("development_evidence", {}).get("path") != development_artifact["path"]
         or payload.get("development_evidence", {}).get("sha256") != development_artifact["sha256"]
@@ -1993,6 +2158,14 @@ def _validate_acceptance_evidence(
                     "sha256sums_sha256",
                 }
                 or any(SHA256.fullmatch(str(value)) is None for value in artifacts.values())
+            )
+        )
+        or (
+            bound_artifacts
+            and not _validate_bound_gate_artifacts(
+                local_gate.get("artifact_files"),
+                artifacts,
+                commit,
             )
         )
         or payload.get("confirmation", {}).get("path") != confirmation["path"]

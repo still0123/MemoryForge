@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import errno
+import hashlib
 import math
 import os
 import stat
@@ -82,20 +83,58 @@ def exclusive_workspace_lock(root: Path, lock_path: Path) -> Iterator[None]:
             yield
         return
 
-    if root.parent == root:
-        with _exclusive_posix_directory_lock(root), exclusive_file_lock(lock_path):
-            yield
-        return
+    try:
+        relative_lock = lock_path.relative_to(root)
+        canonical_root = root.resolve(strict=True)
+    except (OSError, ValueError) as exc:
+        raise UnsafeLockFileError("Workspace namespace could not be resolved safely") from exc
     with (
-        _exclusive_posix_directory_lock(root.parent),
-        _exclusive_posix_directory_lock(root),
-        exclusive_file_lock(lock_path),
+        exclusive_posix_directory_lock(canonical_root),
+        exclusive_file_lock(canonical_root / relative_lock),
     ):
         yield
 
 
 @contextmanager
-def _exclusive_posix_directory_lock(path: Path) -> Iterator[None]:
+def exclusive_posix_directory_lock(path: Path) -> Iterator[int]:
+    """Lock one POSIX directory path and its current inode."""
+    if sys.platform == "win32":
+        raise UnsafeLockFileError("POSIX directory locking is unavailable on Windows")
+    try:
+        canonical = path.resolve(strict=True)
+    except OSError as exc:
+        raise UnsafeLockFileError("directory namespace could not be resolved safely") from exc
+    namespace_lock = _posix_namespace_lock_path(canonical)
+    with (
+        exclusive_file_lock(namespace_lock),
+        _exclusive_posix_directory_lock(canonical) as descriptor,
+    ):
+        yield descriptor
+
+
+def _posix_namespace_lock_path(path: Path) -> Path:
+    get_effective_user = getattr(os, "geteuid", None)
+    if get_effective_user is None:
+        raise UnsafeLockFileError("effective user identity is unavailable")
+    user_id = get_effective_user()
+    try:
+        lock_root = Path("/tmp").resolve(strict=True) / f".memoryforge-locks-{user_id}"
+        lock_root.mkdir(mode=0o700, exist_ok=True)
+        metadata = lock_root.stat(follow_symlinks=False)
+    except OSError as exc:
+        raise UnsafeLockFileError("namespace lock directory is unsafe") from exc
+    if (
+        not stat.S_ISDIR(metadata.st_mode)
+        or metadata.st_uid != user_id
+        or stat.S_IMODE(metadata.st_mode) & 0o077
+    ):
+        raise UnsafeLockFileError("namespace lock directory must be private and owner-controlled")
+    digest = hashlib.sha256(os.fsencode(str(path))).hexdigest()
+    return lock_root / f"path-{digest}.lock"
+
+
+@contextmanager
+def _exclusive_posix_directory_lock(path: Path) -> Iterator[int]:
     directory_flag = getattr(os, "O_DIRECTORY", None)
     no_follow_flag = getattr(os, "O_NOFOLLOW", None)
     if directory_flag is None or no_follow_flag is None:
@@ -110,7 +149,7 @@ def _exclusive_posix_directory_lock(path: Path) -> Iterator[None]:
         lock_descriptor(descriptor)
         locked = True
         _require_same_directory(path, descriptor)
-        yield
+        yield descriptor
     finally:
         try:
             if locked:

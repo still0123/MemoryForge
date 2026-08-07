@@ -2,7 +2,7 @@
 
 ## Status
 
-`CANDIDATE_6_LOCAL_GATES_PASS_REVIEW_PENDING`
+`CANDIDATE_6_REVIEW_REJECTED_CANDIDATE_7_PENDING`
 
 ## Base
 
@@ -220,8 +220,8 @@ Linux acceptance:
 - Coverage: 88%
 - Registry at gate: 12 suites / 7 experiments / 81 Evidence / 121 QA
 
-Both gates passed Ruff, format, strict Mypy, dependency checks, Wheel and
-sdist clean-room installs, `pip check`, CLI smoke, and Code Wiki release
+Both gate records reported Ruff, format, strict Mypy, dependency checks, Wheel
+and sdist clean-room installs, `pip check`, CLI smoke, and Code Wiki release
 checks. Both produced byte-identical artifacts:
 
 - Wheel SHA256:
@@ -290,8 +290,30 @@ checks. Both produced byte-identical artifacts:
 - sdist SHA256:
   `eca169f278c89e5499e521e9864679ce796b931746e84ec9c7a09a6b1f68edc0`
 
-Candidate 6 is the accepted development result pending final static review.
-Native Windows confirmation remains frozen at `not_run` and is not claimed.
+## Candidate 6 Final Review
+
+- Result: `REJECTED`
+- Findings: 9 P1, 4 P2
+- Review range: `origin/main...d89ac4578d62c695c1ce3d18c9d86a228851e1f4`
+- Confirmation status: `not_run`
+
+Candidate 6 remains retained but is superseded. Reproduced findings included:
+
+- replacing the Workspace parent or ChangeSet staging directory split POSIX
+  serialization;
+- allowed macOS `/tmp` and `/var` aliases failed at lock acquisition;
+- timeout cleanup could escape or block without a second bound;
+- pytest failure text could misclassify runtime errors as collection failures;
+- macOS acceptance allowed a partial pytest run;
+- gate artifacts were digest strings without retained bytes;
+- gate Commit ancestry, exact JSON types, split counts, and Evidence split were
+  not all enforced;
+- the POSIX gate did not invoke the CLI version command despite recording that
+  smoke as passed.
+
+Candidate 7 fixes these root causes and must rerun development and both local
+gates. Native Windows confirmation remains frozen at `not_run` and is not
+claimed.
 
 ## Goal
 
@@ -320,10 +342,12 @@ local PowerShell and native smoke entry points.
 
 ## Integration Contract
 
-- `Workspace.exclusive_lock` locks the parent namespace, Workspace root, and
-  compatibility lock file on POSIX, and delegates to the lock file on Windows;
-- `ChangeSetStore` serializes mutations by locking its opened staging
-  directory through the platform descriptor API;
+- POSIX path locks use a private, stable per-user namespace key plus the opened
+  directory inode, so path replacement and rename aliases share serialization;
+- `Workspace.exclusive_lock` also locks the compatibility lock file, while
+  Windows delegates directly to that file;
+- `ChangeSetStore` serializes mutations through the same POSIX path-and-inode
+  contract for its opened staging directory;
 - `workspace.py` and `changesets.py` contain no direct platform lock imports;
 - existing Workspace security errors stay fail-closed;
 - no database, SourceVersion, Citation, ChangeSet, or public payload schema

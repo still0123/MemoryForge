@@ -27,7 +27,7 @@ from memoryforge.models import (
     StagedChangeSet,
     StagedWikiFile,
 )
-from memoryforge.platform_lock import lock_descriptor, unlock_descriptor
+from memoryforge.platform_lock import exclusive_posix_directory_lock
 from memoryforge.workspace import Workspace, WorkspaceIntegrityError
 
 CHANGESET_ID_PATTERN = re.compile(r"^chg_[A-Za-z0-9_-]+$")
@@ -562,18 +562,8 @@ class ChangeSetStore:
     @contextmanager
     def _locked_staging(self) -> Iterator[int]:
         self.workspace.validate_internal_directory(self.staging_dir)
-        descriptor = self._open_staging()
-        locked = False
-        try:
-            lock_descriptor(descriptor)
-            locked = True
+        with exclusive_posix_directory_lock(self.staging_dir) as descriptor:
             yield descriptor
-        finally:
-            try:
-                if locked:
-                    unlock_descriptor(descriptor)
-            finally:
-                os.close(descriptor)
 
 
 def _candidate_parts(wiki_path: str) -> tuple[str, ...]:

@@ -60,6 +60,25 @@ def test_isolated_pytest_timeout_terminates_process(
     assert time.monotonic() - started < 2
 
 
+def test_isolated_pytest_timeout_has_bounded_cleanup_fallback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(benchmark, "CASE_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr(benchmark, "CLEANUP_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr(benchmark, "_terminate_process_tree", lambda _process: None)
+    started = time.monotonic()
+
+    return_code, output, timed_out = benchmark._run_isolated_pytest(
+        [sys.executable, "-c", "import time; time.sleep(30)"],
+        cwd=tmp_path,
+        environment=dict(os.environ),
+    )
+
+    assert (return_code, output, timed_out) == (-1, "", True)
+    assert time.monotonic() - started < 2
+
+
 def test_direct_platform_import_count_handles_import_from(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -78,6 +97,7 @@ def test_pytest_failure_classification_preserves_collection_cause() -> None:
     assert (
         benchmark._classify_pytest_result(
             4,
+            "ERROR collecting tests/test_x.py\n"
             "ModuleNotFoundError: No module named 'memoryforge.platform_lock'",
             "failed",
             timed_out=False,
@@ -110,6 +130,24 @@ def test_pytest_failure_classification_preserves_collection_cause() -> None:
             timed_out=False,
         )
         == "pytest_collection_syntax_error"
+    )
+    assert (
+        benchmark._classify_pytest_result(
+            1,
+            "FAILED test_runtime.py::test_import - ModuleNotFoundError: runtime dependency",
+            "failed",
+            timed_out=False,
+        )
+        == "pytest_failure"
+    )
+    assert (
+        benchmark._classify_pytest_result(
+            3,
+            "INTERNALERROR: cleanup failed",
+            "failed",
+            timed_out=False,
+        )
+        == "pytest_internal_error"
     )
 
 
@@ -198,3 +236,34 @@ def test_workspace_lock_is_not_split_by_root_replacement(tmp_path: Path) -> None
             time.sleep(0.05)
             assert not waiting.done()
         waiting.result(timeout=2)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX namespace lock")
+def test_workspace_lock_is_not_split_by_parent_replacement(tmp_path: Path) -> None:
+    namespace = tmp_path / "namespace"
+    workspace = Workspace.initialize(namespace / "workspace")
+
+    def acquire_second() -> None:
+        with workspace.exclusive_lock():
+            pass
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        with workspace.exclusive_lock():
+            namespace.rename(tmp_path / "displaced-namespace")
+            workspace.internal_dir.mkdir(parents=True)
+            waiting = executor.submit(acquire_second)
+            time.sleep(0.05)
+            assert not waiting.done()
+        waiting.result(timeout=2)
+
+
+@pytest.mark.skipif(
+    not Path("/var").is_symlink() or Path("/var").resolve() != Path("/private/var"),
+    reason="macOS /var alias is not present",
+)
+def test_workspace_lock_allows_fixed_macos_system_alias(tmp_path: Path) -> None:
+    alias = Path("/var") / tmp_path.relative_to("/private/var") / "alias-workspace-lock"
+    workspace = Workspace.initialize(alias)
+
+    with workspace.exclusive_lock():
+        pass

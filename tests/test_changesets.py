@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -112,6 +114,25 @@ def test_changeset_store_serializes_on_the_staging_directory(tmp_path: Path) -> 
             assert try_lock_descriptor(contender) is False
         finally:
             os.close(contender)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX directory namespace lock")
+def test_changeset_store_lock_is_not_split_by_staging_replacement(tmp_path: Path) -> None:
+    workspace = Workspace.initialize(tmp_path / "wiki")
+    store = ChangeSetStore(workspace)
+
+    def acquire_second() -> None:
+        with store._locked_staging():
+            pass
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        with store._locked_staging():
+            workspace.staging_dir.rename(workspace.internal_dir / "displaced-staging")
+            workspace.staging_dir.mkdir(mode=0o700)
+            waiting = executor.submit(acquire_second)
+            time.sleep(0.05)
+            assert not waiting.done()
+        waiting.result(timeout=2)
 
 
 def _page_changeset(workspace: Workspace, base_commit: str | None = None) -> ChangeSet:

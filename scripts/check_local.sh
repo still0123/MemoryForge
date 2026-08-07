@@ -77,6 +77,8 @@ if not import_path.is_relative_to(environment):
     raise SystemExit(f"sdist import escaped clean environment: {import_path}")
 print(importlib.metadata.version("memoryforge"))
 PY
+  env -u PYTHONPATH PYTHONNOUSERSITE=1 \
+    "$workdir/sdist/bin/python" -I -m memoryforge --version
 )
 
 "$python" - "$output" <<'PY'

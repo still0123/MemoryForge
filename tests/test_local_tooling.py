@@ -45,6 +45,7 @@ def test_local_check_keeps_the_quality_and_artifact_contract() -> None:
         "env -u PYTHONPATH PYTHONNOUSERSITE=1",
         "-I -m pip check",
         "sdist import escaped clean environment",
+        '"$workdir/sdist/bin/python" -I -m memoryforge --version',
         "hashlib.sha256",
         "SHA256SUMS",
     ):
