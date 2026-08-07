@@ -272,6 +272,12 @@ REQUIRED_EXPERIMENT_EVIDENCE = {
             "1584be87a25356d6189c55a696c35d9b679c4c56c654da261c1caf6d185abb31",
             "79188650e953c6c183b631fd41432e795bde0eaa",
         ),
+        _RESULTS + "cross_platform_delivery_candidate_4.json": (
+            5,
+            "accepted_development_superseded",
+            "198c3654291ba762b591891f894f87c3ebc41764faa8e7e24cfc5c484a4c39cb",
+            "2bb3505ce2c5b32ec1ce6e2b4dcd1a12638cc93f",
+        ),
     },
 }
 STATIC_SHOWCASE_REJECTED_CONTRACTS = {
