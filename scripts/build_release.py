@@ -220,7 +220,7 @@ def _validate_sdist(path: Path) -> None:
 
 
 def _check_sdist_clean_room(sdist: Path, root: Path) -> dict[str, str]:
-    environment = root / "environment"
+    environment = (root / "environment").resolve()
     venv.EnvBuilder(with_pip=True).create(environment)
     python = environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     clean_environment = {
@@ -272,7 +272,10 @@ def _check_sdist_clean_room(sdist: Path, root: Path) -> dict[str, str]:
     )
     import_path = Path(str(probe.get("import_path", ""))).resolve()
     if probe.get("version") != TARGET_VERSION or not import_path.is_relative_to(environment):
-        raise SystemExit("sdist clean-room import escaped or reported the wrong version")
+        raise SystemExit(
+            "sdist clean-room import escaped or reported the wrong version: "
+            f"version={probe.get('version')!r}, import_path={import_path}"
+        )
     if (
         _run(
             [str(python), "-I", "-m", "memoryforge", "--version"],
