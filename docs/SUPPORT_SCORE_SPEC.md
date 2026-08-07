@@ -2,7 +2,7 @@
 
 ## Status
 
-`CANDIDATE_11_DEVELOPMENT_PASSED_REGRESSION_PENDING`
+`ACCEPTED_DEVELOPMENT_AND_LOCAL_REGRESSION`
 
 ## Frozen Inputs
 
@@ -573,7 +573,29 @@ Candidate 11 restores all accepted development metrics:
   metrics: 100.0%.
 
 Both structural and evaluation payloads are deterministic across the two clean
-runs. Candidate 11 full local regression is pending. Confirmation remains
+runs.
+
+## Candidate 11 Full Local Gate
+
+- Gate Commit:
+  `ad67aa09341d451a7661634c0bf714291f0ad452`;
+- acceptance Evidence:
+  `demo/results/support_score_candidate_11_local_gate.json`;
+- acceptance Evidence SHA256:
+  `686f4b799d2f7a07bc7bff0a732ddc538d8a3584e2c8962e17f2da39ac9fbe71`;
+- Ruff check and format: passed;
+- strict Mypy: passed;
+- registry: 12 release suites, two experiments, 40 Evidence artifacts, and 121
+  QA cases;
+- dependency check: passed;
+- pytest: 479 passed;
+- coverage: 88%;
+- Wheel clean-room: passed;
+- sdist clean-room: passed;
+- `pip check` and CLI version smoke test: passed.
+
+Candidate 11 is the accepted development and local-regression result.
+Candidate 10 remains registered as rejected Evidence. Confirmation remains
 `not_run`.
 
 ## Forbidden
