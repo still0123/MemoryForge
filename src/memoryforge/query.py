@@ -133,6 +133,7 @@ def answer_question(
     verify: bool = False,
     max_pages: int = 3,
     max_citations: int = 1,
+    min_source_count: int = 1,
     provider: OpenAICompatibleProvider | None = None,
     allow_local: bool = False,
     repository_id: str | None = None,
@@ -141,6 +142,7 @@ def answer_question(
     """Answer from a bounded set of Wiki pages, expanding raw evidence only on request."""
     _validate_max_pages(max_pages)
     _validate_max_citations(max_citations)
+    _validate_min_source_count(min_source_count)
     base_question_terms = _terms(question)
     question_terms = _expanded_question_terms(base_question_terms)
     identifier_terms = {term for term in base_question_terms if not _CJK.fullmatch(term)}
@@ -365,7 +367,7 @@ def answer_question(
         selected,
         symbol_matches=symbol_matches,
         exact_symbol_fact_keys=exact_symbol_fact_keys,
-        required_citations=max_citations,
+        required_sources=min_source_count,
         code_page_paths=code_page_paths,
         code_page_fact_terms=code_page_fact_terms,
         code_page_identifiers=code_page_identifiers,
@@ -714,7 +716,7 @@ def _support_score(
     *,
     symbol_matches: tuple[AppliedCodeSymbolMatch, ...],
     exact_symbol_fact_keys: set[tuple[str, str, int, str, str]],
-    required_citations: int,
+    required_sources: int,
     code_page_paths: set[str],
     code_page_fact_terms: dict[str, set[str]] | None = None,
     code_page_identifiers: dict[str, set[str]] | None = None,
@@ -756,13 +758,13 @@ def _support_score(
         _citation_fact_key(page_path, citation) for page_path, citation in selected
     }
     selected_identifiers.update(
-        match.identifier.casefold()
+        match.identifier
         for match in symbol_matches
         if _citation_fact_key(match.page_path, match) in selected_fact_keys
     )
     covered_identifier_count = sum(
         any(
-            identifier.casefold() == candidate or identifier.casefold() in candidate.split(".")
+            identifier == candidate or identifier in candidate.split(".")
             for candidate in selected_identifiers
         )
         for identifier in explicit_identifiers
@@ -788,7 +790,7 @@ def _support_score(
         (citation["source_id"], citation["source_version"]) for _, citation in selected
     }
     multi_source_coverage = (
-        min(1.0, len(citation_sources) / required_citations) if required_citations > 1 else 1.0
+        min(1.0, len(citation_sources) / required_sources) if required_sources > 1 else 1.0
     )
     real_workspace = (workspace_root / "raw").is_dir() and (
         workspace_root / ".memoryforge" / "index.sqlite"
@@ -835,7 +837,7 @@ def _support_score(
             failed_hard_gates.append("condition_not_co_located")
         if question_has_negation and not negation_alignment:
             failed_hard_gates.append("negation_not_aligned")
-        if required_citations > 1 and multi_source_coverage < 1:
+        if required_sources > 1 and multi_source_coverage < 1:
             failed_hard_gates.append("multi_source_incomplete")
         if not current_source_versions:
             failed_hard_gates.append("citation_not_current")
@@ -864,7 +866,7 @@ def _has_support_condition(text: str) -> bool:
 
 
 def _code_identifier_tokens(text: str) -> set[str]:
-    return {match.group().casefold() for match in _EXPLICIT_CODE_IDENTIFIER.finditer(text)}
+    return {match.group() for match in _EXPLICIT_CODE_IDENTIFIER.finditer(text)}
 
 
 def _candidate_pages(
@@ -1118,6 +1120,15 @@ def _validate_max_citations(max_citations: int) -> None:
         or not 1 <= max_citations <= 10
     ):
         raise ValueError("max_citations must be an integer between 1 and 10")
+
+
+def _validate_min_source_count(min_source_count: int) -> None:
+    if (
+        isinstance(min_source_count, bool)
+        or not isinstance(min_source_count, int)
+        or not 1 <= min_source_count <= 10
+    ):
+        raise ValueError("min_source_count must be an integer between 1 and 10")
 
 
 def _answer_citation_limit(question: str, max_citations: int) -> int:

@@ -17,7 +17,7 @@ def test_code_support_rejects_topic_only_evidence(tmp_path: Path) -> None:
         [("wiki/pages/code/repository/agent-loop.md", citation)],
         symbol_matches=(),
         exact_symbol_fact_keys=set(),
-        required_citations=1,
+        required_sources=1,
         code_page_paths={"wiki/pages/code/repository/agent-loop.md"},
     )
 
@@ -40,7 +40,7 @@ def test_code_support_accepts_an_exact_signature(tmp_path: Path) -> None:
         [(page_path, citation)],
         symbol_matches=(),
         exact_symbol_fact_keys=set(),
-        required_citations=1,
+        required_sources=1,
         code_page_paths={page_path},
     )
 
@@ -60,7 +60,7 @@ def test_support_requires_aligned_negation(tmp_path: Path) -> None:
         [(page_path, citation)],
         symbol_matches=(),
         exact_symbol_fact_keys=set(),
-        required_citations=1,
+        required_sources=1,
         code_page_paths={page_path},
     )
 
@@ -83,7 +83,7 @@ def test_multi_source_support_requires_distinct_sources(tmp_path: Path) -> None:
         [(page_path, first), (page_path, second)],
         symbol_matches=(),
         exact_symbol_fact_keys=set(),
-        required_citations=2,
+        required_sources=2,
         code_page_paths={page_path},
     )
 
@@ -110,7 +110,7 @@ def test_conditional_support_requires_one_fact_to_cover_both_clauses(tmp_path: P
         ],
         symbol_matches=(),
         exact_symbol_fact_keys=set(),
-        required_citations=1,
+        required_sources=1,
         code_page_paths={page_path},
     )
 
@@ -128,7 +128,7 @@ def test_explicit_identifier_requires_symbol_or_page_fact_coverage(tmp_path: Pat
         [(page_path, _citation("CacheManager manages cache entries."))],
         symbol_matches=(),
         exact_symbol_fact_keys=set(),
-        required_citations=1,
+        required_sources=1,
         code_page_paths={page_path},
         code_page_fact_terms={page_path: query_module._terms("real.CacheManager")},
     )
@@ -147,7 +147,25 @@ def test_explicit_identifier_does_not_match_a_camel_case_suffix(tmp_path: Path) 
         [(page_path, _citation("SkillUpRunnerAdapter runs production."))],
         symbol_matches=(),
         exact_symbol_fact_keys=set(),
-        required_citations=1,
+        required_sources=1,
+        code_page_paths={page_path},
+    )
+
+    assert support["components"]["exact_identifier_coverage"] == 0.0
+    assert "exact_identifier_not_covered" in support["failed_hard_gates"]
+
+
+def test_explicit_identifier_is_case_sensitive(tmp_path: Path) -> None:
+    page_path = "wiki/pages/code/repository/runner.md"
+
+    support = query_module._support_score(
+        tmp_path,
+        "What does `runnerAdapter` return?",
+        query_module._terms("What does `runnerAdapter` return?"),
+        [(page_path, _citation("RunnerAdapter returns a result."))],
+        symbol_matches=(),
+        exact_symbol_fact_keys=set(),
+        required_sources=1,
         code_page_paths={page_path},
     )
 
@@ -165,7 +183,7 @@ def test_all_explicit_identifiers_require_coverage(tmp_path: Path) -> None:
         [(page_path, _citation("RunnerAdapter runs production."))],
         symbol_matches=(),
         exact_symbol_fact_keys=set(),
-        required_citations=1,
+        required_sources=1,
         code_page_paths={page_path},
     )
 
@@ -186,7 +204,7 @@ def test_support_benchmark_validates_complete_and_optional_unknown_payloads() ->
         [("wiki/pages/cache.md", _citation("Cache returns a stored value."))],
         symbol_matches=(),
         exact_symbol_fact_keys=set(),
-        required_citations=1,
+        required_sources=1,
         code_page_paths=set(),
     )
 

@@ -299,8 +299,7 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
                     confirmation,
                 )
             if status == "accepted_development" or (
-                status == "accepted_development_superseded"
-                and "acceptance_evidence" in artifact
+                status == "accepted_development_superseded" and "acceptance_evidence" in artifact
             ):
                 evidence_count += _validate_acceptance_evidence(
                     experiment,

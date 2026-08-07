@@ -228,6 +228,7 @@ def _evaluate_case(
         case.question,
         debug=True,
         max_citations=citation_limit,
+        min_source_count=citation_limit,
         repository_id=repository_scope,
     )
     answer_text = answer["answer"]
