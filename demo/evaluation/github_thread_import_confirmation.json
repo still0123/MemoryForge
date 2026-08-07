@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "suite_id": "github-thread-import-lifecycle",
+  "suite_revision": 1,
+  "split": "confirmation",
+  "status": "not_run",
+  "cases": [
+    {
+      "id": "confirmation-bounded-pagination",
+      "category": "pagination",
+      "scenario": "Import one Issue whose comments require more than one API page.",
+      "expected": "All pages are imported in order without requesting any other repository resource."
+    },
+    {
+      "id": "confirmation-pr-review-deduplication",
+      "category": "pull_request",
+      "scenario": "Import one Pull Request with conversation comments, review bodies, and inline comments.",
+      "expected": "Contributions are deduplicated by kind and ID and sorted deterministically."
+    },
+    {
+      "id": "confirmation-offline-update-stable-identity",
+      "category": "temporal_update",
+      "scenario": "Import an updated saved JSON snapshot with the same canonical thread URL.",
+      "expected": "The source ID remains stable and exactly one new current SourceVersion is created."
+    }
+  ]
+}
