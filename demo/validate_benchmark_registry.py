@@ -299,7 +299,7 @@ REQUIRED_EXPERIMENT_EVIDENCE = {
         ),
         _RESULTS + "cross_platform_delivery_candidate_8.json": (
             9,
-            "accepted_development_superseded",
+            "accepted_development",
             "e86b08906ddd99bf8cf14089cc9e2e873c902d6855c33596c2cc973352f2d106",
             "beb4bd0f41afc804136ce1e96b8b9857d88be30b",
         ),
@@ -486,6 +486,11 @@ REQUIRED_ACCEPTANCE_EVIDENCE = {
             "7d047d5d3a360450c046adf90fcd3165c6bab4a5417c7e2a71ff70b06dba9ed1",
             "569451d7f56d5606e8b000f15e34e04b87cb62a4",
         ),
+        _RESULTS + "cross_platform_delivery_candidate_8.json": (
+            _RESULTS + "cross_platform_delivery_candidate_8_local_gate.json",
+            "99d534741eebb1a10121d753953d420edde8e6381ec454e660a90dba3a338c7d",
+            "04f246f815f0c80f74a3aa20caf5af3a31ff5c92",
+        ),
     },
 }
 REQUIRED_LINUX_EVIDENCE = {
@@ -514,6 +519,11 @@ REQUIRED_LINUX_EVIDENCE = {
             _RESULTS + "cross_platform_delivery_candidate_7_linux_gate.json",
             "263ff1e5ec752d5bb2f18372ee70c6dd3e1f5a6d80ee7719cc15d5ab092a5bc6",
             "569451d7f56d5606e8b000f15e34e04b87cb62a4",
+        ),
+        _RESULTS + "cross_platform_delivery_candidate_8.json": (
+            _RESULTS + "cross_platform_delivery_candidate_8_linux_gate.json",
+            "14553130cb03afaa220a476f5be2d1b170c89afb9fcf74af4730c93a6cae65b6",
+            "04f246f815f0c80f74a3aa20caf5af3a31ff5c92",
         ),
     },
 }
@@ -634,6 +644,30 @@ LINUX_EVIDENCE_CONTRACTS = {
         },
         "bound_artifacts": True,
     },
+    _RESULTS + "cross_platform_delivery_candidate_8_linux_gate.json": {
+        "runtime": {
+            "virtualization": "Lima 2.2.0 local VM",
+            "distribution": "Debian GNU/Linux 12",
+            "kernel": "Linux 6.1.0-50-cloud-arm64",
+            "architecture": "aarch64",
+            "implementation": "CPython",
+            "python": "3.11.2",
+            "hosted_runner": False,
+        },
+        "registry_validation": {
+            "suite_count": 12,
+            "experiment_count": 7,
+            "evidence_count": 90,
+            "qa_case_count": 121,
+        },
+        "pytest": {
+            "passed": 555,
+            "skipped": 3,
+            "failed": 0,
+            "coverage_percent": 88,
+        },
+        "bound_artifacts": True,
+    },
 }
 FINAL_ACCEPTANCE_REGISTRY_COUNTS = {
     "exact-symbol-routing.learn-claude-code": {
@@ -675,7 +709,7 @@ FINAL_ACCEPTANCE_REGISTRY_COUNTS = {
     "cross-platform-delivery": {
         "suite_count": 12,
         "experiment_count": 7,
-        "evidence_count": 87,
+        "evidence_count": 90,
         "qa_case_count": 121,
     },
 }
@@ -914,6 +948,19 @@ CROSS_PLATFORM_MAC_GATE_CONTRACTS = {
         },
         "pytest": {
             "passed": 557,
+            "failed": 0,
+            "coverage_percent": 88,
+        },
+    },
+    _RESULTS + "cross_platform_delivery_candidate_8_local_gate.json": {
+        "registry_validation": {
+            "suite_count": 12,
+            "experiment_count": 7,
+            "evidence_count": 90,
+            "qa_case_count": 121,
+        },
+        "pytest": {
+            "passed": 558,
             "failed": 0,
             "coverage_percent": 88,
         },

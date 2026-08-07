@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "suite_id": "cross-platform-delivery",
+  "suite_revision": 1,
+  "memoryforge_commit": "04f246f815f0c80f74a3aa20caf5af3a31ff5c92",
+  "memoryforge_worktree_dirty": false,
+  "runtime": {
+    "system": "Darwin",
+    "machine": "arm64",
+    "implementation": "CPython",
+    "python": "3.11.15",
+    "hosted_runner": false
+  },
+  "development_evidence": {
+    "path": "demo/results/cross_platform_delivery_candidate_8.json",
+    "sha256": "e86b08906ddd99bf8cf14089cc9e2e873c902d6855c33596c2cc973352f2d106",
+    "memoryforge_commit": "beb4bd0f41afc804136ce1e96b8b9857d88be30b",
+    "passed": true
+  },
+  "local_gate": {
+    "command": "scripts/check_local.sh",
+    "ruff_check": "passed",
+    "ruff_format": "passed",
+    "strict_mypy": "passed",
+    "registry_validation": {
+      "suite_count": 12,
+      "experiment_count": 7,
+      "evidence_count": 90,
+      "qa_case_count": 121
+    },
+    "dependency_check": "passed",
+    "pytest": {
+      "passed": 558,
+      "failed": 0,
+      "coverage_percent": 88
+    },
+    "wheel_clean_room": "passed",
+    "sdist_clean_room": "passed",
+    "pip_check": "passed",
+    "cli_version_smoke": "passed",
+    "artifacts": {
+      "wheel_sha256": "a24702bf8e92ce9fee612b18bff09552ea990ebf94d9492a0b75745657223c4a",
+      "sdist_sha256": "f3c7570e19c10389342508279d80827dd6f091d469bae2cf4eb47da9cf3f365a",
+      "provenance_sha256": "8c7e02ee34384b10b8da9f0edf99e717f822ab7a822b311f6717f0b7e9c2355d",
+      "sha256sums_sha256": "cd431754c0a1ee663788406071e62dfc7d80dd41563ecf5c872ba3445f53ff54"
+    },
+    "artifact_files": {
+      "wheel": {
+        "path": "demo/results/artifacts/cross_platform_delivery_candidate_8/memoryforge-0.2.1-py3-none-any.whl",
+        "sha256": "a24702bf8e92ce9fee612b18bff09552ea990ebf94d9492a0b75745657223c4a"
+      },
+      "sdist": {
+        "path": "demo/results/artifacts/cross_platform_delivery_candidate_8/memoryforge-0.2.1.tar.gz",
+        "sha256": "f3c7570e19c10389342508279d80827dd6f091d469bae2cf4eb47da9cf3f365a"
+      },
+      "provenance": {
+        "path": "demo/results/artifacts/cross_platform_delivery_candidate_8/macos-release-provenance.json",
+        "sha256": "8c7e02ee34384b10b8da9f0edf99e717f822ab7a822b311f6717f0b7e9c2355d"
+      },
+      "sha256sums": {
+        "path": "demo/results/artifacts/cross_platform_delivery_candidate_8/macos-SHA256SUMS",
+        "sha256": "cd431754c0a1ee663788406071e62dfc7d80dd41563ecf5c872ba3445f53ff54"
+      }
+    }
+  },
+  "confirmation": {
+    "path": "demo/evaluation/cross_platform_delivery_confirmation.json",
+    "sha256": "200074acfb79979bf4663b97ae25e9dd62fa0f94359b8aa0d39c4250256660fc",
+    "status": "not_run"
+  },
+  "passed": true
+}
