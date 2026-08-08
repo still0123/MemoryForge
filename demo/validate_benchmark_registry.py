@@ -463,6 +463,12 @@ REQUIRED_EXPERIMENT_EVIDENCE = {
             "cabe2c738be47c5e3d73b371c78a32b1dbaea899f1ce743234327316f67ded0b",
             "63326fb2f123c336c31bcebf68c76c90dfac86e6",
         ),
+        _RESULTS + "release_candidate_development_candidate_10_rejected.json": (
+            11,
+            "rejected",
+            "6a52f9ffda29b8c49dd2e428683294d4d108fee22bebebafec91552f126a8b14",
+            "a4c74bdb8047bb6267955624c7d054d17bb5e722",
+        ),
     },
 }
 RELEASE_CANDIDATE_REJECTED_FAILURES = {
@@ -475,6 +481,9 @@ RELEASE_CANDIDATE_REJECTED_FAILURES = {
     },
     _RESULTS + "release_candidate_development_candidate_4_rejected.json": {
         "release-document-consistency": "release_document_mismatch",
+    },
+    _RESULTS + "release_candidate_development_candidate_10_rejected.json": {
+        "workspace-release-drill": "workspace_drill_failure",
     },
 }
 STATIC_SHOWCASE_REJECTED_CONTRACTS = {
@@ -3195,7 +3204,7 @@ def _git_commit_descends_from(commit: str, ancestor: str) -> bool:
     return (
         subprocess.run(
             ["git", "merge-base", "--is-ancestor", ancestor, commit],
-            cwd=REPO_ROOT,
+            cwd=SOURCE_GIT_ROOT,
             check=False,
             capture_output=True,
         ).returncode

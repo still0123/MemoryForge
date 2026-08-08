@@ -1,10 +1,10 @@
 # v0.3.0 Release Candidate Specification
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=9; platform_gate_candidate=9; platform_gate_status=accepted; review_status=rejected; macos_passed=607; linux_passed=604; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=10; platform_gate_candidate=9; platform_gate_status=accepted; review_status=not_run; macos_passed=607; linux_passed=604; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 ## Status
 
-`LOCAL_GATES_PASSED_REVIEW_REJECTED`
+`DEVELOPMENT_REJECTED`
 
 ## Base
 
@@ -603,6 +603,26 @@ remaining build-environment dependencies, weak package/privacy replay, and
 historical review scopes that were not all recomputed from fixed Commits. All
 14 raw findings, Top 5, fixed scope, HTML, and Markdown reports are retained.
 Candidate 9 does not authorize confirmation.
+
+## Rejected Development Candidate 10
+
+- Evidence:
+  `demo/results/release_candidate_development_candidate_10_rejected.json`
+- Evidence SHA256:
+  `6a52f9ffda29b8c49dd2e428683294d4d108fee22bebebafec91552f126a8b14`
+- MemoryForge Commit:
+  `a4c74bdb8047bb6267955624c7d054d17bb5e722`
+- Result: `REJECTED`
+- Development pass rate: 83.3%
+- Failed case: `workspace-release-drill`
+- Error classification: `workspace_drill_failure`
+- Confirmation status: `not_run`
+- Holdout status: `not_run`
+
+Candidate 10 generated Summary schema 3 and Workspace drill schema 2
+successfully. The development consumer still required the old drill schema 1,
+so the run was rejected at 5/6. The output and all generated artifacts are
+retained; Candidate 10 is not rerun.
 
 ## Confirmation Components
 

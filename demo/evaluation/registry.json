@@ -1263,6 +1263,15 @@
             "passed": false
           },
           "passed": true
+        },
+        {
+          "split": "development",
+          "evidence_revision": 11,
+          "status": "rejected",
+          "path": "demo/results/release_candidate_development_candidate_10_rejected.json",
+          "sha256": "6a52f9ffda29b8c49dd2e428683294d4d108fee22bebebafec91552f126a8b14",
+          "memoryforge_commit": "a4c74bdb8047bb6267955624c7d054d17bb5e722",
+          "passed": false
         }
       ]
     }

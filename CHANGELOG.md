@@ -1,6 +1,6 @@
 # Changelog
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=9; platform_gate_candidate=9; platform_gate_status=accepted; review_status=rejected; macos_passed=607; linux_passed=604; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=10; platform_gate_candidate=9; platform_gate_status=accepted; review_status=not_run; macos_passed=607; linux_passed=604; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 ## v0.3.0 — Release Candidate
 
@@ -50,6 +50,8 @@
   Wheel、sdist 与 raw Code Wiki Evidence 跨平台 SHA256 一致。
 - Candidate 9 静态终审发现 0 P0 / 10 P1 / 4 P2，结果 rejected；全部 14 条与固定 Commit
   范围报告保留，confirmation/holdout 未运行。
+- Candidate 10 development 生成 Summary schema 3 与 Workspace drill schema 2，但旧 consumer
+  仍要求 drill schema 1，结果 5/6 rejected；完整 artifacts 与失败 Evidence 保留。
 - 强化回答准确率契约，要求关键事实和冻结来源同时命中；AgentSkill-Eval 30 题严格 Answer 为
   96.7%，Citation grounding 为 100%，Source recall@3 为 96.2%；
 - 追加独立 Click 20 题复评；回答准确率 5.0%、来源召回 16.7%，再次确认外部有效性缺口；

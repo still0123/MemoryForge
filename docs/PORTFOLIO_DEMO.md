@@ -1,6 +1,6 @@
 # 秋招演示与面试说明
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=9; platform_gate_candidate=9; platform_gate_status=accepted; review_status=rejected; macos_passed=607; linux_passed=604; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=10; platform_gate_candidate=9; platform_gate_status=accepted; review_status=not_run; macos_passed=607; linux_passed=604; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 这份文档用于把 MemoryForge 讲成一个完整项目。演示只使用公开的 `AgentSkill-Eval` 文档，不使用公司代码、真实飞书正文、Token 或 App Secret。
 
@@ -106,6 +106,10 @@ Candidate 9 development 已 6/6 通过：版本探针不再继承 coverage 环�
 incremental 与原始 Evidence 完整绑定。本地门禁为 macOS 607 passed、Linux 604 passed / 3 skipped；
 Wheel、sdist 与 raw Code Wiki Evidence 跨平台同字节。终审发现 0 P0 / 10 P1 / 4 P2，结果
 rejected；14 条发现保留，confirmation 继续关闭。
+
+Candidate 10 已生成完整 Summary schema 3 与可重算的 Workspace drill schema 2；旧 development
+consumer 仍要求 schema 1，故结果为 5/6 rejected。该负结果及全部 artifacts 已保留，未运行
+confirmation/holdout。
 
 随后展示 support-score development：Answer 与 Selective Accuracy 为 100%，Coverage 为 90%，
 Risk 为 0%；同时明确 confirmation 尚未运行。这样可以说明“有正向指标，但不越过冻结 split
