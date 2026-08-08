@@ -12,6 +12,10 @@ else
   python="python3"
 fi
 
+unset PYTHONPATH PYTHONHOME
+export PYTHONNOUSERSITE=1
+export SOURCE_DATE_EPOCH=315532800
+
 output="${1:-$root/local-evidence/$(date -u +%Y%m%dT%H%M%SZ)}"
 if [[ -e "$output" ]]; then
   echo "output already exists: $output" >&2

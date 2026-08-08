@@ -23,6 +23,7 @@ SOURCE_ROOT = REPO_ROOT / "src"
 TARGET_VERSION = "0.3.0"
 CONSTRAINTS = REPO_ROOT / "constraints/dev.txt"
 FORBIDDEN_SDIST_PARTS = ("/demo/results/artifacts/",)
+SOURCE_DATE_EPOCH = "315532800"
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -109,7 +110,10 @@ def _build_release(staging: Path, *, repo_root: Path, commit: str) -> None:
                 str(wheel_check),
             ],
             cwd=repo_root,
-            environment={**os.environ, "PIP_CONSTRAINT": str(constraints)},
+            environment={
+                **_clean_build_environment(),
+                "PIP_CONSTRAINT": str(constraints),
+            },
         )
         wheel_check_payload = _read_json(wheel_check)
         sdist_check = _check_sdist_clean_room(
@@ -193,6 +197,7 @@ def _isolated_build(
     venv.EnvBuilder(with_pip=True).create(environment)
     python = environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     uv = shutil.which("uv")
+    build_environment = _clean_build_environment()
     if uv:
         _run(
             [
@@ -207,6 +212,7 @@ def _isolated_build(
                 "hatchling",
             ],
             cwd=repo_root,
+            environment=build_environment,
         )
     else:
         _run(
@@ -221,6 +227,7 @@ def _isolated_build(
                 "hatchling",
             ],
             cwd=repo_root,
+            environment=build_environment,
         )
     _run(
         [
@@ -234,6 +241,7 @@ def _isolated_build(
             str(destination),
         ],
         cwd=repo_root,
+        environment=build_environment,
     )
     wheel = _single(destination, "memoryforge-*.whl")
     sdist = _single(destination, "memoryforge-*.tar.gz")
@@ -284,6 +292,7 @@ def _check_sdist_clean_room(
     }
     clean_environment["PIP_CONSTRAINT"] = str(constraints)
     clean_environment["PYTHONNOUSERSITE"] = "1"
+    clean_environment["SOURCE_DATE_EPOCH"] = SOURCE_DATE_EPOCH
     _run(
         [
             str(python),
@@ -403,6 +412,15 @@ def _read_json(path: Path) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise SystemExit(f"expected JSON object: {path.name}")
     return payload
+
+
+def _clean_build_environment() -> dict[str, str]:
+    environment = {
+        key: value for key, value in os.environ.items() if key not in {"PYTHONPATH", "PYTHONHOME"}
+    }
+    environment["PYTHONNOUSERSITE"] = "1"
+    environment["SOURCE_DATE_EPOCH"] = SOURCE_DATE_EPOCH
+    return environment
 
 
 def _run(

@@ -1817,9 +1817,11 @@ def _validate_release_candidate_experiment_payload(
         or set(payload.get("development", {})) != {"path", "sha256", "case_count", "evaluation"}
         or payload.get("development", {}).get("path") != development["path"]
         or payload.get("development", {}).get("sha256") != development["sha256"]
+        or type(payload.get("development", {}).get("case_count")) is not int
         or payload.get("development", {}).get("case_count") != development["case_count"]
         or not isinstance(evaluation, dict)
         or set(evaluation) != {"case_count", "metrics", "cases"}
+        or type(evaluation.get("case_count")) is not int
         or evaluation.get("case_count") != development["case_count"]
         or not isinstance(cases, list)
         or [case.get("id") for case in cases if isinstance(case, dict)] != frozen_ids
@@ -1951,7 +1953,13 @@ def _validate_release_development_artifacts(
     expected_root = f"demo/results/artifacts/release_candidate_development/{commit}"
     if payload.get("artifact_root") != expected_root:
         return False
-    root = (REPO_ROOT / expected_root).resolve()
+    declared_root = REPO_ROOT / expected_root
+    cursor = REPO_ROOT
+    for part in Path(expected_root).parts:
+        cursor /= part
+        if cursor.is_symlink():
+            return False
+    root = declared_root.resolve()
     if not root.is_relative_to(REPO_ROOT.resolve()) or not root.is_dir():
         return False
     package = payload.get("package")
@@ -2029,11 +2037,27 @@ def _validate_release_development_artifacts(
         ):
             return False
     expected_files = {
+        "benchmark-summary.json",
+        "release-provenance.json",
+        "workspace-drill.json",
+        str(package["wheel"]),
+        str(package["sdist"]),
+        *(
+            f"reproducibility-{name}-{package[kind]}"
+            for name in ("first", "second")
+            for kind in ("wheel", "sdist")
+        ),
+    }
+    actual_files = {
         path.relative_to(root).as_posix()
         for path in root.rglob("*")
-        if path.is_file() and path.name != "SHA256SUMS"
+        if path.is_file() and path != root / "SHA256SUMS"
     }
-    if set(registered_sums) != expected_files:
+    if (
+        set(registered_sums) != expected_files
+        or actual_files != expected_files
+        or any(path.is_symlink() for path in root.rglob("*"))
+    ):
         return False
     support = {
         "provenance_sha256": root / "release-provenance.json",
@@ -2054,18 +2078,9 @@ def _validate_release_development_artifacts(
     except (OSError, json.JSONDecodeError):
         return False
     return (
-        isinstance(provenance, dict)
-        and provenance.get("memoryforge_commit") == commit
-        and provenance.get("memoryforge_worktree_dirty") is False
-        and _strict_mapping(provenance.get("package"), package)
-        and _strict_json_value(provenance.get("builds"), builds)
-        and isinstance(summary, dict)
-        and summary.get("schema_version") == 1
-        and summary.get("memoryforge_commit") == commit
-        and isinstance(drill, dict)
-        and drill.get("schema_version") == 1
-        and drill.get("memoryforge_commit") == commit
-        and drill.get("passed") is True
+        _release_provenance_contract(provenance, commit, package, builds)
+        and _release_summary_contract(summary, commit)
+        and _release_drill_contract(drill, commit)
     )
 
 
@@ -2091,6 +2106,174 @@ def _read_registered_sha256sums(root: Path) -> dict[str, str] | None:
             return None
         sums[relative] = digest
     return sums
+
+
+def _release_provenance_contract(
+    payload: object,
+    commit: str,
+    package: dict[str, Any],
+    builds: list[Any],
+) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    runtime = payload.get("runtime")
+    checks = payload.get("checks")
+    dependencies = payload.get("dependencies")
+    return (
+        set(payload)
+        == {
+            "schema_version",
+            "memoryforge_commit",
+            "memoryforge_worktree_dirty",
+            "package",
+            "builds",
+            "reproducible_artifacts",
+            "runtime",
+            "checks",
+            "dependencies",
+            "confirmation",
+            "holdout",
+        }
+        and type(payload.get("schema_version")) is int
+        and payload.get("schema_version") == 1
+        and payload.get("memoryforge_commit") == commit
+        and payload.get("memoryforge_worktree_dirty") is False
+        and payload.get("reproducible_artifacts") is True
+        and _strict_mapping(payload.get("package"), package)
+        and _strict_json_value(payload.get("builds"), builds)
+        and isinstance(runtime, dict)
+        and set(runtime) == {"implementation", "python", "system", "machine"}
+        and runtime.get("implementation") == "CPython"
+        and str(runtime.get("python", "")).startswith("3.11.")
+        and all(isinstance(runtime.get(key), str) and runtime[key] for key in ("system", "machine"))
+        and isinstance(checks, dict)
+        and set(checks)
+        == {
+            "wheel_clean_room",
+            "sdist_clean_room",
+            "workspace_drill",
+            "benchmark_summary",
+            "sdist_members",
+        }
+        and _strict_mapping(
+            checks.get("wheel_clean_room"),
+            {
+                "pip_check": "passed",
+                "cli_help": "passed",
+                "cli_version": "passed",
+                "code_wiki_benchmark": "passed",
+                "public_demo": "not_run",
+            },
+        )
+        and _strict_mapping(
+            checks.get("sdist_clean_room"),
+            {
+                "install": "passed",
+                "pip_check": "passed",
+                "import": "passed",
+                "cli_version": "passed",
+            },
+        )
+        and all(
+            checks.get(key) == "passed"
+            for key in ("workspace_drill", "benchmark_summary", "sdist_members")
+        )
+        and isinstance(dependencies, dict)
+        and bool(dependencies)
+        and all(
+            isinstance(key, str) and isinstance(value, str) for key, value in dependencies.items()
+        )
+        and _strict_mapping(payload.get("confirmation"), {"status": "not_run"})
+        and _strict_mapping(payload.get("holdout"), {"status": "not_run"})
+    )
+
+
+def _release_summary_contract(payload: object, commit: str) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    registry = payload.get("registry")
+    return (
+        set(payload)
+        == {
+            "schema_version",
+            "package_version",
+            "memoryforge_commit",
+            "registry",
+            "macro",
+            "suites",
+            "experiments",
+            "negative_results",
+        }
+        and type(payload.get("schema_version")) is int
+        and payload.get("schema_version") == 1
+        and payload.get("package_version") == "0.3.0"
+        and payload.get("memoryforge_commit") == commit
+        and isinstance(registry, dict)
+        and set(registry)
+        == {
+            "status",
+            "suite_count",
+            "experiment_count",
+            "evidence_count",
+            "qa_case_count",
+            "qa_case_types_present",
+            "suite_types",
+        }
+        and registry.get("status") == "valid"
+        and type(registry.get("suite_count")) is int
+        and registry.get("suite_count") == 12
+        and type(registry.get("experiment_count")) is int
+        and registry.get("experiment_count") == 8
+        and type(registry.get("evidence_count")) is int
+        and registry["evidence_count"] > 0
+        and type(registry.get("qa_case_count")) is int
+        and registry.get("qa_case_count") == 121
+        and isinstance(payload.get("macro"), dict)
+        and bool(payload["macro"])
+        and isinstance(payload.get("suites"), list)
+        and len(payload["suites"]) == 12
+        and isinstance(payload.get("experiments"), list)
+        and len(payload["experiments"]) == 8
+        and isinstance(payload.get("negative_results"), list)
+        and bool(payload["negative_results"])
+    )
+
+
+def _release_drill_contract(payload: object, commit: str) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    expected_checks = {
+        key: "passed"
+        for key in {
+            "refresh",
+            "review",
+            "approve",
+            "apply",
+            "lint",
+            "no_pending_ingest",
+            "backup",
+            "restore",
+            "query",
+            "showcase",
+        }
+    }
+    return (
+        set(payload)
+        == {
+            "schema_version",
+            "memoryforge_commit",
+            "checks",
+            "private_detail_leaks",
+            "passed",
+        }
+        and type(payload.get("schema_version")) is int
+        and payload.get("schema_version") == 1
+        and payload.get("memoryforge_commit") == commit
+        and _strict_mapping(payload.get("checks"), expected_checks)
+        and type(payload.get("private_detail_leaks")) is int
+        and payload.get("private_detail_leaks") == 0
+        and payload.get("passed") is True
+    )
 
 
 def _validate_pytest_component_experiment_payload(
@@ -2302,7 +2485,14 @@ def _git_commit_descends_from(commit: str, ancestor: str) -> bool:
 
 
 def _payload_private_detail_leaks(payload: object) -> int:
-    prefixes = ("/Users/", "/home/", "/private/var/", "C:\\Users\\")
+    prefixes = (
+        "/Users/",
+        "/home/",
+        "/private/var/",
+        "/private/tmp/",
+        "/tmp/",
+        "C:\\Users\\",
+    )
     secrets = ("api_key", "token=", "password=", "secret=")
     secret_keys = ("api_key", "token", "password", "secret")
     secret_values = ("sk-", "ghp_", "bearer ")
@@ -2322,7 +2512,7 @@ def _payload_private_detail_leaks(payload: object) -> int:
         elif isinstance(value, str):
             lowered = value.casefold()
             if (
-                any(prefix in value for prefix in prefixes)
+                any(prefix.casefold() in lowered for prefix in prefixes)
                 or any(secret in lowered for secret in secrets)
                 or any(secret in lowered for secret in secret_values)
             ):
@@ -2370,7 +2560,21 @@ def _validate_bound_gate_artifacts(
     package = provenance.get("package", {}) if isinstance(provenance, dict) else {}
     runtime = provenance.get("runtime", {}) if isinstance(provenance, dict) else {}
     checks = provenance.get("checks", {}) if isinstance(provenance, dict) else {}
+    commands = provenance.get("commands") if isinstance(provenance, dict) else None
+    code_wiki = provenance.get("code_wiki") if isinstance(provenance, dict) else None
+    public_demo = provenance.get("public_demo") if isinstance(provenance, dict) else None
+    metrics = code_wiki.get("metrics") if isinstance(code_wiki, dict) else None
+    gates = code_wiki.get("gates") if isinstance(code_wiki, dict) else None
+    incremental = code_wiki.get("incremental") if isinstance(code_wiki, dict) else None
     package_version = package.get("version") if isinstance(package, dict) else None
+    expected_commands = [
+        "python -m pip install <wheel>",
+        "python -m pip check",
+        "python -m memoryforge --help",
+        "python demo/run_code_wiki_benchmark.py",
+    ]
+    if isinstance(checks, dict) and "cli_version" in checks:
+        expected_commands.insert(3, "python -m memoryforge --version")
     if (
         not isinstance(provenance, dict)
         or type(provenance.get("schema_version")) is not int
@@ -2424,6 +2628,42 @@ def _validate_bound_gate_artifacts(
         or checks.get("cli_help") != "passed"
         or checks.get("code_wiki_benchmark") != "passed"
         or any(status not in {"passed", "not_run"} for status in checks.values())
+        or commands != expected_commands
+        or not isinstance(code_wiki, dict)
+        or set(code_wiki) != {"evidence_sha256", "metrics", "gates", "incremental"}
+        or SHA256.fullmatch(str(code_wiki.get("evidence_sha256"))) is None
+        or not isinstance(metrics, dict)
+        or not metrics
+        or any(type(value) not in {int, float} or value != 100.0 for value in metrics.values())
+        or not isinstance(gates, dict)
+        or not gates
+        or any(value is not True for value in gates.values())
+        or not isinstance(incremental, dict)
+        or set(incremental)
+        != {
+            "changed_symbols",
+            "expected_changed_symbols",
+            "changed_pages",
+            "expected_changed_pages",
+            "changed_page_ratio",
+            "max_changed_page_ratio",
+            "stable_symbol_ids",
+            "passed",
+        }
+        or incremental.get("changed_symbols") != incremental.get("expected_changed_symbols")
+        or incremental.get("changed_pages") != incremental.get("expected_changed_pages")
+        or type(incremental.get("changed_page_ratio")) not in {int, float}
+        or type(incremental.get("max_changed_page_ratio")) not in {int, float}
+        or incremental["changed_page_ratio"] > incremental["max_changed_page_ratio"]
+        or incremental.get("stable_symbol_ids") is not True
+        or incremental.get("passed") is not True
+        or not _strict_mapping(
+            public_demo,
+            {
+                "status": "not_run",
+                "required_commit": "93f5dc05229da250b041850ad8deeeec886ef304",
+            },
+        )
     ):
         return False
 
@@ -3329,6 +3569,20 @@ def _validate_release_candidate_acceptance_evidence(
         },
     }
     evidence_revision = development_artifact["evidence_revision"]
+    development_package: dict[str, Any] | None = None
+    if evidence_revision >= 8:
+        try:
+            development_payload = json.loads(
+                (REPO_ROOT / str(development_artifact["path"])).read_text(encoding="utf-8")
+            )
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ValueError(
+                "release-candidate development package Evidence is unreadable"
+            ) from exc
+        candidate_package = development_payload.get("release_artifacts", {}).get("package")
+        if not isinstance(candidate_package, dict):
+            raise ValueError("release-candidate development package Evidence is missing")
+        development_package = candidate_package
     if evidence_revision == 3:
         contracts["macos"]["pytest"] = {
             "passed": 583,
@@ -3518,6 +3772,15 @@ def _validate_release_candidate_acceptance_evidence(
             or local_gate.get("pip_check") != "passed"
             or local_gate.get("cli_version_smoke") != "passed"
             or not _strict_mapping(local_gate.get("artifacts"), contract["artifacts"])
+            or (
+                development_package is not None
+                and (
+                    local_gate.get("artifacts", {}).get("wheel_sha256")
+                    != development_package.get("wheel_sha256")
+                    or local_gate.get("artifacts", {}).get("sdist_sha256")
+                    != development_package.get("sdist_sha256")
+                )
+            )
             or not _validate_bound_gate_artifacts(
                 local_gate.get("artifact_files"),
                 local_gate.get("artifacts"),

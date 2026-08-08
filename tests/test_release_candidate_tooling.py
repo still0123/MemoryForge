@@ -8,6 +8,8 @@ import tarfile
 import zipfile
 from pathlib import Path
 
+import pytest
+
 _SCRIPT = Path(__file__).resolve().parent.parent / "demo/run_release_candidate_benchmark.py"
 _SPEC = importlib.util.spec_from_file_location("run_release_candidate_benchmark", _SCRIPT)
 assert _SPEC and _SPEC.loader
@@ -79,6 +81,23 @@ def test_release_candidate_rejects_incomplete_release_contract(tmp_path: Path) -
     assert benchmark._release_artifact_evidence(tmp_path, "1" * 40)["sha256sums_sha256"] == ""
 
 
+def test_release_candidate_rejects_unlisted_files_and_nested_output(tmp_path: Path) -> None:
+    provenance = _release_artifacts(tmp_path)
+    _write_release_artifacts(tmp_path, provenance)
+    (tmp_path / "unlisted-private.txt").write_text("private", encoding="utf-8")
+
+    assert benchmark._check_reproducible_artifacts(tmp_path)["passed"] is False
+    with pytest.raises(SystemExit, match="outside --release-dir"):
+        benchmark.main(
+            [
+                "--release-dir",
+                str(tmp_path),
+                "--output",
+                str(tmp_path / "evidence.json"),
+            ]
+        )
+
+
 def test_release_candidate_rejects_retained_path_alias(tmp_path: Path) -> None:
     provenance = _release_artifacts(tmp_path)
     provenance["builds"][1]["wheel"]["retained_path"] = (
@@ -139,6 +158,7 @@ def test_release_candidate_privacy_scan_rejects_paths_and_secrets() -> None:
         == 2
     )
     assert benchmark._private_detail_leaks([{"api_key": "sk-live-private-value"}]) == 2
+    assert benchmark._private_detail_leaks([{"path": "/private/tmp/private-workspace"}]) == 1
 
 
 def test_release_document_claims_are_explicit() -> None:

@@ -485,11 +485,84 @@ def test_benchmark_registry_closes_release_development_artifacts(
         artifact["memoryforge_commit"],
         evidence_revision=artifact["evidence_revision"],
     )
+    alternate = destination.parent / "copied-artifacts"
+    destination.rename(alternate)
+    destination.symlink_to(alternate, target_is_directory=True)
+    assert not validator._validate_release_development_artifacts(
+        evidence,
+        artifact["memoryforge_commit"],
+        evidence_revision=artifact["evidence_revision"],
+    )
+    destination.unlink()
+    alternate.rename(destination)
     (destination / "benchmark-summary.json").unlink()
     assert not validator._validate_release_development_artifacts(
         evidence,
         artifact["memoryforge_commit"],
         evidence_revision=artifact["evidence_revision"],
+    )
+
+
+def test_benchmark_registry_rejects_loose_release_case_counts() -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "release-candidate-delivery"
+    )
+    artifact = next(item for item in experiment["evidence"] if item["evidence_revision"] == 7)
+    payload = json.loads((validator.REPO_ROOT / artifact["path"]).read_text(encoding="utf-8"))
+    payload["development"]["case_count"] = 6.0
+    payload["development"]["evaluation"]["case_count"] = 6.0
+    evaluation_sha256 = hashlib.sha256(
+        json.dumps(
+            payload["development"]["evaluation"],
+            sort_keys=True,
+            ensure_ascii=False,
+        ).encode()
+    ).hexdigest()
+    for run in payload["runs"]:
+        run["evaluation_sha256"] = evaluation_sha256
+
+    with pytest.raises(ValueError, match="release-candidate experiment Evidence contract failed"):
+        validator._validate_release_candidate_experiment_payload(
+            experiment,
+            artifact,
+            payload,
+            experiment["splits"]["development"],
+            experiment["splits"]["confirmation"],
+        )
+
+
+def test_benchmark_registry_requires_semantic_release_support() -> None:
+    commit = "1" * 40
+    assert not validator._release_summary_contract(
+        {"schema_version": 1, "memoryforge_commit": commit},
+        commit,
+    )
+    assert not validator._release_drill_contract(
+        {"schema_version": True, "memoryforge_commit": commit, "passed": True},
+        commit,
+    )
+
+
+def test_benchmark_registry_consumes_local_gate_benchmark_provenance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = json.loads(
+        (
+            validator.REPO_ROOT / "demo/results/release_candidate_candidate_6_local_gates.json"
+        ).read_text(encoding="utf-8")
+    )
+    local_gate = payload["platforms"]["macos"]["local_gate"]
+    provenance_path = validator.REPO_ROOT / local_gate["artifact_files"]["provenance"]["path"]
+    provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+    provenance["code_wiki"] = {}
+    monkeypatch.setattr(validator.json, "loads", lambda _value: provenance)
+
+    assert not validator._validate_bound_gate_artifacts(
+        local_gate["artifact_files"],
+        local_gate["artifacts"],
+        payload["memoryforge_commit"],
+        require_clean_sdist=True,
     )
 
 
@@ -808,9 +881,31 @@ def test_benchmark_registry_hashes_bound_gate_artifact_bytes(
                     "code_wiki_benchmark": "passed",
                     "public_demo": "not_run",
                 },
-                "commands": [],
-                "code_wiki": {},
-                "public_demo": {"status": "not_run"},
+                "commands": [
+                    "python -m pip install <wheel>",
+                    "python -m pip check",
+                    "python -m memoryforge --help",
+                    "python demo/run_code_wiki_benchmark.py",
+                ],
+                "code_wiki": {
+                    "evidence_sha256": "1" * 64,
+                    "metrics": {"deterministic_replay": 100.0},
+                    "gates": {"deterministic": True},
+                    "incremental": {
+                        "changed_symbols": [],
+                        "expected_changed_symbols": [],
+                        "changed_pages": [],
+                        "expected_changed_pages": [],
+                        "changed_page_ratio": 0.0,
+                        "max_changed_page_ratio": 0.0,
+                        "stable_symbol_ids": True,
+                        "passed": True,
+                    },
+                },
+                "public_demo": {
+                    "status": "not_run",
+                    "required_commit": "93f5dc05229da250b041850ad8deeeec886ef304",
+                },
             }
         ),
         encoding="utf-8",

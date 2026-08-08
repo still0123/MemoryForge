@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import io
 import tarfile
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -24,6 +25,27 @@ release_builder = _module("build_release", "scripts/build_release.py")
 
 def test_release_builder_reads_version_from_current_source() -> None:
     assert release_builder._source_cli_version() == "0.3.0"
+
+
+def test_release_package_inputs_and_build_environment_are_stable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = tomllib.loads(
+        (Path(__file__).resolve().parent.parent / "pyproject.toml").read_text(encoding="utf-8")
+    )
+    assert project["project"]["readme"] == "PACKAGE_README.md"
+    assert project["tool"]["hatch"]["build"]["targets"]["sdist"]["include"] == [
+        "/PACKAGE_README.md",
+        "/pyproject.toml",
+        "/src",
+    ]
+    monkeypatch.setenv("PYTHONPATH", "/private/tmp/untrusted")
+    monkeypatch.setenv("PYTHONHOME", "/private/tmp/untrusted")
+    environment = release_builder._clean_build_environment()
+    assert "PYTHONPATH" not in environment
+    assert "PYTHONHOME" not in environment
+    assert environment["PYTHONNOUSERSITE"] == "1"
+    assert environment["SOURCE_DATE_EPOCH"] == "315532800"
 
 
 def test_benchmark_summary_reports_macro_per_suite_and_negatives() -> None:
@@ -113,6 +135,11 @@ def test_workspace_release_drill_measures_showcase_privacy(tmp_path: Path) -> No
     )
 
     assert workspace_drill._showcase_private_detail_leaks(showcase) == 2
+    (showcase / "showcase.json").write_text(
+        '{"path": "C:\\\\Users\\\\private\\\\workspace"}',
+        encoding="utf-8",
+    )
+    assert workspace_drill._showcase_private_detail_leaks(showcase) == 3
 
 
 def test_release_builder_rejects_nested_artifacts(tmp_path: Path) -> None:

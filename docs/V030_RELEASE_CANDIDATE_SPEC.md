@@ -1,10 +1,10 @@
 # v0.3.0 Release Candidate Specification
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=6; platform_gate_candidate=6; platform_gate_status=accepted; review_status=rejected; macos_passed=594; linux_passed=591; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=7; platform_gate_candidate=6; platform_gate_status=accepted; review_status=pending; macos_passed=594; linux_passed=591; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 ## Status
 
-`LOCAL_GATES_ACCEPTED_FINAL_REVIEW_REJECTED`
+`CANDIDATE_7_PREPARED_DEVELOPMENT_PENDING`
 
 ## Base
 
@@ -217,9 +217,12 @@ confirmation.
 - Confirmation status: `not_run`
 - Holdout status: `not_run`
 
-Candidate 3 retains both isolated build outputs, binds a structured release
-claim across public documents, rejects non-executed clean-room checks, scans
-secret-bearing provenance keys, and rechecks summary source identity.
+Candidate 3 binds a structured release claim across public documents, rejects
+non-executed clean-room checks, scans secret-bearing provenance keys, and
+rechecks summary source identity. Its development Evidence did not register
+both isolated build byte sets, so that historical reproducibility claim is not
+independently verifiable. Candidate 6 final-review Evidence retains this
+negative audit finding.
 
 ## Accepted Candidate 3 Local Gates
 
@@ -379,6 +382,15 @@ consumers for retained support JSON, local-gate benchmark provenance, path
 ownership, privacy, and strict JSON types. Raw findings and the Top 5 report
 remain under `demo/results/artifacts/release_candidate_review_candidate_6/`.
 Candidate 6 no longer authorizes confirmation.
+
+## Candidate 7 Preparation
+
+Candidate 7 uses a stable package README, an explicit minimal sdist include
+set, and a fixed `SOURCE_DATE_EPOCH`. Evidence, Registry, tests, and release
+status documents can therefore be appended after development without changing
+the Wheel/sdist bytes. Its acceptance contract requires macOS and Linux
+local-gate artifact hashes to equal the development artifact hashes.
+Development has not run.
 
 ## Confirmation Components
 

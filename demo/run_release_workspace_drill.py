@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import shutil
@@ -205,16 +206,37 @@ def _showcase_private_detail_leaks(
     *,
     forbidden_paths: tuple[str, ...] = (),
 ) -> int:
-    prefixes = ("/Users/", "/home/", "/private/var/", "C:\\Users\\", *forbidden_paths)
+    prefixes = (
+        "/Users/",
+        "/home/",
+        "/private/var/",
+        "/private/tmp/",
+        "/tmp/",
+        "C:\\Users\\",
+        *forbidden_paths,
+    )
     secrets = ("api_key=", "token=", "password=", "secret=", "sk-", "ghp_", "bearer ")
     leaks = 0
+
+    def strings(value: object) -> list[str]:
+        if isinstance(value, dict):
+            return [text for key, item in value.items() for text in (str(key), *strings(item))]
+        if isinstance(value, list):
+            return [text for item in value for text in strings(item)]
+        return [value] if isinstance(value, str) else []
+
     for path in root.rglob("*"):
         if not path.is_file():
             continue
         text = path.read_bytes().decode("utf-8", errors="replace")
-        lowered = text.casefold()
-        leaks += sum(prefix in text for prefix in prefixes if prefix)
-        leaks += sum(secret in lowered for secret in secrets)
+        values = [text]
+        if path.suffix == ".json":
+            with contextlib.suppress(json.JSONDecodeError):
+                values = strings(json.loads(text))
+        for value in values:
+            lowered = value.casefold()
+            leaks += sum(prefix.casefold() in lowered for prefix in prefixes if prefix)
+            leaks += sum(secret in lowered for secret in secrets)
     return leaks
 
 

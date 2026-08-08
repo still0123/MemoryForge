@@ -70,7 +70,7 @@ DOCUMENT_CLAIMS = {
         "原生 Windows confirmation",
     ),
     DOCUMENTS[4]: (
-        "LOCAL_GATES_ACCEPTED_FINAL_REVIEW_REJECTED",
+        "CANDIDATE_7_PREPARED_DEVELOPMENT_PENDING",
         "594 passed",
         "591 passed, 3 skipped",
         "Confirmation status: `not_run`",
@@ -79,8 +79,8 @@ DOCUMENT_CLAIMS = {
 }
 RELEASE_CLAIM_MARKER = (
     "<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; "
-    "active_candidate=6; platform_gate_candidate=6; platform_gate_status=accepted; "
-    "review_status=rejected; "
+    "active_candidate=7; platform_gate_candidate=6; platform_gate_status=accepted; "
+    "review_status=pending; "
     "macos_passed=594; linux_passed=591; linux_skipped=3; "
     "windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->"
 )
@@ -150,6 +150,8 @@ def main(argv: list[str] | None = None) -> None:
     output = args.output.resolve()
     if output.is_relative_to(REPO_ROOT) or release_dir.is_relative_to(REPO_ROOT):
         raise SystemExit("release inputs and output must remain outside the repository")
+    if output == release_dir or output.is_relative_to(release_dir):
+        raise SystemExit("--output must remain outside --release-dir")
     release_dir.mkdir(parents=True, exist_ok=True)
     memoryforge_commit = _git("rev-parse", "HEAD")
     if _git("status", "--porcelain"):
@@ -369,9 +371,15 @@ def _check_reproducible_artifacts(release_dir: Path) -> dict[str, object]:
             for record in (build["wheel"], build["sdist"])
         ),
     }
+    actual_files = {
+        path.relative_to(release_dir).as_posix()
+        for path in release_dir.rglob("*")
+        if path.is_file() and path != release_dir / "SHA256SUMS"
+    }
     passed = (
         identities[0] == identities[1]
         and set(sums) == expected_files
+        and actual_files == expected_files
         and all(SHA256.fullmatch(str(value)) is not None for value in identities[0])
         and isinstance(package, dict)
         and package.get("version") == TARGET_VERSION
@@ -388,7 +396,16 @@ def _check_workspace_drill(release_dir: Path) -> dict[str, object]:
     drill = _load_json(release_dir / "workspace-drill.json")
     checks = drill.get("checks")
     passed = (
-        drill.get("schema_version") == 1
+        set(drill)
+        == {
+            "schema_version",
+            "memoryforge_commit",
+            "checks",
+            "private_detail_leaks",
+            "passed",
+        }
+        and type(drill.get("schema_version")) is int
+        and drill.get("schema_version") == 1
         and drill.get("memoryforge_commit") == _git("rev-parse", "HEAD")
         and isinstance(checks, dict)
         and set(checks) == WORKSPACE_CHECKS
@@ -642,7 +659,14 @@ def _check_splits_closed(
 
 
 def _private_detail_leaks(payloads: list[dict[str, Any]]) -> int:
-    prefixes = ("/Users/", "/home/", "/private/var/", "C:\\Users\\")
+    prefixes = (
+        "/Users/",
+        "/home/",
+        "/private/var/",
+        "/private/tmp/",
+        "/tmp/",
+        "C:\\Users\\",
+    )
     secrets = ("api_key", "token=", "password=", "secret=")
     secret_keys = ("api_key", "token", "password", "secret")
     secret_values = ("sk-", "ghp_", "bearer ")
@@ -661,7 +685,7 @@ def _private_detail_leaks(payloads: list[dict[str, Any]]) -> int:
         elif isinstance(value, str):
             lowered = value.casefold()
             if (
-                any(prefix in value for prefix in prefixes)
+                any(prefix.casefold() in lowered for prefix in prefixes)
                 or any(secret in lowered for secret in secrets)
                 or any(secret in lowered for secret in secret_values)
             ):

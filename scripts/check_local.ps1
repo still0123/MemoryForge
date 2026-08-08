@@ -17,6 +17,11 @@ if ($env:PYTHON_BIN) {
     $Python = $PythonCommand.Source
 }
 
+Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
+Remove-Item Env:PYTHONHOME -ErrorAction SilentlyContinue
+$env:PYTHONNOUSERSITE = "1"
+$env:SOURCE_DATE_EPOCH = "315532800"
+
 if (-not $Output) {
     $Timestamp = (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
     $Output = Join-Path $Root "local-evidence\$Timestamp"
