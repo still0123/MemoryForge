@@ -1,0 +1,18 @@
+{
+  "checks": {
+    "apply": "passed",
+    "approve": "passed",
+    "backup": "passed",
+    "lint": "passed",
+    "no_pending_ingest": "passed",
+    "query": "passed",
+    "refresh": "passed",
+    "restore": "passed",
+    "review": "passed",
+    "showcase": "passed"
+  },
+  "memoryforge_commit": "2451f2dae8845b490db1cb46727c7828f0d227f7",
+  "passed": true,
+  "private_detail_leaks": 0,
+  "schema_version": 1
+}

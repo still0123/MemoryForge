@@ -44,12 +44,14 @@ DOCUMENT_CLAIMS = {
     DOCUMENTS[0]: (
         "v0.3.0",
         "10% / 0%",
+        "Candidate 8 development",
         "599 passed",
         "596 passed / 3 skipped",
         "原生 Windows confirmation 未运行",
     ),
     DOCUMENTS[1]: (
         "v0.3.0 — Release Candidate",
+        "Candidate 8 development",
         "599 passed",
         "596 passed / 3 skipped",
         "原生 Windows confirmation",
@@ -58,6 +60,7 @@ DOCUMENT_CLAIMS = {
     DOCUMENTS[2]: (
         "v0.3.0 RC",
         "10%/0%",
+        "Candidate 8 development",
         "599 passed",
         "596 passed / 3 skipped",
         "不等于原生 Windows confirmation",
@@ -65,12 +68,13 @@ DOCUMENT_CLAIMS = {
     DOCUMENTS[3]: (
         "release candidate",
         "10%/0%",
+        "Candidate 8",
         "599 passed",
         "596 passed / 3 skipped",
         "原生 Windows confirmation",
     ),
     DOCUMENTS[4]: (
-        "LOCAL_GATES_PASSED_REVIEW_REJECTED",
+        "DEVELOPMENT_PASSED_LOCAL_GATES_PENDING",
         "599 passed",
         "596 passed, 3 skipped",
         "Confirmation status: `not_run`",
@@ -79,8 +83,8 @@ DOCUMENT_CLAIMS = {
 }
 RELEASE_CLAIM_MARKER = (
     "<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; "
-    "active_candidate=7; platform_gate_candidate=7; platform_gate_status=accepted; "
-    "review_status=rejected; "
+    "active_candidate=8; platform_gate_candidate=7; platform_gate_status=accepted; "
+    "review_status=pending; "
     "macos_passed=599; linux_passed=596; linux_skipped=3; "
     "windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->"
 )

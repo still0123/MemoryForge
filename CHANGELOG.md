@@ -1,6 +1,6 @@
 # Changelog
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=7; platform_gate_candidate=7; platform_gate_status=accepted; review_status=rejected; macos_passed=599; linux_passed=596; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=8; platform_gate_candidate=7; platform_gate_status=accepted; review_status=pending; macos_passed=599; linux_passed=596; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 ## v0.3.0 — Release Candidate
 
@@ -38,6 +38,8 @@
   coverage 均为 88%；两端 Wheel/sdist 与 development 制品逐字节一致。
 - Candidate 7 静态终审发现 0 P0 / 10 P1 / 3 P2，结果 rejected；原始 13 条、Top 5 与固定
   Commit 范围报告均保留。
+- Candidate 8 development 6/6；固定 checkout EOL，闭合 Summary/manifest/case identity，
+  拒绝 symlink，并真实验证 Workspace answer、Citation、unknown 与 backup/restore replay。
 - 强化回答准确率契约，要求关键事实和冻结来源同时命中；AgentSkill-Eval 30 题严格 Answer 为
   96.7%，Citation grounding 为 100%，Source recall@3 为 96.2%；
 - 追加独立 Click 20 题复评；回答准确率 5.0%、来源召回 16.7%，再次确认外部有效性缺口；

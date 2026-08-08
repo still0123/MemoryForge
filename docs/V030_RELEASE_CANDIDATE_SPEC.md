@@ -1,10 +1,10 @@
 # v0.3.0 Release Candidate Specification
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=7; platform_gate_candidate=7; platform_gate_status=accepted; review_status=rejected; macos_passed=599; linux_passed=596; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=8; platform_gate_candidate=7; platform_gate_status=accepted; review_status=pending; macos_passed=599; linux_passed=596; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 ## Status
 
-`LOCAL_GATES_PASSED_REVIEW_REJECTED`
+`DEVELOPMENT_PASSED_LOCAL_GATES_PENDING`
 
 ## Base
 
@@ -465,6 +465,33 @@ review ranges that depended on movable refs. Raw 13 findings, Top 5, fixed
 review scope, HTML, and Markdown reports remain under
 `demo/results/artifacts/release_candidate_review_candidate_7/`. Candidate 7
 does not authorize confirmation.
+
+## Accepted Development Candidate 8
+
+- Evidence: `demo/results/release_candidate_development_candidate_8.json`
+- Evidence SHA256:
+  `37b0270bba89da81815f2ac00fbeec10e766c8a16436e28ab1e7a2fd449afe83`
+- MemoryForge Commit:
+  `2451f2dae8845b490db1cb46727c7828f0d227f7`
+- Result: `DEVELOPMENT_PASSED_GATE_PENDING`
+- Development pass rate: 100.0%
+- Failed cases: 0
+- Reproducible Wheel/sdist: true
+- Private detail leaks: 0
+- Confirmation status: `not_run`
+- Holdout status: `not_run`
+- Wheel SHA256:
+  `fd3a0ab7cd24e5148408250a220db44eb378ff705770593784c17ec687878096`
+- sdist SHA256:
+  `2cbe617826ce0b9b7e2bd3da66f22bb7b5c05cd894426d80ee1d47a140ac7a05`
+
+Candidate 8 fixes all 13 Candidate 7 review findings: checkout EOL is
+frozen, retained summaries are rebuilt from fixed Registry snapshots,
+confirmation counts come from hashed cases, Summary schema 2 binds acceptance
+and negative Commit identities, release symlinks are rejected, Workspace
+answer/Citation/unknown/replay checks are real, and historical review scopes
+are fixed by immutable Commit sidecars. Local gates and final review remain
+pending; confirmation stays closed.
 
 ## Confirmation Components
 

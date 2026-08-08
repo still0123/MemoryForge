@@ -378,6 +378,12 @@ REQUIRED_EXPERIMENT_EVIDENCE = {
             "337393de3ea54605055fd08f29fa92679ca3db52470879080cc0c92c5dd5ff10",
             "80b111bbd472cacd16ceb773a4c141e70ee97a4a",
         ),
+        _RESULTS + "release_candidate_development_candidate_8.json": (
+            9,
+            "development_passed_gate_pending",
+            "37b0270bba89da81815f2ac00fbeec10e766c8a16436e28ab1e7a2fd449afe83",
+            "2451f2dae8845b490db1cb46727c7828f0d227f7",
+        ),
     },
 }
 RELEASE_CANDIDATE_REJECTED_FAILURES = {
@@ -1543,6 +1549,7 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
         allowed_statuses = {
             "rejected",
             "development_passed_regression_failed",
+            "development_passed_gate_pending",
             "accepted_development_superseded",
             "accepted_development",
         }
@@ -2010,6 +2017,7 @@ def _validate_release_candidate_experiment_payload(
             "accepted_development",
             "accepted_development_superseded",
             "development_passed_regression_failed",
+            "development_passed_gate_pending",
         }
         or artifact["passed"] is not True
         or not _strict_mapping(metrics, experiment["expected_metrics"]["development"])
