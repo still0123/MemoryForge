@@ -81,7 +81,7 @@ def test_benchmark_summary_reports_macro_per_suite_and_negatives() -> None:
         "8d9fe33359b71ac0b86b6fa42b0bc5ee34080126af3ae0b9bf2fa2c0121cf2a6"
     )
     assert release["repositories"][0]["commit"] == ("4d834679ec61355e285fb36a0cceef8f489a9083")
-    assert release["evidence"][-1]["status"] == "development_passed_gate_pending"
+    assert release["evidence"][-1]["status"] == "local_gates_passed_review_pending"
     assert all(
         set(accepted) == {"status", "development", "acceptance"}
         and len(accepted["development"]["memoryforge_commit"]) == 40

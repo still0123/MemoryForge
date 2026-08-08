@@ -1,10 +1,10 @@
 # v0.3.0 Release Candidate Specification
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=11; platform_gate_candidate=9; platform_gate_status=accepted; review_status=pending; macos_passed=607; linux_passed=604; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=11; platform_gate_candidate=11; platform_gate_status=accepted; review_status=pending; macos_passed=609; linux_passed=606; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 ## Status
 
-`DEVELOPMENT_PASSED_LOCAL_GATES_PENDING`
+`LOCAL_GATES_PASSED_REVIEW_PENDING`
 
 ## Base
 
@@ -647,7 +647,28 @@ Candidate 11 uses one schema-aware consumer for retained Workspace Evidence.
 Summary schema 3 binds repository, development split, expected metrics, and all
 Evidence identities; drill schema 2 retains exact query, Citation, unknown,
 case metrics, and backup/restore replay. Local gates and final review remain
-pending; confirmation stays closed.
+recorded below; final review remains pending and confirmation stays closed.
+
+## Accepted Candidate 11 Local Gates
+
+- Evidence: `demo/results/release_candidate_candidate_11_local_gates.json`
+- Evidence SHA256:
+  `c9b61fbc81951aa87944e2866a2693c97838b40b26fea3baed7ff92383f539a3`
+- Gate Commit:
+  `ee298f07a66c4889b999752fb07555993c16716c`
+- macOS: 609 passed, 0 skipped, coverage 88%
+- Debian 12 / Lima: 606 passed, 3 skipped, coverage 88%
+- Registry at gate time: 12 suites, 8 experiments, 123 Evidence, 121 QA
+- Wheel SHA256:
+  `fd3a0ab7cd24e5148408250a220db44eb378ff705770593784c17ec687878096`
+- sdist SHA256:
+  `2cbe617826ce0b9b7e2bd3da66f22bb7b5c05cd894426d80ee1d47a140ac7a05`
+- raw Code Wiki Evidence SHA256:
+  `5421009566d32b77cd0aee34e1f5bf23ddfb9ebd7cad0b6932d9c38d7a84a001`
+
+Both platforms passed the complete local gate. Wheel, sdist, and raw Code Wiki
+Evidence bytes match across platforms; each retained SHA256SUMS replays in
+place. Final static review remains required before acceptance.
 
 ## Confirmation Components
 
