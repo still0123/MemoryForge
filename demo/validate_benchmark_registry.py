@@ -350,7 +350,7 @@ REQUIRED_EXPERIMENT_EVIDENCE = {
         ),
         _RESULTS + "release_candidate_development_candidate_6.json": (
             7,
-            "accepted_development",
+            "development_passed_regression_failed",
             "8d1f1a07f218581048e3860556e12dea0a900f2189876f28265afeffbf8093a3",
             "9a6c145a3f052c78b47c4d8f882d4a3191c4a2f4",
         ),
@@ -444,6 +444,11 @@ REQUIRED_REGRESSION_EVIDENCE = {
             _RESULTS + "release_candidate_candidate_5_static_review_rejected.json",
             "7973225fac1123040b93674bbcb2d5df38872229772e9711015af064cbd39913",
             "26767333bc20a6367bc87f239cdc956cd40e7f4e",
+        ),
+        _RESULTS + "release_candidate_development_candidate_6.json": (
+            _RESULTS + "release_candidate_candidate_6_static_review_rejected.json",
+            "cc3ae3f9a5f99f5d420e2b4cfce1f12cc260b46d99b03b34f93632f5c47dcacc",
+            "9588c2fb6a41225515165f0114ce61f23f51d921",
         ),
     },
 }
@@ -2707,6 +2712,7 @@ def _validate_release_sdist_regression(
     if payload.get("candidate") in {
         "release-development-candidate-2",
         "release-development-candidate-5",
+        "release-development-candidate-6",
     }:
         return _validate_release_static_review_regression(
             experiment,
@@ -2881,6 +2887,73 @@ def _validate_release_static_review_regression(
             "fix": (
                 "Build from a fixed source snapshot and enforce exact package, provenance, "
                 "SHA256SUMS, summary, artifact, Commit, document, privacy, and JSON type contracts."
+            ),
+        }
+        for artifact in expected_review["artifacts"].values():
+            _validate_artifact(artifact, "release-candidate static review")
+        review_ancestry_valid = _git_commit_descends_from(
+            commit,
+            development_artifact["memoryforge_commit"],
+        )
+    elif candidate == "release-development-candidate-6":
+        expected_review = {
+            "scope": "origin/main...HEAD",
+            "status": "failed",
+            "p0": 0,
+            "p1": 9,
+            "p2": 3,
+            "failures": [
+                "isolated_build_pythonpath",
+                "showcase_windows_path_privacy",
+                "unlisted_release_file",
+                "private_tmp_privacy",
+                "artifact_root_symlink",
+                "nested_sha256sums",
+                "case_count_type",
+                "support_schema_type",
+                "candidate_3_reproducibility_audit",
+                "development_gate_artifact_mismatch",
+                "support_semantic_closure",
+                "local_gate_benchmark_provenance",
+            ],
+            "artifacts": {
+                "raw_findings": {
+                    "path": (
+                        "demo/results/artifacts/release_candidate_review_candidate_6/comments.jsonl"
+                    ),
+                    "sha256": ("c12104b0f0da87c8348eed667a8843c663030abe827f80dd020a0b0b34803dec"),
+                },
+                "top_findings": {
+                    "path": (
+                        "demo/results/artifacts/release_candidate_review_candidate_6/"
+                        "final_comments.json"
+                    ),
+                    "sha256": ("dc6780587fd000d667a6c556bdb0312b475ee836075bd398cbac8c8b3dceae6a"),
+                },
+                "html_report": {
+                    "path": (
+                        "demo/results/artifacts/release_candidate_review_candidate_6/report.html"
+                    ),
+                    "sha256": ("fd20f774f76ec959a021e4bc8de9b704bb34bb251bfe920a58cc57163b5d14c9"),
+                },
+                "markdown_report": {
+                    "path": (
+                        "demo/results/artifacts/release_candidate_review_candidate_6/report.md"
+                    ),
+                    "sha256": ("2d1a2e77d2439ca1bf0abc5c364831fc20443ab84aeac40a1305c213fa364039"),
+                },
+            },
+        }
+        expected_root_cause = {
+            "summary": (
+                "Development and local-gate acceptance did not require the same release bytes, "
+                "while retained support and privacy consumers remained weaker than their "
+                "producers."
+            ),
+            "fix": (
+                "Freeze stable package inputs before development, require byte-identical "
+                "acceptance artifacts, and enforce exact semantic, path, privacy, and type "
+                "contracts."
             ),
         }
         for artifact in expected_review["artifacts"].values():

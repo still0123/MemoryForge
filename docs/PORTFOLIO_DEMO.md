@@ -1,6 +1,6 @@
 # 秋招演示与面试说明
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=6; platform_gate_candidate=6; platform_gate_status=accepted; review_status=pending; macos_passed=594; linux_passed=591; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=6; platform_gate_candidate=6; platform_gate_status=accepted; review_status=rejected; macos_passed=594; linux_passed=591; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 这份文档用于把 MemoryForge 讲成一个完整项目。演示只使用公开的 `AgentSkill-Eval` 文档，不使用公司代码、真实飞书正文、Token 或 App Secret。
 
@@ -87,7 +87,8 @@ Windows 成功。
 Candidate 5 最终静态审查为 0 P0 / 10 P1 / 2 P2，结果 rejected。审查失败优先于本地门禁成功，
 因此不得授权 confirmation。
 
-Candidate 6 development 已 6/6 通过，并从 detached Commit 快照构建；最终审查尚未运行。
+Candidate 6 development 已 6/6 通过，并从 detached Commit 快照构建；最终静态审查为
+0 P0 / 9 P1 / 3 P2，结果 rejected。development 与本地门禁制品不一致，故不得授权 confirmation。
 
 随后展示 support-score development：Answer 与 Selective Accuracy 为 100%，Coverage 为 90%，
 Risk 为 0%；同时明确 confirmation 尚未运行。这样可以说明“有正向指标，但不越过冻结 split

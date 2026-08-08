@@ -37,13 +37,7 @@ def test_benchmark_summary_reports_macro_per_suite_and_negatives() -> None:
         for experiment in summary["experiments"]
         if experiment["suite_id"] == "release-candidate-delivery"
     )
-    assert release["accepted_evidence"] == [
-        {
-            "path": "demo/results/release_candidate_development_candidate_6.json",
-            "sha256": "8d1f1a07f218581048e3860556e12dea0a900f2189876f28265afeffbf8093a3",
-            "memoryforge_commit": "9a6c145a3f052c78b47c4d8f882d4a3191c4a2f4",
-        }
-    ]
+    assert release["accepted_evidence"] == []
     assert summary["macro"]["citation_grounding_accuracy"] > 90
     assert any(
         result["suite_id"] == "doc-wiki-qa.click" and result["status"] == "retained_metric_gap"
@@ -53,7 +47,7 @@ def test_benchmark_summary_reports_macro_per_suite_and_negatives() -> None:
         result["suite_id"] == "release-candidate-delivery"
         and result["status"] == "regression_rejected"
         and result["path"]
-        == "demo/results/release_candidate_candidate_5_static_review_rejected.json"
+        == "demo/results/release_candidate_candidate_6_static_review_rejected.json"
         for result in summary["negative_results"]
     )
 

@@ -1,6 +1,6 @@
 # Changelog
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=6; platform_gate_candidate=6; platform_gate_status=accepted; review_status=pending; macos_passed=594; linux_passed=591; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=6; platform_gate_candidate=6; platform_gate_status=accepted; review_status=rejected; macos_passed=594; linux_passed=591; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 ## v0.3.0 — Release Candidate
 
@@ -29,6 +29,7 @@
   provenance、summary、SHA256SUMS、retained artifacts、Workspace privacy 与 Registry Commit。
 - Candidate 6 本地门禁在 macOS 为 594 passed、Linux 为 591 passed / 3 skipped，
   coverage 均为 88%，Wheel/sdist 跨平台 SHA256 一致。
+- Candidate 6 最终静态审查发现 0 P0 / 9 P1 / 3 P2，结果 rejected；原始与 Top 5 报告均保留。
 - 强化回答准确率契约，要求关键事实和冻结来源同时命中；AgentSkill-Eval 30 题严格 Answer 为
   96.7%，Citation grounding 为 100%，Source recall@3 为 96.2%；
 - 追加独立 Click 20 题复评；回答准确率 5.0%、来源召回 16.7%，再次确认外部有效性缺口；

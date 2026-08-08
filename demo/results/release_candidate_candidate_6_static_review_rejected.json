@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "suite_id": "release-candidate-delivery",
+  "suite_revision": 1,
+  "memoryforge_commit": "9588c2fb6a41225515165f0114ce61f23f51d921",
+  "memoryforge_worktree_dirty": false,
+  "candidate": "release-development-candidate-6",
+  "review": {
+    "scope": "origin/main...HEAD",
+    "status": "failed",
+    "p0": 0,
+    "p1": 9,
+    "p2": 3,
+    "failures": [
+      "isolated_build_pythonpath",
+      "showcase_windows_path_privacy",
+      "unlisted_release_file",
+      "private_tmp_privacy",
+      "artifact_root_symlink",
+      "nested_sha256sums",
+      "case_count_type",
+      "support_schema_type",
+      "candidate_3_reproducibility_audit",
+      "development_gate_artifact_mismatch",
+      "support_semantic_closure",
+      "local_gate_benchmark_provenance"
+    ],
+    "artifacts": {
+      "raw_findings": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_6/comments.jsonl",
+        "sha256": "c12104b0f0da87c8348eed667a8843c663030abe827f80dd020a0b0b34803dec"
+      },
+      "top_findings": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_6/final_comments.json",
+        "sha256": "dc6780587fd000d667a6c556bdb0312b475ee836075bd398cbac8c8b3dceae6a"
+      },
+      "html_report": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_6/report.html",
+        "sha256": "fd20f774f76ec959a021e4bc8de9b704bb34bb251bfe920a58cc57163b5d14c9"
+      },
+      "markdown_report": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_6/report.md",
+        "sha256": "2d1a2e77d2439ca1bf0abc5c364831fc20443ab84aeac40a1305c213fa364039"
+      }
+    }
+  },
+  "root_cause": {
+    "summary": "Development and local-gate acceptance did not require the same release bytes, while retained support and privacy consumers remained weaker than their producers.",
+    "fix": "Freeze stable package inputs before development, require byte-identical acceptance artifacts, and enforce exact semantic, path, privacy, and type contracts."
+  },
+  "confirmation": {
+    "path": "demo/evaluation/release_candidate_confirmation.json",
+    "sha256": "3eed08e04592b614a709cd18c6a92951b5da145d7dab4b9997824cd4e002e805",
+    "status": "not_run"
+  },
+  "holdout": {
+    "path": "demo/evaluation/release_candidate_holdout.json",
+    "sha256": "b466644bef2748a96d598540c54633fe49770af97fc71ce6e62e18eda687e8f8",
+    "status": "not_run"
+  },
+  "passed": false
+}

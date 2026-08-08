@@ -1,10 +1,10 @@
 # v0.3.0 Release Candidate Specification
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=6; platform_gate_candidate=6; platform_gate_status=accepted; review_status=pending; macos_passed=594; linux_passed=591; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=6; platform_gate_candidate=6; platform_gate_status=accepted; review_status=rejected; macos_passed=594; linux_passed=591; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 ## Status
 
-`LOCAL_GATES_ACCEPTED_FINAL_REVIEW_PENDING`
+`LOCAL_GATES_ACCEPTED_FINAL_REVIEW_REJECTED`
 
 ## Base
 
@@ -356,8 +356,29 @@ build byte sets and all supporting JSON artifacts are registered.
 
 Both platforms passed Ruff, formatting, strict Mypy, Registry validation,
 dependency checks, the full pytest suite, Wheel clean-room, sdist clean-room,
-`pip check`, and CLI version smoke. Final static review remains required
-before confirmation authorization.
+`pip check`, and CLI version smoke.
+
+## Rejected Candidate 6 Static Review
+
+- Evidence:
+  `demo/results/release_candidate_candidate_6_static_review_rejected.json`
+- Evidence SHA256:
+  `cc3ae3f9a5f99f5d420e2b4cfce1f12cc260b46d99b03b34f93632f5c47dcacc`
+- Reviewed Commit:
+  `9588c2fb6a41225515165f0114ce61f23f51d921`
+- Result: `REJECTED`
+- P0: 0
+- P1: 9
+- P2: 3
+- Confirmation status: `not_run`
+- Holdout status: `not_run`
+
+The review proved that Candidate 6 development and local gates used different
+Wheel/sdist bytes after package inputs changed. It also found weaker Registry
+consumers for retained support JSON, local-gate benchmark provenance, path
+ownership, privacy, and strict JSON types. Raw findings and the Top 5 report
+remain under `demo/results/artifacts/release_candidate_review_candidate_6/`.
+Candidate 6 no longer authorizes confirmation.
 
 ## Confirmation Components
 
