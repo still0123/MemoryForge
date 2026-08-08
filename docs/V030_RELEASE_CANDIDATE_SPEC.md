@@ -1,10 +1,10 @@
 # v0.3.0 Release Candidate Specification
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=8; platform_gate_candidate=7; platform_gate_status=accepted; review_status=pending; macos_passed=599; linux_passed=596; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=8; platform_gate_candidate=8; platform_gate_status=accepted; review_status=pending; macos_passed=604; linux_passed=601; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 ## Status
 
-`DEVELOPMENT_PASSED_LOCAL_GATES_PENDING`
+`LOCAL_GATES_PASSED_REVIEW_PENDING`
 
 ## Base
 
@@ -492,6 +492,27 @@ and negative Commit identities, release symlinks are rejected, Workspace
 answer/Citation/unknown/replay checks are real, and historical review scopes
 are fixed by immutable Commit sidecars. Local gates and final review remain
 pending; confirmation stays closed.
+
+## Accepted Candidate 8 Local Gates
+
+- Evidence: `demo/results/release_candidate_candidate_8_local_gates.json`
+- Evidence SHA256:
+  `65486449522da88a80a734f30af81cf8881cdd41b12766440f9a50aac7d0930e`
+- Gate Commit:
+  `4c6f8e64e4dcda725966d7982ad3f2630814432f`
+- macOS: 604 passed, 0 skipped, coverage 88%
+- Debian 12 / Lima: 601 passed, 3 skipped, coverage 88%
+- Registry at gate time: 12 suites, 8 experiments, 116 Evidence, 121 QA
+- Wheel SHA256:
+  `fd3a0ab7cd24e5148408250a220db44eb378ff705770593784c17ec687878096`
+- sdist SHA256:
+  `2cbe617826ce0b9b7e2bd3da66f22bb7b5c05cd894426d80ee1d47a140ac7a05`
+
+Both platforms passed the complete local gate and produced package bytes
+identical to Candidate 8 development. Each platform's retained directory
+preserves the original `dist/`, `release-provenance.json`, and `SHA256SUMS`
+layout; `shasum -a 256 -c SHA256SUMS` succeeds in place. Final static review
+remains required before confirmation authorization.
 
 ## Confirmation Components
 

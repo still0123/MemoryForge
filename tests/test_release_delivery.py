@@ -67,7 +67,23 @@ def test_benchmark_summary_reports_macro_per_suite_and_negatives() -> None:
         for experiment in summary["experiments"]
         if experiment["suite_id"] == "release-candidate-delivery"
     )
-    assert release["accepted_evidence"] == []
+    assert release["accepted_evidence"] == [
+        {
+            "status": "accepted_development",
+            "development": {
+                "path": "demo/results/release_candidate_development_candidate_8.json",
+                "sha256": "37b0270bba89da81815f2ac00fbeec10e766c8a16436e28ab1e7a2fd449afe83",
+                "memoryforge_commit": "2451f2dae8845b490db1cb46727c7828f0d227f7",
+                "passed": True,
+            },
+            "acceptance": {
+                "path": "demo/results/release_candidate_candidate_8_local_gates.json",
+                "sha256": "65486449522da88a80a734f30af81cf8881cdd41b12766440f9a50aac7d0930e",
+                "memoryforge_commit": "4c6f8e64e4dcda725966d7982ad3f2630814432f",
+                "passed": True,
+            },
+        }
+    ]
     assert all(
         set(accepted) == {"status", "development", "acceptance"}
         and len(accepted["development"]["memoryforge_commit"]) == 40
