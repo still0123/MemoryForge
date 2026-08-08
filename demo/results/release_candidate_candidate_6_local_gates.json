@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "suite_id": "release-candidate-delivery",
+  "suite_revision": 1,
+  "memoryforge_commit": "4440b05e4200ceb939d5668f7a8dd73a77a69287",
+  "memoryforge_worktree_dirty": false,
+  "development_evidence": {
+    "path": "demo/results/release_candidate_development_candidate_6.json",
+    "sha256": "8d1f1a07f218581048e3860556e12dea0a900f2189876f28265afeffbf8093a3",
+    "memoryforge_commit": "9a6c145a3f052c78b47c4d8f882d4a3191c4a2f4",
+    "passed": true
+  },
+  "platforms": {
+    "macos": {
+      "runtime": {
+        "virtualization": "native",
+        "system": "Darwin",
+        "machine": "arm64",
+        "implementation": "CPython",
+        "python": "3.11.15",
+        "hosted_runner": false
+      },
+      "local_gate": {
+        "command": "scripts/check_local.sh",
+        "ruff_check": "passed",
+        "ruff_format": "passed",
+        "strict_mypy": "passed",
+        "registry_validation": {
+          "suite_count": 12,
+          "experiment_count": 8,
+          "evidence_count": 109,
+          "qa_case_count": 121
+        },
+        "dependency_check": "passed",
+        "pytest": {
+          "passed": 594,
+          "skipped": 0,
+          "failed": 0,
+          "coverage_percent": 88
+        },
+        "wheel_clean_room": "passed",
+        "sdist_clean_room": "passed",
+        "pip_check": "passed",
+        "cli_version_smoke": "passed",
+        "artifacts": {
+          "wheel_sha256": "a0ddda5469074b9aa4222f42aea95a411316be5878d54833101d0dece3ccc811",
+          "sdist_sha256": "dfb59503b821e8eaf641cfede9111753cae52faa74b7920182a64f1e4c6a2eab",
+          "provenance_sha256": "b8eee0b5a80ed49fb9c47312441c5f1fe9fd8b4d2e8416f0bb215fdfc2c864ba",
+          "sha256sums_sha256": "a81611296be0be13b1625fb126e8f0a11706659b1428fa44b447f243fc40a5b2"
+        },
+        "artifact_files": {
+          "wheel": {
+            "path": "demo/results/artifacts/release_candidate_delivery_candidate_6/memoryforge-0.3.0-py3-none-any.whl",
+            "sha256": "a0ddda5469074b9aa4222f42aea95a411316be5878d54833101d0dece3ccc811"
+          },
+          "sdist": {
+            "path": "demo/results/artifacts/release_candidate_delivery_candidate_6/memoryforge-0.3.0.tar.gz",
+            "sha256": "dfb59503b821e8eaf641cfede9111753cae52faa74b7920182a64f1e4c6a2eab"
+          },
+          "provenance": {
+            "path": "demo/results/artifacts/release_candidate_delivery_candidate_6/macos-release-provenance.json",
+            "sha256": "b8eee0b5a80ed49fb9c47312441c5f1fe9fd8b4d2e8416f0bb215fdfc2c864ba"
+          },
+          "sha256sums": {
+            "path": "demo/results/artifacts/release_candidate_delivery_candidate_6/macos-SHA256SUMS",
+            "sha256": "a81611296be0be13b1625fb126e8f0a11706659b1428fa44b447f243fc40a5b2"
+          }
+        }
+      }
+    },
+    "linux": {
+      "runtime": {
+        "virtualization": "Lima 2.2.0 local VM",
+        "distribution": "Debian GNU/Linux 12",
+        "kernel": "Linux 6.1.0-52-cloud-arm64",
+        "architecture": "aarch64",
+        "implementation": "CPython",
+        "python": "3.11.2",
+        "hosted_runner": false
+      },
+      "local_gate": {
+        "command": "scripts/check_local.sh",
+        "ruff_check": "passed",
+        "ruff_format": "passed",
+        "strict_mypy": "passed",
+        "registry_validation": {
+          "suite_count": 12,
+          "experiment_count": 8,
+          "evidence_count": 109,
+          "qa_case_count": 121
+        },
+        "dependency_check": "passed",
+        "pytest": {
+          "passed": 591,
+          "skipped": 3,
+          "failed": 0,
+          "coverage_percent": 88
+        },
+        "wheel_clean_room": "passed",
+        "sdist_clean_room": "passed",
+        "pip_check": "passed",
+        "cli_version_smoke": "passed",
+        "artifacts": {
+          "wheel_sha256": "a0ddda5469074b9aa4222f42aea95a411316be5878d54833101d0dece3ccc811",
+          "sdist_sha256": "dfb59503b821e8eaf641cfede9111753cae52faa74b7920182a64f1e4c6a2eab",
+          "provenance_sha256": "5ccf9a5139c79c49d2983aab3dbbed6554344ceb921aff00f53db1f6db0bd7a1",
+          "sha256sums_sha256": "e3bce41329457bd208e6a19bcfa3cb3f7c76fe41cce71930ab619b8fec8aaf87"
+        },
+        "artifact_files": {
+          "wheel": {
+            "path": "demo/results/artifacts/release_candidate_delivery_candidate_6/memoryforge-0.3.0-py3-none-any.whl",
+            "sha256": "a0ddda5469074b9aa4222f42aea95a411316be5878d54833101d0dece3ccc811"
+          },
+          "sdist": {
+            "path": "demo/results/artifacts/release_candidate_delivery_candidate_6/memoryforge-0.3.0.tar.gz",
+            "sha256": "dfb59503b821e8eaf641cfede9111753cae52faa74b7920182a64f1e4c6a2eab"
+          },
+          "provenance": {
+            "path": "demo/results/artifacts/release_candidate_delivery_candidate_6/linux-release-provenance.json",
+            "sha256": "5ccf9a5139c79c49d2983aab3dbbed6554344ceb921aff00f53db1f6db0bd7a1"
+          },
+          "sha256sums": {
+            "path": "demo/results/artifacts/release_candidate_delivery_candidate_6/linux-SHA256SUMS",
+            "sha256": "e3bce41329457bd208e6a19bcfa3cb3f7c76fe41cce71930ab619b8fec8aaf87"
+          }
+        }
+      }
+    }
+  },
+  "confirmation": {
+    "path": "demo/evaluation/release_candidate_confirmation.json",
+    "sha256": "3eed08e04592b614a709cd18c6a92951b5da145d7dab4b9997824cd4e002e805",
+    "status": "not_run"
+  },
+  "holdout": {
+    "path": "demo/evaluation/release_candidate_holdout.json",
+    "sha256": "b466644bef2748a96d598540c54633fe49770af97fc71ce6e62e18eda687e8f8",
+    "status": "not_run"
+  },
+  "passed": true
+}

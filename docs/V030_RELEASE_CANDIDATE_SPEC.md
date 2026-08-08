@@ -1,10 +1,10 @@
 # v0.3.0 Release Candidate Specification
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=6; platform_gate_candidate=5; platform_gate_status=accepted; review_status=pending; macos_passed=586; linux_passed=583; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=6; platform_gate_candidate=6; platform_gate_status=accepted; review_status=pending; macos_passed=594; linux_passed=591; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 ## Status
 
-`DEVELOPMENT_ACCEPTED_LOCAL_GATES_PENDING`
+`LOCAL_GATES_ACCEPTED_FINAL_REVIEW_PENDING`
 
 ## Base
 
@@ -338,8 +338,26 @@ Candidate 6 builds from a detached Commit snapshot and strictly validates
 package identity, provenance schema, exact Benchmark summary, SHA256SUMS,
 retained artifact ownership, supporting JSON Evidence, Registry Commit
 identity, document completion claims, and Showcase privacy. Both isolated
-build byte sets and all supporting JSON artifacts are registered. macOS and
-Linux local gates must pass before another final review.
+build byte sets and all supporting JSON artifacts are registered.
+
+## Accepted Candidate 6 Local Gates
+
+- Evidence: `demo/results/release_candidate_candidate_6_local_gates.json`
+- Evidence SHA256:
+  `37b1df73117f5e9260861a76abc79af6f614fba4399cab4ba6a3d1c567ce394d`
+- Gate Commit:
+  `4440b05e4200ceb939d5668f7a8dd73a77a69287`
+- macOS: 594 passed, 0 skipped, coverage 88%
+- Debian 12 / Lima: 591 passed, 3 skipped, coverage 88%
+- Wheel SHA256:
+  `a0ddda5469074b9aa4222f42aea95a411316be5878d54833101d0dece3ccc811`
+- sdist SHA256:
+  `dfb59503b821e8eaf641cfede9111753cae52faa74b7920182a64f1e4c6a2eab`
+
+Both platforms passed Ruff, formatting, strict Mypy, Registry validation,
+dependency checks, the full pytest suite, Wheel clean-room, sdist clean-room,
+`pip check`, and CLI version smoke. Final static review remains required
+before confirmation authorization.
 
 ## Confirmation Components
 

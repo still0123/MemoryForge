@@ -1182,6 +1182,12 @@
           "path": "demo/results/release_candidate_development_candidate_6.json",
           "sha256": "8d1f1a07f218581048e3860556e12dea0a900f2189876f28265afeffbf8093a3",
           "memoryforge_commit": "9a6c145a3f052c78b47c4d8f882d4a3191c4a2f4",
+          "acceptance_evidence": {
+            "path": "demo/results/release_candidate_candidate_6_local_gates.json",
+            "sha256": "37b1df73117f5e9260861a76abc79af6f614fba4399cab4ba6a3d1c567ce394d",
+            "memoryforge_commit": "4440b05e4200ceb939d5668f7a8dd73a77a69287",
+            "passed": true
+          },
           "passed": true
         }
       ]
