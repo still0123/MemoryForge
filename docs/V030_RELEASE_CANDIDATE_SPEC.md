@@ -1,10 +1,10 @@
 # v0.3.0 Release Candidate Specification
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=5; platform_gate_candidate=5; platform_gate_status=accepted; review_status=rejected; macos_passed=586; linux_passed=583; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=6; platform_gate_candidate=5; platform_gate_status=accepted; review_status=pending; macos_passed=586; linux_passed=583; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 ## Status
 
-`LOCAL_GATES_ACCEPTED_FINAL_REVIEW_REJECTED`
+`DEVELOPMENT_ACCEPTED_LOCAL_GATES_PENDING`
 
 ## Base
 
@@ -318,6 +318,28 @@ Commit binding, document claims, and Showcase privacy measurement. Raw
 findings and the review Top 5 report remain under
 `demo/results/artifacts/release_candidate_review_candidate_5/`.
 Candidate 5 no longer authorizes confirmation.
+
+## Accepted Development Candidate 6
+
+- Evidence: `demo/results/release_candidate_development_candidate_6.json`
+- Evidence SHA256:
+  `8d1f1a07f218581048e3860556e12dea0a900f2189876f28265afeffbf8093a3`
+- MemoryForge Commit:
+  `9a6c145a3f052c78b47c4d8f882d4a3191c4a2f4`
+- Result: `ACCEPTED_DEVELOPMENT`
+- Development pass rate: 100.0%
+- Failed cases: 0
+- Reproducible Wheel/sdist: true
+- Private detail leaks: 0
+- Confirmation status: `not_run`
+- Holdout status: `not_run`
+
+Candidate 6 builds from a detached Commit snapshot and strictly validates
+package identity, provenance schema, exact Benchmark summary, SHA256SUMS,
+retained artifact ownership, supporting JSON Evidence, Registry Commit
+identity, document completion claims, and Showcase privacy. Both isolated
+build byte sets and all supporting JSON artifacts are registered. macOS and
+Linux local gates must pass before another final review.
 
 ## Confirmation Components
 

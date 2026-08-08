@@ -25,7 +25,7 @@ def test_benchmark_registry_binds_all_release_artifacts() -> None:
         "status": "valid",
         "suite_count": 12,
         "experiment_count": 8,
-        "evidence_count": 108,
+        "evidence_count": 109,
         "qa_case_count": 121,
         "qa_case_types_present": [
             "code_behavior",
@@ -439,7 +439,7 @@ def test_benchmark_registry_binds_release_acceptance_commit() -> None:
     experiment = next(
         item for item in registry["experiments"] if item["suite_id"] == "release-candidate-delivery"
     )
-    artifact = experiment["evidence"][-1]
+    artifact = next(item for item in experiment["evidence"] if item["evidence_revision"] == 6)
     payload = json.loads(
         (validator.REPO_ROOT / artifact["acceptance_evidence"]["path"]).read_text(encoding="utf-8")
     )
