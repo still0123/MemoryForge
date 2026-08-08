@@ -1031,8 +1031,7 @@
       "required_evidence_statuses": [
         "rejected",
         "accepted_development_superseded",
-        "development_passed_regression_failed",
-        "accepted_development"
+        "development_passed_regression_failed"
       ],
       "repositories": [
         {
@@ -1199,10 +1198,16 @@
         {
           "split": "development",
           "evidence_revision": 8,
-          "status": "accepted_development",
+          "status": "development_passed_regression_failed",
           "path": "demo/results/release_candidate_development_candidate_7.json",
           "sha256": "337393de3ea54605055fd08f29fa92679ca3db52470879080cc0c92c5dd5ff10",
           "memoryforge_commit": "80b111bbd472cacd16ceb773a4c141e70ee97a4a",
+          "regression_evidence": {
+            "path": "demo/results/release_candidate_candidate_7_local_gate_contract_rejected.json",
+            "sha256": "921d5595531bc3b8427b4080264f366f02b40909e01312fc340ce417c298aa57",
+            "memoryforge_commit": "0da3092733e0cf549d3e55ed50ed2413374a5cfb",
+            "passed": false
+          },
           "passed": true
         }
       ]

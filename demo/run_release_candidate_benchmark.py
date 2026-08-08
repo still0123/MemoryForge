@@ -70,7 +70,7 @@ DOCUMENT_CLAIMS = {
         "原生 Windows confirmation",
     ),
     DOCUMENTS[4]: (
-        "DEVELOPMENT_ACCEPTED_LOCAL_GATES_PENDING",
+        "DEVELOPMENT_PASSED_LOCAL_GATE_REJECTED",
         "594 passed",
         "591 passed, 3 skipped",
         "Confirmation status: `not_run`",

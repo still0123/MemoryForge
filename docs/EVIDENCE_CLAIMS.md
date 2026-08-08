@@ -25,6 +25,7 @@
 | Candidate 6 在 macOS 594 passed，Linux 591 passed / 3 skipped，coverage 88%，Wheel/sdist 跨平台 SHA256 一致 | [`release_candidate_candidate_6_local_gates.json`](../demo/results/release_candidate_candidate_6_local_gates.json) | 固定 Commit `4440b05`；不等于原生 Windows confirmation |
 | Candidate 6 最终静态审查为 0 P0 / 9 P1 / 3 P2，结果 rejected | [`release_candidate_candidate_6_static_review_rejected.json`](../demo/results/release_candidate_candidate_6_static_review_rejected.json) | development 与 local-gate 制品不一致；未运行 confirmation/holdout |
 | Candidate 7 development 6/6，固定 package 输入并绑定完整 release artifact closure | [`release_candidate_development_candidate_7.json`](../demo/results/release_candidate_development_candidate_7.json) | 固定 Commit `80b111b`；本地门禁、confirmation 与 holdout 未运行 |
+| Candidate 7 macOS 首次本地门禁为 598 passed / 1 failed，结果 rejected | [`release_candidate_candidate_7_local_gate_contract_rejected.json`](../demo/results/release_candidate_candidate_7_local_gate_contract_rejected.json) | 旧测试误要求已移除的 `sdist.exclude`；Linux、confirmation、holdout 未运行 |
 | Candidate 2 首次 sdist preflight 因 macOS 路径 alias 失败且未生成输出目录 | [`release_candidate_sdist_probe_regression_rejected.json`](../demo/results/release_candidate_sdist_probe_regression_rejected.json) | 保留失败；修复使用 canonical path，未放宽 ownership gate |
 | 开发与构建依赖可冻结重放 | [`constraints/dev.txt`](../constraints/dev.txt)，SHA256 `48debebcfd2da302201688e0582c676cb571d66e96cd7a2a2e0654f49a544571` | 仅覆盖声明的平台与 Python 版本 |
 | Wheel 和 sdist 可独立安装 | 本地门禁与 [`run_release_check.py`](../demo/run_release_check.py) | 需要在精确 Commit 上重跑 |

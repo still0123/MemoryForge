@@ -356,7 +356,7 @@ REQUIRED_EXPERIMENT_EVIDENCE = {
         ),
         _RESULTS + "release_candidate_development_candidate_7.json": (
             8,
-            "accepted_development",
+            "development_passed_regression_failed",
             "337393de3ea54605055fd08f29fa92679ca3db52470879080cc0c92c5dd5ff10",
             "80b111bbd472cacd16ceb773a4c141e70ee97a4a",
         ),
@@ -455,6 +455,11 @@ REQUIRED_REGRESSION_EVIDENCE = {
             _RESULTS + "release_candidate_candidate_6_static_review_rejected.json",
             "cc3ae3f9a5f99f5d420e2b4cfce1f12cc260b46d99b03b34f93632f5c47dcacc",
             "9588c2fb6a41225515165f0114ce61f23f51d921",
+        ),
+        _RESULTS + "release_candidate_development_candidate_7.json": (
+            _RESULTS + "release_candidate_candidate_7_local_gate_contract_rejected.json",
+            "921d5595531bc3b8427b4080264f366f02b40909e01312fc340ce417c298aa57",
+            "0da3092733e0cf549d3e55ed50ed2413374a5cfb",
         ),
     },
 }
@@ -2955,6 +2960,14 @@ def _validate_release_sdist_regression(
     confirmation: dict[str, Any],
     commit: str,
 ) -> int:
+    if payload.get("candidate") == "release-development-candidate-7-local-gate":
+        return _validate_release_local_gate_regression(
+            experiment,
+            development_artifact,
+            payload,
+            confirmation,
+            commit,
+        )
     if payload.get("candidate") in {
         "release-development-candidate-2",
         "release-development-candidate-5",
@@ -3033,6 +3046,88 @@ def _validate_release_sdist_regression(
         or payload.get("passed") is not False
     ):
         raise ValueError("release-candidate sdist regression Evidence changed")
+    return 1
+
+
+def _validate_release_local_gate_regression(
+    experiment: dict[str, Any],
+    development_artifact: dict[str, Any],
+    payload: dict[str, Any],
+    confirmation: dict[str, Any],
+    commit: str,
+) -> int:
+    holdout = experiment["splits"]["holdout"]
+    if (
+        set(payload)
+        != {
+            "schema_version",
+            "suite_id",
+            "suite_revision",
+            "memoryforge_commit",
+            "memoryforge_worktree_dirty",
+            "candidate",
+            "local_gate",
+            "root_cause",
+            "confirmation",
+            "holdout",
+            "passed",
+        }
+        or type(payload.get("schema_version")) is not int
+        or payload.get("schema_version") != 1
+        or payload.get("suite_id") != experiment["suite_id"]
+        or type(payload.get("suite_revision")) is not int
+        or payload.get("suite_revision") != experiment["suite_revision"]
+        or payload.get("memoryforge_commit") != commit
+        or payload.get("memoryforge_worktree_dirty") is not False
+        or not _git_commit_descends_from(commit, development_artifact["memoryforge_commit"])
+        or payload.get("candidate") != "release-development-candidate-7-local-gate"
+        or not _strict_mapping(
+            payload.get("local_gate"),
+            {
+                "platform": "macos",
+                "command": "scripts/check_local.sh",
+                "status": "failed",
+                "classification": "outdated_sdist_manifest_contract",
+                "pytest": {"passed": 598, "failed": 1, "skipped": 0},
+                "failed_test": (
+                    "tests/test_local_tooling.py::test_package_and_cli_versions_match_v030"
+                ),
+                "linux_status": "not_run",
+            },
+        )
+        or not _strict_mapping(
+            payload.get("root_cause"),
+            {
+                "summary": (
+                    "The local tooling test still required the superseded sdist.exclude "
+                    "contract after Candidate 7 switched to an explicit stable sdist.include set."
+                ),
+                "fix": (
+                    "Assert the exact stable sdist include set and package README instead of "
+                    "the removed exclusion."
+                ),
+            },
+        )
+        or not _strict_mapping(
+            payload.get("confirmation"),
+            {
+                "path": confirmation["path"],
+                "sha256": confirmation["sha256"],
+                "status": "not_run",
+            },
+        )
+        or not isinstance(holdout, dict)
+        or not _strict_mapping(
+            payload.get("holdout"),
+            {
+                "path": holdout["path"],
+                "sha256": holdout["sha256"],
+                "status": "not_run",
+            },
+        )
+        or payload.get("passed") is not False
+    ):
+        raise ValueError("release-candidate local gate regression Evidence changed")
     return 1
 
 

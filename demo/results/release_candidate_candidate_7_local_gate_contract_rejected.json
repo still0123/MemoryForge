@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "suite_id": "release-candidate-delivery",
+  "suite_revision": 1,
+  "memoryforge_commit": "0da3092733e0cf549d3e55ed50ed2413374a5cfb",
+  "memoryforge_worktree_dirty": false,
+  "candidate": "release-development-candidate-7-local-gate",
+  "local_gate": {
+    "platform": "macos",
+    "command": "scripts/check_local.sh",
+    "status": "failed",
+    "classification": "outdated_sdist_manifest_contract",
+    "pytest": {
+      "passed": 598,
+      "failed": 1,
+      "skipped": 0
+    },
+    "failed_test": "tests/test_local_tooling.py::test_package_and_cli_versions_match_v030",
+    "linux_status": "not_run"
+  },
+  "root_cause": {
+    "summary": "The local tooling test still required the superseded sdist.exclude contract after Candidate 7 switched to an explicit stable sdist.include set.",
+    "fix": "Assert the exact stable sdist include set and package README instead of the removed exclusion."
+  },
+  "confirmation": {
+    "path": "demo/evaluation/release_candidate_confirmation.json",
+    "sha256": "3eed08e04592b614a709cd18c6a92951b5da145d7dab4b9997824cd4e002e805",
+    "status": "not_run"
+  },
+  "holdout": {
+    "path": "demo/evaluation/release_candidate_holdout.json",
+    "sha256": "b466644bef2748a96d598540c54633fe49770af97fc71ce6e62e18eda687e8f8",
+    "status": "not_run"
+  },
+  "passed": false
+}

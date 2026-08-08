@@ -4,7 +4,7 @@
 
 ## Status
 
-`DEVELOPMENT_ACCEPTED_LOCAL_GATES_PENDING`
+`DEVELOPMENT_PASSED_LOCAL_GATE_REJECTED`
 
 ## Base
 
@@ -403,6 +403,24 @@ local-gate artifact hashes to equal the development artifact hashes.
 - Private detail leaks: 0
 - Confirmation status: `not_run`
 - Holdout status: `not_run`
+
+## Rejected Candidate 7 First Local Gate
+
+- Evidence:
+  `demo/results/release_candidate_candidate_7_local_gate_contract_rejected.json`
+- Evidence SHA256:
+  `921d5595531bc3b8427b4080264f366f02b40909e01312fc340ce417c298aa57`
+- Gate Commit:
+  `0da3092733e0cf549d3e55ed50ed2413374a5cfb`
+- macOS: 598 passed, 1 failed
+- Linux: `not_run`
+- Classification: `outdated_sdist_manifest_contract`
+- Confirmation status: `not_run`
+- Holdout status: `not_run`
+
+The old local-tooling test still required `sdist.exclude` after Candidate 7
+replaced it with an explicit stable `sdist.include` set. The failure is
+retained; the package bytes themselves remained identical to development.
 
 ## Confirmation Components
 

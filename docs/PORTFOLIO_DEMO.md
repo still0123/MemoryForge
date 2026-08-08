@@ -90,7 +90,8 @@ Candidate 5 最终静态审查为 0 P0 / 10 P1 / 2 P2，结果 rejected。审查
 Candidate 6 development 已 6/6 通过，并从 detached Commit 快照构建；最终静态审查为
 0 P0 / 9 P1 / 3 P2，结果 rejected。development 与本地门禁制品不一致，故不得授权 confirmation。
 
-Candidate 7 已固定 package 输入和构建 epoch；development 6/6 通过，本地门禁尚未运行。
+Candidate 7 已固定 package 输入和构建 epoch；development 6/6 通过。macOS 首次本地门禁因旧
+`sdist.exclude` 测试合同而 598/599 rejected；Linux 未运行。
 
 随后展示 support-score development：Answer 与 Selective Accuracy 为 100%，Coverage 为 90%，
 Risk 为 0%；同时明确 confirmation 尚未运行。这样可以说明“有正向指标，但不越过冻结 split
