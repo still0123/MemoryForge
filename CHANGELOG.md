@@ -1,6 +1,6 @@
 # Changelog
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=11; platform_gate_candidate=11; platform_gate_status=accepted; review_status=pending; macos_passed=609; linux_passed=606; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=11; platform_gate_candidate=11; platform_gate_status=accepted; review_status=rejected; macos_passed=609; linux_passed=606; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 ## v0.3.0 — Release Candidate
 
@@ -56,6 +56,8 @@
   answer/Citation/unknown/replay、完整 experiment identity 与显式 review 状态。
 - Candidate 11 本地门禁通过：macOS 609 passed，Linux 606 passed / 3 skipped；coverage 88%，
   Wheel、sdist 与 raw Code Wiki Evidence 跨平台同字节。
+- Candidate 11 静态终审发现 0 P0 / 8 P1 / 4 P2，结果 rejected；12 条独立根因与固定
+  Commit 范围报告保留。
 - 强化回答准确率契约，要求关键事实和冻结来源同时命中；AgentSkill-Eval 30 题严格 Answer 为
   96.7%，Citation grounding 为 100%，Source recall@3 为 96.2%；
 - 追加独立 Click 20 题复评；回答准确率 5.0%、来源召回 16.7%，再次确认外部有效性缺口；

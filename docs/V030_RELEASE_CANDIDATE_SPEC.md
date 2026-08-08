@@ -1,10 +1,10 @@
 # v0.3.0 Release Candidate Specification
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=11; platform_gate_candidate=11; platform_gate_status=accepted; review_status=pending; macos_passed=609; linux_passed=606; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=11; platform_gate_candidate=11; platform_gate_status=accepted; review_status=rejected; macos_passed=609; linux_passed=606; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 ## Status
 
-`LOCAL_GATES_PASSED_REVIEW_PENDING`
+`LOCAL_GATES_PASSED_REVIEW_REJECTED`
 
 ## Base
 
@@ -668,7 +668,27 @@ recorded below; final review remains pending and confirmation stays closed.
 
 Both platforms passed the complete local gate. Wheel, sdist, and raw Code Wiki
 Evidence bytes match across platforms; each retained SHA256SUMS replays in
-place. Final static review remains required before acceptance.
+place. The rejected final static review is recorded below.
+
+## Rejected Candidate 11 Static Review
+
+- Evidence:
+  `demo/results/release_candidate_candidate_11_static_review_rejected.json`
+- Evidence SHA256:
+  `45ab7e09a98b6e888332a16ed03be1944c3f14ea5851ac4d700fde986e02b1f6`
+- Reviewed range:
+  `569685c2f0bf790819820b821b4768d180c4ee0d...43d5c80852595c7b49e46c66f70ced82c53cf7d0`
+- Result: `REJECTED`
+- P0: 0
+- P1: 8
+- P2: 4
+- Confirmation status: `not_run`
+- Holdout status: `not_run`
+
+The review found remaining exact package/query schemas, environment isolation,
+privacy, artifact-root closure, Registry snapshot binding, and accepted-review
+transition gaps. All 12 independent findings and fixed scope are retained.
+Candidate 11 does not authorize confirmation.
 
 ## Confirmation Components
 
