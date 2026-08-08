@@ -1,6 +1,6 @@
 # 秋招演示与面试说明
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=8; platform_gate_candidate=8; platform_gate_status=accepted; review_status=rejected; macos_passed=604; linux_passed=601; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=9; platform_gate_candidate=8; platform_gate_status=accepted; review_status=pending; macos_passed=604; linux_passed=601; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 这份文档用于把 MemoryForge 讲成一个完整项目。演示只使用公开的 `AgentSkill-Eval` 文档，不使用公司代码、真实飞书正文、Token 或 App Secret。
 
@@ -100,6 +100,10 @@ negative Commit；冻结 manifest 从实际哈希题集计数；Workspace drill 
 unknown 和恢复重放。本地门禁为 macOS 604 passed、Linux 601 passed / 3 skipped；两端 package
 bytes 与 development 一致，retained SHA256SUMS 可原位重放。终审发现 0 P0 / 4 P1 / 2 P2，
 结果 rejected；6 条发现保留，因此不得授权 confirmation。
+
+Candidate 9 development 已 6/6 通过：版本探针不再继承 coverage 环境，历史 review sidecar
+从固定 Commit 复算，Showcase 指标与最终 case 一致，Code Wiki 的 12 项 metrics、6 项 gates、
+incremental 与原始 Evidence 完整绑定。本地双平台门禁和终审尚未运行，confirmation 继续关闭。
 
 随后展示 support-score development：Answer 与 Selective Accuracy 为 100%，Coverage 为 90%，
 Risk 为 0%；同时明确 confirmation 尚未运行。这样可以说明“有正向指标，但不越过冻结 split

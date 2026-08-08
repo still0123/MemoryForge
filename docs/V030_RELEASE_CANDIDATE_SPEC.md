@@ -1,10 +1,10 @@
 # v0.3.0 Release Candidate Specification
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=8; platform_gate_candidate=8; platform_gate_status=accepted; review_status=rejected; macos_passed=604; linux_passed=601; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=9; platform_gate_candidate=8; platform_gate_status=accepted; review_status=pending; macos_passed=604; linux_passed=601; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 ## Status
 
-`LOCAL_GATES_PASSED_REVIEW_REJECTED`
+`DEVELOPMENT_PASSED_LOCAL_GATES_PENDING`
 
 ## Base
 
@@ -534,6 +534,32 @@ incomplete review-scope recomputation, unclean version-probe environments,
 Showcase metrics not derived from final replay cases, and a weak Code Wiki
 provenance consumer. All six findings and the fixed review scope are retained.
 Candidate 8 does not authorize confirmation.
+
+## Accepted Development Candidate 9
+
+- Evidence: `demo/results/release_candidate_development_candidate_9.json`
+- Evidence SHA256:
+  `cabe2c738be47c5e3d73b371c78a32b1dbaea899f1ce743234327316f67ded0b`
+- MemoryForge Commit:
+  `63326fb2f123c336c31bcebf68c76c90dfac86e6`
+- Result: `DEVELOPMENT_PASSED_GATE_PENDING`
+- Development pass rate: 100.0%
+- Failed cases: 0
+- Reproducible Wheel/sdist: true
+- Private detail leaks: 0
+- Confirmation status: `not_run`
+- Holdout status: `not_run`
+- Wheel SHA256:
+  `fd3a0ab7cd24e5148408250a220db44eb378ff705770593784c17ec687878096`
+- sdist SHA256:
+  `2cbe617826ce0b9b7e2bd3da66f22bb7b5c05cd894426d80ee1d47a140ac7a05`
+
+Candidate 9 closes all six Candidate 8 review findings without changing any
+frozen split. Summary schema 2 is mandatory by Commit ancestry, root Registry
+types are strict, historical review scope is recomputed from fixed Commits,
+version probes use a clean Python environment, Showcase metrics derive from
+final replay cases, and complete Code Wiki Evidence is retained and validated.
+Local gates and final review remain pending; confirmation stays closed.
 
 ## Confirmation Components
 
