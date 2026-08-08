@@ -1,10 +1,10 @@
 # v0.3.0 Release Candidate Specification
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=8; platform_gate_candidate=8; platform_gate_status=accepted; review_status=pending; macos_passed=604; linux_passed=601; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=8; platform_gate_candidate=8; platform_gate_status=accepted; review_status=rejected; macos_passed=604; linux_passed=601; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 ## Status
 
-`LOCAL_GATES_PASSED_REVIEW_PENDING`
+`LOCAL_GATES_PASSED_REVIEW_REJECTED`
 
 ## Base
 
@@ -513,6 +513,27 @@ identical to Candidate 8 development. Each platform's retained directory
 preserves the original `dist/`, `release-provenance.json`, and `SHA256SUMS`
 layout; `shasum -a 256 -c SHA256SUMS` succeeds in place. Final static review
 remains required before confirmation authorization.
+
+## Rejected Candidate 8 Static Review
+
+- Evidence:
+  `demo/results/release_candidate_candidate_8_static_review_rejected.json`
+- Evidence SHA256:
+  `f2456842b969565a221d962fc48f95264cbe22ccce13fca960b21b1a155f043a`
+- Reviewed range:
+  `569685c2f0bf790819820b821b4768d180c4ee0d...f4dde0904e5bcaeb78be6d7a32e74a6beae5679a`
+- Result: `REJECTED`
+- P0: 0
+- P1: 4
+- P2: 2
+- Confirmation status: `not_run`
+- Holdout status: `not_run`
+
+The review found a schema-2 downgrade path, a root JSON boolean alias,
+incomplete review-scope recomputation, unclean version-probe environments,
+Showcase metrics not derived from final replay cases, and a weak Code Wiki
+provenance consumer. All six findings and the fixed review scope are retained.
+Candidate 8 does not authorize confirmation.
 
 ## Confirmation Components
 

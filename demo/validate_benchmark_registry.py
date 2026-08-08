@@ -380,7 +380,7 @@ REQUIRED_EXPERIMENT_EVIDENCE = {
         ),
         _RESULTS + "release_candidate_development_candidate_8.json": (
             9,
-            "accepted_development",
+            "development_passed_regression_failed",
             "37b0270bba89da81815f2ac00fbeec10e766c8a16436e28ab1e7a2fd449afe83",
             "2451f2dae8845b490db1cb46727c7828f0d227f7",
         ),
@@ -500,6 +500,11 @@ REQUIRED_REVIEW_EVIDENCE = {
             _RESULTS + "release_candidate_candidate_7_static_review_rejected.json",
             "94b841b8148f40049e3b226b705294527767acf7567a5a456b8706edcde3b501",
             "a044337347b9c6884ea660c7568c4e3911c84521",
+        ),
+        _RESULTS + "release_candidate_development_candidate_8.json": (
+            _RESULTS + "release_candidate_candidate_8_static_review_rejected.json",
+            "f2456842b969565a221d962fc48f95264cbe22ccce13fca960b21b1a155f043a",
+            "f4dde0904e5bcaeb78be6d7a32e74a6beae5679a",
         ),
     },
 }
@@ -3740,6 +3745,96 @@ def _validate_release_static_review_regression(
                 "diff_mode": "merge_base_to_source",
                 "reviewed_files": 79,
                 "changed_lines": 14125,
+            },
+        )
+    elif candidate == "release-development-candidate-8":
+        expected_review = {
+            "scope": (
+                "569685c2f0bf790819820b821b4768d180c4ee0d..."
+                "f4dde0904e5bcaeb78be6d7a32e74a6beae5679a"
+            ),
+            "base_commit": "569685c2f0bf790819820b821b4768d180c4ee0d",
+            "source_commit": "f4dde0904e5bcaeb78be6d7a32e74a6beae5679a",
+            "status": "failed",
+            "p0": 0,
+            "p1": 4,
+            "p2": 2,
+            "failures": [
+                "summary_schema_downgrade",
+                "registry_schema_type",
+                "historical_review_scope_stats",
+                "version_probe_environment",
+                "showcase_metric_case_mismatch",
+                "local_gate_code_wiki_semantic_closure",
+            ],
+            "artifacts": {
+                "raw_findings": {
+                    "path": (
+                        "demo/results/artifacts/release_candidate_review_candidate_8/comments.jsonl"
+                    ),
+                    "sha256": ("22ed19f0cccfdf53ea1831f661eccd1c41414f8aab4993ca02798a7698a5fd26"),
+                },
+                "top_findings": {
+                    "path": (
+                        "demo/results/artifacts/release_candidate_review_candidate_8/"
+                        "final_comments.json"
+                    ),
+                    "sha256": ("1f33de965191482cd3e38f37f3a41cde8b73c6a406c0f02cfcaaa7b07b74d23c"),
+                },
+                "html_report": {
+                    "path": (
+                        "demo/results/artifacts/release_candidate_review_candidate_8/report.html"
+                    ),
+                    "sha256": ("4e2b3b16534d84dcd8bf4558ee5cab620b49a2406bd7b3d601ae5da54bae37a8"),
+                },
+                "markdown_report": {
+                    "path": (
+                        "demo/results/artifacts/release_candidate_review_candidate_8/report.md"
+                    ),
+                    "sha256": ("12aa690de93c6f274411d04e9344a4679e5f96fd67da99970433a56255dbd8e6"),
+                },
+                "review_scope": {
+                    "path": (
+                        "demo/results/artifacts/release_candidate_review_candidate_8/"
+                        "review-scope.json"
+                    ),
+                    "sha256": ("b838d75cdd3d75f44f99c85cd67cfb080063dea90aa209e4340b44242109a2f2"),
+                },
+            },
+        }
+        expected_root_cause = {
+            "summary": (
+                "Candidate 8 closed the first review findings, but several consumers still "
+                "accepted weaker schemas, incomplete platform provenance, and inconsistent "
+                "audit metadata."
+            ),
+            "fix": (
+                "Freeze schema 2 by Commit ancestry, enforce strict root types and exact Code "
+                "Wiki contracts, recompute review scope stats, isolate version probes, and "
+                "derive Showcase metrics from final cases."
+            ),
+        }
+        for artifact in expected_review["artifacts"].values():
+            _validate_artifact(artifact, "release-candidate static review")
+        scope_artifact = expected_review["artifacts"]["review_scope"]
+        scope_payload = json.loads(
+            (REPO_ROOT / str(scope_artifact["path"])).read_text(encoding="utf-8")
+        )
+        review_ancestry_valid = _git_commit_descends_from(
+            commit,
+            development_artifact["memoryforge_commit"],
+        ) and _strict_mapping(
+            scope_payload,
+            {
+                "schema_version": 1,
+                "base_commit": expected_review["base_commit"],
+                "source_commit": expected_review["source_commit"],
+                "diff_mode": "merge_base_to_source",
+                "reviewed_files": 97,
+                "diff_files": 161,
+                "added_lines": 17612,
+                "deleted_lines": 192,
+                "changed_lines": 17804,
             },
         )
     else:
