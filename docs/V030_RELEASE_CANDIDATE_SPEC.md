@@ -1,10 +1,10 @@
 # v0.3.0 Release Candidate Specification
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=10; platform_gate_candidate=9; platform_gate_status=accepted; review_status=not_run; macos_passed=607; linux_passed=604; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=11; platform_gate_candidate=9; platform_gate_status=accepted; review_status=pending; macos_passed=607; linux_passed=604; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 ## Status
 
-`DEVELOPMENT_REJECTED`
+`DEVELOPMENT_PASSED_LOCAL_GATES_PENDING`
 
 ## Base
 
@@ -623,6 +623,31 @@ Candidate 10 generated Summary schema 3 and Workspace drill schema 2
 successfully. The development consumer still required the old drill schema 1,
 so the run was rejected at 5/6. The output and all generated artifacts are
 retained; Candidate 10 is not rerun.
+
+## Accepted Development Candidate 11
+
+- Evidence: `demo/results/release_candidate_development_candidate_11.json`
+- Evidence SHA256:
+  `690b4d46e4191e3e0b267e9100fd3f61fa0cbdd8f9661784b2dd82405a2ac396`
+- MemoryForge Commit:
+  `f174d1de4e459c4b324f0ba5f58e8df62263fa00`
+- Result: `DEVELOPMENT_PASSED_GATE_PENDING`
+- Development pass rate: 100.0%
+- Failed cases: 0
+- Reproducible Wheel/sdist: true
+- Private detail leaks: 0
+- Confirmation status: `not_run`
+- Holdout status: `not_run`
+- Wheel SHA256:
+  `fd3a0ab7cd24e5148408250a220db44eb378ff705770593784c17ec687878096`
+- sdist SHA256:
+  `2cbe617826ce0b9b7e2bd3da66f22bb7b5c05cd894426d80ee1d47a140ac7a05`
+
+Candidate 11 uses one schema-aware consumer for retained Workspace Evidence.
+Summary schema 3 binds repository, development split, expected metrics, and all
+Evidence identities; drill schema 2 retains exact query, Citation, unknown,
+case metrics, and backup/restore replay. Local gates and final review remain
+pending; confirmation stays closed.
 
 ## Confirmation Components
 
