@@ -1,6 +1,6 @@
 # MemoryForge v0.3.0 Evidence Claims
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=11; platform_gate_candidate=11; platform_gate_status=accepted; review_status=rejected; macos_passed=609; linux_passed=606; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=12; platform_gate_candidate=11; platform_gate_status=accepted; review_status=pending; macos_passed=609; linux_passed=606; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 本页只列可由仓库内 Evidence 直接核验的主张。局部结果不得外推为任意仓库、任意语言或生产 SLA。
 
@@ -38,6 +38,7 @@
 | Candidate 11 development 6/6，Summary schema 3 与可重算 Workspace query Evidence 通过 | [`release_candidate_development_candidate_11.json`](../demo/results/release_candidate_development_candidate_11.json) | 固定 Commit `f174d1d`；终审 rejected；confirmation/holdout 未运行 |
 | Candidate 11 在 macOS 609 passed，Linux 606 passed / 3 skipped，coverage 88%，raw Code Wiki Evidence 跨平台同字节 | [`release_candidate_candidate_11_local_gates.json`](../demo/results/release_candidate_candidate_11_local_gates.json) | 固定 Commit `ee298f0`；终审 rejected；不等于原生 Windows confirmation |
 | Candidate 11 静态终审为 0 P0 / 8 P1 / 4 P2，结果 rejected | [`release_candidate_candidate_11_static_review_rejected.json`](../demo/results/release_candidate_candidate_11_static_review_rejected.json) | 固定范围 `569685c...43d5c80`；12 条独立发现保留；confirmation/holdout 未运行 |
+| Candidate 12 development 6/6，关闭 Candidate 11 的 12 个审查根因 | [`release_candidate_development_candidate_12.json`](../demo/results/release_candidate_development_candidate_12.json) | 固定 Commit `bced2a6`；本地双平台门禁与终审待运行；confirmation/holdout 未运行 |
 | Candidate 2 首次 sdist preflight 因 macOS 路径 alias 失败且未生成输出目录 | [`release_candidate_sdist_probe_regression_rejected.json`](../demo/results/release_candidate_sdist_probe_regression_rejected.json) | 保留失败；修复使用 canonical path，未放宽 ownership gate |
 | 开发与构建依赖可冻结重放 | [`constraints/dev.txt`](../constraints/dev.txt)，SHA256 `48debebcfd2da302201688e0582c676cb571d66e96cd7a2a2e0654f49a544571` | 仅覆盖声明的平台与 Python 版本 |
 | Wheel 和 sdist 可独立安装 | 本地门禁与 [`run_release_check.py`](../demo/run_release_check.py) | 需要在精确 Commit 上重跑 |

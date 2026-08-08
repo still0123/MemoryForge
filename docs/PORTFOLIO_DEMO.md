@@ -1,6 +1,6 @@
 # 秋招演示与面试说明
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=11; platform_gate_candidate=11; platform_gate_status=accepted; review_status=rejected; macos_passed=609; linux_passed=606; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=12; platform_gate_candidate=11; platform_gate_status=accepted; review_status=pending; macos_passed=609; linux_passed=606; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 这份文档用于把 MemoryForge 讲成一个完整项目。演示只使用公开的 `AgentSkill-Eval` 文档，不使用公司代码、真实飞书正文、Token 或 App Secret。
 
@@ -116,6 +116,11 @@ Candidate 11 统一使用 schema-aware consumer 后 development 6/6 通过。公
 split 和完整历史身份。本地门禁为 macOS 609 passed、Linux 606 passed / 3 skipped；package 与
 raw Code Wiki Evidence 跨平台同字节。终审发现 0 P0 / 8 P1 / 4 P2，结果 rejected；12 条独立
 发现保留，confirmation 继续关闭。
+
+Candidate 12 development 6/6 通过，并关闭 Candidate 11 的 12 个审查根因：package metadata、
+Registry-to-Commit、verify Evidence/support、跨平台隐私路径、clean-room import、Git fixture
+identity、PowerShell 恢复、artifact root 和 passed-review 状态均由确定性 consumer 重放。
+Candidate 12 本地双平台门禁与终审尚未运行；609/606 仍仅属于 Candidate 11。
 
 随后展示 support-score development：Answer 与 Selective Accuracy 为 100%，Coverage 为 90%，
 Risk 为 0%；同时明确 confirmation 尚未运行。这样可以说明“有正向指标，但不越过冻结 split

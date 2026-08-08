@@ -1,10 +1,10 @@
 # v0.3.0 Release Candidate Specification
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=11; platform_gate_candidate=11; platform_gate_status=accepted; review_status=rejected; macos_passed=609; linux_passed=606; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=12; platform_gate_candidate=11; platform_gate_status=accepted; review_status=pending; macos_passed=609; linux_passed=606; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 ## Status
 
-`LOCAL_GATES_PASSED_REVIEW_REJECTED`
+`DEVELOPMENT_PASSED_GATE_PENDING`
 
 ## Base
 
@@ -689,6 +689,33 @@ The review found remaining exact package/query schemas, environment isolation,
 privacy, artifact-root closure, Registry snapshot binding, and accepted-review
 transition gaps. All 12 independent findings and fixed scope are retained.
 Candidate 11 does not authorize confirmation.
+
+## Accepted Development Candidate 12
+
+- Evidence: `demo/results/release_candidate_development_candidate_12.json`
+- Evidence SHA256:
+  `d66093fdd468501ef5c43045cb2d72579bf97a83d0a29602d51447d3e92d816c`
+- MemoryForge Commit:
+  `bced2a660ef38dfc4c0c6a0f994897d6af895574`
+- Result: `DEVELOPMENT_PASSED_GATE_PENDING`
+- Development pass rate: 100.0%
+- Failed cases: 0
+- Reproducible Wheel/sdist: true
+- Private detail leaks: 0
+- Confirmation status: `not_run`
+- Holdout status: `not_run`
+- Wheel SHA256:
+  `fd3a0ab7cd24e5148408250a220db44eb378ff705770593784c17ec687878096`
+- sdist SHA256:
+  `2cbe617826ce0b9b7e2bd3da66f22bb7b5c05cd894426d80ee1d47a140ac7a05`
+
+Candidate 12 closes all twelve Candidate 11 findings with exact package/query
+schemas, Registry-to-Commit binding, cross-platform path privacy, clean-room
+import ownership, fixed Git fixture identity, PowerShell initialization
+restoration, replayable artifact-root closure, and passed final-review
+governance. The two development replays are byte-equivalent at the evaluation
+level. Candidate 12 local macOS/Linux gates and final review remain pending;
+the retained Candidate 11 platform counts do not authorize confirmation.
 
 ## Confirmation Components
 
