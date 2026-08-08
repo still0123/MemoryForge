@@ -198,6 +198,11 @@ def test_workspace_release_drill_rejects_wrong_or_non_replayed_queries() -> None
     assert workspace_drill._replay_payload(answered) == workspace_drill._replay_payload(
         {key: value for key, value in answered.items() if key != "trace"}
     )
+    assert workspace_drill._evaluation_metrics(False, True) == {
+        "answer_accuracy": 0.0,
+        "citation_grounding_accuracy": 0.0,
+        "abstention_accuracy": 100.0,
+    }
     answered["answer"] = "wrong"
     assert not workspace_drill._answered_query_valid(answered)
 

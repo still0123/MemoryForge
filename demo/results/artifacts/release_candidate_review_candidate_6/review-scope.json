@@ -4,5 +4,8 @@
   "source_commit": "9588c2fb6a41225515165f0114ce61f23f51d921",
   "diff_mode": "merge_base_to_source",
   "reviewed_files": 62,
-  "changed_lines": 10918
+  "diff_files": 105,
+  "added_lines": 10918,
+  "deleted_lines": 35,
+  "changed_lines": 10953
 }

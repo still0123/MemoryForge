@@ -17,6 +17,7 @@ from typing import Any, cast
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SOURCE_GIT_ROOT = REPO_ROOT
 DEFAULT_REGISTRY = REPO_ROOT / "demo/evaluation/registry.json"
+SUMMARY_SCHEMA_2_ANCESTOR = "2451f2dae8845b490db1cb46727c7828f0d227f7"
 SUITE_ID = re.compile(r"^[a-z0-9]+(?:[._-][a-z0-9]+)+$")
 COMMIT = re.compile(r"^[a-f0-9]{40}$")
 SHA256 = re.compile(r"^[a-f0-9]{64}$")
@@ -27,21 +28,59 @@ SUITE_TYPES = {
     "code_wiki_qa",
     "source_lifecycle",
 }
+CODE_WIKI_METRICS = {
+    "expected_source_coverage",
+    "symbol_recall",
+    "core_relation_recall",
+    "known_gap_relation_recall",
+    "overall_relation_recall",
+    "module_assignment_accuracy",
+    "citation_grounding_accuracy",
+    "architecture_edge_grounding",
+    "mermaid_edge_coverage",
+    "architecture_citation_coverage",
+    "architecture_mermaid_determinism",
+    "deterministic_replay",
+}
+CODE_WIKI_GATES = {
+    "core_symbols",
+    "core_relations",
+    "module_assignment",
+    "citations",
+    "architecture_wiki",
+    "deterministic",
+}
+CODE_WIKI_INCREMENTAL = {
+    "changed_symbols": ["py.app", "py.app.run_local"],
+    "expected_changed_symbols": ["py.app", "py.app.run_local"],
+    "changed_pages": ["wiki/pages/code/<repository-id-prefix>/py/app.md"],
+    "expected_changed_pages": ["wiki/pages/code/<repository-id-prefix>/py/app.md"],
+    "changed_page_ratio": 0.2,
+    "max_changed_page_ratio": 0.25,
+    "stable_symbol_ids": True,
+    "passed": True,
+}
 _RESULTS = "demo/results/"
 HISTORICAL_REVIEW_SCOPES = {
     _RESULTS + "artifacts/release_candidate_review_candidate_5/review-scope.json": {
-        "sha256": "63aa2d22181f326181e09d1a6dcd30f8636e3265e86fdfe1df38c4f8429935ea",
+        "sha256": "3da236623b9ba45ce4704b1d332c441e59b24a99ed4ce08f348b9bb09cb37e85",
         "base_commit": "569685c2f0bf790819820b821b4768d180c4ee0d",
         "source_commit": "26767333bc20a6367bc87f239cdc956cd40e7f4e",
         "reviewed_files": 48,
-        "changed_lines": 7835,
+        "diff_files": 82,
+        "added_lines": 7835,
+        "deleted_lines": 30,
+        "changed_lines": 7865,
     },
     _RESULTS + "artifacts/release_candidate_review_candidate_6/review-scope.json": {
-        "sha256": "b53d1a03fbd6552106cb41fb9add2fe9d3992a2dd824e74f6c540e0f8f942c4b",
+        "sha256": "19b308f5fb463821eee729aac06bc8f7d03efb8fabd80fa0239df0fec0a029ce",
         "base_commit": "569685c2f0bf790819820b821b4768d180c4ee0d",
         "source_commit": "9588c2fb6a41225515165f0114ce61f23f51d921",
         "reviewed_files": 62,
-        "changed_lines": 10918,
+        "diff_files": 105,
+        "added_lines": 10918,
+        "deleted_lines": 35,
+        "changed_lines": 10953,
     },
 }
 REQUIRED_EXPERIMENT_EVIDENCE = {
@@ -1294,7 +1333,7 @@ def main(argv: list[str] | None = None) -> None:
 
 def validate_registry(path: Path = DEFAULT_REGISTRY) -> dict[str, object]:
     registry = json.loads(path.read_text(encoding="utf-8"))
-    if registry.get("schema_version") != 1:
+    if type(registry.get("schema_version")) is not int or registry.get("schema_version") != 1:
         raise ValueError("unsupported benchmark registry schema")
     if registry.get("package_release_target") != "0.3.0":
         raise ValueError("benchmark registry must target package 0.3.0")
@@ -1445,13 +1484,67 @@ def _validate_historical_review_scopes() -> None:
             "source_commit": expected["source_commit"],
             "diff_mode": "merge_base_to_source",
             "reviewed_files": expected["reviewed_files"],
+            "diff_files": expected["diff_files"],
+            "added_lines": expected["added_lines"],
+            "deleted_lines": expected["deleted_lines"],
             "changed_lines": expected["changed_lines"],
         }
-        if not _strict_mapping(payload, expected_payload) or not _git_commit_descends_from(
-            str(expected["source_commit"]),
+        actual_stats = _git_diff_stats(
             str(expected["base_commit"]),
+            str(expected["source_commit"]),
+        )
+        expected_stats = {
+            key: expected[key]
+            for key in (
+                "diff_files",
+                "reviewed_files",
+                "added_lines",
+                "deleted_lines",
+                "changed_lines",
+            )
+        }
+        if (
+            not _strict_mapping(payload, expected_payload)
+            or actual_stats != expected_stats
+            or not _git_commit_descends_from(
+                str(expected["source_commit"]),
+                str(expected["base_commit"]),
+            )
         ):
             raise ValueError("release-candidate review scope changed")
+
+
+def _git_diff_stats(base_commit: str, source_commit: str) -> dict[str, int]:
+    output = subprocess.run(
+        ["git", "diff", "--numstat", f"{base_commit}...{source_commit}"],
+        cwd=SOURCE_GIT_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    diff_files = reviewed_files = added_lines = deleted_lines = 0
+    for line in output.splitlines():
+        added, deleted, path = line.split("\t", 2)
+        diff_files += 1
+        if added.isdigit() and deleted.isdigit():
+            file_added = int(added)
+            file_deleted = int(deleted)
+            added_lines += file_added
+            deleted_lines += file_deleted
+            if _historical_review_path_included(path, file_added, file_deleted):
+                reviewed_files += 1
+    return {
+        "diff_files": diff_files,
+        "reviewed_files": reviewed_files,
+        "added_lines": added_lines,
+        "deleted_lines": deleted_lines,
+        "changed_lines": added_lines + deleted_lines,
+    }
+
+
+def _historical_review_path_included(path: str, added: int, deleted: int) -> bool:
+    parts = path.split("/")
+    return added + deleted > 0 and "tests" not in parts and not path.endswith((".gz", ".md"))
 
 
 def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
@@ -2525,6 +2618,17 @@ def _release_summary_contract(payload: object, commit: str) -> bool:
     if schema_version not in {1, 2}:
         return False
     try:
+        schema_2_required = (
+            subprocess.run(
+                ["git", "merge-base", "--is-ancestor", SUMMARY_SCHEMA_2_ANCESTOR, commit],
+                cwd=SOURCE_GIT_ROOT,
+                check=False,
+                capture_output=True,
+            ).returncode
+            == 0
+        )
+        if schema_version != (2 if schema_2_required else 1):
+            return False
         snapshot = json.loads(
             subprocess.run(
                 ["git", "show", f"{commit}:demo/evaluation/registry.json"],
@@ -2836,6 +2940,7 @@ def _validate_bound_gate_artifacts(
     *,
     require_clean_sdist: bool = False,
     require_replayable_sums: bool = False,
+    require_code_evidence: bool = False,
 ) -> bool:
     digest_fields = {
         "wheel": "wheel_sha256",
@@ -2843,6 +2948,8 @@ def _validate_bound_gate_artifacts(
         "provenance": "provenance_sha256",
         "sha256sums": "sha256sums_sha256",
     }
+    if require_code_evidence:
+        digest_fields["code_wiki_evidence"] = "code_wiki_evidence_sha256"
     if (
         not isinstance(artifact_files, dict)
         or set(artifact_files) != set(digest_fields)
@@ -2941,30 +3048,12 @@ def _validate_bound_gate_artifacts(
         or set(code_wiki) != {"evidence_sha256", "metrics", "gates", "incremental"}
         or SHA256.fullmatch(str(code_wiki.get("evidence_sha256"))) is None
         or not isinstance(metrics, dict)
-        or not metrics
+        or set(metrics) != CODE_WIKI_METRICS
         or any(type(value) not in {int, float} or value != 100.0 for value in metrics.values())
         or not isinstance(gates, dict)
-        or not gates
+        or set(gates) != CODE_WIKI_GATES
         or any(value is not True for value in gates.values())
-        or not isinstance(incremental, dict)
-        or set(incremental)
-        != {
-            "changed_symbols",
-            "expected_changed_symbols",
-            "changed_pages",
-            "expected_changed_pages",
-            "changed_page_ratio",
-            "max_changed_page_ratio",
-            "stable_symbol_ids",
-            "passed",
-        }
-        or incremental.get("changed_symbols") != incremental.get("expected_changed_symbols")
-        or incremental.get("changed_pages") != incremental.get("expected_changed_pages")
-        or type(incremental.get("changed_page_ratio")) not in {int, float}
-        or type(incremental.get("max_changed_page_ratio")) not in {int, float}
-        or incremental["changed_page_ratio"] > incremental["max_changed_page_ratio"]
-        or incremental.get("stable_symbol_ids") is not True
-        or incremental.get("passed") is not True
+        or not _strict_mapping(incremental, CODE_WIKI_INCREMENTAL)
         or not _strict_mapping(
             public_demo,
             {
@@ -2974,6 +3063,41 @@ def _validate_bound_gate_artifacts(
         )
     ):
         return False
+
+    if require_code_evidence:
+        try:
+            code_evidence = json.loads(paths["code_wiki_evidence"].read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return False
+        evaluation = code_evidence.get("evaluation") if isinstance(code_evidence, dict) else None
+        if (
+            not isinstance(code_evidence, dict)
+            or set(code_evidence)
+            != {
+                "schema_version",
+                "memoryforge_commit",
+                "memoryforge_worktree_dirty",
+                "fixture",
+                "workflow",
+                "evaluation",
+                "incremental",
+            }
+            or type(code_evidence.get("schema_version")) is not int
+            or code_evidence.get("schema_version") != 1
+            or code_evidence.get("memoryforge_commit") != gate_commit
+            or code_evidence.get("memoryforge_worktree_dirty") is not False
+            or not isinstance(evaluation, dict)
+            or set(evaluation) != {"schema_version", "suite", "counts", "metrics", "gates", "cases"}
+            or not isinstance(evaluation.get("counts"), dict)
+            or not evaluation["counts"]
+            or not isinstance(evaluation.get("cases"), list)
+            or not evaluation["cases"]
+            or not _strict_mapping(evaluation.get("metrics"), metrics)
+            or not _strict_mapping(evaluation.get("gates"), gates)
+            or not _strict_mapping(code_evidence.get("incremental"), incremental)
+            or code_wiki.get("evidence_sha256") != artifact_digests.get("code_wiki_evidence_sha256")
+        ):
+            return False
 
     if require_clean_sdist:
         try:
@@ -2998,6 +3122,8 @@ def _validate_bound_gate_artifacts(
         f"dist/{paths['sdist'].name}": artifact_digests["sdist_sha256"],
         "release-provenance.json": artifact_digests["provenance_sha256"],
     }
+    if require_code_evidence:
+        expected_sums["code-wiki-evidence.json"] = artifact_digests["code_wiki_evidence_sha256"]
     return sums == expected_sums and (
         not require_replayable_sums or _sha256sums_replays(paths["sha256sums"].parent, sums)
     )
@@ -4476,6 +4602,7 @@ def _validate_release_candidate_acceptance_evidence(
                 commit,
                 require_clean_sdist=True,
                 require_replayable_sums=evidence_revision >= 9,
+                require_code_evidence=evidence_revision >= 10,
             )
             or not _release_provenance_matches(local_gate, contract["runtime"])
         ):

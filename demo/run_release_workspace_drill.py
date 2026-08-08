@@ -144,28 +144,26 @@ def run_drill(workdir: Path) -> dict[str, Any]:
     unknown_valid = _unknown_query_valid(unknown)
     answered_replayed = _replay_payload(query) == _replay_payload(restored_query)
     unknown_replayed = _replay_payload(unknown) == _replay_payload(restored_unknown)
+    answered_passed = answered_valid and answered_replayed
+    unknown_passed = unknown_valid and unknown_replayed
 
     cases = [
         {
             "id": "exact-code-signature",
             "category": "exact_symbol",
-            "error_classification": (
-                "none" if answered_valid and answered_replayed else "answer_or_replay_mismatch"
-            ),
+            "error_classification": ("none" if answered_passed else "answer_or_replay_mismatch"),
             "memoryforge": {
-                "answer_correct": answered_valid and answered_replayed,
+                "answer_correct": answered_passed,
                 "abstention_correct": False,
             },
         },
         {
             "id": "unsupported-symbol-abstention",
             "category": "unanswerable",
-            "error_classification": (
-                "none" if unknown_valid and unknown_replayed else "abstention_or_replay_mismatch"
-            ),
+            "error_classification": ("none" if unknown_passed else "abstention_or_replay_mismatch"),
             "memoryforge": {
-                "answer_correct": unknown_valid and unknown_replayed,
-                "abstention_correct": unknown_valid and unknown_replayed,
+                "answer_correct": unknown_passed,
+                "abstention_correct": unknown_passed,
             },
         },
     ]
@@ -183,11 +181,7 @@ def run_drill(workdir: Path) -> dict[str, Any]:
                 "evaluation": {
                     "suite": "release Workspace drill",
                     "case_count": len(cases),
-                    "memoryforge": {
-                        "answer_accuracy": 100.0 if answered_valid else 0.0,
-                        "citation_grounding_accuracy": 100.0 if answered_valid else 0.0,
-                        "abstention_accuracy": 100.0 if unknown_valid else 0.0,
-                    },
+                    "memoryforge": _evaluation_metrics(answered_passed, unknown_passed),
                     "cases": cases,
                 },
             },
@@ -298,6 +292,17 @@ def _unknown_query_valid(payload: dict[str, Any]) -> bool:
 
 def _replay_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in payload.items() if key != "trace"}
+
+
+def _evaluation_metrics(
+    answered_passed: bool,
+    unknown_passed: bool,
+) -> dict[str, float]:
+    return {
+        "answer_accuracy": 100.0 if answered_passed else 0.0,
+        "citation_grounding_accuracy": 100.0 if answered_passed else 0.0,
+        "abstention_accuracy": 100.0 if unknown_passed else 0.0,
+    }
 
 
 def _showcase_private_detail_leaks(

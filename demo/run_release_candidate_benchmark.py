@@ -741,7 +741,7 @@ def _load_json(path: Path) -> dict[str, Any]:
 
 
 def _cli_version() -> str:
-    environment = {**os.environ, "PYTHONPATH": str(SOURCE_ROOT)}
+    environment = _clean_python_environment()
     completed = subprocess.run(
         [sys.executable, "-m", "memoryforge", "--version"],
         cwd=REPO_ROOT,
@@ -754,7 +754,7 @@ def _cli_version() -> str:
 
 
 def _source_module_version() -> str:
-    environment = {**os.environ, "PYTHONPATH": str(SOURCE_ROOT)}
+    environment = _clean_python_environment()
     completed = subprocess.run(
         [sys.executable, "-c", "import memoryforge; print(memoryforge.__version__)"],
         cwd=REPO_ROOT,
@@ -764,6 +764,18 @@ def _source_module_version() -> str:
         text=True,
     )
     return completed.stdout.strip()
+
+
+def _clean_python_environment() -> dict[str, str]:
+    environment = {
+        key: value
+        for key, value in os.environ.items()
+        if key not in {"PYTHONHOME", "PYTHONPATH"}
+        and not key.startswith(("COV_CORE_", "COVERAGE_"))
+    }
+    environment["PYTHONPATH"] = str(SOURCE_ROOT)
+    environment["PYTHONNOUSERSITE"] = "1"
+    return environment
 
 
 def _release_artifact_evidence(

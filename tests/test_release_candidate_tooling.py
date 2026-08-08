@@ -33,6 +33,23 @@ def test_release_candidate_runner_binds_frozen_inputs() -> None:
     ]
 
 
+def test_release_candidate_version_probes_use_clean_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PYTHONHOME", "/private/tmp/untrusted")
+    monkeypatch.setenv("PYTHONPATH", "/private/tmp/untrusted")
+    monkeypatch.setenv("COV_CORE_DATAFILE", ".coverage")
+    monkeypatch.setenv("COVERAGE_FILE", ".coverage")
+
+    environment = benchmark._clean_python_environment()
+
+    assert environment["PYTHONPATH"] == str(benchmark.SOURCE_ROOT)
+    assert environment["PYTHONNOUSERSITE"] == "1"
+    assert "PYTHONHOME" not in environment
+    assert "COV_CORE_DATAFILE" not in environment
+    assert "COVERAGE_FILE" not in environment
+
+
 def test_release_candidate_reproducibility_requires_two_matching_builds(
     tmp_path: Path,
 ) -> None:

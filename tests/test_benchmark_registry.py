@@ -56,6 +56,16 @@ def test_benchmark_registry_rejects_duplicate_suite_ids(tmp_path: Path) -> None:
         validator.validate_registry(path)
 
 
+def test_benchmark_registry_rejects_boolean_root_schema(tmp_path: Path) -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    registry["schema_version"] = True
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps(registry), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="unsupported benchmark registry schema"):
+        validator.validate_registry(path)
+
+
 def test_benchmark_registry_rejects_artifact_hash_drift(tmp_path: Path) -> None:
     registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
     registry["suites"][0]["splits"]["development"]["sha256"] = "0" * 64
@@ -601,6 +611,33 @@ def test_benchmark_registry_requires_semantic_release_support() -> None:
     assert validator._release_summary_contract(historical, historical_commit)
     historical["suites"][0]["suite_id"] = "forged-suite"
     assert not validator._release_summary_contract(historical, historical_commit)
+    schema_2_commit = "2451f2dae8845b490db1cb46727c7828f0d227f7"
+    schema_2_summary = json.loads(
+        (
+            validator.REPO_ROOT
+            / "demo/results/artifacts/release_candidate_development"
+            / schema_2_commit
+            / "benchmark-summary.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert validator._release_summary_contract(schema_2_summary, schema_2_commit)
+    snapshot = json.loads(
+        validator.subprocess.run(
+            ["git", "show", f"{schema_2_commit}:demo/evaluation/registry.json"],
+            cwd=validator.SOURCE_GIT_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+    )
+    downgraded = validator.build_benchmark_summary(
+        snapshot,
+        validator._registry_snapshot_summary(snapshot),
+        package_version="0.3.0",
+        memoryforge_commit=schema_2_commit,
+        schema_version=1,
+    )
+    assert not validator._release_summary_contract(downgraded, schema_2_commit)
 
 
 def test_retained_sha256sums_must_replay_from_its_directory(tmp_path: Path) -> None:
@@ -619,6 +656,19 @@ def test_retained_sha256sums_must_replay_from_its_directory(tmp_path: Path) -> N
     wheel.unlink()
     assert not validator._sha256sums_replays(tmp_path, sums)
     assert not validator._sha256sums_replays(tmp_path, {"../outside": "0" * 64})
+
+
+def test_historical_review_scope_stats_are_recomputed() -> None:
+    assert validator._git_diff_stats(
+        "569685c2f0bf790819820b821b4768d180c4ee0d",
+        "26767333bc20a6367bc87f239cdc956cd40e7f4e",
+    ) == {
+        "diff_files": 82,
+        "reviewed_files": 48,
+        "added_lines": 7835,
+        "deleted_lines": 30,
+        "changed_lines": 7865,
+    }
 
 
 def test_benchmark_registry_consumes_local_gate_benchmark_provenance(
@@ -924,6 +974,7 @@ def test_benchmark_registry_hashes_bound_gate_artifact_bytes(
     wheel = tmp_path / "memoryforge-0.2.1-py3-none-any.whl"
     sdist = tmp_path / "memoryforge-0.2.1.tar.gz"
     provenance = tmp_path / "release-provenance.json"
+    code_evidence = tmp_path / "code-wiki-evidence.json"
     sums = tmp_path / "SHA256SUMS"
     wheel.write_bytes(b"wheel")
     with tarfile.open(sdist, "w:gz") as archive:
@@ -933,6 +984,31 @@ def test_benchmark_registry_hashes_bound_gate_artifact_bytes(
         archive.addfile(member, io.BytesIO(payload))
     wheel_sha256 = hashlib.sha256(wheel.read_bytes()).hexdigest()
     sdist_sha256 = hashlib.sha256(sdist.read_bytes()).hexdigest()
+    code_metrics = {name: 100.0 for name in validator.CODE_WIKI_METRICS}
+    code_gates = {name: True for name in validator.CODE_WIKI_GATES}
+    code_incremental = dict(validator.CODE_WIKI_INCREMENTAL)
+    code_evidence.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "memoryforge_commit": commit,
+                "memoryforge_worktree_dirty": False,
+                "fixture": {"name": "test"},
+                "workflow": {"status": "passed"},
+                "evaluation": {
+                    "schema_version": 1,
+                    "suite": "test",
+                    "counts": {"sources": 1},
+                    "metrics": code_metrics,
+                    "gates": code_gates,
+                    "cases": [{"id": "test", "status": "passed"}],
+                },
+                "incremental": code_incremental,
+            }
+        ),
+        encoding="utf-8",
+    )
+    code_evidence_sha256 = hashlib.sha256(code_evidence.read_bytes()).hexdigest()
     provenance.write_text(
         json.dumps(
             {
@@ -965,19 +1041,10 @@ def test_benchmark_registry_hashes_bound_gate_artifact_bytes(
                     "python demo/run_code_wiki_benchmark.py",
                 ],
                 "code_wiki": {
-                    "evidence_sha256": "1" * 64,
-                    "metrics": {"deterministic_replay": 100.0},
-                    "gates": {"deterministic": True},
-                    "incremental": {
-                        "changed_symbols": [],
-                        "expected_changed_symbols": [],
-                        "changed_pages": [],
-                        "expected_changed_pages": [],
-                        "changed_page_ratio": 0.0,
-                        "max_changed_page_ratio": 0.0,
-                        "stable_symbol_ids": True,
-                        "passed": True,
-                    },
+                    "evidence_sha256": code_evidence_sha256,
+                    "metrics": code_metrics,
+                    "gates": code_gates,
+                    "incremental": code_incremental,
                 },
                 "public_demo": {
                     "status": "not_run",
@@ -991,12 +1058,14 @@ def test_benchmark_registry_hashes_bound_gate_artifact_bytes(
     sums.write_text(
         f"{wheel_sha256}  dist/{wheel.name}\n"
         f"{sdist_sha256}  dist/{sdist.name}\n"
+        f"{code_evidence_sha256}  code-wiki-evidence.json\n"
         f"{provenance_sha256}  release-provenance.json\n",
         encoding="ascii",
     )
     digests = {
         "wheel_sha256": wheel_sha256,
         "sdist_sha256": sdist_sha256,
+        "code_wiki_evidence_sha256": code_evidence_sha256,
         "provenance_sha256": provenance_sha256,
         "sha256sums_sha256": hashlib.sha256(sums.read_bytes()).hexdigest(),
     }
@@ -1005,6 +1074,7 @@ def test_benchmark_registry_hashes_bound_gate_artifact_bytes(
         for name, path in {
             "wheel": wheel,
             "sdist": sdist,
+            "code_wiki_evidence": code_evidence,
             "provenance": provenance,
             "sha256sums": sums,
         }.items()
@@ -1016,6 +1086,7 @@ def test_benchmark_registry_hashes_bound_gate_artifact_bytes(
         digests,
         commit,
         require_clean_sdist=True,
+        require_code_evidence=True,
     )
     provenance_payload = json.loads(provenance.read_text(encoding="utf-8"))
     provenance_payload["checks"]["pip_check"] = "failed"
@@ -1026,6 +1097,7 @@ def test_benchmark_registry_hashes_bound_gate_artifact_bytes(
     sums.write_text(
         f"{wheel_sha256}  dist/{wheel.name}\n"
         f"{sdist_sha256}  dist/{sdist.name}\n"
+        f"{code_evidence_sha256}  code-wiki-evidence.json\n"
         f"{digests['provenance_sha256']}  release-provenance.json\n",
         encoding="ascii",
     )
@@ -1036,6 +1108,7 @@ def test_benchmark_registry_hashes_bound_gate_artifact_bytes(
         digests,
         commit,
         require_clean_sdist=True,
+        require_code_evidence=True,
     )
     provenance_payload["checks"]["pip_check"] = "passed"
     provenance_payload.pop("note")
@@ -1055,6 +1128,7 @@ def test_benchmark_registry_hashes_bound_gate_artifact_bytes(
     sums.write_text(
         f"{wheel_sha256}  dist/{wheel.name}\n"
         f"{digests['sdist_sha256']}  dist/{sdist.name}\n"
+        f"{code_evidence_sha256}  code-wiki-evidence.json\n"
         f"{provenance_sha256}  release-provenance.json\n",
         encoding="ascii",
     )
@@ -1065,6 +1139,7 @@ def test_benchmark_registry_hashes_bound_gate_artifact_bytes(
         digests,
         commit,
         require_clean_sdist=True,
+        require_code_evidence=True,
     )
 
     wheel.write_bytes(b"tampered")
@@ -1074,6 +1149,7 @@ def test_benchmark_registry_hashes_bound_gate_artifact_bytes(
             digests,
             commit,
             require_clean_sdist=True,
+            require_code_evidence=True,
         )
 
 

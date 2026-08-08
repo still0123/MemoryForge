@@ -70,6 +70,7 @@ PY
 PIP_CONSTRAINT="$root/constraints/dev.txt" "$python" demo/run_release_check.py \
   --wheel "$output"/dist/memoryforge-*.whl \
   --workdir "$workdir/wheel" \
+  --code-evidence-output "$output/code-wiki-evidence.json" \
   --output "$output/release-provenance.json"
 
 "$python" -m venv "$workdir/sdist"
@@ -105,7 +106,10 @@ import sys
 from pathlib import Path
 
 root = Path(sys.argv[1])
-artifacts = sorted((root / "dist").iterdir()) + [root / "release-provenance.json"]
+artifacts = sorted((root / "dist").iterdir()) + [
+    root / "code-wiki-evidence.json",
+    root / "release-provenance.json",
+]
 lines = [
     f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(root)}"
     for path in artifacts

@@ -129,6 +129,7 @@ try {
             "demo/run_release_check.py",
             "--wheel", $Wheel,
             "--workdir", (Join-Path $Workdir "wheel"),
+            "--code-evidence-output", (Join-Path $Output "code-wiki-evidence.json"),
             "--output", (Join-Path $Output "release-provenance.json")
         )
     } finally {
@@ -200,6 +201,7 @@ try {
     $HashTargets = @(
         Get-ChildItem -LiteralPath $Dist -File | Sort-Object Name
     )
+    $HashTargets += Get-Item -LiteralPath (Join-Path $Output "code-wiki-evidence.json")
     $HashTargets += Get-Item -LiteralPath (Join-Path $Output "platform-smoke.json")
     $HashTargets += Get-Item -LiteralPath (Join-Path $Output "release-provenance.json")
     $Lines = foreach ($Artifact in $HashTargets) {
