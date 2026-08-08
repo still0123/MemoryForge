@@ -57,7 +57,7 @@ Wiki 树、Diff、Citation Trace、Benchmark、保留的失败案例、正确拒
 | learn-claude-code support score development | Answer / selective accuracy **100%**，coverage **90%**，risk **0%** | 10 题；confirmation 未运行 |
 | Click 外部迁移 | development / holdout Answer **10% / 0%** | 真实负结果，未隐藏 |
 | Static Showcase development | **4/4**，本地详情泄漏 **0**，Workspace 变更 **0** | confirmation 未运行 |
-| v0.3.0 RC Candidate 7 | stable package inputs；同一制品门禁 | development 尚未运行 |
+| v0.3.0 RC Candidate 7 development | **6/6**；stable package inputs；同一制品门禁 | 本地门禁尚未运行 |
 | v0.3.0 RC Candidate 6 本地门禁 | macOS **594 passed**；Debian **591 passed / 3 skipped** | final review rejected；原生 Windows confirmation 未运行 |
 | v0.3.0 RC Candidate 5 本地门禁 | macOS **586 passed**；Debian **583 passed / 3 skipped** | historical；final review rejected |
 

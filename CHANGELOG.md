@@ -31,7 +31,7 @@
   coverage 均为 88%，Wheel/sdist 跨平台 SHA256 一致。
 - Candidate 6 最终静态审查发现 0 P0 / 9 P1 / 3 P2，结果 rejected；原始与 Top 5 报告均保留。
 - Candidate 7 固定 package metadata/sdist 输入与构建 epoch，并要求 development 与 local-gate
-  Wheel/sdist SHA256 完全一致；development 尚未运行。
+  Wheel/sdist SHA256 完全一致；development 6/6 通过，本地门禁尚未运行。
 - 强化回答准确率契约，要求关键事实和冻结来源同时命中；AgentSkill-Eval 30 题严格 Answer 为
   96.7%，Citation grounding 为 100%，Source recall@3 为 96.2%；
 - 追加独立 Click 20 题复评；回答准确率 5.0%、来源召回 16.7%，再次确认外部有效性缺口；

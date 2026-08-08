@@ -4,7 +4,7 @@
 
 ## Status
 
-`CANDIDATE_7_PREPARED_DEVELOPMENT_PENDING`
+`DEVELOPMENT_ACCEPTED_LOCAL_GATES_PENDING`
 
 ## Base
 
@@ -383,14 +383,26 @@ ownership, privacy, and strict JSON types. Raw findings and the Top 5 report
 remain under `demo/results/artifacts/release_candidate_review_candidate_6/`.
 Candidate 6 no longer authorizes confirmation.
 
-## Candidate 7 Preparation
+## Accepted Development Candidate 7
 
 Candidate 7 uses a stable package README, an explicit minimal sdist include
 set, and a fixed `SOURCE_DATE_EPOCH`. Evidence, Registry, tests, and release
 status documents can therefore be appended after development without changing
 the Wheel/sdist bytes. Its acceptance contract requires macOS and Linux
 local-gate artifact hashes to equal the development artifact hashes.
-Development has not run.
+
+- Evidence: `demo/results/release_candidate_development_candidate_7.json`
+- Evidence SHA256:
+  `337393de3ea54605055fd08f29fa92679ca3db52470879080cc0c92c5dd5ff10`
+- MemoryForge Commit:
+  `80b111bbd472cacd16ceb773a4c141e70ee97a4a`
+- Result: `ACCEPTED_DEVELOPMENT`
+- Development pass rate: 100.0%
+- Failed cases: 0
+- Reproducible Wheel/sdist: true
+- Private detail leaks: 0
+- Confirmation status: `not_run`
+- Holdout status: `not_run`
 
 ## Confirmation Components
 
