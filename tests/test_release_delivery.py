@@ -59,7 +59,13 @@ def test_benchmark_summary_reports_macro_per_suite_and_negatives() -> None:
         for experiment in summary["experiments"]
         if experiment["suite_id"] == "release-candidate-delivery"
     )
-    assert release["accepted_evidence"] == []
+    assert release["accepted_evidence"] == [
+        {
+            "path": "demo/results/release_candidate_development_candidate_7.json",
+            "sha256": "337393de3ea54605055fd08f29fa92679ca3db52470879080cc0c92c5dd5ff10",
+            "memoryforge_commit": "80b111bbd472cacd16ceb773a4c141e70ee97a4a",
+        }
+    ]
     assert summary["macro"]["citation_grounding_accuracy"] > 90
     assert any(
         result["suite_id"] == "doc-wiki-qa.click" and result["status"] == "retained_metric_gap"

@@ -1,6 +1,6 @@
 # 秋招演示与面试说明
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=7; platform_gate_candidate=6; platform_gate_status=accepted; review_status=pending; macos_passed=594; linux_passed=591; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=7; platform_gate_candidate=7; platform_gate_status=accepted; review_status=pending; macos_passed=599; linux_passed=596; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 这份文档用于把 MemoryForge 讲成一个完整项目。演示只使用公开的 `AgentSkill-Eval` 文档，不使用公司代码、真实飞书正文、Token 或 App Secret。
 
@@ -80,9 +80,9 @@ Relation、Module、Mermaid edge 和 Citation 指标均为 100%，单文件更�
 provenance 由双隔离本地构建生成；原生 Windows confirmation、holdout 与最终 tag 完成前只称
 release candidate，不称已发布。
 
-当前 Candidate 6 本地门禁为 macOS 594 passed、Linux 591 passed / 3 skipped，coverage 均为
-88%；原生 Windows confirmation 未运行。这组结果只证明固定 Commit 的本地交付链路，不外推为
-Windows 成功。
+当前 Candidate 7 本地门禁为 macOS 599 passed、Linux 596 passed / 3 skipped，coverage 均为
+88%；Wheel/sdist 与 development 字节一致。原生 Windows confirmation 未运行。这组结果只证明
+固定 Commit 的本地交付链路，不外推为 Windows 成功。
 
 Candidate 5 最终静态审查为 0 P0 / 10 P1 / 2 P2，结果 rejected。审查失败优先于本地门禁成功，
 因此不得授权 confirmation。
@@ -91,7 +91,8 @@ Candidate 6 development 已 6/6 通过，并从 detached Commit 快照构建；�
 0 P0 / 9 P1 / 3 P2，结果 rejected。development 与本地门禁制品不一致，故不得授权 confirmation。
 
 Candidate 7 已固定 package 输入和构建 epoch；development 6/6 通过。macOS 首次本地门禁因旧
-`sdist.exclude` 测试合同而 598/599 rejected；Linux 未运行。
+`sdist.exclude` 测试合同而 598/599 rejected，失败保留。修复测试合同后，同一 package bytes
+通过双平台门禁；最终静态审查仍待运行。
 
 随后展示 support-score development：Answer 与 Selective Accuracy 为 100%，Coverage 为 90%，
 Risk 为 0%；同时明确 confirmation 尚未运行。这样可以说明“有正向指标，但不越过冻结 split

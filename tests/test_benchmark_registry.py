@@ -25,7 +25,7 @@ def test_benchmark_registry_binds_all_release_artifacts() -> None:
         "status": "valid",
         "suite_count": 12,
         "experiment_count": 8,
-        "evidence_count": 113,
+        "evidence_count": 114,
         "qa_case_count": 121,
         "qa_case_types_present": [
             "code_behavior",
@@ -398,11 +398,11 @@ def test_benchmark_registry_binds_release_candidate_platform_results() -> None:
     experiment = next(
         item for item in registry["experiments"] if item["suite_id"] == "release-candidate-delivery"
     )
-    artifact = experiment["evidence"][1]
+    artifact = next(item for item in experiment["evidence"] if item["evidence_revision"] == 8)
     payload = json.loads(
         (validator.REPO_ROOT / artifact["acceptance_evidence"]["path"]).read_text(encoding="utf-8")
     )
-    payload["platforms"]["linux"]["local_gate"]["pytest"]["passed"] = 570
+    payload["platforms"]["linux"]["local_gate"]["pytest"]["passed"] = 595
 
     with pytest.raises(ValueError, match="linux local gate Evidence changed"):
         validator._validate_release_candidate_acceptance_evidence(

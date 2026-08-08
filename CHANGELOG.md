@@ -1,6 +1,6 @@
 # Changelog
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=7; platform_gate_candidate=6; platform_gate_status=accepted; review_status=pending; macos_passed=594; linux_passed=591; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=7; platform_gate_candidate=7; platform_gate_status=accepted; review_status=pending; macos_passed=599; linux_passed=596; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 ## v0.3.0 — Release Candidate
 
@@ -34,6 +34,8 @@
   Wheel/sdist SHA256 完全一致；development 6/6 通过。
 - Candidate 7 macOS 首次门禁为 598 passed / 1 failed，因旧测试仍要求已移除的
   `sdist.exclude` 合同而 rejected；Linux 未运行，失败 Evidence 已保留。
+- Candidate 7 修复测试合同后本地门禁通过：macOS 599 passed，Linux 596 passed / 3 skipped，
+  coverage 均为 88%；两端 Wheel/sdist 与 development 制品逐字节一致。
 - 强化回答准确率契约，要求关键事实和冻结来源同时命中；AgentSkill-Eval 30 题严格 Answer 为
   96.7%，Citation grounding 为 100%，Source recall@3 为 96.2%；
 - 追加独立 Click 20 题复评；回答准确率 5.0%、来源召回 16.7%，再次确认外部有效性缺口；
