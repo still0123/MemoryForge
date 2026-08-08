@@ -207,6 +207,7 @@ def _isolated_build(
         _run(
             [
                 uv,
+                "--no-config",
                 "pip",
                 "install",
                 "--python",
@@ -227,6 +228,7 @@ def _isolated_build(
                 str(python),
                 "-m",
                 "pip",
+                "--isolated",
                 "install",
                 "--index-url",
                 PACKAGE_INDEX_URL,
@@ -303,6 +305,7 @@ def _check_sdist_clean_room(
             str(python),
             "-m",
             "pip",
+            "--isolated",
             "install",
             "--disable-pip-version-check",
             "--index-url",
@@ -317,6 +320,7 @@ def _check_sdist_clean_room(
             str(python),
             "-m",
             "pip",
+            "--isolated",
             "install",
             "--disable-pip-version-check",
             "--no-build-isolation",
@@ -386,18 +390,30 @@ def _source_module_version(
     source_root: Path = SOURCE_ROOT,
 ) -> str:
     module = ast.parse((source_root / "memoryforge/__init__.py").read_text(encoding="utf-8"))
+    versions: list[str] = []
     for statement in module.body:
-        if (
-            isinstance(statement, ast.Assign)
-            and any(
-                isinstance(target, ast.Name) and target.id == "__version__"
-                for target in statement.targets
+        value: ast.expr | None = None
+        targets: list[ast.expr] = []
+        if isinstance(statement, ast.Assign):
+            value = statement.value
+            targets = statement.targets
+        elif isinstance(statement, (ast.AnnAssign, ast.AugAssign, ast.Delete)):
+            targets = (
+                [statement.target]
+                if isinstance(statement, (ast.AnnAssign, ast.AugAssign))
+                else list(statement.targets)
             )
-            and isinstance(statement.value, ast.Constant)
-            and isinstance(statement.value.value, str)
+        if not any(
+            isinstance(target, ast.Name) and target.id == "__version__" for target in targets
         ):
-            return statement.value.value
-    raise SystemExit("memoryforge.__version__ must be a string literal")
+            continue
+        if isinstance(value, ast.Constant) and isinstance(value.value, str):
+            versions.append(value.value)
+        else:
+            raise SystemExit("memoryforge.__version__ must be one string literal assignment")
+    if len(versions) != 1:
+        raise SystemExit("memoryforge.__version__ must be one string literal assignment")
+    return versions[0]
 
 
 def _single(directory: Path, pattern: str) -> Path:
@@ -428,10 +444,8 @@ def _clean_build_environment() -> dict[str, str]:
     environment = {
         key: value
         for key, value in os.environ.items()
-        if key not in {"PYTHONPATH", "PYTHONHOME", "PIP_CONFIG_FILE"}
-        and not key.startswith(
-            ("COV_CORE_", "COVERAGE_", "PIP_INDEX", "PIP_EXTRA_INDEX", "UV_INDEX")
-        )
+        if key not in {"PYTHONPATH", "PYTHONHOME"}
+        and not key.startswith(("COV_CORE_", "COVERAGE_", "PIP_", "UV_"))
     }
     environment["PYTHONNOUSERSITE"] = "1"
     environment["SOURCE_DATE_EPOCH"] = SOURCE_DATE_EPOCH

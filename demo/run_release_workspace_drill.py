@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import importlib.util
 import json
 import os
 import shutil
@@ -18,6 +19,15 @@ SOURCE_ROOT = REPO_ROOT / "src"
 SIGNATURE_QUESTION = "What is the signature of src.service.cache_ttl?"
 EXPECTED_SIGNATURE = "`src.service.cache_ttl` (function): `def cache_ttl() -> int:`"
 UNKNOWN_QUESTION = "What is the signature of src.service.missing_symbol?"
+_VALIDATOR_PATH = REPO_ROOT / "demo/validate_benchmark_registry.py"
+_VALIDATOR_SPEC = importlib.util.spec_from_file_location(
+    "validate_benchmark_registry",
+    _VALIDATOR_PATH,
+)
+if _VALIDATOR_SPEC is None or _VALIDATOR_SPEC.loader is None:
+    raise RuntimeError("could not load benchmark registry validator")
+registry_validator = importlib.util.module_from_spec(_VALIDATOR_SPEC)
+_VALIDATOR_SPEC.loader.exec_module(registry_validator)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -140,8 +150,8 @@ def run_drill(workdir: Path) -> dict[str, Any]:
         "--workspace",
         str(restored),
     )
-    answered_valid = _answered_query_valid(query)
-    unknown_valid = _unknown_query_valid(unknown)
+    answered_valid = _answered_query_valid(_replay_payload(query))
+    unknown_valid = _unknown_query_valid(_replay_payload(unknown))
     answered_replayed = _replay_payload(query) == _replay_payload(restored_query)
     unknown_replayed = _replay_payload(unknown) == _replay_payload(restored_unknown)
     answered_passed = answered_valid and answered_replayed
@@ -262,51 +272,11 @@ def run_drill(workdir: Path) -> dict[str, Any]:
 
 
 def _answered_query_valid(payload: dict[str, Any]) -> bool:
-    citations = payload.get("citations")
-    support = payload.get("support")
-    if not isinstance(citations, list) or len(citations) != 1:
-        return False
-    citation = citations[0]
-    if not isinstance(citation, dict):
-        return False
-    source_id = citation.get("source_id")
-    return (
-        payload.get("status") == "answered"
-        and payload.get("answer") == EXPECTED_SIGNATURE
-        and set(citation) == {"source_id", "source_version", "locator", "quote"}
-        and isinstance(source_id, str)
-        and len(source_id) == 64
-        and all(character in "0123456789abcdef" for character in source_id)
-        and citation.get("source_version") == 2
-        and citation.get("locator") == "chars:17-61"
-        and citation.get("quote") == EXPECTED_SIGNATURE
-        and payload.get("source_id") == source_id
-        and payload.get("source_version") == citation["source_version"]
-        and payload.get("locator") == citation["locator"]
-        and payload.get("quote") == citation["quote"]
-        and isinstance(support, dict)
-        and support.get("sufficient") is True
-        and support.get("enforced") is True
-        and support.get("failed_hard_gates") == []
-    )
+    return registry_validator._release_drill_answered_query(payload)
 
 
 def _unknown_query_valid(payload: dict[str, Any]) -> bool:
-    support = payload.get("support")
-    return (
-        payload.get("status") == "unknown"
-        and payload.get("answer") == "不知道"
-        and payload.get("citations") == []
-        and payload.get("source_id") is None
-        and payload.get("source_version") is None
-        and payload.get("locator") is None
-        and payload.get("quote") is None
-        and isinstance(support, dict)
-        and support.get("sufficient") is False
-        and support.get("enforced") is True
-        and support.get("failed_hard_gates")
-        == ["exact_identifier_not_covered", "score_below_threshold"]
-    )
+    return registry_validator._release_drill_unknown_query(payload)
 
 
 def _replay_payload(payload: dict[str, Any]) -> dict[str, Any]:

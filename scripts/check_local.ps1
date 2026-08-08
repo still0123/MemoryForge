@@ -8,65 +8,67 @@ $ErrorActionPreference = "Stop"
 $PreviousLocation = Get-Location
 $EnvironmentNames = @("PYTHONPATH", "PYTHONHOME", "PYTHONNOUSERSITE", "SOURCE_DATE_EPOCH")
 $OriginalEnvironment = @{}
-foreach ($Name in $EnvironmentNames) {
-    $OriginalEnvironment[$Name] = @{
-        Exists = Test-Path -LiteralPath "Env:$Name"
-        Value = [Environment]::GetEnvironmentVariable($Name, "Process")
-    }
-}
-
-$Root = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
-Set-Location -LiteralPath $Root
-
-if ($env:PYTHON_BIN) {
-    $Python = $env:PYTHON_BIN
-} elseif (Test-Path -LiteralPath (Join-Path $Root ".venv\Scripts\python.exe")) {
-    $Python = Join-Path $Root ".venv\Scripts\python.exe"
-} else {
-    $PythonCommand = Get-Command python -ErrorAction Stop
-    $Python = $PythonCommand.Source
-}
-
-if (-not $Output) {
-    $Timestamp = (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
-    $Output = Join-Path $Root "local-evidence\$Timestamp"
-}
-$Output = [IO.Path]::GetFullPath($Output)
-if (Test-Path -LiteralPath $Output) {
-    throw "output already exists: $Output"
-}
-
-$Workdir = Join-Path ([IO.Path]::GetTempPath()) (
-    "memoryforge-local-check." + [Guid]::NewGuid().ToString("N")
-)
-$Dist = Join-Path $Output "dist"
-[IO.Directory]::CreateDirectory($Dist) | Out-Null
-[IO.Directory]::CreateDirectory($Workdir) | Out-Null
-
-function Invoke-External {
-    param(
-        [string]$Command,
-        [string[]]$Arguments
-    )
-    & $Command @Arguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "command failed ($LASTEXITCODE): $Command $($Arguments -join ' ')"
-    }
-}
-
-function Get-SingleArtifact {
-    param(
-        [string]$Directory,
-        [string]$Filter
-    )
-    $Artifacts = @(Get-ChildItem -LiteralPath $Directory -Filter $Filter -File)
-    if ($Artifacts.Count -ne 1) {
-        throw "expected one $Filter artifact, found $($Artifacts.Count)"
-    }
-    return $Artifacts[0].FullName
-}
+$Workdir = $null
 
 try {
+    foreach ($Name in $EnvironmentNames) {
+        $OriginalEnvironment[$Name] = @{
+            Exists = Test-Path -LiteralPath "Env:$Name"
+            Value = [Environment]::GetEnvironmentVariable($Name, "Process")
+        }
+    }
+
+    $Root = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
+    Set-Location -LiteralPath $Root
+
+    if ($env:PYTHON_BIN) {
+        $Python = $env:PYTHON_BIN
+    } elseif (Test-Path -LiteralPath (Join-Path $Root ".venv\Scripts\python.exe")) {
+        $Python = Join-Path $Root ".venv\Scripts\python.exe"
+    } else {
+        $PythonCommand = Get-Command python -ErrorAction Stop
+        $Python = $PythonCommand.Source
+    }
+
+    if (-not $Output) {
+        $Timestamp = (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
+        $Output = Join-Path $Root "local-evidence\$Timestamp"
+    }
+    $Output = [IO.Path]::GetFullPath($Output)
+    if (Test-Path -LiteralPath $Output) {
+        throw "output already exists: $Output"
+    }
+
+    $Workdir = Join-Path ([IO.Path]::GetTempPath()) (
+        "memoryforge-local-check." + [Guid]::NewGuid().ToString("N")
+    )
+    $Dist = Join-Path $Output "dist"
+    [IO.Directory]::CreateDirectory($Dist) | Out-Null
+    [IO.Directory]::CreateDirectory($Workdir) | Out-Null
+
+    function Invoke-External {
+        param(
+            [string]$Command,
+            [string[]]$Arguments
+        )
+        & $Command @Arguments
+        if ($LASTEXITCODE -ne 0) {
+            throw "command failed ($LASTEXITCODE): $Command $($Arguments -join ' ')"
+        }
+    }
+
+    function Get-SingleArtifact {
+        param(
+            [string]$Directory,
+            [string]$Filter
+        )
+        $Artifacts = @(Get-ChildItem -LiteralPath $Directory -Filter $Filter -File)
+        if ($Artifacts.Count -ne 1) {
+            throw "expected one $Filter artifact, found $($Artifacts.Count)"
+        }
+        return $Artifacts[0].FullName
+    }
+
     Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
     Remove-Item Env:PYTHONHOME -ErrorAction SilentlyContinue
     $env:PYTHONNOUSERSITE = "1"
@@ -242,8 +244,13 @@ try {
 
     Write-Output "Local checks passed. Evidence: $Output"
 } finally {
-    Remove-Item -LiteralPath $Workdir -Recurse -Force -ErrorAction SilentlyContinue
+    if ($Workdir) {
+        Remove-Item -LiteralPath $Workdir -Recurse -Force -ErrorAction SilentlyContinue
+    }
     foreach ($Name in $EnvironmentNames) {
+        if (-not $OriginalEnvironment.ContainsKey($Name)) {
+            continue
+        }
         if ($OriginalEnvironment[$Name].Exists) {
             [Environment]::SetEnvironmentVariable(
                 $Name,

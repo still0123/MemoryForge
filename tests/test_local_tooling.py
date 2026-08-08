@@ -86,6 +86,10 @@ def test_powershell_gate_uses_literal_paths_and_isolated_sdist_probe() -> None:
         'Invoke-External $SdistPython @("-I", "-m", "memoryforge", "--version")',
     ):
         assert required in script
+    assert script.index("$Workdir = $null") < script.index("try {")
+    assert script.index("try {") < script.index("Set-Location -LiteralPath $Root")
+    assert "if ($Workdir)" in script
+    assert "$OriginalEnvironment.ContainsKey($Name)" in script
 
 
 def test_github_actions_workflows_are_removed() -> None:

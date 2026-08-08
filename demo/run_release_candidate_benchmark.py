@@ -636,41 +636,7 @@ def _check_splits_closed(
 
 
 def _private_detail_leaks(payloads: list[dict[str, Any]]) -> int:
-    prefixes = (
-        "/Users/",
-        "/home/",
-        "/private/var/",
-        "/private/tmp/",
-        "/tmp/",
-        "C:\\Users\\",
-    )
-    secrets = ("api_key", "token=", "password=", "secret=")
-    secret_keys = ("api_key", "token", "password", "secret")
-    secret_values = ("sk-", "ghp_", "bearer ")
-    leaks = 0
-
-    def visit(value: object) -> None:
-        nonlocal leaks
-        if isinstance(value, dict):
-            for key, item in value.items():
-                if any(secret in str(key).casefold() for secret in secret_keys) and item:
-                    leaks += 1
-                visit(item)
-        elif isinstance(value, list):
-            for item in value:
-                visit(item)
-        elif isinstance(value, str):
-            lowered = value.casefold()
-            if (
-                any(prefix.casefold() in lowered for prefix in prefixes)
-                or any(secret in lowered for secret in secrets)
-                or any(secret in lowered for secret in secret_values)
-            ):
-                leaks += 1
-
-    for payload in payloads:
-        visit(payload)
-    return leaks
+    return sum(registry_validator._payload_private_detail_leaks(payload) for payload in payloads)
 
 
 def _load_frozen_inputs() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:

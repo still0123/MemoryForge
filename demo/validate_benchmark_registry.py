@@ -14,7 +14,7 @@ import zipfile
 from collections import defaultdict
 from email.parser import BytesParser
 from email.policy import default
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any, cast
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -1836,23 +1836,12 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
                 raise ValueError(
                     f"experiment acceptance Evidence history is incomplete: {suite_id}"
                 )
-            if suite_id == "release-candidate-delivery":
-                if status == "accepted_development" and (
-                    not isinstance(review_evidence, dict)
-                    or review_evidence.get("passed") is not True
-                ):
-                    raise ValueError("release candidate requires an accepted final review")
-                if status == "local_gates_passed_review_pending" and (
-                    not isinstance(acceptance_evidence, dict)
-                    or acceptance_evidence.get("passed") is not True
-                    or review_evidence is not None
-                ):
-                    raise ValueError("release candidate review-pending state is inconsistent")
-                if status == "development_passed_review_failed" and (
-                    not isinstance(review_evidence, dict)
-                    or review_evidence.get("passed") is not False
-                ):
-                    raise ValueError("release candidate review-failed state is inconsistent")
+            if suite_id == "release-candidate-delivery" and not _release_review_state_valid(
+                status,
+                acceptance_evidence,
+                review_evidence,
+            ):
+                raise ValueError("release candidate review state is inconsistent")
             expected_linux = required_linux.get(path)
             linux_evidence = artifact.get("linux_evidence")
             if expected_linux is None:
@@ -2404,29 +2393,33 @@ def _validate_release_development_artifacts(
 
 
 def _package_archives_match(wheel: Path, sdist: Path) -> bool:
+    wheel_metadata_path = "memoryforge-0.3.0.dist-info/METADATA"
+    sdist_metadata_path = "memoryforge-0.3.0/PKG-INFO"
     try:
         with zipfile.ZipFile(wheel) as archive:
             metadata_names = [
                 name for name in archive.namelist() if name.endswith(".dist-info/METADATA")
             ]
-            if len(metadata_names) != 1:
+            if metadata_names != [wheel_metadata_path]:
                 return False
-            wheel_metadata = BytesParser(policy=default).parsebytes(archive.read(metadata_names[0]))
+            wheel_payload = archive.read(wheel_metadata_path)
         with tarfile.open(sdist, "r:gz") as archive:
             metadata_members = [
                 member for member in archive.getmembers() if member.name.endswith("/PKG-INFO")
             ]
-            if len(metadata_members) != 1:
+            if [member.name for member in metadata_members] != [sdist_metadata_path]:
                 return False
             extracted = archive.extractfile(metadata_members[0])
             if extracted is None:
                 return False
-            sdist_metadata = BytesParser(policy=default).parsebytes(extracted.read())
+            sdist_payload = extracted.read()
     except (OSError, KeyError, tarfile.TarError, zipfile.BadZipFile):
         return False
-    return all(
-        metadata.get("Name", "").casefold() == "memoryforge" and metadata.get("Version") == "0.3.0"
-        for metadata in (wheel_metadata, sdist_metadata)
+    metadata = BytesParser(policy=default).parsebytes(wheel_payload)
+    return (
+        wheel_payload == sdist_payload
+        and metadata.get("Name", "").casefold() == "memoryforge"
+        and metadata.get("Version") == "0.3.0"
     )
 
 
@@ -2548,6 +2541,27 @@ def build_benchmark_summary(
     if schema_version >= 3:
         if not _git_commit_descends_from(memoryforge_commit, memoryforge_commit):
             raise ValueError("benchmark summary Commit does not exist")
+        try:
+            committed_registry = json.loads(
+                subprocess.run(
+                    [
+                        "git",
+                        "show",
+                        f"{memoryforge_commit}:demo/evaluation/registry.json",
+                    ],
+                    cwd=SOURCE_GIT_ROOT,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                ).stdout
+            )
+        except (json.JSONDecodeError, subprocess.CalledProcessError) as exc:
+            raise ValueError("benchmark summary Registry snapshot is unreadable") from exc
+        if not _strict_json_value(registry, committed_registry) or not _strict_mapping(
+            registry_summary,
+            _registry_snapshot_summary(committed_registry),
+        ):
+            raise ValueError("benchmark summary Registry does not match its Commit")
         for experiment in registry["experiments"]:
             if experiment["suite_id"] != "release-candidate-delivery":
                 continue
@@ -2635,8 +2649,9 @@ def _benchmark_experiment_summary(
             for evidence in accepted
         ]
     else:
-        accepted_evidence = [
-            {
+        accepted_evidence = []
+        for evidence in accepted:
+            accepted_summary = {
                 "status": evidence["status"],
                 "development": {
                     "path": evidence["path"],
@@ -2646,8 +2661,9 @@ def _benchmark_experiment_summary(
                 },
                 "acceptance": evidence["acceptance_evidence"],
             }
-            for evidence in accepted
-        ]
+            if "review_evidence" in evidence:
+                accepted_summary["review"] = evidence["review_evidence"]
+            accepted_evidence.append(accepted_summary)
     summary = {
         "suite_id": experiment["suite_id"],
         "suite_revision": experiment["suite_revision"],
@@ -2732,7 +2748,11 @@ def _benchmark_negative_results(
                 ("review_evidence", "review_rejected"),
             ):
                 negative = evidence.get(field)
-                if not isinstance(negative, dict):
+                if (
+                    not isinstance(negative, dict)
+                    or field == "review_evidence"
+                    and negative.get("passed") is not False
+                ):
                     continue
                 result = {
                     "suite_id": experiment["suite_id"],
@@ -2881,6 +2901,7 @@ def _release_drill_contract(
         and _strict_mapping(payload.get("checks"), expected_checks)
         and type(payload.get("private_detail_leaks")) is int
         and payload.get("private_detail_leaks") == 0
+        and _payload_private_detail_leaks(payload) == 0
         and payload.get("passed") is True
     )
     if evidence_revision < 11:
@@ -2974,14 +2995,38 @@ def _release_drill_answered_query(payload: object) -> bool:
     if not isinstance(payload, dict):
         return False
     citations = payload.get("citations")
+    evidence = payload.get("evidence")
     support = payload.get("support")
-    if not isinstance(citations, list) or len(citations) != 1:
+    if (
+        set(payload)
+        != {
+            "status",
+            "answer",
+            "citations",
+            "evidence",
+            "source_id",
+            "source_version",
+            "locator",
+            "quote",
+            "support",
+            "wiki_pages",
+        }
+        or not isinstance(citations, list)
+        or len(citations) != 1
+        or not isinstance(evidence, list)
+        or len(evidence) != 1
+    ):
         return False
     citation = citations[0]
-    if not isinstance(citation, dict):
+    verified = evidence[0]
+    if not isinstance(citation, dict) or not isinstance(verified, dict):
         return False
     source_id = citation.get("source_id")
     expected_answer = "`src.service.cache_ttl` (function): `def cache_ttl() -> int:`"
+    expected_evidence = {
+        **citation,
+        "text": "def cache_ttl() -> int:\n    return CACHE_TTL",
+    }
     return (
         payload.get("status") == "answered"
         and payload.get("answer") == expected_answer
@@ -2994,10 +3039,25 @@ def _release_drill_answered_query(payload: object) -> bool:
         and payload.get("source_version") == citation["source_version"]
         and payload.get("locator") == citation["locator"]
         and payload.get("quote") == citation["quote"]
-        and isinstance(support, dict)
-        and support.get("sufficient") is True
-        and support.get("enforced") is True
-        and support.get("failed_hard_gates") == []
+        and _strict_mapping(verified, expected_evidence)
+        and _release_drill_support_valid(
+            support,
+            {
+                "exact_identifier_coverage": 1.0,
+                "core_term_coverage": 0.6667,
+                "fact_co_location": 1.0,
+                "negation_alignment": 1.0,
+                "multi_source_coverage": 1.0,
+                "current_source_versions": 1.0,
+            },
+        )
+        and isinstance(payload.get("wiki_pages"), list)
+        and len(payload["wiki_pages"]) == 1
+        and re.fullmatch(
+            r"wiki/pages/code/[a-f0-9]{12}/src/service\.md",
+            str(payload["wiki_pages"][0]),
+        )
+        is not None
     )
 
 
@@ -3006,17 +3066,76 @@ def _release_drill_unknown_query(payload: object) -> bool:
         return False
     support = payload.get("support")
     return (
-        payload.get("status") == "unknown"
+        set(payload)
+        == {
+            "status",
+            "answer",
+            "citations",
+            "source_id",
+            "source_version",
+            "locator",
+            "quote",
+            "support",
+            "wiki_pages",
+        }
+        and payload.get("status") == "unknown"
         and payload.get("answer") == "不知道"
         and payload.get("citations") == []
         and all(
             payload.get(key) is None for key in ("source_id", "source_version", "locator", "quote")
         )
-        and isinstance(support, dict)
-        and support.get("sufficient") is False
-        and support.get("enforced") is True
-        and support.get("failed_hard_gates")
-        == ["exact_identifier_not_covered", "score_below_threshold"]
+        and _release_drill_support_valid(
+            support,
+            {
+                "exact_identifier_coverage": 0.0,
+                "core_term_coverage": 0.3333,
+                "fact_co_location": 1.0,
+                "negation_alignment": 1.0,
+                "multi_source_coverage": 1.0,
+                "current_source_versions": 1.0,
+            },
+        )
+        and payload.get("wiki_pages") == []
+    )
+
+
+def _release_drill_support_valid(
+    payload: object,
+    expected_components: dict[str, float],
+) -> bool:
+    if not isinstance(payload, dict) or not _strict_mapping(
+        payload.get("components"),
+        expected_components,
+    ):
+        return False
+    components = cast(dict[str, float], payload["components"])
+    score = round(
+        100
+        * (
+            0.20 * components["exact_identifier_coverage"]
+            + 0.35 * components["core_term_coverage"]
+            + 0.15 * components["fact_co_location"]
+            + 0.10 * components["negation_alignment"]
+            + 0.10 * components["multi_source_coverage"]
+            + 0.10 * components["current_source_versions"]
+        ),
+        1,
+    )
+    failed = []
+    if components["exact_identifier_coverage"] < 1:
+        failed.append("exact_identifier_not_covered")
+    if score < 75.0:
+        failed.append("score_below_threshold")
+    return _strict_mapping(
+        payload,
+        {
+            "score": score,
+            "threshold": 75.0,
+            "sufficient": not failed,
+            "enforced": True,
+            "components": expected_components,
+            "failed_hard_gates": failed,
+        },
     )
 
 
@@ -3257,6 +3376,13 @@ def _payload_private_detail_leaks(payload: object) -> int:
             lowered = value.casefold()
             if (
                 any(prefix.casefold() in lowered for prefix in prefixes)
+                or re.search(
+                    r"(?<![A-Za-z0-9:/>])/(?!/)[^/\s]+(?:/[^/\s]*)*",
+                    value,
+                )
+                is not None
+                or re.search(r"(?i)(?:^|[^A-Za-z0-9])[A-Z]:[\\/]", value) is not None
+                or value.startswith(("\\\\", "//"))
                 or any(secret in lowered for secret in secrets)
                 or any(secret in lowered for secret in secret_values)
             ):
@@ -3264,6 +3390,23 @@ def _payload_private_detail_leaks(payload: object) -> int:
 
     visit(payload)
     return leaks
+
+
+def _fresh_venv_import_path(value: object) -> bool:
+    if not isinstance(value, str) or not value or "\\" in value:
+        return False
+    posix = PurePosixPath(value)
+    windows = PureWindowsPath(value)
+    return (
+        not posix.is_absolute()
+        and not windows.is_absolute()
+        and not windows.drive
+        and posix.as_posix() == value
+        and len(posix.parts) >= 4
+        and posix.parts[0] == ".venv"
+        and posix.parts[-3:] == ("site-packages", "memoryforge", "__init__.py")
+        and all(part not in {"", ".", ".."} for part in posix.parts)
+    )
 
 
 def _validate_bound_gate_artifacts(
@@ -3357,6 +3500,7 @@ def _validate_bound_gate_artifacts(
         or package.get("wheel") != paths["wheel"].name
         or package.get("wheel_sha256") != artifact_digests.get("wheel_sha256")
         or package.get("import_from_fresh_venv") is not True
+        or not _fresh_venv_import_path(package.get("import_path"))
         or not isinstance(package.get("dependencies"), dict)
         or not isinstance(runtime, dict)
         or set(runtime) != {"implementation", "python", "platform"}
@@ -3400,55 +3544,12 @@ def _validate_bound_gate_artifacts(
     if require_code_evidence:
         try:
             code_evidence = json.loads(paths["code_wiki_evidence"].read_text(encoding="utf-8"))
-            suite_path = REPO_ROOT / "demo/evaluation/code_wiki_eval.json"
-            suite = json.loads(suite_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             return False
         evaluation = code_evidence.get("evaluation") if isinstance(code_evidence, dict) else None
-        cases = evaluation.get("cases") if isinstance(evaluation, dict) else None
         if (
-            not isinstance(code_evidence, dict)
-            or set(code_evidence)
-            != {
-                "schema_version",
-                "memoryforge_commit",
-                "memoryforge_worktree_dirty",
-                "fixture",
-                "workflow",
-                "evaluation",
-                "incremental",
-            }
-            or type(code_evidence.get("schema_version")) is not int
-            or code_evidence.get("schema_version") != 1
-            or code_evidence.get("memoryforge_commit") != gate_commit
-            or code_evidence.get("memoryforge_worktree_dirty") is not False
-            or not _strict_mapping(
-                code_evidence.get("fixture"),
-                {
-                    "path": "demo/fixtures/code_wiki_project",
-                    "suite_sha256": hashlib.sha256(suite_path.read_bytes()).hexdigest(),
-                    **CODE_WIKI_FIXTURE_COMMITS,
-                },
-            )
-            or not _strict_mapping(
-                code_evidence.get("workflow"),
-                {
-                    "wiki_file_count": 8,
-                    "lint": {
-                        "status": "clean",
-                        "checked_pages": 8,
-                        "issues": [],
-                    },
-                },
-            )
+            not _raw_code_wiki_evidence_contract(code_evidence, gate_commit)
             or not isinstance(evaluation, dict)
-            or set(evaluation) != {"schema_version", "suite", "counts", "metrics", "gates", "cases"}
-            or type(evaluation.get("schema_version")) is not int
-            or evaluation.get("schema_version") != 1
-            or evaluation.get("suite") != suite.get("name")
-            or not _strict_mapping(evaluation.get("counts"), CODE_WIKI_COUNTS)
-            or not isinstance(cases, dict)
-            or not _strict_mapping(cases, _expected_code_wiki_cases(suite))
             or not _strict_mapping(evaluation.get("metrics"), metrics)
             or not _strict_mapping(evaluation.get("gates"), gates)
             or not _strict_mapping(code_evidence.get("incremental"), incremental)
@@ -3481,8 +3582,94 @@ def _validate_bound_gate_artifacts(
     }
     if require_code_evidence:
         expected_sums["code-wiki-evidence.json"] = artifact_digests["code_wiki_evidence_sha256"]
-    return sums == expected_sums and (
-        not require_replayable_sums or _sha256sums_replays(paths["sha256sums"].parent, sums)
+    if sums != expected_sums:
+        return False
+    if not require_replayable_sums:
+        return True
+    root = paths["sha256sums"].parent
+    expected_paths = {
+        "sha256sums": root / "SHA256SUMS",
+        "wheel": root / f"dist/{paths['wheel'].name}",
+        "sdist": root / f"dist/{paths['sdist'].name}",
+        "provenance": root / "release-provenance.json",
+    }
+    if require_code_evidence:
+        expected_paths["code_wiki_evidence"] = root / "code-wiki-evidence.json"
+    actual_files: set[str] = set()
+    for path in root.rglob("*"):
+        if path.is_symlink() or not (path.is_file() or path.is_dir()):
+            return False
+        if path.is_file():
+            actual_files.add(path.relative_to(root).as_posix())
+    return (
+        all(paths[name] == expected for name, expected in expected_paths.items())
+        and actual_files == {path.relative_to(root).as_posix() for path in expected_paths.values()}
+        and _sha256sums_replays(root, sums)
+    )
+
+
+def _raw_code_wiki_evidence_contract(
+    payload: object,
+    commit: str,
+) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    try:
+        suite_path = REPO_ROOT / "demo/evaluation/code_wiki_eval.json"
+        suite = json.loads(suite_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    evaluation = payload.get("evaluation")
+    cases = evaluation.get("cases") if isinstance(evaluation, dict) else None
+    return (
+        set(payload)
+        == {
+            "schema_version",
+            "memoryforge_commit",
+            "memoryforge_worktree_dirty",
+            "fixture",
+            "workflow",
+            "evaluation",
+            "incremental",
+        }
+        and type(payload.get("schema_version")) is int
+        and payload.get("schema_version") == 1
+        and payload.get("memoryforge_commit") == commit
+        and payload.get("memoryforge_worktree_dirty") is False
+        and _payload_private_detail_leaks(payload) == 0
+        and _strict_mapping(
+            payload.get("fixture"),
+            {
+                "path": "demo/fixtures/code_wiki_project",
+                "suite_sha256": hashlib.sha256(suite_path.read_bytes()).hexdigest(),
+                **CODE_WIKI_FIXTURE_COMMITS,
+            },
+        )
+        and _strict_mapping(
+            payload.get("workflow"),
+            {
+                "wiki_file_count": 8,
+                "lint": {
+                    "status": "clean",
+                    "checked_pages": 8,
+                    "issues": [],
+                },
+            },
+        )
+        and isinstance(evaluation, dict)
+        and set(evaluation) == {"schema_version", "suite", "counts", "metrics", "gates", "cases"}
+        and type(evaluation.get("schema_version")) is int
+        and evaluation.get("schema_version") == 1
+        and evaluation.get("suite") == suite.get("name")
+        and _strict_mapping(evaluation.get("counts"), CODE_WIKI_COUNTS)
+        and _strict_mapping(cases, _expected_code_wiki_cases(suite))
+        and isinstance(evaluation.get("metrics"), dict)
+        and set(evaluation["metrics"]) == CODE_WIKI_METRICS
+        and all(value == 100.0 for value in evaluation["metrics"].values())
+        and isinstance(evaluation.get("gates"), dict)
+        and set(evaluation["gates"]) == CODE_WIKI_GATES
+        and all(value is True for value in evaluation["gates"].values())
+        and _strict_mapping(payload.get("incremental"), CODE_WIKI_INCREMENTAL)
     )
 
 
@@ -3789,6 +3976,31 @@ def _validate_regression_evidence(
     return 1
 
 
+def _release_review_state_valid(
+    status: str,
+    acceptance_evidence: object,
+    review_evidence: object,
+) -> bool:
+    acceptance_passed = (
+        isinstance(acceptance_evidence, dict) and acceptance_evidence.get("passed") is True
+    )
+    if status == "local_gates_passed_review_pending":
+        return acceptance_passed and review_evidence is None
+    if status == "development_passed_review_failed":
+        return (
+            acceptance_passed
+            and isinstance(review_evidence, dict)
+            and review_evidence.get("passed") is False
+        )
+    if status == "accepted_development":
+        return (
+            acceptance_passed
+            and isinstance(review_evidence, dict)
+            and review_evidence.get("passed") is True
+        )
+    return True
+
+
 def _validate_review_evidence(
     experiment: dict[str, Any],
     development_artifact: dict[str, Any],
@@ -3802,13 +4014,21 @@ def _validate_review_evidence(
     if (
         experiment["suite_id"] != "release-candidate-delivery"
         or COMMIT.fullmatch(commit) is None
-        or artifact.get("passed") is not False
+        or type(artifact.get("passed")) is not bool
     ):
         raise ValueError("invalid experiment review Evidence identity")
     payload = cast(
         dict[str, Any],
         json.loads((REPO_ROOT / artifact["path"]).read_text(encoding="utf-8")),
     )
+    if artifact["passed"]:
+        return _validate_release_static_review_acceptance(
+            experiment,
+            development_artifact,
+            payload,
+            confirmation,
+            commit,
+        )
     return _validate_release_static_review_regression(
         experiment,
         development_artifact,
@@ -3816,6 +4036,158 @@ def _validate_review_evidence(
         confirmation,
         commit,
     )
+
+
+def _validate_release_static_review_acceptance(
+    experiment: dict[str, Any],
+    development_artifact: dict[str, Any],
+    payload: dict[str, Any],
+    confirmation: dict[str, Any],
+    commit: str,
+) -> int:
+    review = payload.get("review")
+    holdout = experiment["splits"]["holdout"]
+    acceptance = development_artifact.get("acceptance_evidence")
+    local_gate_commit = (
+        str(acceptance.get("memoryforge_commit")) if isinstance(acceptance, dict) else ""
+    )
+    base_commit = "569685c2f0bf790819820b821b4768d180c4ee0d"
+    artifact_keys = {
+        "raw_findings",
+        "top_findings",
+        "html_report",
+        "markdown_report",
+        "review_scope",
+    }
+    if not isinstance(review, dict):
+        raise ValueError("release-candidate accepted review Evidence changed")
+    artifacts = review.get("artifacts")
+    stats = {
+        key: review.get(key)
+        for key in (
+            "diff_files",
+            "reviewed_files",
+            "added_lines",
+            "deleted_lines",
+            "changed_lines",
+        )
+    }
+    if not isinstance(artifacts, dict) or set(artifacts) != artifact_keys:
+        raise ValueError("release-candidate accepted review Evidence changed")
+    for artifact in artifacts.values():
+        if not isinstance(artifact, dict) or set(artifact) != {"path", "sha256"}:
+            raise ValueError("release-candidate accepted review Evidence changed")
+        _validate_artifact(artifact, "release-candidate accepted static review")
+    try:
+        scope = json.loads(
+            (REPO_ROOT / str(artifacts["review_scope"]["path"])).read_text(encoding="utf-8")
+        )
+        raw_findings = [
+            json.loads(line)
+            for line in (REPO_ROOT / str(artifacts["raw_findings"]["path"]))
+            .read_text(encoding="utf-8")
+            .splitlines()
+            if line.strip()
+        ]
+        top_findings = json.loads(
+            (REPO_ROOT / str(artifacts["top_findings"]["path"])).read_text(encoding="utf-8")
+        )
+    except (OSError, json.JSONDecodeError, KeyError, TypeError):
+        raise ValueError("release-candidate accepted review Evidence changed") from None
+    blocker = {"P0", "P1", "P2"}
+    if (
+        set(payload)
+        != {
+            "schema_version",
+            "suite_id",
+            "suite_revision",
+            "memoryforge_commit",
+            "memoryforge_worktree_dirty",
+            "candidate",
+            "review",
+            "confirmation",
+            "holdout",
+            "passed",
+        }
+        or type(payload.get("schema_version")) is not int
+        or payload.get("schema_version") != 1
+        or payload.get("suite_id") != experiment["suite_id"]
+        or type(payload.get("suite_revision")) is not int
+        or payload.get("suite_revision") != experiment["suite_revision"]
+        or payload.get("memoryforge_commit") != commit
+        or payload.get("memoryforge_worktree_dirty") is not False
+        or re.fullmatch(r"release-development-candidate-[1-9][0-9]*", str(payload.get("candidate")))
+        is None
+        or set(review)
+        != {
+            "scope",
+            "base_commit",
+            "source_commit",
+            "local_gate_commit",
+            "status",
+            "p0",
+            "p1",
+            "p2",
+            *stats,
+            "artifacts",
+        }
+        or review.get("scope") != f"{base_commit}...{commit}"
+        or review.get("base_commit") != base_commit
+        or review.get("source_commit") != commit
+        or review.get("local_gate_commit") != local_gate_commit
+        or review.get("status") != "passed"
+        or any(review.get(key) != 0 for key in ("p0", "p1", "p2"))
+        or any(type(value) is not int or value < 0 for value in stats.values())
+        or stats["reviewed_files"] < 1
+        or stats["diff_files"] < stats["reviewed_files"]
+        or stats["changed_lines"] != stats["added_lines"] + stats["deleted_lines"]
+        or not _git_commit_descends_from(
+            local_gate_commit,
+            development_artifact["memoryforge_commit"],
+        )
+        or not _git_commit_descends_from(commit, local_gate_commit)
+        or _git_diff_stats(base_commit, commit) != stats
+        or not _strict_mapping(
+            scope,
+            {
+                "schema_version": 1,
+                "base_commit": base_commit,
+                "source_commit": commit,
+                "diff_mode": "merge_base_to_source",
+                **stats,
+            },
+        )
+        or not isinstance(raw_findings, list)
+        or any(
+            not isinstance(finding, dict) or finding.get("severity") in blocker
+            for finding in raw_findings
+        )
+        or not isinstance(top_findings, list)
+        or any(
+            not isinstance(finding, dict) or finding.get("severity") in blocker
+            for finding in top_findings
+        )
+        or not _strict_mapping(
+            payload.get("confirmation"),
+            {
+                "path": confirmation["path"],
+                "sha256": confirmation["sha256"],
+                "status": "not_run",
+            },
+        )
+        or not isinstance(holdout, dict)
+        or not _strict_mapping(
+            payload.get("holdout"),
+            {
+                "path": holdout["path"],
+                "sha256": holdout["sha256"],
+                "status": "not_run",
+            },
+        )
+        or payload.get("passed") is not True
+    ):
+        raise ValueError("release-candidate accepted review Evidence changed")
+    return 1
 
 
 def _validate_release_sdist_regression(

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import platform
@@ -16,20 +17,14 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PINNED_PUBLIC_COMMIT = "93f5dc05229da250b041850ad8deeeec886ef304"
 PINNED_PUBLIC_REPOSITORY_ID = "db29dfd06f0a2853c9764f1393b680d6a592b1a5771a012b6e1387fc17aac597"
-CODE_METRICS = (
-    "expected_source_coverage",
-    "symbol_recall",
-    "core_relation_recall",
-    "known_gap_relation_recall",
-    "overall_relation_recall",
-    "module_assignment_accuracy",
-    "citation_grounding_accuracy",
-    "architecture_edge_grounding",
-    "mermaid_edge_coverage",
-    "architecture_citation_coverage",
-    "architecture_mermaid_determinism",
-    "deterministic_replay",
+_VALIDATOR_SPEC = importlib.util.spec_from_file_location(
+    "validate_benchmark_registry",
+    REPO_ROOT / "demo/validate_benchmark_registry.py",
 )
+if _VALIDATOR_SPEC is None or _VALIDATOR_SPEC.loader is None:
+    raise RuntimeError("could not load benchmark registry validator")
+registry_validator = importlib.util.module_from_spec(_VALIDATOR_SPEC)
+_VALIDATOR_SPEC.loader.exec_module(registry_validator)
 PUBLIC_METRICS = {
     "answer_accuracy": 96.7,
     "source_recall_at_3": 96.2,
@@ -209,15 +204,9 @@ def _validate_inputs(
 
 
 def _validate_code_evidence(evidence: dict[str, Any]) -> None:
-    metrics = evidence["evaluation"]["metrics"]
-    failed = [name for name in CODE_METRICS if metrics.get(name) != 100.0]
-    if failed:
-        raise SystemExit(f"code Wiki release metrics failed: {', '.join(failed)}")
-    if not all(evidence["evaluation"]["gates"].values()):
-        raise SystemExit("code Wiki release gate failed")
-    incremental = evidence["incremental"]
-    if not incremental["passed"] or incremental["changed_page_ratio"] > 0.25:
-        raise SystemExit("code Wiki incremental release gate failed")
+    commit = _git_output(REPO_ROOT, "rev-parse", "HEAD")
+    if not registry_validator._raw_code_wiki_evidence_contract(evidence, commit):
+        raise SystemExit("code Wiki release Evidence contract failed")
 
 
 def _validate_public_evidence(evidence: dict[str, Any]) -> None:

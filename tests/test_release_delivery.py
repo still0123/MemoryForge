@@ -22,6 +22,7 @@ def _module(name: str, relative_path: str):
 summary_builder = _module("build_benchmark_summary", "demo/build_benchmark_summary.py")
 workspace_drill = _module("run_release_workspace_drill", "demo/run_release_workspace_drill.py")
 release_builder = _module("build_release", "scripts/build_release.py")
+release_check = _module("run_release_check", "demo/run_release_check.py")
 
 
 def test_release_builder_reads_version_from_current_source() -> None:
@@ -51,16 +52,42 @@ def test_release_package_inputs_and_build_environment_are_stable(
     monkeypatch.setenv("COV_CORE_DATAFILE", ".coverage")
     monkeypatch.setenv("COVERAGE_FILE", ".coverage")
     monkeypatch.setenv("PIP_INDEX_URL", "https://example.invalid/simple")
+    monkeypatch.setenv("PIP_FIND_LINKS", "/private/tmp/untrusted")
     monkeypatch.setenv("UV_INDEX_URL", "https://example.invalid/simple")
+    monkeypatch.setenv("UV_EXTRA_INDEX_URL", "https://example.invalid/simple")
+    monkeypatch.setenv("UV_CONFIG_FILE", "/private/tmp/untrusted.toml")
     environment = release_builder._clean_build_environment()
     assert "PYTHONPATH" not in environment
     assert "PYTHONHOME" not in environment
     assert "COV_CORE_DATAFILE" not in environment
     assert "COVERAGE_FILE" not in environment
+    assert "PIP_FIND_LINKS" not in environment
+    assert "UV_EXTRA_INDEX_URL" not in environment
+    assert "UV_CONFIG_FILE" not in environment
     assert environment["PIP_INDEX_URL"] == release_builder.PACKAGE_INDEX_URL
     assert environment["UV_DEFAULT_INDEX"] == release_builder.PACKAGE_INDEX_URL
     assert environment["PYTHONNOUSERSITE"] == "1"
     assert environment["SOURCE_DATE_EPOCH"] == "315532800"
+
+
+@pytest.mark.parametrize(
+    "source",
+    (
+        '__version__ = "0.3.0"\n__version__ = "9.9.9"\n',
+        '__version__: str = "0.3.0"\n',
+        '__version__ = "0.3.0"\ndel __version__\n',
+    ),
+)
+def test_release_builder_rejects_ambiguous_source_versions(
+    tmp_path: Path,
+    source: str,
+) -> None:
+    package = tmp_path / "memoryforge"
+    package.mkdir()
+    (package / "__init__.py").write_text(source, encoding="utf-8")
+
+    with pytest.raises(SystemExit, match="one string literal assignment"):
+        release_builder._source_module_version(tmp_path)
 
 
 def test_benchmark_summary_reports_macro_per_suite_and_negatives() -> None:
@@ -108,6 +135,20 @@ def test_benchmark_summary_reports_macro_per_suite_and_negatives() -> None:
         and result["memoryforge_commit"] == "a044337347b9c6884ea660c7568c4e3911c84521"
         for result in summary["negative_results"]
     )
+
+
+def test_benchmark_summary_binds_registry_to_declared_commit() -> None:
+    registry = json.loads(summary_builder.REGISTRY.read_text(encoding="utf-8"))
+    registry_summary = summary_builder.validator.validate_registry_payload(registry)
+    registry["qa_case_count"] -= 1
+
+    with pytest.raises(ValueError, match="Registry does not match its Commit"):
+        summary_builder.validator.build_benchmark_summary(
+            registry,
+            registry_summary,
+            package_version="0.3.0",
+            memoryforge_commit=summary_builder._git("rev-parse", "HEAD"),
+        )
 
 
 def test_workspace_release_drill_runs_real_public_workflow(
@@ -188,47 +229,19 @@ def test_workspace_release_drill_binds_cli_to_current_source(
 
 
 def test_workspace_release_drill_rejects_wrong_or_non_replayed_queries() -> None:
-    citation = {
-        "source_id": "1" * 64,
-        "source_version": 2,
-        "locator": "chars:17-61",
-        "quote": workspace_drill.EXPECTED_SIGNATURE,
-    }
-    answered = {
-        "status": "answered",
-        "answer": workspace_drill.EXPECTED_SIGNATURE,
-        "citations": [citation],
-        **citation,
-        "support": {
-            "sufficient": True,
-            "enforced": True,
-            "failed_hard_gates": [],
-        },
-        "trace": [{"level": "L0"}],
-    }
-    unknown = {
-        "status": "unknown",
-        "answer": "不知道",
-        "citations": [],
-        "source_id": None,
-        "source_version": None,
-        "locator": None,
-        "quote": None,
-        "support": {
-            "sufficient": False,
-            "enforced": True,
-            "failed_hard_gates": [
-                "exact_identifier_not_covered",
-                "score_below_threshold",
-            ],
-        },
-    }
+    retained = json.loads(
+        (
+            workspace_drill.REPO_ROOT / "demo/results/artifacts/release_candidate_development/"
+            "f174d1de4e459c4b324f0ba5f58e8df62263fa00/workspace-drill.json"
+        ).read_text(encoding="utf-8")
+    )
+    answered = retained["queries"]["answered"]["original"]
+    unknown = retained["queries"]["unknown"]["original"]
 
     assert workspace_drill._answered_query_valid(answered)
     assert workspace_drill._unknown_query_valid(unknown)
-    assert workspace_drill._replay_payload(answered) == workspace_drill._replay_payload(
-        {key: value for key, value in answered.items() if key != "trace"}
-    )
+    traced = {**answered, "trace": [{"level": "L0"}]}
+    assert workspace_drill._replay_payload(answered) == workspace_drill._replay_payload(traced)
     assert workspace_drill._evaluation_metrics(False, True) == {
         "answer_accuracy": 0.0,
         "citation_grounding_accuracy": 0.0,
@@ -236,6 +249,33 @@ def test_workspace_release_drill_rejects_wrong_or_non_replayed_queries() -> None
     }
     answered["answer"] = "wrong"
     assert not workspace_drill._answered_query_valid(answered)
+    answered["answer"] = workspace_drill.EXPECTED_SIGNATURE
+    answered.pop("evidence")
+    assert not workspace_drill._answered_query_valid(answered)
+    unknown["support"].pop("score")
+    assert not workspace_drill._unknown_query_valid(unknown)
+
+
+def test_release_check_reuses_raw_code_wiki_consumer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    evidence = json.loads(
+        (
+            release_check.REPO_ROOT
+            / "demo/results/artifacts/release_candidate_delivery_candidate_11/"
+            "macos/code-wiki-evidence.json"
+        ).read_text(encoding="utf-8")
+    )
+    monkeypatch.setattr(
+        release_check,
+        "_git_output",
+        lambda *_args: evidence["memoryforge_commit"],
+    )
+    release_check._validate_code_evidence(evidence)
+    evidence["fixture"]["initial_commit"] = "0" * 40
+
+    with pytest.raises(SystemExit, match="Evidence contract failed"):
+        release_check._validate_code_evidence(evidence)
 
 
 def test_workspace_release_drill_rejects_dirty_source(
