@@ -1,6 +1,6 @@
 # MemoryForge
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=9; platform_gate_candidate=8; platform_gate_status=accepted; review_status=pending; macos_passed=604; linux_passed=601; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=9; platform_gate_candidate=9; platform_gate_status=accepted; review_status=pending; macos_passed=607; linux_passed=604; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 > 把散落在代码仓库、设计文档和飞书里的技术资料，编译成一套可维护、可追溯、可以直接在飞书提问的个人技术 Wiki。
 
@@ -57,7 +57,8 @@ Wiki 树、Diff、Citation Trace、Benchmark、保留的失败案例、正确拒
 | learn-claude-code support score development | Answer / selective accuracy **100%**，coverage **90%**，risk **0%** | 10 题；confirmation 未运行 |
 | Click 外部迁移 | development / holdout Answer **10% / 0%** | 真实负结果，未隐藏 |
 | Static Showcase development | **4/4**，本地详情泄漏 **0**，Workspace 变更 **0** | confirmation 未运行 |
-| v0.3.0 RC Candidate 9 development | **6/6**；12 项 Code Wiki provenance 闭包 | 本地双平台门禁与终审待运行 |
+| v0.3.0 RC Candidate 9 development | **6/6**；12 项 Code Wiki provenance 闭包 | 本地双平台门禁通过；终审待运行 |
+| v0.3.0 RC Candidate 9 本地门禁 | macOS **607 passed**；Debian **604 passed / 3 skipped** | package 与 raw Code Wiki Evidence 跨平台同字节 |
 | v0.3.0 RC Candidate 8 development | **6/6**；Summary schema 2；真实 query/replay gate | 本地双平台门禁通过；终审 rejected |
 | v0.3.0 RC Candidate 8 本地门禁 | macOS **604 passed**；Debian **601 passed / 3 skipped** | package bytes 与 development 一致；终审 rejected |
 | v0.3.0 RC Candidate 8 静态终审 | **0 P0 / 4 P1 / 2 P2** | rejected；6 条发现保留；confirmation 未运行 |

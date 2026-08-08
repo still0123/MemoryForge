@@ -425,7 +425,7 @@ REQUIRED_EXPERIMENT_EVIDENCE = {
         ),
         _RESULTS + "release_candidate_development_candidate_9.json": (
             10,
-            "development_passed_gate_pending",
+            "accepted_development",
             "cabe2c738be47c5e3d73b371c78a32b1dbaea899f1ce743234327316f67ded0b",
             "63326fb2f123c336c31bcebf68c76c90dfac86e6",
         ),
@@ -718,6 +718,11 @@ REQUIRED_ACCEPTANCE_EVIDENCE = {
             _RESULTS + "release_candidate_candidate_8_local_gates.json",
             "65486449522da88a80a734f30af81cf8881cdd41b12766440f9a50aac7d0930e",
             "4c6f8e64e4dcda725966d7982ad3f2630814432f",
+        ),
+        _RESULTS + "release_candidate_development_candidate_9.json": (
+            _RESULTS + "release_candidate_candidate_9_local_gates.json",
+            "a624fd50375639da4b4727fdac656e3d73074a1c3d845f0204356da0bf1ea48c",
+            "53caa517ac4e11079767ee26633f8f3be9f55d0d",
         ),
     },
 }
@@ -3076,6 +3081,7 @@ def _validate_bound_gate_artifacts(
         except (OSError, json.JSONDecodeError):
             return False
         evaluation = code_evidence.get("evaluation") if isinstance(code_evidence, dict) else None
+        cases = evaluation.get("cases") if isinstance(evaluation, dict) else None
         if (
             not isinstance(code_evidence, dict)
             or set(code_evidence)
@@ -3096,8 +3102,14 @@ def _validate_bound_gate_artifacts(
             or set(evaluation) != {"schema_version", "suite", "counts", "metrics", "gates", "cases"}
             or not isinstance(evaluation.get("counts"), dict)
             or not evaluation["counts"]
-            or not isinstance(evaluation.get("cases"), list)
-            or not evaluation["cases"]
+            or not isinstance(cases, dict)
+            or set(cases) != {"sources", "symbols", "relations", "modules"}
+            or any(not isinstance(group, list) or not group for group in cases.values())
+            or any(
+                not isinstance(case, dict) or case.get("found") is not True
+                for group in cases.values()
+                for case in group
+            )
             or not _strict_mapping(evaluation.get("metrics"), metrics)
             or not _strict_mapping(evaluation.get("gates"), gates)
             or not _strict_mapping(code_evidence.get("incremental"), incremental)
@@ -4504,6 +4516,38 @@ def _validate_release_candidate_acceptance_evidence(
             "provenance_sha256": "3c01c2675d45d0bd95dadfcebee5a7c97b2582640023173430e2c47065dd14c9",
             "sha256sums_sha256": "000b08a55111b34d1a3104cdcbe9f9b82552ee4068f8b298efc93fb63c31def7",
         }
+    elif evidence_revision == 10:
+        contracts["macos"]["pytest"] = {
+            "passed": 607,
+            "skipped": 0,
+            "failed": 0,
+            "coverage_percent": 88,
+        }
+        contracts["macos"]["artifacts"] = {
+            "wheel_sha256": "fd3a0ab7cd24e5148408250a220db44eb378ff705770593784c17ec687878096",
+            "sdist_sha256": "2cbe617826ce0b9b7e2bd3da66f22bb7b5c05cd894426d80ee1d47a140ac7a05",
+            "code_wiki_evidence_sha256": (
+                "f5fc93493984c1259a39f8d35578f98defb5c8adb14be59039bac17489097b9e"
+            ),
+            "provenance_sha256": "4e633d574d0e5f0cb06904a54949ef81ac07e7303c82bd16c0d823ac5544f381",
+            "sha256sums_sha256": "e93b03b762cf9f9f9bee7151e844da223412de0e1375f7b5c5fe3026f678d556",
+        }
+        contracts["linux"]["runtime"]["kernel"] = "Linux 6.1.0-52-cloud-arm64"
+        contracts["linux"]["pytest"] = {
+            "passed": 604,
+            "skipped": 3,
+            "failed": 0,
+            "coverage_percent": 88,
+        }
+        contracts["linux"]["artifacts"] = {
+            "wheel_sha256": "fd3a0ab7cd24e5148408250a220db44eb378ff705770593784c17ec687878096",
+            "sdist_sha256": "2cbe617826ce0b9b7e2bd3da66f22bb7b5c05cd894426d80ee1d47a140ac7a05",
+            "code_wiki_evidence_sha256": (
+                "f5fc93493984c1259a39f8d35578f98defb5c8adb14be59039bac17489097b9e"
+            ),
+            "provenance_sha256": "86e8e7d7518919aead512126d264da3ca31a361d1649bf30c664fdc606440841",
+            "sha256sums_sha256": "6a1ad9f239c27e133c80598bfbd8642aea532e7791efa159c143693f8f962c1d",
+        }
     elif evidence_revision != 2:
         raise ValueError("unknown release-candidate local gate revision")
     if (
@@ -4565,9 +4609,16 @@ def _validate_release_candidate_acceptance_evidence(
     expected_registry = {
         "suite_count": 12,
         "experiment_count": 8,
-        "evidence_count": {2: 97, 3: 100, 4: 103, 6: 106, 7: 109, 8: 113, 9: 116}[
-            evidence_revision
-        ],
+        "evidence_count": {
+            2: 97,
+            3: 100,
+            4: 103,
+            6: 106,
+            7: 109,
+            8: 113,
+            9: 116,
+            10: 119,
+        }[evidence_revision],
         "qa_case_count": 121,
     }
     for name, contract in contracts.items():

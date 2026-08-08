@@ -1,10 +1,10 @@
 # v0.3.0 Release Candidate Specification
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=9; platform_gate_candidate=8; platform_gate_status=accepted; review_status=pending; macos_passed=604; linux_passed=601; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=9; platform_gate_candidate=9; platform_gate_status=accepted; review_status=pending; macos_passed=607; linux_passed=604; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 ## Status
 
-`DEVELOPMENT_PASSED_LOCAL_GATES_PENDING`
+`LOCAL_GATES_PASSED_REVIEW_PENDING`
 
 ## Base
 
@@ -559,7 +559,29 @@ frozen split. Summary schema 2 is mandatory by Commit ancestry, root Registry
 types are strict, historical review scope is recomputed from fixed Commits,
 version probes use a clean Python environment, Showcase metrics derive from
 final replay cases, and complete Code Wiki Evidence is retained and validated.
-Local gates and final review remain pending; confirmation stays closed.
+Local gates are recorded below; final review remains pending and confirmation
+stays closed.
+
+## Accepted Candidate 9 Local Gates
+
+- Evidence: `demo/results/release_candidate_candidate_9_local_gates.json`
+- Evidence SHA256:
+  `a624fd50375639da4b4727fdac656e3d73074a1c3d845f0204356da0bf1ea48c`
+- Gate Commit:
+  `53caa517ac4e11079767ee26633f8f3be9f55d0d`
+- macOS: 607 passed, 0 skipped, coverage 88%
+- Debian 12 / Lima: 604 passed, 3 skipped, coverage 88%
+- Registry at gate time: 12 suites, 8 experiments, 119 Evidence, 121 QA
+- Wheel SHA256:
+  `fd3a0ab7cd24e5148408250a220db44eb378ff705770593784c17ec687878096`
+- sdist SHA256:
+  `2cbe617826ce0b9b7e2bd3da66f22bb7b5c05cd894426d80ee1d47a140ac7a05`
+- raw Code Wiki Evidence SHA256:
+  `f5fc93493984c1259a39f8d35578f98defb5c8adb14be59039bac17489097b9e`
+
+Both platforms passed the complete local gate. Wheel, sdist, and raw Code Wiki
+Evidence bytes match across platforms; each retained SHA256SUMS replays in
+place. Final static review remains required before confirmation authorization.
 
 ## Confirmation Components
 
