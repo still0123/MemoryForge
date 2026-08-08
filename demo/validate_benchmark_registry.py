@@ -10,7 +10,10 @@ import json
 import re
 import subprocess
 import tarfile
+import zipfile
 from collections import defaultdict
+from email.parser import BytesParser
+from email.policy import default
 from pathlib import Path
 from typing import Any, cast
 
@@ -60,6 +63,16 @@ CODE_WIKI_INCREMENTAL = {
     "stable_symbol_ids": True,
     "passed": True,
 }
+CODE_WIKI_COUNTS = {
+    "symbols": 20,
+    "relations": 24,
+    "modules": 8,
+    "architecture_edges": 4,
+}
+CODE_WIKI_FIXTURE_COMMITS = {
+    "initial_commit": "c7a312631c0f4122e82e08d23d69498b1c2881c4",
+    "updated_commit": "eebf184cd82509b0a1c48901fdf643b63f714828",
+}
 _RESULTS = "demo/results/"
 HISTORICAL_REVIEW_SCOPES = {
     _RESULTS + "artifacts/release_candidate_review_candidate_5/review-scope.json": {
@@ -81,6 +94,27 @@ HISTORICAL_REVIEW_SCOPES = {
         "added_lines": 10918,
         "deleted_lines": 35,
         "changed_lines": 10953,
+    },
+    _RESULTS + "artifacts/release_candidate_review_candidate_7/review-scope.json": {
+        "sha256": "55dc5e0dd5512dd34c82f5e886f577f9ec098bb4b5f06d5231c56d8776be16ed",
+        "base_commit": "569685c2f0bf790819820b821b4768d180c4ee0d",
+        "source_commit": "a044337347b9c6884ea660c7568c4e3911c84521",
+        "reviewed_files": 79,
+        "diff_files": 132,
+        "added_lines": 14086,
+        "deleted_lines": 39,
+        "changed_lines": 14125,
+        "scope_fields": ("reviewed_files", "changed_lines"),
+    },
+    _RESULTS + "artifacts/release_candidate_review_candidate_8/review-scope.json": {
+        "sha256": "b838d75cdd3d75f44f99c85cd67cfb080063dea90aa209e4340b44242109a2f2",
+        "base_commit": "569685c2f0bf790819820b821b4768d180c4ee0d",
+        "source_commit": "f4dde0904e5bcaeb78be6d7a32e74a6beae5679a",
+        "reviewed_files": 97,
+        "diff_files": 161,
+        "added_lines": 17612,
+        "deleted_lines": 192,
+        "changed_lines": 17804,
     },
 }
 REQUIRED_EXPERIMENT_EVIDENCE = {
@@ -401,25 +435,25 @@ REQUIRED_EXPERIMENT_EVIDENCE = {
         ),
         _RESULTS + "release_candidate_development_candidate_5.json": (
             6,
-            "development_passed_regression_failed",
+            "development_passed_review_failed",
             "a64d26d8103c5bc7c0e2f61627fe978f57920a31d4be5252866cbbe354e6d861",
             "b42d6a887053464f138f87dd45922d22dc58baa0",
         ),
         _RESULTS + "release_candidate_development_candidate_6.json": (
             7,
-            "development_passed_regression_failed",
+            "development_passed_review_failed",
             "8d1f1a07f218581048e3860556e12dea0a900f2189876f28265afeffbf8093a3",
             "9a6c145a3f052c78b47c4d8f882d4a3191c4a2f4",
         ),
         _RESULTS + "release_candidate_development_candidate_7.json": (
             8,
-            "development_passed_regression_failed",
+            "development_passed_review_failed",
             "337393de3ea54605055fd08f29fa92679ca3db52470879080cc0c92c5dd5ff10",
             "80b111bbd472cacd16ceb773a4c141e70ee97a4a",
         ),
         _RESULTS + "release_candidate_development_candidate_8.json": (
             9,
-            "development_passed_regression_failed",
+            "development_passed_review_failed",
             "37b0270bba89da81815f2ac00fbeec10e766c8a16436e28ab1e7a2fd449afe83",
             "2451f2dae8845b490db1cb46727c7828f0d227f7",
         ),
@@ -510,21 +544,6 @@ REQUIRED_REGRESSION_EVIDENCE = {
             "b0c18c7e2d23d47e3cb8cb1200c3511dc9a4bb560ac81e531e4492c5f1353d5b",
             "94b136e0ddda947c14e4ab0297b6505e00b9c63f",
         ),
-        _RESULTS + "release_candidate_development_candidate_3.json": (
-            _RESULTS + "release_candidate_candidate_2_static_review_rejected.json",
-            "475b6e5981bc43438107c67a7fd3ab05fc95888bfb30c391f2e7ae2275c23d45",
-            "433f33c001c963cd69dd507346ac836895b7c36b",
-        ),
-        _RESULTS + "release_candidate_development_candidate_5.json": (
-            _RESULTS + "release_candidate_candidate_5_static_review_rejected.json",
-            "7973225fac1123040b93674bbcb2d5df38872229772e9711015af064cbd39913",
-            "26767333bc20a6367bc87f239cdc956cd40e7f4e",
-        ),
-        _RESULTS + "release_candidate_development_candidate_6.json": (
-            _RESULTS + "release_candidate_candidate_6_static_review_rejected.json",
-            "cc3ae3f9a5f99f5d420e2b4cfce1f12cc260b46d99b03b34f93632f5c47dcacc",
-            "9588c2fb6a41225515165f0114ce61f23f51d921",
-        ),
         _RESULTS + "release_candidate_development_candidate_7.json": (
             _RESULTS + "release_candidate_candidate_7_local_gate_contract_rejected.json",
             "921d5595531bc3b8427b4080264f366f02b40909e01312fc340ce417c298aa57",
@@ -541,6 +560,21 @@ REQUIRED_REVIEW_EVIDENCE = {
     "static-showcase": {},
     "cross-platform-delivery": {},
     "release-candidate-delivery": {
+        _RESULTS + "release_candidate_development_candidate_3.json": (
+            _RESULTS + "release_candidate_candidate_2_static_review_rejected.json",
+            "475b6e5981bc43438107c67a7fd3ab05fc95888bfb30c391f2e7ae2275c23d45",
+            "433f33c001c963cd69dd507346ac836895b7c36b",
+        ),
+        _RESULTS + "release_candidate_development_candidate_5.json": (
+            _RESULTS + "release_candidate_candidate_5_static_review_rejected.json",
+            "7973225fac1123040b93674bbcb2d5df38872229772e9711015af064cbd39913",
+            "26767333bc20a6367bc87f239cdc956cd40e7f4e",
+        ),
+        _RESULTS + "release_candidate_development_candidate_6.json": (
+            _RESULTS + "release_candidate_candidate_6_static_review_rejected.json",
+            "cc3ae3f9a5f99f5d420e2b4cfce1f12cc260b46d99b03b34f93632f5c47dcacc",
+            "9588c2fb6a41225515165f0114ce61f23f51d921",
+        ),
         _RESULTS + "release_candidate_development_candidate_7.json": (
             _RESULTS + "release_candidate_candidate_7_static_review_rejected.json",
             "94b841b8148f40049e3b226b705294527767acf7567a5a456b8706edcde3b501",
@@ -1349,6 +1383,10 @@ def main(argv: list[str] | None = None) -> None:
 
 def validate_registry(path: Path = DEFAULT_REGISTRY) -> dict[str, object]:
     registry = json.loads(path.read_text(encoding="utf-8"))
+    return validate_registry_payload(registry)
+
+
+def validate_registry_payload(registry: dict[str, Any]) -> dict[str, object]:
     if type(registry.get("schema_version")) is not int or registry.get("schema_version") != 1:
         raise ValueError("unsupported benchmark registry schema")
     if registry.get("package_release_target") != "0.3.0":
@@ -1499,11 +1537,19 @@ def _validate_historical_review_scopes() -> None:
             "base_commit": expected["base_commit"],
             "source_commit": expected["source_commit"],
             "diff_mode": "merge_base_to_source",
-            "reviewed_files": expected["reviewed_files"],
-            "diff_files": expected["diff_files"],
-            "added_lines": expected["added_lines"],
-            "deleted_lines": expected["deleted_lines"],
-            "changed_lines": expected["changed_lines"],
+            **{
+                key: expected[key]
+                for key in expected.get(
+                    "scope_fields",
+                    (
+                        "diff_files",
+                        "reviewed_files",
+                        "added_lines",
+                        "deleted_lines",
+                        "changed_lines",
+                    ),
+                )
+            },
         }
         actual_stats = _git_diff_stats(
             str(expected["base_commit"]),
@@ -1670,6 +1716,7 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
             "development_passed_regression_failed",
             "development_passed_review_failed",
             "development_passed_gate_pending",
+            "local_gates_passed_review_pending",
             "accepted_development_superseded",
             "accepted_development",
         }
@@ -1764,6 +1811,23 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
                 raise ValueError(
                     f"experiment acceptance Evidence history is incomplete: {suite_id}"
                 )
+            if suite_id == "release-candidate-delivery":
+                if status == "accepted_development" and (
+                    not isinstance(review_evidence, dict)
+                    or review_evidence.get("passed") is not True
+                ):
+                    raise ValueError("release candidate requires an accepted final review")
+                if status == "local_gates_passed_review_pending" and (
+                    not isinstance(acceptance_evidence, dict)
+                    or acceptance_evidence.get("passed") is not True
+                    or review_evidence is not None
+                ):
+                    raise ValueError("release candidate review-pending state is inconsistent")
+                if status == "development_passed_review_failed" and (
+                    not isinstance(review_evidence, dict)
+                    or review_evidence.get("passed") is not False
+                ):
+                    raise ValueError("release candidate review-failed state is inconsistent")
             expected_linux = required_linux.get(path)
             linux_evidence = artifact.get("linux_evidence")
             if expected_linux is None:
@@ -2139,6 +2203,7 @@ def _validate_release_candidate_experiment_payload(
             "development_passed_regression_failed",
             "development_passed_review_failed",
             "development_passed_gate_pending",
+            "local_gates_passed_review_pending",
         }
         or artifact["passed"] is not True
         or not _strict_mapping(metrics, experiment["expected_metrics"]["development"])
@@ -2260,6 +2325,11 @@ def _validate_release_development_artifacts(
             or hashlib.sha256(path.read_bytes()).hexdigest() != package[f"{kind}_sha256"]
         ):
             return False
+    if not _package_archives_match(
+        root / str(package["wheel"]),
+        root / str(package["sdist"]),
+    ):
+        return False
     expected_files = {
         "benchmark-summary.json",
         "release-provenance.json",
@@ -2303,8 +2373,35 @@ def _validate_release_development_artifacts(
         return False
     return (
         _release_provenance_contract(provenance, commit, package, builds)
-        and _release_summary_contract(summary, commit)
-        and _release_drill_contract(drill, commit)
+        and _release_summary_contract(summary, commit, evidence_revision=evidence_revision)
+        and _release_drill_contract(drill, commit, evidence_revision=evidence_revision)
+    )
+
+
+def _package_archives_match(wheel: Path, sdist: Path) -> bool:
+    try:
+        with zipfile.ZipFile(wheel) as archive:
+            metadata_names = [
+                name for name in archive.namelist() if name.endswith(".dist-info/METADATA")
+            ]
+            if len(metadata_names) != 1:
+                return False
+            wheel_metadata = BytesParser(policy=default).parsebytes(archive.read(metadata_names[0]))
+        with tarfile.open(sdist, "r:gz") as archive:
+            metadata_members = [
+                member for member in archive.getmembers() if member.name.endswith("/PKG-INFO")
+            ]
+            if len(metadata_members) != 1:
+                return False
+            extracted = archive.extractfile(metadata_members[0])
+            if extracted is None:
+                return False
+            sdist_metadata = BytesParser(policy=default).parsebytes(extracted.read())
+    except (OSError, KeyError, tarfile.TarError, zipfile.BadZipFile):
+        return False
+    return all(
+        metadata.get("Name", "").casefold() == "memoryforge" and metadata.get("Version") == "0.3.0"
+        for metadata in (wheel_metadata, sdist_metadata)
     )
 
 
@@ -2363,6 +2460,7 @@ def _release_provenance_contract(
         and payload.get("memoryforge_commit") == commit
         and payload.get("memoryforge_worktree_dirty") is False
         and payload.get("reproducible_artifacts") is True
+        and _payload_private_detail_leaks(payload) == 0
         and _strict_mapping(payload.get("package"), package)
         and _strict_json_value(payload.get("builds"), builds)
         and isinstance(runtime, dict)
@@ -2418,10 +2516,32 @@ def build_benchmark_summary(
     *,
     package_version: str,
     memoryforge_commit: str,
-    schema_version: int = 2,
+    schema_version: int = 3,
 ) -> dict[str, Any]:
-    if schema_version not in {1, 2}:
+    if type(schema_version) is not int or schema_version not in {1, 2, 3}:
         raise ValueError("unsupported benchmark summary schema")
+    if schema_version >= 3:
+        if not _git_commit_descends_from(memoryforge_commit, memoryforge_commit):
+            raise ValueError("benchmark summary Commit does not exist")
+        for experiment in registry["experiments"]:
+            if experiment["suite_id"] != "release-candidate-delivery":
+                continue
+            for evidence in experiment["evidence"]:
+                if evidence["status"] != "accepted_development":
+                    continue
+                acceptance = evidence.get("acceptance_evidence")
+                if (
+                    not isinstance(acceptance, dict)
+                    or not _git_commit_descends_from(
+                        memoryforge_commit,
+                        str(evidence["memoryforge_commit"]),
+                    )
+                    or not _git_commit_descends_from(
+                        memoryforge_commit,
+                        str(acceptance.get("memoryforge_commit")),
+                    )
+                ):
+                    raise ValueError("benchmark summary acceptance ancestry is invalid")
     suites = [_benchmark_suite_summary(suite) for suite in registry["suites"]]
     experiments = [
         _benchmark_experiment_summary(experiment, schema_version=schema_version)
@@ -2503,13 +2623,43 @@ def _benchmark_experiment_summary(
             }
             for evidence in accepted
         ]
-    return {
+    summary = {
         "suite_id": experiment["suite_id"],
         "suite_revision": experiment["suite_revision"],
         "confirmation": experiment["splits"]["confirmation"],
         "holdout": experiment["splits"]["holdout"],
         "accepted_evidence": accepted_evidence,
     }
+    if schema_version >= 3:
+        summary.update(
+            {
+                "repositories": experiment["repositories"],
+                "development": experiment["splits"]["development"],
+                "expected_metrics": experiment["expected_metrics"],
+                "evidence": [
+                    {
+                        key: value
+                        for key, value in evidence.items()
+                        if key
+                        in {
+                            "split",
+                            "evidence_revision",
+                            "status",
+                            "path",
+                            "sha256",
+                            "memoryforge_commit",
+                            "passed",
+                            "regression_evidence",
+                            "review_evidence",
+                            "acceptance_evidence",
+                            "linux_evidence",
+                        }
+                    }
+                    for evidence in experiment["evidence"]
+                ],
+            }
+        )
+    return summary
 
 
 def _benchmark_macro_metrics(suites: list[dict[str, Any]]) -> dict[str, float]:
@@ -2633,11 +2783,16 @@ def _registry_snapshot_summary(registry: dict[str, Any]) -> dict[str, object]:
     }
 
 
-def _release_summary_contract(payload: object, commit: str) -> bool:
+def _release_summary_contract(
+    payload: object,
+    commit: str,
+    *,
+    evidence_revision: int = 10,
+) -> bool:
     if not isinstance(payload, dict) or type(payload.get("schema_version")) is not int:
         return False
     schema_version = payload["schema_version"]
-    if schema_version not in {1, 2}:
+    if schema_version not in {1, 2, 3}:
         return False
     try:
         schema_2_required = (
@@ -2649,7 +2804,8 @@ def _release_summary_contract(payload: object, commit: str) -> bool:
             ).returncode
             == 0
         )
-        if schema_version != (2 if schema_2_required else 1):
+        expected_schema = 3 if evidence_revision >= 11 else (2 if schema_2_required else 1)
+        if schema_version != expected_schema:
             return False
         snapshot = json.loads(
             subprocess.run(
@@ -2672,7 +2828,12 @@ def _release_summary_contract(payload: object, commit: str) -> bool:
     return _strict_json_value(payload, expected)
 
 
-def _release_drill_contract(payload: object, commit: str) -> bool:
+def _release_drill_contract(
+    payload: object,
+    commit: str,
+    *,
+    evidence_revision: int = 10,
+) -> bool:
     if not isinstance(payload, dict):
         return False
     expected_checks = {
@@ -2690,22 +2851,147 @@ def _release_drill_contract(payload: object, commit: str) -> bool:
             "showcase",
         }
     }
-    return (
-        set(payload)
-        == {
-            "schema_version",
-            "memoryforge_commit",
-            "checks",
-            "private_detail_leaks",
-            "passed",
-        }
-        and type(payload.get("schema_version")) is int
-        and payload.get("schema_version") == 1
-        and payload.get("memoryforge_commit") == commit
+    base_valid = (
+        payload.get("memoryforge_commit") == commit
         and _strict_mapping(payload.get("checks"), expected_checks)
         and type(payload.get("private_detail_leaks")) is int
         and payload.get("private_detail_leaks") == 0
         and payload.get("passed") is True
+    )
+    if evidence_revision < 11:
+        return (
+            set(payload)
+            == {
+                "schema_version",
+                "memoryforge_commit",
+                "checks",
+                "private_detail_leaks",
+                "passed",
+            }
+            and type(payload.get("schema_version")) is int
+            and payload.get("schema_version") == 1
+            and base_valid
+        )
+
+    evaluation = payload.get("evaluation")
+    queries = payload.get("queries")
+    workspace = payload.get("workspace")
+    if (
+        set(payload)
+        != {
+            "schema_version",
+            "memoryforge_commit",
+            "checks",
+            "evaluation",
+            "queries",
+            "workspace",
+            "private_detail_leaks",
+            "passed",
+        }
+        or type(payload.get("schema_version")) is not int
+        or payload.get("schema_version") != 2
+        or not base_valid
+        or not _strict_mapping(
+            evaluation,
+            {
+                "metrics": {
+                    "answer_accuracy": 100.0,
+                    "citation_grounding_accuracy": 100.0,
+                    "abstention_accuracy": 100.0,
+                },
+                "cases": [
+                    {
+                        "id": "exact-code-signature",
+                        "category": "exact_symbol",
+                        "error_classification": "none",
+                        "memoryforge": {
+                            "answer_correct": True,
+                            "abstention_correct": False,
+                        },
+                    },
+                    {
+                        "id": "unsupported-symbol-abstention",
+                        "category": "unanswerable",
+                        "error_classification": "none",
+                        "memoryforge": {
+                            "answer_correct": True,
+                            "abstention_correct": True,
+                        },
+                    },
+                ],
+            },
+        )
+        or not isinstance(queries, dict)
+        or set(queries) != {"answered", "unknown"}
+        or not isinstance(workspace, dict)
+        or set(workspace) != {"original_commit", "restored_commit", "restored_lint"}
+        or COMMIT.fullmatch(str(workspace.get("original_commit"))) is None
+        or workspace.get("restored_commit") != workspace.get("original_commit")
+        or not isinstance(workspace.get("restored_lint"), dict)
+        or workspace["restored_lint"].get("status") != "clean"
+    ):
+        return False
+    answered = queries["answered"]
+    unknown = queries["unknown"]
+    return (
+        isinstance(answered, dict)
+        and set(answered) == {"original", "restored"}
+        and _strict_json_value(answered["original"], answered["restored"])
+        and _release_drill_answered_query(answered["original"])
+        and isinstance(unknown, dict)
+        and set(unknown) == {"original", "restored"}
+        and _strict_json_value(unknown["original"], unknown["restored"])
+        and _release_drill_unknown_query(unknown["original"])
+    )
+
+
+def _release_drill_answered_query(payload: object) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    citations = payload.get("citations")
+    support = payload.get("support")
+    if not isinstance(citations, list) or len(citations) != 1:
+        return False
+    citation = citations[0]
+    if not isinstance(citation, dict):
+        return False
+    source_id = citation.get("source_id")
+    expected_answer = "`src.service.cache_ttl` (function): `def cache_ttl() -> int:`"
+    return (
+        payload.get("status") == "answered"
+        and payload.get("answer") == expected_answer
+        and set(citation) == {"source_id", "source_version", "locator", "quote"}
+        and SHA256.fullmatch(str(source_id)) is not None
+        and citation.get("source_version") == 2
+        and citation.get("locator") == "chars:17-61"
+        and citation.get("quote") == expected_answer
+        and payload.get("source_id") == source_id
+        and payload.get("source_version") == citation["source_version"]
+        and payload.get("locator") == citation["locator"]
+        and payload.get("quote") == citation["quote"]
+        and isinstance(support, dict)
+        and support.get("sufficient") is True
+        and support.get("enforced") is True
+        and support.get("failed_hard_gates") == []
+    )
+
+
+def _release_drill_unknown_query(payload: object) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    support = payload.get("support")
+    return (
+        payload.get("status") == "unknown"
+        and payload.get("answer") == "不知道"
+        and payload.get("citations") == []
+        and all(
+            payload.get(key) is None for key in ("source_id", "source_version", "locator", "quote")
+        )
+        and isinstance(support, dict)
+        and support.get("sufficient") is False
+        and support.get("enforced") is True
+        and support.get("failed_hard_gates")
+        == ["exact_identifier_not_covered", "score_below_threshold"]
     )
 
 
@@ -3089,6 +3375,8 @@ def _validate_bound_gate_artifacts(
     if require_code_evidence:
         try:
             code_evidence = json.loads(paths["code_wiki_evidence"].read_text(encoding="utf-8"))
+            suite_path = REPO_ROOT / "demo/evaluation/code_wiki_eval.json"
+            suite = json.loads(suite_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             return False
         evaluation = code_evidence.get("evaluation") if isinstance(code_evidence, dict) else None
@@ -3109,18 +3397,33 @@ def _validate_bound_gate_artifacts(
             or code_evidence.get("schema_version") != 1
             or code_evidence.get("memoryforge_commit") != gate_commit
             or code_evidence.get("memoryforge_worktree_dirty") is not False
+            or not _strict_mapping(
+                code_evidence.get("fixture"),
+                {
+                    "path": "demo/fixtures/code_wiki_project",
+                    "suite_sha256": hashlib.sha256(suite_path.read_bytes()).hexdigest(),
+                    **CODE_WIKI_FIXTURE_COMMITS,
+                },
+            )
+            or not _strict_mapping(
+                code_evidence.get("workflow"),
+                {
+                    "wiki_file_count": 8,
+                    "lint": {
+                        "status": "clean",
+                        "checked_pages": 8,
+                        "issues": [],
+                    },
+                },
+            )
             or not isinstance(evaluation, dict)
             or set(evaluation) != {"schema_version", "suite", "counts", "metrics", "gates", "cases"}
-            or not isinstance(evaluation.get("counts"), dict)
-            or not evaluation["counts"]
+            or type(evaluation.get("schema_version")) is not int
+            or evaluation.get("schema_version") != 1
+            or evaluation.get("suite") != suite.get("name")
+            or not _strict_mapping(evaluation.get("counts"), CODE_WIKI_COUNTS)
             or not isinstance(cases, dict)
-            or set(cases) != {"sources", "symbols", "relations", "modules"}
-            or any(not isinstance(group, list) or not group for group in cases.values())
-            or any(
-                not isinstance(case, dict) or case.get("found") is not True
-                for group in cases.values()
-                for case in group
-            )
+            or not _strict_mapping(cases, _expected_code_wiki_cases(suite))
             or not _strict_mapping(evaluation.get("metrics"), metrics)
             or not _strict_mapping(evaluation.get("gates"), gates)
             or not _strict_mapping(code_evidence.get("incremental"), incremental)
@@ -3156,6 +3459,38 @@ def _validate_bound_gate_artifacts(
     return sums == expected_sums and (
         not require_replayable_sums or _sha256sums_replays(paths["sha256sums"].parent, sums)
     )
+
+
+def _expected_code_wiki_cases(suite: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    return {
+        "sources": [{"path": path, "found": True} for path in suite["expected_source_paths"]],
+        "symbols": [
+            {
+                "qualified_name": case["qualified_name"],
+                "kind": case["kind"],
+                "found": True,
+            }
+            for case in suite["symbols"]
+        ],
+        "relations": [
+            {
+                "tier": case["tier"],
+                "type": case["type"],
+                "source": case["source"],
+                "target": case["target"],
+                "found": True,
+            }
+            for case in suite["relations"]
+        ],
+        "modules": [
+            {
+                "symbol": case["symbol"],
+                "module_path": case["module_path"],
+                "found": True,
+            }
+            for case in suite["modules"]
+        ],
+    }
 
 
 def _sha256sums_replays(root: Path, sums: dict[str, str]) -> bool:

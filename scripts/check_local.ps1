@@ -5,6 +5,16 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+$PreviousLocation = Get-Location
+$EnvironmentNames = @("PYTHONPATH", "PYTHONHOME", "PYTHONNOUSERSITE", "SOURCE_DATE_EPOCH")
+$OriginalEnvironment = @{}
+foreach ($Name in $EnvironmentNames) {
+    $OriginalEnvironment[$Name] = @{
+        Exists = Test-Path -LiteralPath "Env:$Name"
+        Value = [Environment]::GetEnvironmentVariable($Name, "Process")
+    }
+}
+
 $Root = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
 Set-Location -LiteralPath $Root
 
@@ -16,11 +26,6 @@ if ($env:PYTHON_BIN) {
     $PythonCommand = Get-Command python -ErrorAction Stop
     $Python = $PythonCommand.Source
 }
-
-Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
-Remove-Item Env:PYTHONHOME -ErrorAction SilentlyContinue
-$env:PYTHONNOUSERSITE = "1"
-$env:SOURCE_DATE_EPOCH = "315532800"
 
 if (-not $Output) {
     $Timestamp = (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
@@ -62,6 +67,11 @@ function Get-SingleArtifact {
 }
 
 try {
+    Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
+    Remove-Item Env:PYTHONHOME -ErrorAction SilentlyContinue
+    $env:PYTHONNOUSERSITE = "1"
+    $env:SOURCE_DATE_EPOCH = "315532800"
+
     # Contract: ruff check --no-cache .
     Invoke-External $Python @("-m", "ruff", "check", "--no-cache", ".")
     # Contract: ruff format --check .
@@ -233,4 +243,16 @@ try {
     Write-Output "Local checks passed. Evidence: $Output"
 } finally {
     Remove-Item -LiteralPath $Workdir -Recurse -Force -ErrorAction SilentlyContinue
+    foreach ($Name in $EnvironmentNames) {
+        if ($OriginalEnvironment[$Name].Exists) {
+            [Environment]::SetEnvironmentVariable(
+                $Name,
+                $OriginalEnvironment[$Name].Value,
+                "Process"
+            )
+        } else {
+            Remove-Item "Env:$Name" -ErrorAction SilentlyContinue
+        }
+    }
+    Set-Location -LiteralPath $PreviousLocation.Path
 }

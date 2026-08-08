@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
 import json
 import os
@@ -24,6 +25,7 @@ TARGET_VERSION = "0.3.0"
 CONSTRAINTS = REPO_ROOT / "constraints/dev.txt"
 FORBIDDEN_SDIST_PARTS = ("/demo/results/artifacts/",)
 SOURCE_DATE_EPOCH = "315532800"
+PACKAGE_INDEX_URL = "https://pypi.org/simple"
 WORKTREE_CHECKOUT_OPTIONS = ("-c", "core.autocrlf=false", "-c", "core.eol=lf")
 
 
@@ -132,6 +134,7 @@ def _build_release(staging: Path, *, repo_root: Path, commit: str) -> None:
                 str(staging / "benchmark-summary.json"),
             ],
             cwd=repo_root,
+            environment=_clean_build_environment(),
         )
         _run(
             [
@@ -143,6 +146,7 @@ def _build_release(staging: Path, *, repo_root: Path, commit: str) -> None:
                 str(staging / "workspace-drill.json"),
             ],
             cwd=repo_root,
+            environment=_clean_build_environment(),
         )
 
         provenance = {
@@ -207,6 +211,8 @@ def _isolated_build(
                 "install",
                 "--python",
                 str(python),
+                "--default-index",
+                PACKAGE_INDEX_URL,
                 "-c",
                 str(constraints),
                 "build",
@@ -222,6 +228,8 @@ def _isolated_build(
                 "-m",
                 "pip",
                 "install",
+                "--index-url",
+                PACKAGE_INDEX_URL,
                 "-c",
                 str(constraints),
                 "build",
@@ -288,12 +296,8 @@ def _check_sdist_clean_room(
     environment = (root / "environment").resolve()
     venv.EnvBuilder(with_pip=True).create(environment)
     python = environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-    clean_environment = {
-        key: value for key, value in os.environ.items() if key not in {"PYTHONPATH", "PYTHONHOME"}
-    }
+    clean_environment = _clean_build_environment()
     clean_environment["PIP_CONSTRAINT"] = str(constraints)
-    clean_environment["PYTHONNOUSERSITE"] = "1"
-    clean_environment["SOURCE_DATE_EPOCH"] = SOURCE_DATE_EPOCH
     _run(
         [
             str(python),
@@ -301,6 +305,8 @@ def _check_sdist_clean_room(
             "pip",
             "install",
             "--disable-pip-version-check",
+            "--index-url",
+            PACKAGE_INDEX_URL,
             "hatchling",
         ],
         cwd=cwd,
@@ -370,25 +376,28 @@ def _require_version(
     project = tomllib.loads((repo_root / "pyproject.toml").read_text(encoding="utf-8"))
     versions = {
         str(project["project"]["version"]),
-        _source_cli_version(repo_root, source_root),
+        _source_module_version(source_root),
     }
     if versions != {TARGET_VERSION}:
         raise SystemExit(f"release version must be {TARGET_VERSION}: {sorted(versions)}")
 
 
-def _source_cli_version(
-    repo_root: Path = REPO_ROOT,
+def _source_module_version(
     source_root: Path = SOURCE_ROOT,
 ) -> str:
-    environment = {**os.environ, "PYTHONPATH": str(source_root)}
-    return subprocess.run(
-        [sys.executable, "-m", "memoryforge", "--version"],
-        cwd=repo_root,
-        env=environment,
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
+    module = ast.parse((source_root / "memoryforge/__init__.py").read_text(encoding="utf-8"))
+    for statement in module.body:
+        if (
+            isinstance(statement, ast.Assign)
+            and any(
+                isinstance(target, ast.Name) and target.id == "__version__"
+                for target in statement.targets
+            )
+            and isinstance(statement.value, ast.Constant)
+            and isinstance(statement.value.value, str)
+        ):
+            return statement.value.value
+    raise SystemExit("memoryforge.__version__ must be a string literal")
 
 
 def _single(directory: Path, pattern: str) -> Path:
@@ -417,10 +426,18 @@ def _read_json(path: Path) -> dict[str, Any]:
 
 def _clean_build_environment() -> dict[str, str]:
     environment = {
-        key: value for key, value in os.environ.items() if key not in {"PYTHONPATH", "PYTHONHOME"}
+        key: value
+        for key, value in os.environ.items()
+        if key not in {"PYTHONPATH", "PYTHONHOME", "PIP_CONFIG_FILE"}
+        and not key.startswith(
+            ("COV_CORE_", "COVERAGE_", "PIP_INDEX", "PIP_EXTRA_INDEX", "UV_INDEX")
+        )
     }
     environment["PYTHONNOUSERSITE"] = "1"
     environment["SOURCE_DATE_EPOCH"] = SOURCE_DATE_EPOCH
+    environment["PIP_CONFIG_FILE"] = os.devnull
+    environment["PIP_INDEX_URL"] = PACKAGE_INDEX_URL
+    environment["UV_DEFAULT_INDEX"] = PACKAGE_INDEX_URL
     return environment
 
 

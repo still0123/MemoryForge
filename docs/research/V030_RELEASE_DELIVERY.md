@@ -83,6 +83,27 @@ constraints. The release phase adds only repository-local orchestration:
 
 No reference code is copied.
 
+## Candidate 10 Hardening
+
+Candidate 10 keeps the same two fixed references and narrows the release
+contract:
+
+- Summary schema 3 retains each experiment's repository, development split,
+  expected metrics, and complete Evidence identities.
+- `accepted_development` now requires an accepted final-review sidecar;
+  local-gate success and review failure remain distinct states.
+- Build subprocesses use a clean Python/coverage environment and the official
+  PyPI simple index instead of host index configuration.
+- Retained Workspace, Code Wiki, package metadata, privacy, and review-scope
+  Evidence is replayed from raw structured data rather than trusted pass
+  strings.
+
+Not adopted:
+
+- a vendored package index or committed wheelhouse;
+- a new release framework;
+- changing any frozen development, confirmation, or holdout case.
+
 ## Expected Improvement
 
 - package/CLI/release version consistency: 100%;

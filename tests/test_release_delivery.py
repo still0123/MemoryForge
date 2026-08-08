@@ -25,7 +25,7 @@ release_builder = _module("build_release", "scripts/build_release.py")
 
 
 def test_release_builder_reads_version_from_current_source() -> None:
-    assert release_builder._source_cli_version() == "0.3.0"
+    assert release_builder._source_module_version() == "0.3.0"
 
 
 def test_release_package_inputs_and_build_environment_are_stable(
@@ -48,18 +48,27 @@ def test_release_package_inputs_and_build_environment_are_stable(
     )
     monkeypatch.setenv("PYTHONPATH", "/private/tmp/untrusted")
     monkeypatch.setenv("PYTHONHOME", "/private/tmp/untrusted")
+    monkeypatch.setenv("COV_CORE_DATAFILE", ".coverage")
+    monkeypatch.setenv("COVERAGE_FILE", ".coverage")
+    monkeypatch.setenv("PIP_INDEX_URL", "https://example.invalid/simple")
+    monkeypatch.setenv("UV_INDEX_URL", "https://example.invalid/simple")
     environment = release_builder._clean_build_environment()
     assert "PYTHONPATH" not in environment
     assert "PYTHONHOME" not in environment
+    assert "COV_CORE_DATAFILE" not in environment
+    assert "COVERAGE_FILE" not in environment
+    assert environment["PIP_INDEX_URL"] == release_builder.PACKAGE_INDEX_URL
+    assert environment["UV_DEFAULT_INDEX"] == release_builder.PACKAGE_INDEX_URL
     assert environment["PYTHONNOUSERSITE"] == "1"
     assert environment["SOURCE_DATE_EPOCH"] == "315532800"
 
 
 def test_benchmark_summary_reports_macro_per_suite_and_negatives() -> None:
-    summary = summary_builder.build_summary(memoryforge_commit="1" * 40)
+    commit = summary_builder._git("rev-parse", "HEAD")
+    summary = summary_builder.build_summary(memoryforge_commit=commit)
 
-    assert summary["schema_version"] == 2
-    assert summary["memoryforge_commit"] == "1" * 40
+    assert summary["schema_version"] == 3
+    assert summary["memoryforge_commit"] == commit
     assert summary["registry"]["qa_case_count"] == 121
     assert len(summary["suites"]) == 12
     release = next(
@@ -68,6 +77,11 @@ def test_benchmark_summary_reports_macro_per_suite_and_negatives() -> None:
         if experiment["suite_id"] == "release-candidate-delivery"
     )
     assert release["accepted_evidence"] == []
+    assert release["development"]["sha256"] == (
+        "8d9fe33359b71ac0b86b6fa42b0bc5ee34080126af3ae0b9bf2fa2c0121cf2a6"
+    )
+    assert release["repositories"][0]["commit"] == ("4d834679ec61355e285fb36a0cceef8f489a9083")
+    assert release["evidence"][-1]["status"] == "development_passed_review_failed"
     assert all(
         set(accepted) == {"status", "development", "acceptance"}
         and len(accepted["development"]["memoryforge_commit"]) == 40
@@ -107,8 +121,25 @@ def test_workspace_release_drill_runs_real_public_workflow(
 
     evidence = workspace_drill.run_drill(workdir)
 
+    assert evidence["schema_version"] == 2
     assert evidence["private_detail_leaks"] == 0
     assert evidence["passed"] is True
+    assert (
+        evidence["queries"]["answered"]["original"] == evidence["queries"]["answered"]["restored"]
+    )
+    assert evidence["queries"]["unknown"]["original"] == evidence["queries"]["unknown"]["restored"]
+    assert evidence["evaluation"]["metrics"] == {
+        "answer_accuracy": 100.0,
+        "citation_grounding_accuracy": 100.0,
+        "abstention_accuracy": 100.0,
+    }
+    assert evidence["workspace"]["original_commit"] == evidence["workspace"]["restored_commit"]
+    assert evidence["workspace"]["restored_lint"]["status"] == "clean"
+    assert summary_builder.validator._release_drill_contract(
+        evidence,
+        commit,
+        evidence_revision=11,
+    )
     assert set(evidence["checks"]) == {
         "refresh",
         "review",

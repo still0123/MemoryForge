@@ -234,9 +234,28 @@ def run_drill(workdir: Path) -> dict[str, Any]:
     if final_commit != source_commit or final_dirty:
         raise RuntimeError("Workspace release drill changed the source Commit or worktree")
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "memoryforge_commit": source_commit,
         "checks": checks,
+        "evaluation": {
+            "metrics": _evaluation_metrics(answered_passed, unknown_passed),
+            "cases": cases,
+        },
+        "queries": {
+            "answered": {
+                "original": _replay_payload(query),
+                "restored": _replay_payload(restored_query),
+            },
+            "unknown": {
+                "original": _replay_payload(unknown),
+                "restored": _replay_payload(restored_unknown),
+            },
+        },
+        "workspace": {
+            "original_commit": workspace_commit,
+            "restored_commit": restored_commit,
+            "restored_lint": restored_lint,
+        },
         "private_detail_leaks": private_detail_leaks,
         "passed": passed,
     }

@@ -42,7 +42,7 @@ def main(argv: list[str] | None = None) -> None:
 
 def build_summary(*, memoryforge_commit: str | None = None) -> dict[str, Any]:
     registry = json.loads(REGISTRY.read_text(encoding="utf-8"))
-    registry_summary = validator.validate_registry()
+    registry_summary = validator.validate_registry_payload(registry)
     project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     return validator.build_benchmark_summary(
         registry,
