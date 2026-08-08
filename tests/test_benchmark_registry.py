@@ -25,7 +25,7 @@ def test_benchmark_registry_binds_all_release_artifacts() -> None:
         "status": "valid",
         "suite_count": 12,
         "experiment_count": 8,
-        "evidence_count": 114,
+        "evidence_count": 115,
         "qa_case_count": 121,
         "qa_case_types_present": [
             "code_behavior",
@@ -377,6 +377,26 @@ def test_benchmark_registry_retains_release_static_review_regression() -> None:
             payload,
             experiment["splits"]["confirmation"],
             regression["memoryforge_commit"],
+        )
+
+
+def test_benchmark_registry_retains_candidate_7_static_review() -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "release-candidate-delivery"
+    )
+    artifact = next(item for item in experiment["evidence"] if item["evidence_revision"] == 8)
+    review = artifact["review_evidence"]
+    payload = json.loads((validator.REPO_ROOT / review["path"]).read_text(encoding="utf-8"))
+    payload["review"]["p1"] = 9
+
+    with pytest.raises(ValueError, match="static review Evidence changed"):
+        validator._validate_release_static_review_regression(
+            experiment,
+            artifact,
+            payload,
+            experiment["splits"]["confirmation"],
+            review["memoryforge_commit"],
         )
 
 

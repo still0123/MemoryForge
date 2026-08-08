@@ -356,7 +356,7 @@ REQUIRED_EXPERIMENT_EVIDENCE = {
         ),
         _RESULTS + "release_candidate_development_candidate_7.json": (
             8,
-            "accepted_development",
+            "development_passed_regression_failed",
             "337393de3ea54605055fd08f29fa92679ca3db52470879080cc0c92c5dd5ff10",
             "80b111bbd472cacd16ceb773a4c141e70ee97a4a",
         ),
@@ -460,6 +460,22 @@ REQUIRED_REGRESSION_EVIDENCE = {
             _RESULTS + "release_candidate_candidate_7_local_gate_contract_rejected.json",
             "921d5595531bc3b8427b4080264f366f02b40909e01312fc340ce417c298aa57",
             "0da3092733e0cf549d3e55ed50ed2413374a5cfb",
+        ),
+    },
+}
+REQUIRED_REVIEW_EVIDENCE = {
+    "exact-symbol-routing.learn-claude-code": {},
+    "support-score.learn-claude-code": {},
+    "multi-source-coverage-selection": {},
+    "folder-import-lifecycle": {},
+    "github-thread-import-lifecycle": {},
+    "static-showcase": {},
+    "cross-platform-delivery": {},
+    "release-candidate-delivery": {
+        _RESULTS + "release_candidate_development_candidate_7.json": (
+            _RESULTS + "release_candidate_candidate_7_static_review_rejected.json",
+            "94b841b8148f40049e3b226b705294527767acf7567a5a456b8706edcde3b501",
+            "a044337347b9c6884ea660c7568c4e3911c84521",
         ),
     },
 }
@@ -1501,9 +1517,10 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
         revisions: set[int] = set()
         statuses: set[str] = set()
         required_regression = REQUIRED_REGRESSION_EVIDENCE.get(suite_id)
+        required_review = REQUIRED_REVIEW_EVIDENCE.get(suite_id)
         required_acceptance = REQUIRED_ACCEPTANCE_EVIDENCE.get(suite_id)
         required_linux = REQUIRED_LINUX_EVIDENCE.get(suite_id, {})
-        if required_regression is None or required_acceptance is None:
+        if required_regression is None or required_review is None or required_acceptance is None:
             raise ValueError(f"experiment acceptance Evidence history is missing: {suite_id}")
         for artifact in evidence:
             _validate_artifact(artifact, suite_id)
@@ -1547,6 +1564,21 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
                 raise ValueError(
                     f"experiment regression Evidence history is incomplete: {suite_id}"
                 )
+            expected_review = required_review.get(path)
+            review_evidence = artifact.get("review_evidence")
+            if expected_review is None:
+                if review_evidence is not None:
+                    raise ValueError(f"unexpected experiment review Evidence: {suite_id}")
+            elif (
+                not isinstance(review_evidence, dict)
+                or (
+                    review_evidence.get("path"),
+                    review_evidence.get("sha256"),
+                    review_evidence.get("memoryforge_commit"),
+                )
+                != expected_review
+            ):
+                raise ValueError(f"experiment review Evidence history is incomplete: {suite_id}")
             expected_acceptance = required_acceptance.get(path)
             acceptance_evidence = artifact.get("acceptance_evidence")
             if expected_acceptance is None:
@@ -1595,6 +1627,12 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
             )
             if expected_regression is not None:
                 evidence_count += _validate_regression_evidence(
+                    experiment,
+                    artifact,
+                    confirmation,
+                )
+            if expected_review is not None:
+                evidence_count += _validate_review_evidence(
                     experiment,
                     artifact,
                     confirmation,
@@ -2958,6 +2996,35 @@ def _validate_regression_evidence(
     return 1
 
 
+def _validate_review_evidence(
+    experiment: dict[str, Any],
+    development_artifact: dict[str, Any],
+    confirmation: dict[str, Any],
+) -> int:
+    artifact = development_artifact.get("review_evidence")
+    if not isinstance(artifact, dict):
+        raise ValueError("review-rejected experiment requires review Evidence")
+    _validate_artifact(artifact, str(experiment["suite_id"]))
+    commit = str(artifact.get("memoryforge_commit"))
+    if (
+        experiment["suite_id"] != "release-candidate-delivery"
+        or COMMIT.fullmatch(commit) is None
+        or artifact.get("passed") is not False
+    ):
+        raise ValueError("invalid experiment review Evidence identity")
+    payload = cast(
+        dict[str, Any],
+        json.loads((REPO_ROOT / artifact["path"]).read_text(encoding="utf-8")),
+    )
+    return _validate_release_static_review_regression(
+        experiment,
+        development_artifact,
+        payload,
+        confirmation,
+        commit,
+    )
+
+
 def _validate_release_sdist_regression(
     experiment: dict[str, Any],
     development_artifact: dict[str, Any],
@@ -3300,6 +3367,86 @@ def _validate_release_static_review_regression(
                 "Freeze stable package inputs before development, require byte-identical "
                 "acceptance artifacts, and enforce exact semantic, path, privacy, and type "
                 "contracts."
+            ),
+        }
+        for artifact in expected_review["artifacts"].values():
+            _validate_artifact(artifact, "release-candidate static review")
+        review_ancestry_valid = _git_commit_descends_from(
+            commit,
+            development_artifact["memoryforge_commit"],
+        )
+    elif candidate == "release-development-candidate-7":
+        expected_review = {
+            "scope": (
+                "569685c2f0bf790819820b821b4768d180c4ee0d..."
+                "a044337347b9c6884ea660c7568c4e3911c84521"
+            ),
+            "base_commit": "569685c2f0bf790819820b821b4768d180c4ee0d",
+            "source_commit": "a044337347b9c6884ea660c7568c4e3911c84521",
+            "status": "failed",
+            "p0": 0,
+            "p1": 10,
+            "p2": 3,
+            "failures": [
+                "cross_checkout_eol_instability",
+                "retained_summary_semantic_closure",
+                "frozen_manifest_status_closure",
+                "confirmation_case_count_closure",
+                "acceptance_summary_identity",
+                "negative_summary_commit_binding",
+                "release_symlink_ownership",
+                "workspace_query_replay",
+                "workspace_cli_environment",
+                "showcase_evaluation_integrity",
+                "retained_sha256sums_replay",
+                "candidate_5_review_scope",
+                "candidate_6_review_scope",
+            ],
+            "artifacts": {
+                "raw_findings": {
+                    "path": (
+                        "demo/results/artifacts/release_candidate_review_candidate_7/comments.jsonl"
+                    ),
+                    "sha256": ("3ede07a4a7165f6d645bfb4deb9ab43b08518c3ab05c06d3385ff37a71388ad2"),
+                },
+                "top_findings": {
+                    "path": (
+                        "demo/results/artifacts/release_candidate_review_candidate_7/"
+                        "final_comments.json"
+                    ),
+                    "sha256": ("0aa466e7eb7147e8286a6004c50db63abbfb09850cffb7abf001e02c46ec8f6e"),
+                },
+                "html_report": {
+                    "path": (
+                        "demo/results/artifacts/release_candidate_review_candidate_7/report.html"
+                    ),
+                    "sha256": ("c2e007be529a457db92eda31015800dbd0f75e93f8da7898a491983adce2e194"),
+                },
+                "markdown_report": {
+                    "path": (
+                        "demo/results/artifacts/release_candidate_review_candidate_7/report.md"
+                    ),
+                    "sha256": ("7af1d2138b50817f8add1aa686d7d53272f0064ee033a4455ec835adcd7b2081"),
+                },
+                "review_scope": {
+                    "path": (
+                        "demo/results/artifacts/release_candidate_review_candidate_7/"
+                        "review-scope.json"
+                    ),
+                    "sha256": ("55dc5e0dd5512dd34c82f5e886f577f9ec098bb4b5f06d5231c56d8776be16ed"),
+                },
+            },
+        }
+        expected_root_cause = {
+            "summary": (
+                "Release reproducibility and Evidence consumers still accepted "
+                "platform-dependent checkouts, incomplete semantic closure, and "
+                "non-replayable retained support artifacts."
+            ),
+            "fix": (
+                "Freeze checkout bytes, validate manifests and summaries semantically, reject "
+                "symlinks, prove Workspace replay, and bind canonical SHA256 and review-scope "
+                "artifacts."
             ),
         }
         for artifact in expected_review["artifacts"].values():

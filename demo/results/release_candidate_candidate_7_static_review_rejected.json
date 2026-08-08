@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "suite_id": "release-candidate-delivery",
+  "suite_revision": 1,
+  "memoryforge_commit": "a044337347b9c6884ea660c7568c4e3911c84521",
+  "memoryforge_worktree_dirty": false,
+  "candidate": "release-development-candidate-7",
+  "review": {
+    "scope": "569685c2f0bf790819820b821b4768d180c4ee0d...a044337347b9c6884ea660c7568c4e3911c84521",
+    "base_commit": "569685c2f0bf790819820b821b4768d180c4ee0d",
+    "source_commit": "a044337347b9c6884ea660c7568c4e3911c84521",
+    "status": "failed",
+    "p0": 0,
+    "p1": 10,
+    "p2": 3,
+    "failures": [
+      "cross_checkout_eol_instability",
+      "retained_summary_semantic_closure",
+      "frozen_manifest_status_closure",
+      "confirmation_case_count_closure",
+      "acceptance_summary_identity",
+      "negative_summary_commit_binding",
+      "release_symlink_ownership",
+      "workspace_query_replay",
+      "workspace_cli_environment",
+      "showcase_evaluation_integrity",
+      "retained_sha256sums_replay",
+      "candidate_5_review_scope",
+      "candidate_6_review_scope"
+    ],
+    "artifacts": {
+      "raw_findings": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_7/comments.jsonl",
+        "sha256": "3ede07a4a7165f6d645bfb4deb9ab43b08518c3ab05c06d3385ff37a71388ad2"
+      },
+      "top_findings": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_7/final_comments.json",
+        "sha256": "0aa466e7eb7147e8286a6004c50db63abbfb09850cffb7abf001e02c46ec8f6e"
+      },
+      "html_report": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_7/report.html",
+        "sha256": "c2e007be529a457db92eda31015800dbd0f75e93f8da7898a491983adce2e194"
+      },
+      "markdown_report": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_7/report.md",
+        "sha256": "7af1d2138b50817f8add1aa686d7d53272f0064ee033a4455ec835adcd7b2081"
+      },
+      "review_scope": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_7/review-scope.json",
+        "sha256": "55dc5e0dd5512dd34c82f5e886f577f9ec098bb4b5f06d5231c56d8776be16ed"
+      }
+    }
+  },
+  "root_cause": {
+    "summary": "Release reproducibility and Evidence consumers still accepted platform-dependent checkouts, incomplete semantic closure, and non-replayable retained support artifacts.",
+    "fix": "Freeze checkout bytes, validate manifests and summaries semantically, reject symlinks, prove Workspace replay, and bind canonical SHA256 and review-scope artifacts."
+  },
+  "confirmation": {
+    "path": "demo/evaluation/release_candidate_confirmation.json",
+    "sha256": "3eed08e04592b614a709cd18c6a92951b5da145d7dab4b9997824cd4e002e805",
+    "status": "not_run"
+  },
+  "holdout": {
+    "path": "demo/evaluation/release_candidate_holdout.json",
+    "sha256": "b466644bef2748a96d598540c54633fe49770af97fc71ce6e62e18eda687e8f8",
+    "status": "not_run"
+  },
+  "passed": false
+}

@@ -1,6 +1,6 @@
 # 秋招演示与面试说明
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=7; platform_gate_candidate=7; platform_gate_status=accepted; review_status=pending; macos_passed=599; linux_passed=596; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=7; platform_gate_candidate=7; platform_gate_status=accepted; review_status=rejected; macos_passed=599; linux_passed=596; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 这份文档用于把 MemoryForge 讲成一个完整项目。演示只使用公开的 `AgentSkill-Eval` 文档，不使用公司代码、真实飞书正文、Token 或 App Secret。
 
@@ -92,7 +92,8 @@ Candidate 6 development 已 6/6 通过，并从 detached Commit 快照构建；�
 
 Candidate 7 已固定 package 输入和构建 epoch；development 6/6 通过。macOS 首次本地门禁因旧
 `sdist.exclude` 测试合同而 598/599 rejected，失败保留。修复测试合同后，同一 package bytes
-通过双平台门禁；最终静态审查仍待运行。
+通过双平台门禁。最终静态审查发现 0 P0 / 10 P1 / 3 P2，结果 rejected；13 条原始发现保留，
+因此不得授权 confirmation。
 
 随后展示 support-score development：Answer 与 Selective Accuracy 为 100%，Coverage 为 90%，
 Risk 为 0%；同时明确 confirmation 尚未运行。这样可以说明“有正向指标，但不越过冻结 split

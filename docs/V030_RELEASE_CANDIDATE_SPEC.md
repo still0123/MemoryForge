@@ -1,10 +1,10 @@
 # v0.3.0 Release Candidate Specification
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=7; platform_gate_candidate=7; platform_gate_status=accepted; review_status=pending; macos_passed=599; linux_passed=596; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=7; platform_gate_candidate=7; platform_gate_status=accepted; review_status=rejected; macos_passed=599; linux_passed=596; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 ## Status
 
-`LOCAL_GATES_PASSED_REVIEW_PENDING`
+`LOCAL_GATES_PASSED_REVIEW_REJECTED`
 
 ## Base
 
@@ -442,6 +442,29 @@ dependency checks, full pytest, Wheel clean-room, sdist clean-room, `pip
 check`, and CLI version smoke. Both platform builds are byte-identical to
 Candidate 7 development artifacts. Final static review remains required
 before confirmation authorization.
+
+## Rejected Candidate 7 Static Review
+
+- Evidence:
+  `demo/results/release_candidate_candidate_7_static_review_rejected.json`
+- Evidence SHA256:
+  `94b841b8148f40049e3b226b705294527767acf7567a5a456b8706edcde3b501`
+- Reviewed range:
+  `569685c2f0bf790819820b821b4768d180c4ee0d...a044337347b9c6884ea660c7568c4e3911c84521`
+- Result: `REJECTED`
+- P0: 0
+- P1: 10
+- P2: 3
+- Confirmation status: `not_run`
+- Holdout status: `not_run`
+
+The review found cross-checkout EOL instability, incomplete semantic closure
+for retained summaries and frozen manifests, replay gaps in Workspace drill,
+symlink ownership gaps, non-replayable retained SHA256SUMS, and historical
+review ranges that depended on movable refs. Raw 13 findings, Top 5, fixed
+review scope, HTML, and Markdown reports remain under
+`demo/results/artifacts/release_candidate_review_candidate_7/`. Candidate 7
+does not authorize confirmation.
 
 ## Confirmation Components
 
