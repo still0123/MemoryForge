@@ -1,10 +1,10 @@
 # v0.3.0 Release Candidate Specification
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=9; platform_gate_candidate=9; platform_gate_status=accepted; review_status=pending; macos_passed=607; linux_passed=604; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=9; platform_gate_candidate=9; platform_gate_status=accepted; review_status=rejected; macos_passed=607; linux_passed=604; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 ## Status
 
-`LOCAL_GATES_PASSED_REVIEW_PENDING`
+`LOCAL_GATES_PASSED_REVIEW_REJECTED`
 
 ## Base
 
@@ -559,7 +559,7 @@ frozen split. Summary schema 2 is mandatory by Commit ancestry, root Registry
 types are strict, historical review scope is recomputed from fixed Commits,
 version probes use a clean Python environment, Showcase metrics derive from
 final replay cases, and complete Code Wiki Evidence is retained and validated.
-Local gates are recorded below; final review remains pending and confirmation
+Local gates and the rejected final review are recorded below; confirmation
 stays closed.
 
 ## Accepted Candidate 9 Local Gates
@@ -581,7 +581,28 @@ stays closed.
 
 Both platforms passed the complete local gate. Wheel, sdist, and raw Code Wiki
 Evidence bytes match across platforms; each retained SHA256SUMS replays in
-place. Final static review remains required before confirmation authorization.
+place. The rejected final static review is recorded below.
+
+## Rejected Candidate 9 Static Review
+
+- Evidence:
+  `demo/results/release_candidate_candidate_9_static_review_rejected.json`
+- Evidence SHA256:
+  `bda916939f33f5ca10ad0c78733f01197fd8fc5924712d2b9aa1f37e4bebda2d`
+- Reviewed range:
+  `569685c2f0bf790819820b821b4768d180c4ee0d...c23de5915e6237700c0aa8e03a14e44583ab1049`
+- Result: `REJECTED`
+- P0: 0
+- P1: 10
+- P2: 4
+- Confirmation status: `not_run`
+- Holdout status: `not_run`
+
+The review found retained semantic gaps, an incomplete review state machine,
+remaining build-environment dependencies, weak package/privacy replay, and
+historical review scopes that were not all recomputed from fixed Commits. All
+14 raw findings, Top 5, fixed scope, HTML, and Markdown reports are retained.
+Candidate 9 does not authorize confirmation.
 
 ## Confirmation Components
 

@@ -425,7 +425,7 @@ REQUIRED_EXPERIMENT_EVIDENCE = {
         ),
         _RESULTS + "release_candidate_development_candidate_9.json": (
             10,
-            "accepted_development",
+            "development_passed_review_failed",
             "cabe2c738be47c5e3d73b371c78a32b1dbaea899f1ce743234327316f67ded0b",
             "63326fb2f123c336c31bcebf68c76c90dfac86e6",
         ),
@@ -550,6 +550,11 @@ REQUIRED_REVIEW_EVIDENCE = {
             _RESULTS + "release_candidate_candidate_8_static_review_rejected.json",
             "f2456842b969565a221d962fc48f95264cbe22ccce13fca960b21b1a155f043a",
             "f4dde0904e5bcaeb78be6d7a32e74a6beae5679a",
+        ),
+        _RESULTS + "release_candidate_development_candidate_9.json": (
+            _RESULTS + "release_candidate_candidate_9_static_review_rejected.json",
+            "bda916939f33f5ca10ad0c78733f01197fd8fc5924712d2b9aa1f37e4bebda2d",
+            "c23de5915e6237700c0aa8e03a14e44583ab1049",
         ),
     },
 }
@@ -1663,6 +1668,7 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
         allowed_statuses = {
             "rejected",
             "development_passed_regression_failed",
+            "development_passed_review_failed",
             "development_passed_gate_pending",
             "accepted_development_superseded",
             "accepted_development",
@@ -2131,6 +2137,7 @@ def _validate_release_candidate_experiment_payload(
             "accepted_development",
             "accepted_development_superseded",
             "development_passed_regression_failed",
+            "development_passed_review_failed",
             "development_passed_gate_pending",
         }
         or artifact["passed"] is not True
@@ -2531,7 +2538,11 @@ def _benchmark_negative_results(
     results: list[dict[str, Any]] = []
     for experiment in registry["experiments"]:
         for evidence in experiment["evidence"]:
-            if evidence["status"] in {"rejected", "development_passed_regression_failed"}:
+            if evidence["status"] in {
+                "rejected",
+                "development_passed_regression_failed",
+                "development_passed_review_failed",
+            }:
                 result = {
                     "suite_id": experiment["suite_id"],
                     "status": evidence["status"],
@@ -3980,6 +3991,115 @@ def _validate_release_static_review_regression(
                 "deleted_lines": 192,
                 "changed_lines": 17804,
             },
+        )
+    elif candidate == "release-development-candidate-9":
+        expected_review = {
+            "scope": (
+                "569685c2f0bf790819820b821b4768d180c4ee0d..."
+                "c23de5915e6237700c0aa8e03a14e44583ab1049"
+            ),
+            "base_commit": "569685c2f0bf790819820b821b4768d180c4ee0d",
+            "source_commit": "c23de5915e6237700c0aa8e03a14e44583ab1049",
+            "status": "failed",
+            "p0": 0,
+            "p1": 10,
+            "p2": 4,
+            "failures": [
+                "release_builder_host_runtime_dependency",
+                "release_build_index_reproducibility",
+                "retained_package_metadata",
+                "summary_registry_snapshot_race",
+                "experiment_summary_identity",
+                "summary_acceptance_ancestry",
+                "summary_schema_type",
+                "workspace_drill_semantic_retention",
+                "release_builder_coverage_environment",
+                "code_wiki_raw_evidence_semantics",
+                "powershell_environment_restoration",
+                "release_review_state_machine",
+                "historical_review_scope_recomputation",
+                "retained_provenance_privacy",
+            ],
+            "artifacts": {
+                "raw_findings": {
+                    "path": (
+                        "demo/results/artifacts/release_candidate_review_candidate_9/comments.jsonl"
+                    ),
+                    "sha256": ("03d0f3174e1e9952139fbe9aa732ba3f6b62f0a71473c543f8473609443fb7ab"),
+                },
+                "top_findings": {
+                    "path": (
+                        "demo/results/artifacts/release_candidate_review_candidate_9/"
+                        "final_comments.json"
+                    ),
+                    "sha256": ("3b529d56b5367f8e7a38823e70b07ffb84519fc8cf4061a25b67d6f3a085da12"),
+                },
+                "html_report": {
+                    "path": (
+                        "demo/results/artifacts/release_candidate_review_candidate_9/report.html"
+                    ),
+                    "sha256": ("a46154b192318327132a94a90e300e3111be21719da557a557fc50008573d4d5"),
+                },
+                "markdown_report": {
+                    "path": (
+                        "demo/results/artifacts/release_candidate_review_candidate_9/report.md"
+                    ),
+                    "sha256": ("4d074a85f8afcc704a2672c271ac6877d488262a47c3a62370a52f8ad30273c0"),
+                },
+                "review_scope": {
+                    "path": (
+                        "demo/results/artifacts/release_candidate_review_candidate_9/"
+                        "review-scope.json"
+                    ),
+                    "sha256": ("f2835d8aa5d2b3f7cbcbe4ddad57c6d7bc7448bccb4992077ad04ff77f9ce2f9"),
+                },
+            },
+        }
+        expected_root_cause = {
+            "summary": (
+                "Candidate 9 closed Candidate 8 findings, but final review found incomplete "
+                "retained semantics, review-state governance, environment isolation, and "
+                "historical replay checks."
+            ),
+            "fix": (
+                "Retain independently verifiable query and Code Wiki cases, make review an "
+                "explicit release state, isolate every build subprocess, and replay all package, "
+                "privacy, and review identities from fixed inputs."
+            ),
+        }
+        for artifact in expected_review["artifacts"].values():
+            _validate_artifact(artifact, "release-candidate static review")
+        scope_artifact = expected_review["artifacts"]["review_scope"]
+        scope_payload = json.loads(
+            (REPO_ROOT / str(scope_artifact["path"])).read_text(encoding="utf-8")
+        )
+        expected_stats = {
+            "diff_files": 189,
+            "reviewed_files": 114,
+            "added_lines": 21107,
+            "deleted_lines": 181,
+            "changed_lines": 21288,
+        }
+        review_ancestry_valid = (
+            _git_commit_descends_from(
+                commit,
+                development_artifact["memoryforge_commit"],
+            )
+            and _git_diff_stats(
+                str(expected_review["base_commit"]),
+                str(expected_review["source_commit"]),
+            )
+            == expected_stats
+            and _strict_mapping(
+                scope_payload,
+                {
+                    "schema_version": 1,
+                    "base_commit": expected_review["base_commit"],
+                    "source_commit": expected_review["source_commit"],
+                    "diff_mode": "merge_base_to_source",
+                    **expected_stats,
+                },
+            )
         )
     else:
         raise ValueError("unknown release-candidate static review Evidence")

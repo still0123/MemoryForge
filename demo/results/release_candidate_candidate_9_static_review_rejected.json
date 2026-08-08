@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "suite_id": "release-candidate-delivery",
+  "suite_revision": 1,
+  "memoryforge_commit": "c23de5915e6237700c0aa8e03a14e44583ab1049",
+  "memoryforge_worktree_dirty": false,
+  "candidate": "release-development-candidate-9",
+  "review": {
+    "scope": "569685c2f0bf790819820b821b4768d180c4ee0d...c23de5915e6237700c0aa8e03a14e44583ab1049",
+    "base_commit": "569685c2f0bf790819820b821b4768d180c4ee0d",
+    "source_commit": "c23de5915e6237700c0aa8e03a14e44583ab1049",
+    "status": "failed",
+    "p0": 0,
+    "p1": 10,
+    "p2": 4,
+    "failures": [
+      "release_builder_host_runtime_dependency",
+      "release_build_index_reproducibility",
+      "retained_package_metadata",
+      "summary_registry_snapshot_race",
+      "experiment_summary_identity",
+      "summary_acceptance_ancestry",
+      "summary_schema_type",
+      "workspace_drill_semantic_retention",
+      "release_builder_coverage_environment",
+      "code_wiki_raw_evidence_semantics",
+      "powershell_environment_restoration",
+      "release_review_state_machine",
+      "historical_review_scope_recomputation",
+      "retained_provenance_privacy"
+    ],
+    "artifacts": {
+      "raw_findings": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_9/comments.jsonl",
+        "sha256": "03d0f3174e1e9952139fbe9aa732ba3f6b62f0a71473c543f8473609443fb7ab"
+      },
+      "top_findings": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_9/final_comments.json",
+        "sha256": "3b529d56b5367f8e7a38823e70b07ffb84519fc8cf4061a25b67d6f3a085da12"
+      },
+      "html_report": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_9/report.html",
+        "sha256": "a46154b192318327132a94a90e300e3111be21719da557a557fc50008573d4d5"
+      },
+      "markdown_report": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_9/report.md",
+        "sha256": "4d074a85f8afcc704a2672c271ac6877d488262a47c3a62370a52f8ad30273c0"
+      },
+      "review_scope": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_9/review-scope.json",
+        "sha256": "f2835d8aa5d2b3f7cbcbe4ddad57c6d7bc7448bccb4992077ad04ff77f9ce2f9"
+      }
+    }
+  },
+  "root_cause": {
+    "summary": "Candidate 9 closed Candidate 8 findings, but final review found incomplete retained semantics, review-state governance, environment isolation, and historical replay checks.",
+    "fix": "Retain independently verifiable query and Code Wiki cases, make review an explicit release state, isolate every build subprocess, and replay all package, privacy, and review identities from fixed inputs."
+  },
+  "confirmation": {
+    "path": "demo/evaluation/release_candidate_confirmation.json",
+    "sha256": "3eed08e04592b614a709cd18c6a92951b5da145d7dab4b9997824cd4e002e805",
+    "status": "not_run"
+  },
+  "holdout": {
+    "path": "demo/evaluation/release_candidate_holdout.json",
+    "sha256": "b466644bef2748a96d598540c54633fe49770af97fc71ce6e62e18eda687e8f8",
+    "status": "not_run"
+  },
+  "passed": false
+}

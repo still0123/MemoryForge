@@ -1,6 +1,6 @@
 # MemoryForge v0.3.0 Evidence Claims
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=9; platform_gate_candidate=9; platform_gate_status=accepted; review_status=pending; macos_passed=607; linux_passed=604; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=9; platform_gate_candidate=9; platform_gate_status=accepted; review_status=rejected; macos_passed=607; linux_passed=604; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 本页只列可由仓库内 Evidence 直接核验的主张。局部结果不得外推为任意仓库、任意语言或生产 SLA。
 
@@ -31,8 +31,9 @@
 | Candidate 8 development 6/6，Summary schema 2 与真实 Workspace replay 门禁通过 | [`release_candidate_development_candidate_8.json`](../demo/results/release_candidate_development_candidate_8.json) | 固定 Commit `2451f2d`；终审 rejected；confirmation/holdout 未运行 |
 | Candidate 8 在 macOS 604 passed，Linux 601 passed / 3 skipped，coverage 88%，retained SHA256SUMS 可重放 | [`release_candidate_candidate_8_local_gates.json`](../demo/results/release_candidate_candidate_8_local_gates.json) | 固定 Commit `4c6f8e6`；终审 rejected；不等于原生 Windows confirmation |
 | Candidate 8 静态终审为 0 P0 / 4 P1 / 2 P2，结果 rejected | [`release_candidate_candidate_8_static_review_rejected.json`](../demo/results/release_candidate_candidate_8_static_review_rejected.json) | 固定范围 `569685c...f4dde09`；6 条发现保留；confirmation/holdout 未运行 |
-| Candidate 9 development 6/6，完整 Code Wiki Evidence 与历史评审范围均闭合验证 | [`release_candidate_development_candidate_9.json`](../demo/results/release_candidate_development_candidate_9.json) | 固定 Commit `63326fb`；终审、confirmation、holdout 未运行 |
-| Candidate 9 在 macOS 607 passed，Linux 604 passed / 3 skipped，coverage 88%，raw Code Wiki Evidence 跨平台同字节 | [`release_candidate_candidate_9_local_gates.json`](../demo/results/release_candidate_candidate_9_local_gates.json) | 固定 Commit `53caa51`；终审待运行；不等于原生 Windows confirmation |
+| Candidate 9 development 6/6，完整 Code Wiki Evidence 与历史评审范围均闭合验证 | [`release_candidate_development_candidate_9.json`](../demo/results/release_candidate_development_candidate_9.json) | 固定 Commit `63326fb`；终审 rejected；confirmation/holdout 未运行 |
+| Candidate 9 在 macOS 607 passed，Linux 604 passed / 3 skipped，coverage 88%，raw Code Wiki Evidence 跨平台同字节 | [`release_candidate_candidate_9_local_gates.json`](../demo/results/release_candidate_candidate_9_local_gates.json) | 固定 Commit `53caa51`；终审 rejected；不等于原生 Windows confirmation |
+| Candidate 9 静态终审为 0 P0 / 10 P1 / 4 P2，结果 rejected | [`release_candidate_candidate_9_static_review_rejected.json`](../demo/results/release_candidate_candidate_9_static_review_rejected.json) | 固定范围 `569685c...c23de59`；14 条发现保留；confirmation/holdout 未运行 |
 | Candidate 2 首次 sdist preflight 因 macOS 路径 alias 失败且未生成输出目录 | [`release_candidate_sdist_probe_regression_rejected.json`](../demo/results/release_candidate_sdist_probe_regression_rejected.json) | 保留失败；修复使用 canonical path，未放宽 ownership gate |
 | 开发与构建依赖可冻结重放 | [`constraints/dev.txt`](../constraints/dev.txt)，SHA256 `48debebcfd2da302201688e0582c676cb571d66e96cd7a2a2e0654f49a544571` | 仅覆盖声明的平台与 Python 版本 |
 | Wheel 和 sdist 可独立安装 | 本地门禁与 [`run_release_check.py`](../demo/run_release_check.py) | 需要在精确 Commit 上重跑 |
