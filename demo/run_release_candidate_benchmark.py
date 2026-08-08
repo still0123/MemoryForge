@@ -103,18 +103,6 @@ FORBIDDEN_COMPLETION_PATTERN = re.compile(
     r"[^\n]{0,120}v0\.3\.0"
     r")"
 )
-WORKSPACE_CHECKS = {
-    "refresh",
-    "review",
-    "approve",
-    "apply",
-    "lint",
-    "no_pending_ingest",
-    "backup",
-    "restore",
-    "query",
-    "showcase",
-}
 WHEEL_CLEAN_ROOM_CHECKS = {
     "pip_check": "passed",
     "cli_help": "passed",
@@ -397,24 +385,10 @@ def _check_reproducible_artifacts(release_dir: Path) -> dict[str, object]:
 
 def _check_workspace_drill(release_dir: Path) -> dict[str, object]:
     drill = _load_json(release_dir / "workspace-drill.json")
-    checks = drill.get("checks")
-    passed = (
-        set(drill)
-        == {
-            "schema_version",
-            "memoryforge_commit",
-            "checks",
-            "private_detail_leaks",
-            "passed",
-        }
-        and type(drill.get("schema_version")) is int
-        and drill.get("schema_version") == 1
-        and drill.get("memoryforge_commit") == _git("rev-parse", "HEAD")
-        and isinstance(checks, dict)
-        and set(checks) == WORKSPACE_CHECKS
-        and all(value == "passed" for value in checks.values())
-        and drill.get("private_detail_leaks") == 0
-        and drill.get("passed") is True
+    passed = registry_validator._release_drill_contract(
+        drill,
+        _git("rev-parse", "HEAD"),
+        evidence_revision=11,
     )
     return _check(passed, "none" if passed else "workspace_drill_failure")
 

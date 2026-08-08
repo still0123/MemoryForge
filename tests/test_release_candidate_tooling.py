@@ -84,6 +84,33 @@ def test_release_candidate_versions_read_both_artifact_metadata(tmp_path: Path) 
     }
 
 
+def test_release_candidate_consumes_workspace_drill_schema_2(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commit = "a4c74bdb8047bb6267955624c7d054d17bb5e722"
+    source = (
+        benchmark.REPO_ROOT
+        / "demo/results/artifacts/release_candidate_development"
+        / commit
+        / "workspace-drill.json"
+    )
+    drill = json.loads(source.read_text(encoding="utf-8"))
+    (tmp_path / "workspace-drill.json").write_text(
+        json.dumps(drill),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(benchmark, "_git", lambda *_args: commit)
+
+    assert benchmark._check_workspace_drill(tmp_path)["passed"] is True
+    drill["evaluation"]["metrics"]["answer_accuracy"] = 0.0
+    (tmp_path / "workspace-drill.json").write_text(
+        json.dumps(drill),
+        encoding="utf-8",
+    )
+    assert benchmark._check_workspace_drill(tmp_path)["passed"] is False
+
+
 def test_release_candidate_rejects_incomplete_release_contract(tmp_path: Path) -> None:
     provenance = _release_artifacts(tmp_path)
     _write_release_artifacts(tmp_path, provenance)
