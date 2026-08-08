@@ -24,6 +24,7 @@ TARGET_VERSION = "0.3.0"
 CONSTRAINTS = REPO_ROOT / "constraints/dev.txt"
 FORBIDDEN_SDIST_PARTS = ("/demo/results/artifacts/",)
 SOURCE_DATE_EPOCH = "315532800"
+WORKTREE_CHECKOUT_OPTIONS = ("-c", "core.autocrlf=false", "-c", "core.eol=lf")
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -47,7 +48,7 @@ def main(argv: list[str] | None = None) -> None:
         parent = Path(snapshot_parent)
         snapshot = parent / "source"
         staging = parent / "release"
-        _git("worktree", "add", "--detach", str(snapshot), commit)
+        _git(*WORKTREE_CHECKOUT_OPTIONS, "worktree", "add", "--detach", str(snapshot), commit)
         try:
             _build_release(staging, repo_root=snapshot, commit=commit)
         finally:

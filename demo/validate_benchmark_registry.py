@@ -10,10 +10,12 @@ import json
 import re
 import subprocess
 import tarfile
+from collections import defaultdict
 from pathlib import Path
 from typing import Any, cast
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+SOURCE_GIT_ROOT = REPO_ROOT
 DEFAULT_REGISTRY = REPO_ROOT / "demo/evaluation/registry.json"
 SUITE_ID = re.compile(r"^[a-z0-9]+(?:[._-][a-z0-9]+)+$")
 COMMIT = re.compile(r"^[a-f0-9]{40}$")
@@ -26,6 +28,22 @@ SUITE_TYPES = {
     "source_lifecycle",
 }
 _RESULTS = "demo/results/"
+HISTORICAL_REVIEW_SCOPES = {
+    _RESULTS + "artifacts/release_candidate_review_candidate_5/review-scope.json": {
+        "sha256": "63aa2d22181f326181e09d1a6dcd30f8636e3265e86fdfe1df38c4f8429935ea",
+        "base_commit": "569685c2f0bf790819820b821b4768d180c4ee0d",
+        "source_commit": "26767333bc20a6367bc87f239cdc956cd40e7f4e",
+        "reviewed_files": 48,
+        "changed_lines": 7835,
+    },
+    _RESULTS + "artifacts/release_candidate_review_candidate_6/review-scope.json": {
+        "sha256": "b53d1a03fbd6552106cb41fb9add2fe9d3992a2dd824e74f6c540e0f8f942c4b",
+        "base_commit": "569685c2f0bf790819820b821b4768d180c4ee0d",
+        "source_commit": "9588c2fb6a41225515165f0114ce61f23f51d921",
+        "reviewed_files": 62,
+        "changed_lines": 10918,
+    },
+}
 REQUIRED_EXPERIMENT_EVIDENCE = {
     "exact-symbol-routing.learn-claude-code": {
         _RESULTS + "exact_symbol_routing_candidate_1_rejected.json": (
@@ -1270,6 +1288,7 @@ def validate_registry(path: Path = DEFAULT_REGISTRY) -> dict[str, object]:
     experiments = registry.get("experiments")
     if not isinstance(experiments, list) or not experiments:
         raise ValueError("benchmark registry requires experiments")
+    _validate_historical_review_scopes()
 
     suite_ids = [
         artifact.get("suite_id") for collection in (suites, experiments) for artifact in collection
@@ -1399,6 +1418,26 @@ def validate_registry(path: Path = DEFAULT_REGISTRY) -> dict[str, object]:
     }
 
 
+def _validate_historical_review_scopes() -> None:
+    for path, expected in HISTORICAL_REVIEW_SCOPES.items():
+        artifact = {"path": path, "sha256": expected["sha256"]}
+        _validate_artifact(artifact, "release-candidate review scope")
+        payload = json.loads((REPO_ROOT / path).read_text(encoding="utf-8"))
+        expected_payload = {
+            "schema_version": 1,
+            "base_commit": expected["base_commit"],
+            "source_commit": expected["source_commit"],
+            "diff_mode": "merge_base_to_source",
+            "reviewed_files": expected["reviewed_files"],
+            "changed_lines": expected["changed_lines"],
+        }
+        if not _strict_mapping(payload, expected_payload) or not _git_commit_descends_from(
+            str(expected["source_commit"]),
+            str(expected["base_commit"]),
+        ):
+            raise ValueError("release-candidate review scope changed")
+
+
 def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
     evidence_count = 0
     for experiment in experiments:
@@ -1458,11 +1497,13 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
         development_count, _, _ = _suite_cases(development)
         release_candidate = suite_id == "release-candidate-delivery"
         if release_candidate:
+            _validate_release_split_manifest(development, split_name="development")
             confirmation_count = _release_confirmation_case_count(confirmation, suite_id)
             holdout = splits["holdout"]
             if not isinstance(holdout, dict):
                 raise ValueError(f"release experiment requires frozen holdout: {suite_id}")
             _validate_artifact(holdout, suite_id)
+            _validate_release_split_manifest(holdout, split_name="holdout")
             holdout_count, _, _ = _suite_cases(holdout)
             holdout_valid = (
                 type(holdout.get("case_count")) is int
@@ -2242,55 +2283,249 @@ def _release_provenance_contract(
     )
 
 
-def _release_summary_contract(payload: object, commit: str) -> bool:
-    if not isinstance(payload, dict):
-        return False
-    registry = payload.get("registry")
-    return (
-        set(payload)
-        == {
-            "schema_version",
-            "package_version",
-            "memoryforge_commit",
-            "registry",
-            "macro",
-            "suites",
-            "experiments",
-            "negative_results",
-        }
-        and type(payload.get("schema_version")) is int
-        and payload.get("schema_version") == 1
-        and payload.get("package_version") == "0.3.0"
-        and payload.get("memoryforge_commit") == commit
-        and isinstance(registry, dict)
-        and set(registry)
-        == {
-            "status",
-            "suite_count",
-            "experiment_count",
-            "evidence_count",
-            "qa_case_count",
-            "qa_case_types_present",
-            "suite_types",
-        }
-        and registry.get("status") == "valid"
-        and type(registry.get("suite_count")) is int
-        and registry.get("suite_count") == 12
-        and type(registry.get("experiment_count")) is int
-        and registry.get("experiment_count") == 8
-        and type(registry.get("evidence_count")) is int
-        and registry["evidence_count"] > 0
-        and type(registry.get("qa_case_count")) is int
-        and registry.get("qa_case_count") == 121
-        and isinstance(payload.get("macro"), dict)
-        and bool(payload["macro"])
-        and isinstance(payload.get("suites"), list)
-        and len(payload["suites"]) == 12
-        and isinstance(payload.get("experiments"), list)
-        and len(payload["experiments"]) == 8
-        and isinstance(payload.get("negative_results"), list)
-        and bool(payload["negative_results"])
+def build_benchmark_summary(
+    registry: dict[str, Any],
+    registry_summary: dict[str, object],
+    *,
+    package_version: str,
+    memoryforge_commit: str,
+    schema_version: int = 2,
+) -> dict[str, Any]:
+    if schema_version not in {1, 2}:
+        raise ValueError("unsupported benchmark summary schema")
+    suites = [_benchmark_suite_summary(suite) for suite in registry["suites"]]
+    experiments = [
+        _benchmark_experiment_summary(experiment, schema_version=schema_version)
+        for experiment in registry["experiments"]
+    ]
+    return {
+        "schema_version": schema_version,
+        "package_version": package_version,
+        "memoryforge_commit": memoryforge_commit,
+        "registry": registry_summary,
+        "macro": _benchmark_macro_metrics(suites),
+        "suites": suites,
+        "experiments": experiments,
+        "negative_results": _benchmark_negative_results(
+            registry,
+            schema_version=schema_version,
+        ),
+    }
+
+
+def _benchmark_suite_summary(suite: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "suite_id": suite["suite_id"],
+        "suite_revision": suite["suite_revision"],
+        "suite_type": suite["suite_type"],
+        "repositories": [
+            {
+                "repository": repository["repository"],
+                "commit": repository["commit"],
+                "license": repository["license"],
+            }
+            for repository in suite["repositories"]
+        ],
+        "splits": suite["splits"],
+        "metrics": suite["expected_metrics"],
+        "evidence": [
+            {
+                "split": evidence["split"],
+                "evidence_revision": evidence["evidence_revision"],
+                "path": evidence["path"],
+                "sha256": evidence["sha256"],
+                "memoryforge_commit": evidence["memoryforge_commit"],
+            }
+            for evidence in suite["evidence"]
+        ],
+    }
+
+
+def _benchmark_experiment_summary(
+    experiment: dict[str, Any],
+    *,
+    schema_version: int,
+) -> dict[str, Any]:
+    accepted = [
+        evidence
+        for evidence in experiment["evidence"]
+        if evidence["status"] == "accepted_development"
+    ]
+    if schema_version == 1:
+        accepted_evidence = [
+            {
+                "path": evidence["path"],
+                "sha256": evidence["sha256"],
+                "memoryforge_commit": evidence["memoryforge_commit"],
+            }
+            for evidence in accepted
+        ]
+    else:
+        accepted_evidence = [
+            {
+                "status": evidence["status"],
+                "development": {
+                    "path": evidence["path"],
+                    "sha256": evidence["sha256"],
+                    "memoryforge_commit": evidence["memoryforge_commit"],
+                    "passed": evidence["passed"],
+                },
+                "acceptance": evidence["acceptance_evidence"],
+            }
+            for evidence in accepted
+        ]
+    return {
+        "suite_id": experiment["suite_id"],
+        "suite_revision": experiment["suite_revision"],
+        "confirmation": experiment["splits"]["confirmation"],
+        "holdout": experiment["splits"]["holdout"],
+        "accepted_evidence": accepted_evidence,
+    }
+
+
+def _benchmark_macro_metrics(suites: list[dict[str, Any]]) -> dict[str, float]:
+    values: defaultdict[str, list[float]] = defaultdict(list)
+    for suite in suites:
+        if suite["suite_type"] not in {"document_wiki_qa", "code_wiki_qa"}:
+            continue
+        for metrics in suite["metrics"].values():
+            if not isinstance(metrics, dict):
+                continue
+            for name, value in metrics.items():
+                if isinstance(value, (int, float)) and not isinstance(value, bool):
+                    values[name].append(float(value))
+    return {
+        name: round(sum(metric_values) / len(metric_values), 1)
+        for name, metric_values in sorted(values.items())
+        if metric_values
+    }
+
+
+def _benchmark_negative_results(
+    registry: dict[str, Any],
+    *,
+    schema_version: int,
+) -> list[dict[str, Any]]:
+    results: list[dict[str, Any]] = []
+    for experiment in registry["experiments"]:
+        for evidence in experiment["evidence"]:
+            if evidence["status"] in {"rejected", "development_passed_regression_failed"}:
+                result = {
+                    "suite_id": experiment["suite_id"],
+                    "status": evidence["status"],
+                    "path": evidence["path"],
+                    "sha256": evidence["sha256"],
+                }
+                if schema_version >= 2:
+                    result["memoryforge_commit"] = evidence["memoryforge_commit"]
+                results.append(result)
+            for field, status in (
+                ("regression_evidence", "regression_rejected"),
+                ("review_evidence", "review_rejected"),
+            ):
+                negative = evidence.get(field)
+                if not isinstance(negative, dict):
+                    continue
+                result = {
+                    "suite_id": experiment["suite_id"],
+                    "status": status,
+                    "path": negative["path"],
+                    "sha256": negative["sha256"],
+                }
+                if schema_version >= 2:
+                    result["memoryforge_commit"] = negative["memoryforge_commit"]
+                results.append(result)
+    for suite in registry["suites"]:
+        for split, metrics in suite["expected_metrics"].items():
+            if (
+                isinstance(metrics, dict)
+                and isinstance(metrics.get("answer_accuracy"), (int, float))
+                and metrics["answer_accuracy"] < 100
+            ):
+                result = {
+                    "suite_id": suite["suite_id"],
+                    "status": "retained_metric_gap",
+                    "split": split,
+                    "answer_accuracy": metrics["answer_accuracy"],
+                }
+                if schema_version >= 2:
+                    result["repositories"] = [
+                        {
+                            "repository": repository["repository"],
+                            "commit": repository["commit"],
+                        }
+                        for repository in suite["repositories"]
+                    ]
+                results.append(result)
+    return sorted(
+        results,
+        key=lambda item: (item["suite_id"], item["status"], item.get("split", "")),
     )
+
+
+def _registry_snapshot_summary(registry: dict[str, Any]) -> dict[str, object]:
+    suites = cast(list[dict[str, Any]], registry["suites"])
+    experiments = cast(list[dict[str, Any]], registry["experiments"])
+    sidecar_fields = {
+        "regression_evidence",
+        "review_evidence",
+        "acceptance_evidence",
+        "linux_evidence",
+    }
+    experiment_evidence_count = sum(
+        1 + sum(field in evidence for field in sidecar_fields)
+        for experiment in experiments
+        for evidence in experiment["evidence"]
+    )
+    embedded_acceptance_artifacts = sum(
+        1
+        for experiment in experiments
+        if experiment["suite_id"] == "multi-source-coverage-selection"
+        for evidence in experiment["evidence"]
+        if "acceptance_evidence" in evidence
+    )
+    return {
+        "status": "valid",
+        "suite_count": len(suites),
+        "experiment_count": len(experiments),
+        "evidence_count": (
+            1
+            + experiment_evidence_count
+            + embedded_acceptance_artifacts
+            + sum(len(cast(list[object], suite["evidence"])) for suite in suites)
+        ),
+        "qa_case_count": registry["qa_case_count"],
+        "qa_case_types_present": sorted(registry["qa_case_types_present"]),
+        "suite_types": sorted({str(suite["suite_type"]) for suite in suites}),
+    }
+
+
+def _release_summary_contract(payload: object, commit: str) -> bool:
+    if not isinstance(payload, dict) or type(payload.get("schema_version")) is not int:
+        return False
+    schema_version = payload["schema_version"]
+    if schema_version not in {1, 2}:
+        return False
+    try:
+        snapshot = json.loads(
+            subprocess.run(
+                ["git", "show", f"{commit}:demo/evaluation/registry.json"],
+                cwd=SOURCE_GIT_ROOT,
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout
+        )
+        expected = build_benchmark_summary(
+            snapshot,
+            _registry_snapshot_summary(snapshot),
+            package_version="0.3.0",
+            memoryforge_commit=commit,
+            schema_version=schema_version,
+        )
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError, subprocess.CalledProcessError):
+        return False
+    return _strict_json_value(payload, expected)
 
 
 def _release_drill_contract(payload: object, commit: str) -> bool:
@@ -2582,6 +2817,7 @@ def _validate_bound_gate_artifacts(
     gate_commit: str,
     *,
     require_clean_sdist: bool = False,
+    require_replayable_sums: bool = False,
 ) -> bool:
     digest_fields = {
         "wheel": "wheel_sha256",
@@ -2739,11 +2975,35 @@ def _validate_bound_gate_artifacts(
         if len(parts) != 2 or parts[1] in sums:
             return False
         sums[parts[1]] = parts[0]
-    return sums == {
+    expected_sums = {
         f"dist/{paths['wheel'].name}": artifact_digests["wheel_sha256"],
         f"dist/{paths['sdist'].name}": artifact_digests["sdist_sha256"],
         "release-provenance.json": artifact_digests["provenance_sha256"],
     }
+    return sums == expected_sums and (
+        not require_replayable_sums or _sha256sums_replays(paths["sha256sums"].parent, sums)
+    )
+
+
+def _sha256sums_replays(root: Path, sums: dict[str, str]) -> bool:
+    resolved_root = root.resolve()
+    for relative, expected in sums.items():
+        path = Path(relative)
+        if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
+            return False
+        candidate = root.joinpath(*path.parts)
+        try:
+            resolved = candidate.resolve(strict=True)
+        except OSError:
+            return False
+        if (
+            candidate.is_symlink()
+            or not resolved.is_relative_to(resolved_root)
+            or not resolved.is_file()
+            or hashlib.sha256(resolved.read_bytes()).hexdigest() != expected
+        ):
+            return False
+    return True
 
 
 def _validate_static_showcase_experiment_payload(
@@ -3451,9 +3711,23 @@ def _validate_release_static_review_regression(
         }
         for artifact in expected_review["artifacts"].values():
             _validate_artifact(artifact, "release-candidate static review")
+        scope_artifact = expected_review["artifacts"]["review_scope"]
+        scope_payload = json.loads(
+            (REPO_ROOT / str(scope_artifact["path"])).read_text(encoding="utf-8")
+        )
         review_ancestry_valid = _git_commit_descends_from(
             commit,
             development_artifact["memoryforge_commit"],
+        ) and _strict_mapping(
+            scope_payload,
+            {
+                "schema_version": 1,
+                "base_commit": expected_review["base_commit"],
+                "source_commit": expected_review["source_commit"],
+                "diff_mode": "merge_base_to_source",
+                "reviewed_files": 79,
+                "changed_lines": 14125,
+            },
         )
     else:
         raise ValueError("unknown release-candidate static review Evidence")
@@ -4065,6 +4339,7 @@ def _validate_release_candidate_acceptance_evidence(
                 local_gate.get("artifacts"),
                 commit,
                 require_clean_sdist=True,
+                require_replayable_sums=evidence_revision >= 9,
             )
             or not _release_provenance_matches(local_gate, contract["runtime"])
         ):
@@ -4301,16 +4576,122 @@ def _suite_cases(split: dict[str, Any]) -> tuple[int, set[str], set[str]]:
     )
 
 
+def _validate_release_split_manifest(
+    split: dict[str, Any],
+    *,
+    split_name: str,
+) -> dict[str, Any]:
+    payload = cast(
+        dict[str, Any],
+        json.loads((REPO_ROOT / split["path"]).read_text(encoding="utf-8")),
+    )
+    common_valid = (
+        type(payload.get("schema_version")) is int
+        and payload.get("schema_version") == 1
+        and payload.get("suite_id") == "release-candidate-delivery"
+        and type(payload.get("suite_revision")) is int
+        and payload.get("suite_revision") == 1
+        and payload.get("split") == split_name
+        and isinstance(payload.get("expected_metrics"), dict)
+    )
+    if split_name == "development":
+        valid = (
+            set(payload)
+            == {
+                "schema_version",
+                "suite_id",
+                "suite_revision",
+                "split",
+                "cases",
+                "expected_metrics",
+            }
+            and isinstance(payload.get("cases"), list)
+            and len(payload["cases"]) == 6
+            and len({case.get("id") for case in payload["cases"]}) == 6
+        )
+    elif split_name == "confirmation":
+        valid = (
+            set(payload)
+            == {
+                "schema_version",
+                "suite_id",
+                "suite_revision",
+                "split",
+                "status",
+                "components",
+                "expected_metrics",
+            }
+            and payload.get("status") == "not_run"
+            and isinstance(payload.get("components"), list)
+            and len(payload["components"]) == 7
+        )
+    elif split_name == "holdout":
+        expected_ids = {
+            "fresh-checkout-double-build",
+            "installed-wheel-public-showcase",
+            "workspace-backup-restore-replay",
+            "release-assets-round-trip",
+            "public-claims-privacy-audit",
+        }
+        valid = (
+            set(payload)
+            == {
+                "schema_version",
+                "suite_id",
+                "suite_revision",
+                "split",
+                "status",
+                "cases",
+                "expected_metrics",
+            }
+            and payload.get("status") == "not_run"
+            and isinstance(payload.get("cases"), list)
+            and {case.get("id") for case in payload["cases"]} == expected_ids
+            and len(payload["cases"]) == len(expected_ids)
+        )
+    else:
+        valid = False
+    if not common_valid or not valid:
+        raise ValueError(f"release {split_name} manifest contract failed")
+    return payload
+
+
 def _release_confirmation_case_count(split: dict[str, Any], suite_id: str) -> int:
-    payload = json.loads((REPO_ROOT / split["path"]).read_text(encoding="utf-8"))
+    payload = _validate_release_split_manifest(split, split_name="confirmation")
     components = payload.get("components")
     if not isinstance(components, list) or len(components) != 7:
         raise ValueError(f"release confirmation components changed: {suite_id}")
+    expected_components = {
+        "exact-symbol-routing": "CPython 3.11",
+        "support-score": "CPython 3.11",
+        "multi-source-coverage": "CPython 3.11",
+        "folder-import-lifecycle": "CPython 3.11",
+        "github-thread-import-lifecycle": "CPython 3.11",
+        "static-showcase": "CPython 3.11",
+        "native-windows-delivery": "native Windows, CPython 3.11",
+    }
+    if [component.get("id") for component in components] != list(expected_components):
+        raise ValueError(f"release confirmation component IDs changed: {suite_id}")
     case_count = 0
     for component in components:
-        if not isinstance(component, dict) or type(component.get("case_count")) is not int:
+        if (
+            not isinstance(component, dict)
+            or set(component)
+            != {
+                "id",
+                "path",
+                "sha256",
+                "case_count",
+                "required_runtime",
+            }
+            or type(component.get("case_count")) is not int
+            or component.get("required_runtime") != expected_components.get(component.get("id"))
+        ):
             raise ValueError(f"release confirmation component invalid: {suite_id}")
         _validate_artifact(component, suite_id)
+        actual_count, _, _ = _suite_cases(component)
+        if component["case_count"] != actual_count:
+            raise ValueError(f"release confirmation component case count changed: {suite_id}")
         case_count += component["case_count"]
     return case_count
 

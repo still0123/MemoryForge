@@ -273,6 +273,33 @@ def test_benchmark_registry_keeps_release_candidate_holdout_closed(tmp_path: Pat
         validator.validate_registry(path)
 
 
+def test_release_split_manifest_status_and_component_counts_are_closed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    confirmation = json.loads(
+        (validator.REPO_ROOT / "demo/evaluation/release_candidate_confirmation.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    confirmation["status"] = "passed"
+    path = tmp_path / "confirmation.json"
+    path.write_text(json.dumps(confirmation), encoding="utf-8")
+    descriptor = {"path": path.name}
+    monkeypatch.setattr(validator, "REPO_ROOT", tmp_path)
+
+    with pytest.raises(ValueError, match="confirmation manifest contract failed"):
+        validator._validate_release_split_manifest(descriptor, split_name="confirmation")
+
+    confirmation["status"] = "not_run"
+    confirmation["components"][0]["case_count"] = 500
+    path.write_text(json.dumps(confirmation), encoding="utf-8")
+    monkeypatch.setattr(validator, "_validate_artifact", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(validator, "_suite_cases", lambda _split: (5, set(), set()))
+    with pytest.raises(ValueError, match="component case count changed"):
+        validator._release_confirmation_case_count(descriptor, "release-candidate-delivery")
+
+
 def test_benchmark_registry_binds_rejected_release_candidate_cases() -> None:
     registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
     experiment = next(
@@ -562,6 +589,36 @@ def test_benchmark_registry_requires_semantic_release_support() -> None:
         {"schema_version": True, "memoryforge_commit": commit, "passed": True},
         commit,
     )
+    historical_commit = "80b111bbd472cacd16ceb773a4c141e70ee97a4a"
+    historical = json.loads(
+        (
+            validator.REPO_ROOT
+            / "demo/results/artifacts/release_candidate_development"
+            / historical_commit
+            / "benchmark-summary.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert validator._release_summary_contract(historical, historical_commit)
+    historical["suites"][0]["suite_id"] = "forged-suite"
+    assert not validator._release_summary_contract(historical, historical_commit)
+
+
+def test_retained_sha256sums_must_replay_from_its_directory(tmp_path: Path) -> None:
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    wheel = dist / "memoryforge.whl"
+    provenance = tmp_path / "release-provenance.json"
+    wheel.write_bytes(b"wheel")
+    provenance.write_bytes(b"provenance")
+    sums = {
+        "dist/memoryforge.whl": hashlib.sha256(wheel.read_bytes()).hexdigest(),
+        "release-provenance.json": hashlib.sha256(provenance.read_bytes()).hexdigest(),
+    }
+
+    assert validator._sha256sums_replays(tmp_path, sums)
+    wheel.unlink()
+    assert not validator._sha256sums_replays(tmp_path, sums)
+    assert not validator._sha256sums_replays(tmp_path, {"../outside": "0" * 64})
 
 
 def test_benchmark_registry_consumes_local_gate_benchmark_provenance(

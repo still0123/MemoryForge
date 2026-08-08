@@ -98,6 +98,22 @@ def test_release_candidate_rejects_unlisted_files_and_nested_output(tmp_path: Pa
         )
 
 
+def test_release_candidate_rejects_directories_and_symlinks(tmp_path: Path) -> None:
+    provenance = _release_artifacts(tmp_path)
+    _write_release_artifacts(tmp_path, provenance)
+    nested = tmp_path / "unlisted"
+    nested.mkdir()
+    assert benchmark._check_reproducible_artifacts(tmp_path)["passed"] is False
+    nested.rmdir()
+
+    link = tmp_path / "artifact-link"
+    try:
+        link.symlink_to(tmp_path / provenance["package"]["wheel"])
+    except OSError:
+        pytest.skip("symlink creation is unavailable")
+    assert benchmark._check_reproducible_artifacts(tmp_path)["passed"] is False
+
+
 def test_release_candidate_rejects_retained_path_alias(tmp_path: Path) -> None:
     provenance = _release_artifacts(tmp_path)
     provenance["builds"][1]["wheel"]["retained_path"] = (
@@ -217,10 +233,8 @@ def _release_artifacts(root: Path) -> dict:
     }
     builds = []
     for name in ("first", "second"):
-        retained = root / "reproducibility" / name
-        retained.mkdir(parents=True)
-        retained_wheel = retained / wheel.name
-        retained_sdist = retained / sdist.name
+        retained_wheel = root / f"reproducibility-{name}-{wheel.name}"
+        retained_sdist = root / f"reproducibility-{name}-{sdist.name}"
         retained_wheel.write_bytes(wheel.read_bytes())
         retained_sdist.write_bytes(sdist.read_bytes())
         builds.append(

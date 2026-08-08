@@ -299,6 +299,9 @@ def _check_benchmark_summary(release_dir: Path) -> dict[str, object]:
 
 
 def _check_reproducible_artifacts(release_dir: Path) -> dict[str, object]:
+    entries = list(release_dir.iterdir())
+    if any(path.is_symlink() or not path.is_file() for path in entries):
+        return _check(False, "artifact_contract_invalid")
     provenance = _load_json(release_dir / "release-provenance.json")
     package = provenance.get("package")
     builds = provenance.get("builds")
@@ -371,11 +374,7 @@ def _check_reproducible_artifacts(release_dir: Path) -> dict[str, object]:
             for record in (build["wheel"], build["sdist"])
         ),
     }
-    actual_files = {
-        path.relative_to(release_dir).as_posix()
-        for path in release_dir.rglob("*")
-        if path.is_file() and path != release_dir / "SHA256SUMS"
-    }
+    actual_files = {path.name for path in entries if path.name != "SHA256SUMS"}
     passed = (
         identities[0] == identities[1]
         and set(sums) == expected_files

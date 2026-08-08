@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import io
+import json
 import tarfile
 import tomllib
 from pathlib import Path
@@ -30,15 +31,21 @@ def test_release_builder_reads_version_from_current_source() -> None:
 def test_release_package_inputs_and_build_environment_are_stable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    project = tomllib.loads(
-        (Path(__file__).resolve().parent.parent / "pyproject.toml").read_text(encoding="utf-8")
-    )
+    root = Path(__file__).resolve().parent.parent
+    project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
     assert project["project"]["readme"] == "PACKAGE_README.md"
     assert project["tool"]["hatch"]["build"]["targets"]["sdist"]["include"] == [
         "/PACKAGE_README.md",
         "/pyproject.toml",
         "/src",
     ]
+    assert (root / ".gitattributes").read_text(encoding="utf-8") == "* text=auto eol=lf\n"
+    assert release_builder.WORKTREE_CHECKOUT_OPTIONS == (
+        "-c",
+        "core.autocrlf=false",
+        "-c",
+        "core.eol=lf",
+    )
     monkeypatch.setenv("PYTHONPATH", "/private/tmp/untrusted")
     monkeypatch.setenv("PYTHONHOME", "/private/tmp/untrusted")
     environment = release_builder._clean_build_environment()
@@ -51,6 +58,7 @@ def test_release_package_inputs_and_build_environment_are_stable(
 def test_benchmark_summary_reports_macro_per_suite_and_negatives() -> None:
     summary = summary_builder.build_summary(memoryforge_commit="1" * 40)
 
+    assert summary["schema_version"] == 2
     assert summary["memoryforge_commit"] == "1" * 40
     assert summary["registry"]["qa_case_count"] == 121
     assert len(summary["suites"]) == 12
@@ -60,6 +68,13 @@ def test_benchmark_summary_reports_macro_per_suite_and_negatives() -> None:
         if experiment["suite_id"] == "release-candidate-delivery"
     )
     assert release["accepted_evidence"] == []
+    assert all(
+        set(accepted) == {"status", "development", "acceptance"}
+        and len(accepted["development"]["memoryforge_commit"]) == 40
+        and len(accepted["acceptance"]["memoryforge_commit"]) == 40
+        for experiment in summary["experiments"]
+        for accepted in experiment["accepted_evidence"]
+    )
     assert summary["macro"]["citation_grounding_accuracy"] > 90
     assert any(
         result["suite_id"] == "doc-wiki-qa.click" and result["status"] == "retained_metric_gap"
@@ -70,6 +85,13 @@ def test_benchmark_summary_reports_macro_per_suite_and_negatives() -> None:
         and result["status"] == "regression_rejected"
         and result["path"]
         == "demo/results/release_candidate_candidate_7_local_gate_contract_rejected.json"
+        for result in summary["negative_results"]
+    )
+    assert any(
+        result["status"] == "review_rejected"
+        and result["path"]
+        == "demo/results/release_candidate_candidate_7_static_review_rejected.json"
+        and result["memoryforge_commit"] == "a044337347b9c6884ea660c7568c4e3911c84521"
         for result in summary["negative_results"]
     )
 
@@ -99,6 +121,17 @@ def test_workspace_release_drill_runs_real_public_workflow(
         "query",
         "showcase",
     }
+    showcase_evidence = json.loads((workdir / "showcase-evidence.json").read_text(encoding="utf-8"))
+    assert showcase_evidence["evaluation"]["case_count"] == 2
+    assert all(
+        case["error_classification"] == "none" and case["memoryforge"]["answer_correct"] is True
+        for case in showcase_evidence["evaluation"]["cases"]
+    )
+    assert showcase_evidence["evaluation"]["memoryforge"] == {
+        "answer_accuracy": 100.0,
+        "citation_grounding_accuracy": 100.0,
+        "abstention_accuracy": 100.0,
+    }
 
 
 def test_workspace_release_drill_binds_cli_to_current_source(
@@ -111,9 +144,62 @@ def test_workspace_release_drill_binds_cli_to_current_source(
         return workspace_drill.subprocess.CompletedProcess(command, 0, "0.3.0\n", "")
 
     monkeypatch.setattr(workspace_drill.subprocess, "run", run)
+    monkeypatch.setenv("PYTHONHOME", "/private/tmp/untrusted")
+    monkeypatch.setenv("COV_CORE_SOURCE", "memoryforge")
+    monkeypatch.setenv("COVERAGE_FILE", "/private/tmp/untrusted-coverage")
 
     assert workspace_drill._cli("--version") == "0.3.0\n"
     assert captured["env"]["PYTHONPATH"] == str(workspace_drill.SOURCE_ROOT)
+    assert captured["env"]["PYTHONNOUSERSITE"] == "1"
+    assert "PYTHONHOME" not in captured["env"]
+    assert "COV_CORE_SOURCE" not in captured["env"]
+    assert "COVERAGE_FILE" not in captured["env"]
+
+
+def test_workspace_release_drill_rejects_wrong_or_non_replayed_queries() -> None:
+    citation = {
+        "source_id": "1" * 64,
+        "source_version": 2,
+        "locator": "chars:17-61",
+        "quote": workspace_drill.EXPECTED_SIGNATURE,
+    }
+    answered = {
+        "status": "answered",
+        "answer": workspace_drill.EXPECTED_SIGNATURE,
+        "citations": [citation],
+        **citation,
+        "support": {
+            "sufficient": True,
+            "enforced": True,
+            "failed_hard_gates": [],
+        },
+        "trace": [{"level": "L0"}],
+    }
+    unknown = {
+        "status": "unknown",
+        "answer": "不知道",
+        "citations": [],
+        "source_id": None,
+        "source_version": None,
+        "locator": None,
+        "quote": None,
+        "support": {
+            "sufficient": False,
+            "enforced": True,
+            "failed_hard_gates": [
+                "exact_identifier_not_covered",
+                "score_below_threshold",
+            ],
+        },
+    }
+
+    assert workspace_drill._answered_query_valid(answered)
+    assert workspace_drill._unknown_query_valid(unknown)
+    assert workspace_drill._replay_payload(answered) == workspace_drill._replay_payload(
+        {key: value for key, value in answered.items() if key != "trace"}
+    )
+    answered["answer"] = "wrong"
+    assert not workspace_drill._answered_query_valid(answered)
 
 
 def test_workspace_release_drill_rejects_dirty_source(

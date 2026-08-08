@@ -15,6 +15,9 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SOURCE_ROOT = REPO_ROOT / "src"
+SIGNATURE_QUESTION = "What is the signature of src.service.cache_ttl?"
+EXPECTED_SIGNATURE = "`src.service.cache_ttl` (function): `def cache_ttl() -> int:`"
+UNKNOWN_QUESTION = "What is the signature of src.service.missing_symbol?"
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -86,8 +89,17 @@ def run_drill(workdir: Path) -> dict[str, Any]:
     lint = _cli_json("lint", "--workspace", str(workspace))
     query = _cli_json(
         "ask",
-        "What is the signature of src.service.cache_ttl?",
+        SIGNATURE_QUESTION,
         "--debug",
+        "--verify",
+        "--repository",
+        repository_id,
+        "--workspace",
+        str(workspace),
+    )
+    unknown = _cli_json(
+        "ask",
+        UNKNOWN_QUESTION,
         "--verify",
         "--repository",
         repository_id,
@@ -103,26 +115,80 @@ def run_drill(workdir: Path) -> dict[str, Any]:
         str(workspace),
     )
 
+    workspace_commit = _git_output(workspace, "rev-parse", "HEAD")
+    backup = workdir / "backup"
+    restored = workdir / "restored"
+    shutil.copytree(workspace, backup)
+    shutil.copytree(backup, restored)
+    restored_commit = _git_output(restored, "rev-parse", "HEAD")
+    restored_lint = _cli_json("lint", "--workspace", str(restored))
+    restored_query = _cli_json(
+        "ask",
+        SIGNATURE_QUESTION,
+        "--verify",
+        "--repository",
+        repository_id,
+        "--workspace",
+        str(restored),
+    )
+    restored_unknown = _cli_json(
+        "ask",
+        UNKNOWN_QUESTION,
+        "--verify",
+        "--repository",
+        repository_id,
+        "--workspace",
+        str(restored),
+    )
+    answered_valid = _answered_query_valid(query)
+    unknown_valid = _unknown_query_valid(unknown)
+    answered_replayed = _replay_payload(query) == _replay_payload(restored_query)
+    unknown_replayed = _replay_payload(unknown) == _replay_payload(restored_unknown)
+
+    cases = [
+        {
+            "id": "exact-code-signature",
+            "category": "exact_symbol",
+            "error_classification": (
+                "none" if answered_valid and answered_replayed else "answer_or_replay_mismatch"
+            ),
+            "memoryforge": {
+                "answer_correct": answered_valid and answered_replayed,
+                "abstention_correct": False,
+            },
+        },
+        {
+            "id": "unsupported-symbol-abstention",
+            "category": "unanswerable",
+            "error_classification": (
+                "none" if unknown_valid and unknown_replayed else "abstention_or_replay_mismatch"
+            ),
+            "memoryforge": {
+                "answer_correct": unknown_valid and unknown_replayed,
+                "abstention_correct": unknown_valid and unknown_replayed,
+            },
+        },
+    ]
     showcase_evidence = workdir / "showcase-evidence.json"
     showcase_evidence.write_text(
         json.dumps(
             {
                 "schema_version": 1,
                 "sample_query": {
-                    "question": "What is the signature of src.service.cache_ttl?",
+                    "question": SIGNATURE_QUESTION,
                     "answer": query["answer"],
                     "citations": query["citations"],
                     "trace": query.get("trace", []),
                 },
                 "evaluation": {
                     "suite": "release Workspace drill",
-                    "case_count": 1,
+                    "case_count": len(cases),
                     "memoryforge": {
-                        "answer_accuracy": 100.0,
-                        "citation_grounding_accuracy": 100.0,
-                        "abstention_accuracy": 100.0,
+                        "answer_accuracy": 100.0 if answered_valid else 0.0,
+                        "citation_grounding_accuracy": 100.0 if answered_valid else 0.0,
+                        "abstention_accuracy": 100.0 if unknown_valid else 0.0,
                     },
-                    "cases": [],
+                    "cases": cases,
                 },
             },
             sort_keys=True,
@@ -141,23 +207,6 @@ def run_drill(workdir: Path) -> dict[str, Any]:
         forbidden_paths=(str(workdir.resolve()),),
     )
 
-    workspace_commit = _git_output(workspace, "rev-parse", "HEAD")
-    backup = workdir / "backup"
-    restored = workdir / "restored"
-    shutil.copytree(workspace, backup)
-    shutil.copytree(backup, restored)
-    restored_commit = _git_output(restored, "rev-parse", "HEAD")
-    restored_lint = _cli_json("lint", "--workspace", str(restored))
-    restored_query = _cli_json(
-        "ask",
-        "What is the signature of src.service.cache_ttl?",
-        "--verify",
-        "--repository",
-        repository_id,
-        "--workspace",
-        str(restored),
-    )
-
     checks = {
         "refresh": "passed" if refresh["status"] == "unchanged" else "failed",
         "review": "passed",
@@ -173,9 +222,7 @@ def run_drill(workdir: Path) -> dict[str, Any]:
         "restore": "passed" if restored_commit == workspace_commit else "failed",
         "query": (
             "passed"
-            if query["status"] == restored_query["status"] == "answered"
-            and query["citations"]
-            and restored_query["citations"]
+            if answered_valid and unknown_valid and answered_replayed and unknown_replayed
             else "failed"
         ),
         "showcase": (
@@ -199,6 +246,58 @@ def run_drill(workdir: Path) -> dict[str, Any]:
         "private_detail_leaks": private_detail_leaks,
         "passed": passed,
     }
+
+
+def _answered_query_valid(payload: dict[str, Any]) -> bool:
+    citations = payload.get("citations")
+    support = payload.get("support")
+    if not isinstance(citations, list) or len(citations) != 1:
+        return False
+    citation = citations[0]
+    if not isinstance(citation, dict):
+        return False
+    source_id = citation.get("source_id")
+    return (
+        payload.get("status") == "answered"
+        and payload.get("answer") == EXPECTED_SIGNATURE
+        and set(citation) == {"source_id", "source_version", "locator", "quote"}
+        and isinstance(source_id, str)
+        and len(source_id) == 64
+        and all(character in "0123456789abcdef" for character in source_id)
+        and citation.get("source_version") == 2
+        and citation.get("locator") == "chars:17-61"
+        and citation.get("quote") == EXPECTED_SIGNATURE
+        and payload.get("source_id") == source_id
+        and payload.get("source_version") == citation["source_version"]
+        and payload.get("locator") == citation["locator"]
+        and payload.get("quote") == citation["quote"]
+        and isinstance(support, dict)
+        and support.get("sufficient") is True
+        and support.get("enforced") is True
+        and support.get("failed_hard_gates") == []
+    )
+
+
+def _unknown_query_valid(payload: dict[str, Any]) -> bool:
+    support = payload.get("support")
+    return (
+        payload.get("status") == "unknown"
+        and payload.get("answer") == "不知道"
+        and payload.get("citations") == []
+        and payload.get("source_id") is None
+        and payload.get("source_version") is None
+        and payload.get("locator") is None
+        and payload.get("quote") is None
+        and isinstance(support, dict)
+        and support.get("sufficient") is False
+        and support.get("enforced") is True
+        and support.get("failed_hard_gates")
+        == ["exact_identifier_not_covered", "score_below_threshold"]
+    )
+
+
+def _replay_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in payload.items() if key != "trace"}
 
 
 def _showcase_private_detail_leaks(
@@ -241,8 +340,14 @@ def _showcase_private_detail_leaks(
 
 
 def _cli(*args: str) -> str:
-    environment = dict(os.environ)
+    environment = {
+        key: value
+        for key, value in os.environ.items()
+        if key not in {"PYTHONHOME", "PYTHONPATH"}
+        and not key.startswith(("COV_CORE_", "COVERAGE_"))
+    }
     environment["PYTHONPATH"] = str(SOURCE_ROOT)
+    environment["PYTHONNOUSERSITE"] = "1"
     completed = subprocess.run(
         [sys.executable, "-m", "memoryforge", *args],
         cwd=REPO_ROOT,
