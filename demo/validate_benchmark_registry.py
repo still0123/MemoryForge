@@ -82,7 +82,7 @@ RELEASE_DRILL_FIXTURE = {
     "repository_id": "0bc5bbece6a54d67e12840727ce8663c895b69d203f45eaa1efc940381e86bc0",
     "source_id": "8864360214e8fa15d97f8019b8392729520e066c469d2e8475ec3e07c8734c68",
 }
-RELEASE_DRILL_WORKSPACE_COMMIT = "4238df02ead137e1e422dd7360409b022ba30d78"
+RELEASE_DRILL_WORKSPACE_COMMIT = "682b277b30ae3f8963f0eb1276c888215cb1c8c3"
 _RESULTS = "demo/results/"
 HISTORICAL_REVIEW_SCOPES = {
     _RESULTS + "artifacts/release_candidate_review_candidate_5/review-scope.json": {

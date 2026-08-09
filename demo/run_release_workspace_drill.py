@@ -348,6 +348,7 @@ def _cli(*args: str) -> str:
     }
     environment["PYTHONPATH"] = str(SOURCE_ROOT)
     environment["PYTHONNOUSERSITE"] = "1"
+    environment["SOURCE_DATE_EPOCH"] = "1767225600"
     completed = subprocess.run(
         [sys.executable, "-m", "memoryforge", *args],
         cwd=REPO_ROOT,

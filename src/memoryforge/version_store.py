@@ -253,6 +253,11 @@ class GitVersionStore:
         )
         environment["GIT_CONFIG_NOSYSTEM"] = "1"
         environment["GIT_CONFIG_GLOBAL"] = "/dev/null"
+        source_date_epoch = os.environ.get("SOURCE_DATE_EPOCH", "")
+        if source_date_epoch.isdigit():
+            git_date = f"@{int(source_date_epoch)} +0000"
+            environment["GIT_AUTHOR_DATE"] = git_date
+            environment["GIT_COMMITTER_DATE"] = git_date
         completed = subprocess.run(
             command,
             check=False,

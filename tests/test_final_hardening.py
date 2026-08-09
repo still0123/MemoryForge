@@ -287,6 +287,18 @@ def test_git_baseline_requires_repository_created_by_same_store(tmp_path: Path) 
         GitVersionStore(workspace.root).ensure_baseline((".gitignore",))
 
 
+def test_source_date_epoch_makes_workspace_commits_reproducible(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SOURCE_DATE_EPOCH", "1767225600")
+
+    first = Workspace.initialize(tmp_path / "first")
+    second = Workspace.initialize(tmp_path / "second")
+
+    assert first.current_commit() == second.current_commit()
+
+
 def test_idempotent_changeset_retry_rejects_a_stale_base(tmp_path: Path) -> None:
     workspace = Workspace.initialize(tmp_path / "workspace")
     changeset = _changeset(workspace)
