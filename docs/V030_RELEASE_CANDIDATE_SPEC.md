@@ -1,10 +1,10 @@
 # v0.3.0 Release Candidate Specification
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=12; platform_gate_candidate=12; platform_gate_status=accepted; review_status=pending; macos_passed=623; linux_passed=620; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=12; platform_gate_candidate=12; platform_gate_status=accepted; review_status=rejected; macos_passed=623; linux_passed=620; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 ## Status
 
-`LOCAL_GATES_PASSED_REVIEW_PENDING`
+`LOCAL_GATES_PASSED_REVIEW_REJECTED`
 
 ## Base
 
@@ -715,7 +715,7 @@ import ownership, fixed Git fixture identity, PowerShell initialization
 restoration, replayable artifact-root closure, and passed final-review
 governance. The two development replays are byte-equivalent at the evaluation
 level. Candidate 12 local macOS/Linux gates pass as recorded below; final
-review remains pending and confirmation stays closed.
+review is rejected as recorded below, and confirmation stays closed.
 
 ## Accepted Candidate 12 Local Gates
 
@@ -737,7 +737,29 @@ review remains pending and confirmation stays closed.
 Both platforms passed the complete local gate. Wheel, sdist, and raw Code Wiki
 Evidence bytes match across platforms; each retained SHA256SUMS replays in
 place, and no unregistered file or symlink exists in either artifact root.
-Final static review remains required before confirmation can run.
+The rejected final static review is recorded below.
+
+## Rejected Candidate 12 Static Review
+
+- Evidence:
+  `demo/results/release_candidate_candidate_12_static_review_rejected.json`
+- Evidence SHA256:
+  `168e565b495872b2e663528bb2ca214482e999011e957fab8ddfc577ddb2aac1`
+- Reviewed range:
+  `569685c2f0bf790819820b821b4768d180c4ee0d...e7d3fef9312b4b6c1683e12984ae00cd1b21b343`
+- Result: `REJECTED`
+- P0: 0
+- P1: 9
+- P2: 7
+- Raw findings: 20
+- Independent findings after filtering and deduplication: 16
+- Confirmation status: `not_run`
+- Holdout status: `not_run`
+
+The review found source-snapshot, package-member, split-closure,
+platform-publication, privacy, and accepted-review identity gaps. Raw findings,
+Top 5, HTML/Markdown reports, and fixed review scope are retained. Candidate 12
+does not authorize confirmation.
 
 ## Confirmation Components
 

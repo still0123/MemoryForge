@@ -1,6 +1,6 @@
 # MemoryForge
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=12; platform_gate_candidate=12; platform_gate_status=accepted; review_status=pending; macos_passed=623; linux_passed=620; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=12; platform_gate_candidate=12; platform_gate_status=accepted; review_status=rejected; macos_passed=623; linux_passed=620; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 > 把散落在代码仓库、设计文档和飞书里的技术资料，编译成一套可维护、可追溯、可以直接在飞书提问的个人技术 Wiki。
 
@@ -57,8 +57,9 @@ Wiki 树、Diff、Citation Trace、Benchmark、保留的失败案例、正确拒
 | learn-claude-code support score development | Answer / selective accuracy **100%**，coverage **90%**，risk **0%** | 10 题；confirmation 未运行 |
 | Click 外部迁移 | development / holdout Answer **10% / 0%** | 真实负结果，未隐藏 |
 | Static Showcase development | **4/4**，本地详情泄漏 **0**，Workspace 变更 **0** | confirmation 未运行 |
-| v0.3.0 RC Candidate 12 development | **6/6**；exact package/query/privacy/artifact contracts | 本地双平台门禁通过；终审待运行；confirmation 未运行 |
+| v0.3.0 RC Candidate 12 development | **6/6**；exact package/query/privacy/artifact contracts | 本地双平台门禁通过；终审 rejected；confirmation 未运行 |
 | v0.3.0 RC Candidate 12 本地门禁 | macOS **623 passed**；Debian **620 passed / 3 skipped** | package 与 raw Code Wiki Evidence 跨平台同字节 |
+| v0.3.0 RC Candidate 12 静态终审 | **0 P0 / 9 P1 / 7 P2** | rejected；16 条独立发现保留；confirmation 未运行 |
 | v0.3.0 RC Candidate 11 development | **6/6**；Summary schema 3；可重算 query Evidence | 本地双平台门禁通过；终审 rejected |
 | v0.3.0 RC Candidate 11 本地门禁 | macOS **609 passed**；Debian **606 passed / 3 skipped** | package 与 raw Code Wiki Evidence 跨平台同字节 |
 | v0.3.0 RC Candidate 11 静态终审 | **0 P0 / 8 P1 / 4 P2** | rejected；12 条独立发现保留；confirmation 未运行 |
