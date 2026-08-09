@@ -123,6 +123,12 @@ def test_release_candidate_consumes_workspace_drill_schema_2(
 
     assert benchmark._check_workspace_drill(tmp_path)["passed"] is False
     drill["fixture"] = benchmark.registry_validator.RELEASE_DRILL_FIXTURE
+    drill["workspace"]["original_commit"] = (
+        benchmark.registry_validator.RELEASE_DRILL_WORKSPACE_COMMIT
+    )
+    drill["workspace"]["restored_commit"] = (
+        benchmark.registry_validator.RELEASE_DRILL_WORKSPACE_COMMIT
+    )
     (tmp_path / "workspace-drill.json").write_text(
         json.dumps(drill),
         encoding="utf-8",
