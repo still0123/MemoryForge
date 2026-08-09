@@ -41,14 +41,15 @@ def main(argv: list[str] | None = None) -> None:
 
 
 def build_summary(*, memoryforge_commit: str | None = None) -> dict[str, Any]:
+    commit = memoryforge_commit or _git("rev-parse", "HEAD")
     registry = json.loads(REGISTRY.read_text(encoding="utf-8"))
     registry_summary = validator.validate_registry_payload(registry)
-    project = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    project = tomllib.loads(_git("show", f"{commit}:pyproject.toml"))
     return validator.build_benchmark_summary(
         registry,
         registry_summary,
         package_version=project["project"]["version"],
-        memoryforge_commit=memoryforge_commit or _git("rev-parse", "HEAD"),
+        memoryforge_commit=commit,
     )
 
 

@@ -13,8 +13,16 @@ else
 fi
 
 unset PYTHONPATH PYTHONHOME
+while IFS='=' read -r name _; do
+  if [[ "$name" == GIT_* ]]; then
+    unset "$name"
+  fi
+done < <(env)
 export PYTHONNOUSERSITE=1
 export SOURCE_DATE_EPOCH=315532800
+export PIP_CONFIG_FILE=/dev/null
+export PIP_INDEX_URL=https://pypi.org/simple
+export UV_DEFAULT_INDEX=https://pypi.org/simple
 
 output="${1:-$root/local-evidence/$(date -u +%Y%m%dT%H%M%SZ)}"
 if [[ -e "$output" ]]; then
@@ -23,7 +31,15 @@ if [[ -e "$output" ]]; then
 fi
 
 workdir="$(mktemp -d "${TMPDIR:-/tmp}/memoryforge-local-check.XXXXXX")"
-trap 'rm -rf "$workdir"' EXIT
+snapshot="$workdir/source"
+snapshot_added=0
+cleanup() {
+  if [[ "$snapshot_added" == 1 ]]; then
+    git worktree remove --force "$snapshot" >/dev/null 2>&1 || true
+  fi
+  rm -rf "$workdir"
+}
+trap cleanup EXIT
 mkdir -p "$output/dist"
 
 "$python" -m ruff check --no-cache .
@@ -42,16 +58,25 @@ fi
   -W error::pytest.PytestUnraisableExceptionWarning \
   --cov=memoryforge --cov-report=term-missing
 
+git -c core.autocrlf=false -c core.eol=lf -c core.hooksPath=/dev/null \
+  worktree add --detach "$snapshot" HEAD
+snapshot_added=1
+
 "$python" -m venv "$workdir/build"
 if command -v uv >/dev/null 2>&1; then
   uv pip install --python "$workdir/build/bin/python" \
-    -c "$root/constraints/dev.txt" build hatchling
+    --no-config --default-index https://pypi.org/simple \
+    -c "$snapshot/constraints/dev.txt" build hatchling
 else
   "$workdir/build/bin/python" -m pip install \
-    -c "$root/constraints/dev.txt" build hatchling
+    --isolated --index-url https://pypi.org/simple \
+    -c "$snapshot/constraints/dev.txt" build hatchling
 fi
-"$workdir/build/bin/python" -m build \
-  --wheel --sdist --no-isolation --outdir "$output/dist"
+(
+  cd "$snapshot"
+  "$workdir/build/bin/python" -m build \
+    --wheel --sdist --no-isolation --outdir "$output/dist"
+)
 "$workdir/build/bin/python" - "$output"/dist/memoryforge-*.tar.gz <<'PY'
 import sys
 import tarfile
@@ -67,17 +92,22 @@ if forbidden:
     raise SystemExit(f"sdist contains retained or nested artifacts: {forbidden[:3]}")
 PY
 
-PIP_CONSTRAINT="$root/constraints/dev.txt" "$python" demo/run_release_check.py \
-  --wheel "$output"/dist/memoryforge-*.whl \
-  --workdir "$workdir/wheel" \
-  --code-evidence-output "$output/code-wiki-evidence.json" \
-  --output "$output/release-provenance.json"
+(
+  cd "$snapshot"
+  PIP_CONSTRAINT="$snapshot/constraints/dev.txt" "$python" demo/run_release_check.py \
+    --wheel "$output"/dist/memoryforge-*.whl \
+    --workdir "$workdir/wheel" \
+    --code-evidence-output "$output/code-wiki-evidence.json" \
+    --output "$output/release-provenance.json"
+)
 
 "$python" -m venv "$workdir/sdist"
 "$workdir/sdist/bin/python" -m pip install \
-  -c "$root/constraints/dev.txt" hatchling
+  --isolated --index-url https://pypi.org/simple \
+  -c "$snapshot/constraints/dev.txt" hatchling
 "$workdir/sdist/bin/python" -m pip install \
-  -c "$root/constraints/dev.txt" \
+  --isolated --index-url https://pypi.org/simple \
+  -c "$snapshot/constraints/dev.txt" \
   --no-build-isolation "$output"/dist/memoryforge-*.tar.gz
 (
   cd "$workdir"

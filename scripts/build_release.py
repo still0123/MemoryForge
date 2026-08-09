@@ -26,7 +26,14 @@ CONSTRAINTS = REPO_ROOT / "constraints/dev.txt"
 FORBIDDEN_SDIST_PARTS = ("/demo/results/artifacts/",)
 SOURCE_DATE_EPOCH = "315532800"
 PACKAGE_INDEX_URL = "https://pypi.org/simple"
-WORKTREE_CHECKOUT_OPTIONS = ("-c", "core.autocrlf=false", "-c", "core.eol=lf")
+WORKTREE_CHECKOUT_OPTIONS = (
+    "-c",
+    "core.autocrlf=false",
+    "-c",
+    "core.eol=lf",
+    "-c",
+    f"core.hooksPath={os.devnull}",
+)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -299,7 +306,6 @@ def _check_sdist_clean_room(
     venv.EnvBuilder(with_pip=True).create(environment)
     python = environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     clean_environment = _clean_build_environment()
-    clean_environment["PIP_CONSTRAINT"] = str(constraints)
     _run(
         [
             str(python),
@@ -310,6 +316,8 @@ def _check_sdist_clean_room(
             "--disable-pip-version-check",
             "--index-url",
             PACKAGE_INDEX_URL,
+            "-c",
+            str(constraints),
             "hatchling",
         ],
         cwd=cwd,
@@ -324,6 +332,8 @@ def _check_sdist_clean_room(
             "install",
             "--disable-pip-version-check",
             "--no-build-isolation",
+            "-c",
+            str(constraints),
             str(sdist),
         ],
         cwd=cwd,
@@ -445,7 +455,7 @@ def _clean_build_environment() -> dict[str, str]:
         key: value
         for key, value in os.environ.items()
         if key not in {"PYTHONPATH", "PYTHONHOME"}
-        and not key.startswith(("COV_CORE_", "COVERAGE_", "PIP_", "UV_"))
+        and not key.startswith(("COV_CORE_", "COVERAGE_", "GIT_", "PIP_", "UV_"))
     }
     environment["PYTHONNOUSERSITE"] = "1"
     environment["SOURCE_DATE_EPOCH"] = SOURCE_DATE_EPOCH
@@ -485,9 +495,11 @@ def _sha256(path: Path) -> str:
 
 
 def _git(*args: str, root: Path = REPO_ROOT) -> str:
+    environment = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
     return subprocess.run(
         ["git", *args],
         cwd=root,
+        env=environment,
         check=True,
         capture_output=True,
         text=True,

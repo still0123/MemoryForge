@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import io
 import json
+import os
 import tarfile
 import tomllib
 from pathlib import Path
@@ -41,16 +42,21 @@ def test_release_package_inputs_and_build_environment_are_stable(
         "/src",
     ]
     assert (root / ".gitattributes").read_text(encoding="utf-8") == "* text=auto eol=lf\n"
-    assert release_builder.WORKTREE_CHECKOUT_OPTIONS == (
+    assert (
         "-c",
         "core.autocrlf=false",
         "-c",
         "core.eol=lf",
-    )
+        "-c",
+        f"core.hooksPath={os.devnull}",
+    ) == release_builder.WORKTREE_CHECKOUT_OPTIONS
     monkeypatch.setenv("PYTHONPATH", "/private/tmp/untrusted")
     monkeypatch.setenv("PYTHONHOME", "/private/tmp/untrusted")
     monkeypatch.setenv("COV_CORE_DATAFILE", ".coverage")
     monkeypatch.setenv("COVERAGE_FILE", ".coverage")
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", "core.hooksPath")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", "/private/tmp/untrusted-hook")
     monkeypatch.setenv("PIP_INDEX_URL", "https://example.invalid/simple")
     monkeypatch.setenv("PIP_FIND_LINKS", "/private/tmp/untrusted")
     monkeypatch.setenv("UV_INDEX_URL", "https://example.invalid/simple")
@@ -61,6 +67,7 @@ def test_release_package_inputs_and_build_environment_are_stable(
     assert "PYTHONHOME" not in environment
     assert "COV_CORE_DATAFILE" not in environment
     assert "COVERAGE_FILE" not in environment
+    assert not any(key.startswith("GIT_") for key in environment)
     assert "PIP_FIND_LINKS" not in environment
     assert "UV_EXTRA_INDEX_URL" not in environment
     assert "UV_CONFIG_FILE" not in environment
@@ -68,6 +75,68 @@ def test_release_package_inputs_and_build_environment_are_stable(
     assert environment["UV_DEFAULT_INDEX"] == release_builder.PACKAGE_INDEX_URL
     assert environment["PYTHONNOUSERSITE"] == "1"
     assert environment["SOURCE_DATE_EPOCH"] == "315532800"
+
+
+def test_release_builder_git_ignores_caller_git_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, str] = {}
+
+    def fake_run(*_args: object, **kwargs: object) -> object:
+        captured.update(kwargs["env"])  # type: ignore[arg-type]
+        return type("Completed", (), {"stdout": "head\n"})()
+
+    monkeypatch.setenv("GIT_DIR", "/private/tmp/untrusted")
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setattr(release_builder.subprocess, "run", fake_run)
+
+    assert release_builder._git("rev-parse", "HEAD") == "head"
+    assert not any(key.startswith("GIT_") for key in captured)
+
+
+def test_sdist_clean_room_passes_constraints_to_isolated_pip(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commands: list[tuple[list[str], dict[str, str]]] = []
+    environment = (tmp_path / "clean" / "environment").resolve()
+    import_path = environment / "lib/python3.11/site-packages/memoryforge/__init__.py"
+
+    class FakeEnvBuilder:
+        def __init__(self, *, with_pip: bool) -> None:
+            assert with_pip is True
+
+        def create(self, _path: Path) -> None:
+            return None
+
+    def fake_run(
+        command: list[str],
+        *,
+        cwd: Path,
+        environment: dict[str, str],
+    ) -> str:
+        commands.append((command, environment))
+        if "importlib.metadata,json,memoryforge" in " ".join(command):
+            return json.dumps({"version": "0.3.0", "import_path": str(import_path)})
+        if command[-2:] == ["memoryforge", "--version"]:
+            return "0.3.0\n"
+        return ""
+
+    constraints = tmp_path / "constraints.txt"
+    monkeypatch.setattr(release_builder.venv, "EnvBuilder", FakeEnvBuilder)
+    monkeypatch.setattr(release_builder, "_run", fake_run)
+
+    release_builder._check_sdist_clean_room(
+        tmp_path / "memoryforge-0.3.0.tar.gz",
+        tmp_path / "clean",
+        constraints=constraints,
+        cwd=tmp_path,
+    )
+
+    installs = [command for command, _environment in commands if "install" in command]
+    assert len(installs) == 2
+    assert all(["-c", str(constraints)] == command[-3:-1] for command in installs)
+    assert all("PIP_CONSTRAINT" not in clean for _command, clean in commands)
 
 
 @pytest.mark.parametrize(
@@ -179,7 +248,7 @@ def test_workspace_release_drill_runs_real_public_workflow(
     assert summary_builder.validator._release_drill_contract(
         evidence,
         commit,
-        evidence_revision=11,
+        evidence_revision=14,
     )
     assert set(evidence["checks"]) == {
         "refresh",

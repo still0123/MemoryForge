@@ -1105,7 +1105,7 @@
         {
           "split": "development",
           "evidence_revision": 3,
-          "status": "accepted_development_superseded",
+          "status": "development_passed_review_failed",
           "path": "demo/results/release_candidate_development_candidate_2.json",
           "sha256": "84a5a2e3eefb6894d512a0aea6ccc4626844ceaaab55a28b3a96f733f84b0792",
           "memoryforge_commit": "4972b3c2223c5e6fe7248090a9d8ee006c1c271b",
@@ -1121,6 +1121,12 @@
             "memoryforge_commit": "926832e28503b69d83c2ca760d3ad0065615b5a8",
             "passed": true
           },
+          "review_evidence": {
+            "path": "demo/results/release_candidate_candidate_2_static_review_rejected.json",
+            "sha256": "475b6e5981bc43438107c67a7fd3ab05fc95888bfb30c391f2e7ae2275c23d45",
+            "memoryforge_commit": "433f33c001c963cd69dd507346ac836895b7c36b",
+            "passed": false
+          },
           "passed": true
         },
         {
@@ -1130,12 +1136,6 @@
           "path": "demo/results/release_candidate_development_candidate_3.json",
           "sha256": "c61e5817c9a55e2bda780a7381512087c0a37943d8d34bb0e0a54a880a074349",
           "memoryforge_commit": "5005f1511301797d7d1a9ce25c3a885ab6ba85ba",
-          "review_evidence": {
-            "path": "demo/results/release_candidate_candidate_2_static_review_rejected.json",
-            "sha256": "475b6e5981bc43438107c67a7fd3ab05fc95888bfb30c391f2e7ae2275c23d45",
-            "memoryforge_commit": "433f33c001c963cd69dd507346ac836895b7c36b",
-            "passed": false
-          },
           "acceptance_evidence": {
             "path": "demo/results/release_candidate_candidate_3_local_gates.json",
             "sha256": "54e6bbd11d952c7f18afb7f4d637c5285daf6f4ac7596f649eeb5710af08bfcc",

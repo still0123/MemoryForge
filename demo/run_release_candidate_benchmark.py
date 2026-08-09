@@ -144,6 +144,8 @@ def main(argv: list[str] | None = None) -> None:
         raise SystemExit("release inputs and output must remain outside the repository")
     if output == release_dir or output.is_relative_to(release_dir):
         raise SystemExit("--output must remain outside --release-dir")
+    if output.exists():
+        raise SystemExit(f"--output already exists: {output}")
     release_dir.mkdir(parents=True, exist_ok=True)
     memoryforge_commit = _git("rev-parse", "HEAD")
     if _git("status", "--porcelain"):
@@ -199,7 +201,14 @@ def main(argv: list[str] | None = None) -> None:
         "passed": all(gates.values()),
     }
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
+    temporary = output.with_name(f".{output.name}.{os.getpid()}.tmp")
+    try:
+        temporary.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
+        os.link(temporary, output)
+    except FileExistsError as exc:
+        raise SystemExit(f"--output already exists: {output}") from exc
+    finally:
+        temporary.unlink(missing_ok=True)
     print(f"Wrote release-candidate development Evidence to {output}")
     if not evidence["passed"]:
         raise SystemExit("release-candidate development gate failed")
@@ -388,7 +397,7 @@ def _check_workspace_drill(release_dir: Path) -> dict[str, object]:
     passed = registry_validator._release_drill_contract(
         drill,
         _git("rev-parse", "HEAD"),
-        evidence_revision=11,
+        evidence_revision=14,
     )
     return _check(passed, "none" if passed else "workspace_drill_failure")
 

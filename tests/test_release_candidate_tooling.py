@@ -33,6 +33,25 @@ def test_release_candidate_runner_binds_frozen_inputs() -> None:
     ]
 
 
+def test_release_candidate_runner_refuses_existing_output_before_work(tmp_path: Path) -> None:
+    release_dir = tmp_path / "release"
+    output = tmp_path / "evidence.json"
+    output.write_text("keep\n", encoding="utf-8")
+
+    with pytest.raises(SystemExit, match="--output already exists"):
+        benchmark.main(
+            [
+                "--release-dir",
+                str(release_dir),
+                "--output",
+                str(output),
+            ]
+        )
+
+    assert output.read_text(encoding="utf-8") == "keep\n"
+    assert not release_dir.exists()
+
+
 def test_release_candidate_version_probes_use_clean_environment(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -88,7 +107,7 @@ def test_release_candidate_consumes_workspace_drill_schema_2(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    commit = "a4c74bdb8047bb6267955624c7d054d17bb5e722"
+    commit = "bced2a660ef38dfc4c0c6a0f994897d6af895574"
     source = (
         benchmark.REPO_ROOT
         / "demo/results/artifacts/release_candidate_development"
@@ -102,6 +121,12 @@ def test_release_candidate_consumes_workspace_drill_schema_2(
     )
     monkeypatch.setattr(benchmark, "_git", lambda *_args: commit)
 
+    assert benchmark._check_workspace_drill(tmp_path)["passed"] is False
+    drill["fixture"] = benchmark.registry_validator.RELEASE_DRILL_FIXTURE
+    (tmp_path / "workspace-drill.json").write_text(
+        json.dumps(drill),
+        encoding="utf-8",
+    )
     assert benchmark._check_workspace_drill(tmp_path)["passed"] is True
     drill["evaluation"]["metrics"]["answer_accuracy"] = 0.0
     (tmp_path / "workspace-drill.json").write_text(

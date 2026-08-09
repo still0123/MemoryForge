@@ -6,9 +6,14 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $PreviousLocation = Get-Location
-$EnvironmentNames = @("PYTHONPATH", "PYTHONHOME", "PYTHONNOUSERSITE", "SOURCE_DATE_EPOCH")
+$EnvironmentNames = @(
+    "PYTHONPATH", "PYTHONHOME", "PYTHONNOUSERSITE", "SOURCE_DATE_EPOCH",
+    "PIP_CONFIG_FILE", "PIP_INDEX_URL", "UV_DEFAULT_INDEX"
+) + @((Get-ChildItem Env: | Where-Object Name -Like "GIT_*").Name)
 $OriginalEnvironment = @{}
 $Workdir = $null
+$Snapshot = $null
+$SnapshotAdded = $false
 
 try {
     foreach ($Name in $EnvironmentNames) {
@@ -71,8 +76,14 @@ try {
 
     Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
     Remove-Item Env:PYTHONHOME -ErrorAction SilentlyContinue
+    foreach ($Name in @($EnvironmentNames | Where-Object { $_ -Like "GIT_*" })) {
+        Remove-Item "Env:$Name" -ErrorAction SilentlyContinue
+    }
     $env:PYTHONNOUSERSITE = "1"
     $env:SOURCE_DATE_EPOCH = "315532800"
+    $env:PIP_CONFIG_FILE = "NUL"
+    $env:PIP_INDEX_URL = "https://pypi.org/simple"
+    $env:UV_DEFAULT_INDEX = "https://pypi.org/simple"
 
     # Contract: ruff check --no-cache .
     Invoke-External $Python @("-m", "ruff", "check", "--no-cache", ".")
@@ -108,6 +119,15 @@ try {
         "--cov-report=term-missing"
     )
 
+    $Snapshot = Join-Path $Workdir "source"
+    Invoke-External "git" @(
+        "-c", "core.autocrlf=false",
+        "-c", "core.eol=lf",
+        "-c", "core.hooksPath=NUL",
+        "worktree", "add", "--detach", $Snapshot, "HEAD"
+    )
+    $SnapshotAdded = $true
+
     $BuildEnvironment = Join-Path $Workdir "build"
     Invoke-External $Python @("-m", "venv", $BuildEnvironment)
     $BuildPython = Join-Path $BuildEnvironment "Scripts\python.exe"
@@ -115,35 +135,47 @@ try {
         Invoke-External "uv" @(
             "pip", "install",
             "--python", $BuildPython,
-            "-c", (Join-Path $Root "constraints\dev.txt"),
+            "--no-config", "--default-index", "https://pypi.org/simple",
+            "-c", (Join-Path $Snapshot "constraints\dev.txt"),
             "build", "hatchling"
         )
     } else {
         Invoke-External $BuildPython @(
             "-m", "pip", "install",
-            "-c", (Join-Path $Root "constraints\dev.txt"),
+            "--isolated", "--index-url", "https://pypi.org/simple",
+            "-c", (Join-Path $Snapshot "constraints\dev.txt"),
             "build", "hatchling"
         )
     }
     # Contract: --wheel --sdist --no-isolation
-    Invoke-External $BuildPython @(
-        "-m", "build",
-        "--wheel", "--sdist", "--no-isolation",
-        "--outdir", $Dist
-    )
+    Push-Location -LiteralPath $Snapshot
+    try {
+        Invoke-External $BuildPython @(
+            "-m", "build",
+            "--wheel", "--sdist", "--no-isolation",
+            "--outdir", $Dist
+        )
+    } finally {
+        Pop-Location
+    }
 
     $Wheel = Get-SingleArtifact $Dist "memoryforge-*.whl"
     $PreviousConstraint = $env:PIP_CONSTRAINT
-    $env:PIP_CONSTRAINT = Join-Path $Root "constraints\dev.txt"
+    $env:PIP_CONSTRAINT = Join-Path $Snapshot "constraints\dev.txt"
     try {
         # Contract: demo/run_release_check.py
-        Invoke-External $Python @(
-            "demo/run_release_check.py",
-            "--wheel", $Wheel,
-            "--workdir", (Join-Path $Workdir "wheel"),
-            "--code-evidence-output", (Join-Path $Output "code-wiki-evidence.json"),
-            "--output", (Join-Path $Output "release-provenance.json")
-        )
+        Push-Location -LiteralPath $Snapshot
+        try {
+            Invoke-External $Python @(
+                "demo/run_release_check.py",
+                "--wheel", $Wheel,
+                "--workdir", (Join-Path $Workdir "wheel"),
+                "--code-evidence-output", (Join-Path $Output "code-wiki-evidence.json"),
+                "--output", (Join-Path $Output "release-provenance.json")
+            )
+        } finally {
+            Pop-Location
+        }
     } finally {
         if ($null -eq $PreviousConstraint) {
             Remove-Item Env:PIP_CONSTRAINT -ErrorAction SilentlyContinue
@@ -157,7 +189,8 @@ try {
     $SdistPython = Join-Path $SdistEnvironment "Scripts\python.exe"
     Invoke-External $SdistPython @(
         "-m", "pip", "install",
-        "-c", (Join-Path $Root "constraints\dev.txt"),
+        "--isolated", "--index-url", "https://pypi.org/simple",
+        "-c", (Join-Path $Snapshot "constraints\dev.txt"),
         "hatchling"
     )
     $Sdist = Get-SingleArtifact $Dist "memoryforge-*.tar.gz"
@@ -171,7 +204,8 @@ try {
     # Contract: --no-build-isolation
     Invoke-External $SdistPython @(
         "-m", "pip", "install",
-        "-c", (Join-Path $Root "constraints\dev.txt"),
+        "--isolated", "--index-url", "https://pypi.org/simple",
+        "-c", (Join-Path $Snapshot "constraints\dev.txt"),
         "--no-build-isolation", $Sdist
     )
     $PreviousPythonPath = $env:PYTHONPATH
@@ -244,6 +278,9 @@ try {
 
     Write-Output "Local checks passed. Evidence: $Output"
 } finally {
+    if ($SnapshotAdded) {
+        & git worktree remove --force $Snapshot *> $null
+    }
     if ($Workdir) {
         Remove-Item -LiteralPath $Workdir -Recurse -Force -ErrorAction SilentlyContinue
     }

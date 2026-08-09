@@ -71,6 +71,7 @@ def run_drill(workdir: Path) -> dict[str, Any]:
     _git(source, "remote", "add", "origin", "https://example.invalid/release-fixture.git")
     _git(source, "add", ".")
     _git(source, "commit", "-m", "release fixture")
+    fixture_commit = _git_output(source, "rev-parse", "HEAD")
 
     workspace = workdir / "workspace"
     _cli("init", str(workspace))
@@ -246,6 +247,11 @@ def run_drill(workdir: Path) -> dict[str, Any]:
     return {
         "schema_version": 2,
         "memoryforge_commit": source_commit,
+        "fixture": {
+            "repository_commit": fixture_commit,
+            "repository_id": repository_id,
+            "source_id": query["source_id"],
+        },
         "checks": checks,
         "evaluation": {
             "metrics": _evaluation_metrics(answered_passed, unknown_passed),

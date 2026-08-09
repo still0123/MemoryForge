@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import base64
+import copy
 import hashlib
 import importlib.util
 import io
 import json
 import os
 import shutil
+import subprocess
 import tarfile
 import zipfile
 from pathlib import Path
@@ -303,6 +306,14 @@ def test_release_split_manifest_status_and_component_counts_are_closed(
         validator._validate_release_split_manifest(descriptor, split_name="confirmation")
 
     confirmation["status"] = "not_run"
+    path.write_text(json.dumps(confirmation), encoding="utf-8")
+    result = tmp_path / "demo/results/release_candidate_confirmation.json"
+    result.parent.mkdir(parents=True)
+    result.write_text("{}\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="confirmation manifest contract failed"):
+        validator._validate_release_split_manifest(descriptor, split_name="confirmation")
+    result.unlink()
+
     confirmation["components"][0]["case_count"] = 500
     path.write_text(json.dumps(confirmation), encoding="utf-8")
     monkeypatch.setattr(validator, "_validate_artifact", lambda *_args, **_kwargs: None)
@@ -403,7 +414,11 @@ def test_benchmark_registry_retains_release_static_review_evidence() -> None:
     experiment = next(
         item for item in registry["experiments"] if item["suite_id"] == "release-candidate-delivery"
     )
-    artifact = experiment["evidence"][3]
+    artifact = next(
+        item
+        for item in experiment["evidence"]
+        if item["path"] == "demo/results/release_candidate_development_candidate_2.json"
+    )
     review = artifact["review_evidence"]
     payload = json.loads((validator.REPO_ROOT / review["path"]).read_text(encoding="utf-8"))
     payload["review"]["p1"] = 4
@@ -591,7 +606,13 @@ def test_benchmark_registry_rejects_loose_release_case_counts() -> None:
 
 
 def test_benchmark_registry_requires_semantic_release_support() -> None:
-    commit = "1" * 40
+    commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=validator.SOURCE_GIT_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
     with pytest.raises(ValueError, match="unsupported benchmark summary schema"):
         validator.build_benchmark_summary(
             {},
@@ -599,6 +620,22 @@ def test_benchmark_registry_requires_semantic_release_support() -> None:
             package_version="0.3.0",
             memoryforge_commit=commit,
             schema_version=True,
+        )
+    committed_registry = json.loads(
+        subprocess.run(
+            ["git", "show", f"{commit}:demo/evaluation/registry.json"],
+            cwd=validator.SOURCE_GIT_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+    )
+    with pytest.raises(ValueError, match="package version does not match"):
+        validator.build_benchmark_summary(
+            committed_registry,
+            validator._registry_snapshot_summary(committed_registry),
+            package_version="9.9.9",
+            memoryforge_commit=commit,
         )
     assert not validator._release_summary_contract(
         {"schema_version": 1, "memoryforge_commit": commit},
@@ -999,7 +1036,13 @@ def test_benchmark_registry_hashes_bound_gate_artifact_bytes(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    commit = "1" * 40
+    commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=validator.SOURCE_GIT_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
     wheel = tmp_path / "memoryforge-0.2.1-py3-none-any.whl"
     sdist = tmp_path / "memoryforge-0.2.1.tar.gz"
     provenance = tmp_path / "release-provenance.json"
@@ -1111,6 +1154,31 @@ def test_benchmark_registry_hashes_bound_gate_artifact_bytes(
         require_clean_sdist=True,
         require_code_evidence=True,
     )
+    platform_smoke = tmp_path / "platform-smoke.json"
+    platform_smoke.write_text('{"passed": true}\n', encoding="utf-8")
+    platform_sha256 = hashlib.sha256(platform_smoke.read_bytes()).hexdigest()
+    digests["platform_smoke_sha256"] = platform_sha256
+    files["platform_smoke"] = {
+        "path": platform_smoke.name,
+        "sha256": platform_sha256,
+    }
+    sums.write_text(
+        f"{wheel_sha256}  dist/{wheel.name}\n"
+        f"{sdist_sha256}  dist/{sdist.name}\n"
+        f"{code_evidence_sha256}  code-wiki-evidence.json\n"
+        f"{platform_sha256}  platform-smoke.json\n"
+        f"{provenance_sha256}  release-provenance.json\n",
+        encoding="ascii",
+    )
+    digests["sha256sums_sha256"] = hashlib.sha256(sums.read_bytes()).hexdigest()
+    files["sha256sums"]["sha256"] = digests["sha256sums_sha256"]
+    assert validator._validate_bound_gate_artifacts(
+        files,
+        digests,
+        commit,
+        require_clean_sdist=True,
+        require_code_evidence=True,
+    )
     provenance_payload = json.loads(provenance.read_text(encoding="utf-8"))
     provenance_payload["checks"]["pip_check"] = "failed"
     provenance_payload["note"] = "copied from /Users/private/workspace"
@@ -1193,8 +1261,9 @@ def test_benchmark_registry_rejects_private_or_failed_provenance() -> None:
         validator._payload_private_detail_leaks(
             {"credentials": {"api_key": "sk-live-private-value"}}
         )
-        == 2
+        == 3
     )
+    assert validator._payload_private_detail_leaks({"Authorization": "Basic Zm9vOmJhcg=="}) == 2
     for private_path in (
         "/root",
         "/root/private/workspace",
@@ -1234,11 +1303,12 @@ def test_benchmark_registry_replays_package_archive_metadata(tmp_path: Path) -> 
     )
     wheel = root / "memoryforge-0.3.0-py3-none-any.whl"
     sdist = root / "memoryforge-0.3.0.tar.gz"
-    assert validator._package_archives_match(wheel, sdist)
+    commit = "63326fb2f123c336c31bcebf68c76c90dfac86e6"
+    assert validator._package_archives_match(wheel, sdist, commit)
 
     forged_wheel = tmp_path / wheel.name
     forged_wheel.write_bytes(b"not a wheel")
-    assert not validator._package_archives_match(forged_wheel, sdist)
+    assert not validator._package_archives_match(forged_wheel, sdist, commit)
 
     metadata = b"Metadata-Version: 2.3\nName: memoryforge\nVersion: 0.3.0\n"
     with zipfile.ZipFile(forged_wheel, "w") as archive:
@@ -1249,11 +1319,48 @@ def test_benchmark_registry_replays_package_archive_metadata(tmp_path: Path) -> 
         member = tarfile.TarInfo("memoryforge-0.3.0/PKG-INFO")
         member.size = len(changed)
         archive.addfile(member, io.BytesIO(changed))
-    assert not validator._package_archives_match(forged_wheel, forged_sdist)
+    assert not validator._package_archives_match(forged_wheel, forged_sdist, commit)
 
     with zipfile.ZipFile(forged_wheel, "w") as archive:
         archive.writestr("other-0.3.0.dist-info/METADATA", metadata)
-    assert not validator._package_archives_match(forged_wheel, forged_sdist)
+    assert not validator._package_archives_match(forged_wheel, forged_sdist, commit)
+
+
+def test_benchmark_registry_binds_all_package_sources_to_commit(tmp_path: Path) -> None:
+    commit = "63326fb2f123c336c31bcebf68c76c90dfac86e6"
+    root = validator.REPO_ROOT / "demo/results/artifacts/release_candidate_development" / commit
+    wheel = root / "memoryforge-0.3.0-py3-none-any.whl"
+    sdist = root / "memoryforge-0.3.0.tar.gz"
+    forged_wheel = tmp_path / wheel.name
+    forged_sdist = tmp_path / sdist.name
+    record_path = "memoryforge-0.3.0.dist-info/RECORD"
+    source_path = "memoryforge/__init__.py"
+
+    with zipfile.ZipFile(wheel) as source:
+        entries = {item.filename: source.read(item.filename) for item in source.infolist()}
+    entries[source_path] += b"\n# forged\n"
+    record_lines = []
+    for name, content in entries.items():
+        if name == record_path:
+            continue
+        digest = base64.urlsafe_b64encode(hashlib.sha256(content).digest()).rstrip(b"=").decode()
+        record_lines.append(f"{name},sha256={digest},{len(content)}")
+    record_lines.append(f"{record_path},,")
+    entries[record_path] = ("\n".join(record_lines) + "\n").encode()
+    with zipfile.ZipFile(forged_wheel, "w") as archive:
+        for name, content in entries.items():
+            archive.writestr(name, content)
+
+    with tarfile.open(sdist, "r:gz") as source, tarfile.open(forged_sdist, "w:gz") as output:
+        for member in source.getmembers():
+            payload = source.extractfile(member).read() if member.isfile() else None
+            if member.name.endswith("/src/memoryforge/__init__.py") and payload is not None:
+                payload += b"\n# forged\n"
+                member = copy.copy(member)
+                member.size = len(payload)
+            output.addfile(member, io.BytesIO(payload) if payload is not None else None)
+
+    assert not validator._package_archives_match(forged_wheel, forged_sdist, commit)
 
 
 @pytest.mark.parametrize(
@@ -1716,6 +1823,7 @@ def test_benchmark_registry_accepts_zero_blocker_final_review(
         "splits": {"holdout": holdout},
     }
     development = {
+        "path": "demo/results/release_candidate_development_candidate_12.json",
         "memoryforge_commit": development_commit,
         "acceptance_evidence": {
             "memoryforge_commit": local_gate_commit,
@@ -1760,6 +1868,16 @@ def test_benchmark_registry_accepts_zero_blocker_final_review(
         )
         == 1
     )
+    payload["review"]["p0"] = False
+    with pytest.raises(ValueError, match="accepted review Evidence changed"):
+        validator._validate_release_static_review_acceptance(
+            experiment,
+            development,
+            payload,
+            confirmation,
+            review_commit,
+        )
+    payload["review"]["p0"] = 0
     (tmp_path / "final_comments.json").write_text(
         '[{"severity": "P1"}]\n',
         encoding="utf-8",
