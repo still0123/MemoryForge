@@ -11,6 +11,11 @@ elif [[ -x "$root/.venv/bin/python" ]]; then
 else
   python="python3"
 fi
+if [[ "$python" == */* ]]; then
+  python="$(cd "$(dirname "$python")" && pwd)/$(basename "$python")"
+else
+  python="$(command -v "$python")"
+fi
 
 unset PYTHONPATH PYTHONHOME
 while IFS='=' read -r name _; do

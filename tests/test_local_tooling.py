@@ -39,6 +39,7 @@ def test_local_check_keeps_the_quality_and_artifact_contract() -> None:
         "demo/validate_benchmark_registry.py",
         "pytest -W error::ResourceWarning",
         "error::pytest.PytestUnraisableExceptionWarning",
+        'python="$(cd "$(dirname "$python")" && pwd)/$(basename "$python")"',
         "core.hooksPath=/dev/null",
         'worktree add --detach "$snapshot" HEAD',
         '"$workdir/build/bin/python" -m build',
