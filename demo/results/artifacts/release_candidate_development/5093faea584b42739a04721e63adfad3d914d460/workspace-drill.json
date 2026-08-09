@@ -1,0 +1,207 @@
+{
+  "checks": {
+    "apply": "passed",
+    "approve": "passed",
+    "backup": "passed",
+    "lint": "passed",
+    "no_pending_ingest": "passed",
+    "query": "passed",
+    "refresh": "passed",
+    "restore": "passed",
+    "review": "passed",
+    "showcase": "passed"
+  },
+  "evaluation": {
+    "cases": [
+      {
+        "category": "exact_symbol",
+        "error_classification": "none",
+        "id": "exact-code-signature",
+        "memoryforge": {
+          "abstention_correct": false,
+          "answer_correct": true
+        }
+      },
+      {
+        "category": "unanswerable",
+        "error_classification": "none",
+        "id": "unsupported-symbol-abstention",
+        "memoryforge": {
+          "abstention_correct": true,
+          "answer_correct": true
+        }
+      }
+    ],
+    "metrics": {
+      "abstention_accuracy": 100.0,
+      "answer_accuracy": 100.0,
+      "citation_grounding_accuracy": 100.0
+    }
+  },
+  "fixture": {
+    "repository_commit": "92c1236e57b9b059ae23c95452c916cccc732af0",
+    "repository_id": "0bc5bbece6a54d67e12840727ce8663c895b69d203f45eaa1efc940381e86bc0",
+    "source_id": "8864360214e8fa15d97f8019b8392729520e066c469d2e8475ec3e07c8734c68"
+  },
+  "memoryforge_commit": "5093faea584b42739a04721e63adfad3d914d460",
+  "passed": true,
+  "private_detail_leaks": 0,
+  "queries": {
+    "answered": {
+      "original": {
+        "answer": "`src.service.cache_ttl` (function): `def cache_ttl() -> int:`",
+        "citations": [
+          {
+            "locator": "chars:17-61",
+            "quote": "`src.service.cache_ttl` (function): `def cache_ttl() -> int:`",
+            "source_id": "8864360214e8fa15d97f8019b8392729520e066c469d2e8475ec3e07c8734c68",
+            "source_version": 2
+          }
+        ],
+        "evidence": [
+          {
+            "locator": "chars:17-61",
+            "quote": "`src.service.cache_ttl` (function): `def cache_ttl() -> int:`",
+            "source_id": "8864360214e8fa15d97f8019b8392729520e066c469d2e8475ec3e07c8734c68",
+            "source_version": 2,
+            "text": "def cache_ttl() -> int:\n    return CACHE_TTL"
+          }
+        ],
+        "locator": "chars:17-61",
+        "quote": "`src.service.cache_ttl` (function): `def cache_ttl() -> int:`",
+        "source_id": "8864360214e8fa15d97f8019b8392729520e066c469d2e8475ec3e07c8734c68",
+        "source_version": 2,
+        "status": "answered",
+        "support": {
+          "components": {
+            "core_term_coverage": 0.6667,
+            "current_source_versions": 1.0,
+            "exact_identifier_coverage": 1.0,
+            "fact_co_location": 1.0,
+            "multi_source_coverage": 1.0,
+            "negation_alignment": 1.0
+          },
+          "enforced": true,
+          "failed_hard_gates": [],
+          "score": 88.3,
+          "sufficient": true,
+          "threshold": 75.0
+        },
+        "wiki_pages": [
+          "wiki/pages/code/0bc5bbece6a5/src/service.md"
+        ]
+      },
+      "restored": {
+        "answer": "`src.service.cache_ttl` (function): `def cache_ttl() -> int:`",
+        "citations": [
+          {
+            "locator": "chars:17-61",
+            "quote": "`src.service.cache_ttl` (function): `def cache_ttl() -> int:`",
+            "source_id": "8864360214e8fa15d97f8019b8392729520e066c469d2e8475ec3e07c8734c68",
+            "source_version": 2
+          }
+        ],
+        "evidence": [
+          {
+            "locator": "chars:17-61",
+            "quote": "`src.service.cache_ttl` (function): `def cache_ttl() -> int:`",
+            "source_id": "8864360214e8fa15d97f8019b8392729520e066c469d2e8475ec3e07c8734c68",
+            "source_version": 2,
+            "text": "def cache_ttl() -> int:\n    return CACHE_TTL"
+          }
+        ],
+        "locator": "chars:17-61",
+        "quote": "`src.service.cache_ttl` (function): `def cache_ttl() -> int:`",
+        "source_id": "8864360214e8fa15d97f8019b8392729520e066c469d2e8475ec3e07c8734c68",
+        "source_version": 2,
+        "status": "answered",
+        "support": {
+          "components": {
+            "core_term_coverage": 0.6667,
+            "current_source_versions": 1.0,
+            "exact_identifier_coverage": 1.0,
+            "fact_co_location": 1.0,
+            "multi_source_coverage": 1.0,
+            "negation_alignment": 1.0
+          },
+          "enforced": true,
+          "failed_hard_gates": [],
+          "score": 88.3,
+          "sufficient": true,
+          "threshold": 75.0
+        },
+        "wiki_pages": [
+          "wiki/pages/code/0bc5bbece6a5/src/service.md"
+        ]
+      }
+    },
+    "unknown": {
+      "original": {
+        "answer": "\u4e0d\u77e5\u9053",
+        "citations": [],
+        "locator": null,
+        "quote": null,
+        "source_id": null,
+        "source_version": null,
+        "status": "unknown",
+        "support": {
+          "components": {
+            "core_term_coverage": 0.3333,
+            "current_source_versions": 1.0,
+            "exact_identifier_coverage": 0.0,
+            "fact_co_location": 1.0,
+            "multi_source_coverage": 1.0,
+            "negation_alignment": 1.0
+          },
+          "enforced": true,
+          "failed_hard_gates": [
+            "exact_identifier_not_covered",
+            "score_below_threshold"
+          ],
+          "score": 56.7,
+          "sufficient": false,
+          "threshold": 75.0
+        },
+        "wiki_pages": []
+      },
+      "restored": {
+        "answer": "\u4e0d\u77e5\u9053",
+        "citations": [],
+        "locator": null,
+        "quote": null,
+        "source_id": null,
+        "source_version": null,
+        "status": "unknown",
+        "support": {
+          "components": {
+            "core_term_coverage": 0.3333,
+            "current_source_versions": 1.0,
+            "exact_identifier_coverage": 0.0,
+            "fact_co_location": 1.0,
+            "multi_source_coverage": 1.0,
+            "negation_alignment": 1.0
+          },
+          "enforced": true,
+          "failed_hard_gates": [
+            "exact_identifier_not_covered",
+            "score_below_threshold"
+          ],
+          "score": 56.7,
+          "sufficient": false,
+          "threshold": 75.0
+        },
+        "wiki_pages": []
+      }
+    }
+  },
+  "schema_version": 2,
+  "workspace": {
+    "original_commit": "682b277b30ae3f8963f0eb1276c888215cb1c8c3",
+    "restored_commit": "682b277b30ae3f8963f0eb1276c888215cb1c8c3",
+    "restored_lint": {
+      "checked_pages": 2,
+      "issues": [],
+      "status": "clean"
+    }
+  }
+}
