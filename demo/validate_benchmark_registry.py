@@ -493,7 +493,7 @@ REQUIRED_EXPERIMENT_EVIDENCE = {
         ),
         _RESULTS + "release_candidate_development_candidate_13.json": (
             14,
-            "local_gates_passed_review_pending",
+            "development_passed_review_failed",
             "df39214604a3f211507a4b0079a21e34a0fd5836e7f813611c4639ae72631a43",
             "5093faea584b42739a04721e63adfad3d914d460",
         ),
@@ -636,6 +636,11 @@ REQUIRED_REVIEW_EVIDENCE = {
             _RESULTS + "release_candidate_candidate_12_static_review_rejected.json",
             "168e565b495872b2e663528bb2ca214482e999011e957fab8ddfc577ddb2aac1",
             "e7d3fef9312b4b6c1683e12984ae00cd1b21b343",
+        ),
+        _RESULTS + "release_candidate_development_candidate_13.json": (
+            _RESULTS + "release_candidate_candidate_13_static_review_rejected.json",
+            "6d442587d6502704b274d51ec5d94b14076fcac77dc20110f9b81b7705532b65",
+            "2fff47c47f0cc3c4bbb98eb02c0acb77bce1718e",
         ),
     },
 }
@@ -5252,6 +5257,112 @@ def _validate_release_static_review_regression(
             "added_lines": 34045,
             "deleted_lines": 249,
             "changed_lines": 34294,
+        }
+        review_ancestry_valid = (
+            _git_commit_descends_from(
+                commit,
+                development_artifact["memoryforge_commit"],
+            )
+            and _git_diff_stats(
+                str(expected_review["base_commit"]),
+                str(expected_review["source_commit"]),
+            )
+            == expected_stats
+            and _strict_mapping(
+                scope_payload,
+                {
+                    "schema_version": 1,
+                    "base_commit": expected_review["base_commit"],
+                    "source_commit": expected_review["source_commit"],
+                    "diff_mode": "merge_base_to_source",
+                    **expected_stats,
+                },
+            )
+        )
+    elif candidate == "release-development-candidate-13":
+        expected_review = {
+            "scope": (
+                "569685c2f0bf790819820b821b4768d180c4ee0d..."
+                "2fff47c47f0cc3c4bbb98eb02c0acb77bce1718e"
+            ),
+            "base_commit": "569685c2f0bf790819820b821b4768d180c4ee0d",
+            "source_commit": "2fff47c47f0cc3c4bbb98eb02c0acb77bce1718e",
+            "status": "failed",
+            "p0": 0,
+            "p1": 10,
+            "p2": 0,
+            "failures": [
+                "local_gate_worktree_snapshot_binding",
+                "local_gate_python_checkout_binding",
+                "local_gate_package_source_environment",
+                "workspace_drill_git_environment",
+                "development_runner_git_environment",
+                "powershell_python_path",
+                "registry_artifact_exact_schema",
+                "accepted_review_archive_consistency",
+            ],
+            "artifacts": {
+                "raw_findings": {
+                    "path": (
+                        "demo/results/artifacts/release_candidate_review_candidate_13/"
+                        "comments.jsonl"
+                    ),
+                    "sha256": "13a40d85a5f5837e6e655e6642456cd25619f97094327d9f00005f885c6ac630",
+                },
+                "top_findings": {
+                    "path": (
+                        "demo/results/artifacts/release_candidate_review_candidate_13/"
+                        "final_comments.json"
+                    ),
+                    "sha256": "cabfc5ccc343b3ffe6c6bcc979b1bfcfc1230c449a3e39e59438d5e7bc855b05",
+                },
+                "html_report": {
+                    "path": (
+                        "demo/results/artifacts/release_candidate_review_candidate_13/"
+                        "report.html"
+                    ),
+                    "sha256": "c40857942bd2d3fc5032b0d2da53ec406c41f5fcc0f3053b5f8989611a07c188",
+                },
+                "markdown_report": {
+                    "path": (
+                        "demo/results/artifacts/release_candidate_review_candidate_13/"
+                        "report.md"
+                    ),
+                    "sha256": "536911849dab2fe1b8dbb0e8e5512248a7a1d242a7795591cdb0eadcb0878e87",
+                },
+                "review_scope": {
+                    "path": (
+                        "demo/results/artifacts/release_candidate_review_candidate_13/"
+                        "review-scope.json"
+                    ),
+                    "sha256": "47d3a617a06b9399135ed83f43fbe09298f6c6bd0be5144a3d22db5b43509cb1",
+                },
+            },
+        }
+        expected_root_cause = {
+            "summary": (
+                "Candidate 13 closed Candidate 12 findings, but final review found local-gate "
+                "source identity, package-source environment, Git-environment, Registry schema, "
+                "and accepted-review archive gaps."
+            ),
+            "fix": (
+                "Run every gate against one clean fixed Commit and its package source, scrub Git "
+                "and package-manager environments, require exact Registry schemas, and bind "
+                "accepted review archives to the zero-finding result."
+            ),
+        }
+        for artifact in expected_review["artifacts"].values():
+            _validate_artifact(artifact, "release-candidate static review")
+        scope_artifact = expected_review["artifacts"]["review_scope"]
+        scope_payload = json.loads(
+            (REPO_ROOT / str(scope_artifact["path"])).read_text(encoding="utf-8")
+        )
+        expected_stats = {
+            "diff_files": 288,
+            "reviewed_files": 172,
+            "added_lines": 39376,
+            "deleted_lines": 477,
+            "changed_lines": 39853,
         }
         review_ancestry_valid = (
             _git_commit_descends_from(
