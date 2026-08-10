@@ -1032,7 +1032,7 @@
         "rejected",
         "accepted_development_superseded",
         "development_passed_review_failed",
-        "development_passed_gate_pending"
+        "local_gates_passed_review_pending"
       ],
       "repositories": [
         {
@@ -1340,10 +1340,16 @@
         {
           "split": "development",
           "evidence_revision": 15,
-          "status": "development_passed_gate_pending",
+          "status": "local_gates_passed_review_pending",
           "path": "demo/results/release_candidate_development_candidate_14.json",
           "sha256": "1626fe4b1f7be6780769f28a4233fc438ef40daaad968c9e78a89b6771917fae",
           "memoryforge_commit": "db231a15f87ec9c3bd2084104de575a4fca3eadc",
+          "acceptance_evidence": {
+            "path": "demo/results/release_candidate_candidate_14_local_gates.json",
+            "sha256": "739a3927e170dedd5d4e784cd350093cce5a47062a3a03dd820a857514a64a2d",
+            "memoryforge_commit": "4e35729ed42a02518f9017d9742e60643b67f84d",
+            "passed": true
+          },
           "passed": true
         }
       ]
