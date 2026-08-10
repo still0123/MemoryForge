@@ -1,12 +1,12 @@
 # MemoryForge
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=19; platform_gate_candidate=19; platform_gate_status=accepted; review_status=accepted; macos_passed=634; linux_passed=631; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=released; supported_platforms=macos+linux; active_candidate=19; platform_gate_candidate=19; platform_gate_status=accepted; review_status=accepted; macos_passed=642; linux_passed=639; linux_skipped=3; windows_status=not_verified; release_verification=passed -->
 
 > 把散落在代码仓库、设计文档、飞书和 AI 对话里的技术资料，编译成一套可维护、可追溯、可以直接在飞书提问的个人技术 Wiki。
 
-> **当前开发验收：Candidate 19 已接受。** Candidate 19 为 macOS `634 passed`、Linux
-> `631 passed / 3 skipped`；当前分支新增记忆、历史与查询改进后 macOS `642 passed`。
-> 原生 Windows confirmation 未运行，holdout 也未运行，v0.3.0 仍未发布。
+> **v0.3.0 发布范围：macOS 与 Linux。** macOS `642 passed`；Linux
+> `639 passed / 3 skipped`。Windows 尚未验证，不属于本版本支持范围。最终状态与 SHA256 以 GitHub Release
+> 为准。
 
 ![MemoryForge 工作流](assets/memoryforge-flow.svg)
 
@@ -61,8 +61,8 @@ Wiki 树、Diff、Citation Trace、Benchmark、保留的失败案例、正确拒
 | learn-claude-code support score development | Answer / selective accuracy **100%**，coverage **90%**，risk **0%** | 10 题；confirmation 未运行 |
 | Click 外部迁移 | development / holdout Answer **10% / 0%** | 真实负结果，未隐藏 |
 | Static Showcase development | **4/4**，本地详情泄漏 **0**，Workspace 变更 **0** | confirmation 未运行 |
-| v0.3.0 RC Candidate 19 development | **6/6**；package/query/privacy/artifact contracts | accepted；静态终审 **0 P0/P1/P2** |
-| v0.3.0 RC Candidate 19 本地门禁 | macOS **634 passed**；Linux **631 passed / 3 skipped** | package 与 raw Code Wiki Evidence 跨平台同字节 |
+| v0.3.0 Candidate 19 development | **6/6**；package/query/privacy/artifact contracts | accepted；静态终审 **0 P0/P1/P2** |
+| v0.3.0 本地门禁 | macOS **642 passed**；Linux **639 passed / 3 skipped** | Windows 未验证，不属于支持范围 |
 | 历史：v0.3.0 RC Candidate 12 development | macOS **623 passed**；Debian **620 passed / 3 skipped** | 静态终审 rejected；详细记录在 Evidence registry |
 
 ## 它解决了什么问题？
@@ -272,8 +272,8 @@ uv build --wheel --out-dir dist
 
 公开仓库必须 checkout 到 `93f5dc05229da250b041850ad8deeeec886ef304`。提交的
 [`release_provenance.json`](demo/results/release_provenance.json) 是 v0.2.0 的历史发布证据。
-v0.3.0 的实际 import 路径、依赖版本、Wheel/sdist SHA256 和 tag Commit 以最终 GitHub Release
-中的 `release-provenance.json` 与 `SHA256SUMS` 为准；release-candidate 阶段不提前宣称已发布。
+v0.3.0 的实际 import 路径、依赖版本、Wheel/sdist SHA256 和 tag Commit 以 GitHub Release
+中的 `release-provenance.json` 与 `SHA256SUMS` 为准。
 
 ### 本地零付费门禁
 
@@ -288,7 +288,7 @@ python scripts/build_release.py \
   --output /private/tmp/memoryforge-v0.3.0-release
 ```
 
-Windows PowerShell 使用同一门禁契约：
+Windows PowerShell 提供实验性本地检查，但 v0.3.0 未验证 Windows：
 
 ```powershell
 .\scripts\check_local.ps1

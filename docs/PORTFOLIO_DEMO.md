@@ -1,6 +1,6 @@
 # 秋招演示与面试说明
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=19; platform_gate_candidate=19; platform_gate_status=accepted; review_status=accepted; macos_passed=634; linux_passed=631; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=released; supported_platforms=macos+linux; active_candidate=19; platform_gate_candidate=19; platform_gate_status=accepted; review_status=accepted; macos_passed=642; linux_passed=639; linux_skipped=3; windows_status=not_verified; release_verification=passed -->
 
 这份文档用于把 MemoryForge 讲成一个完整项目。演示只使用公开的 `AgentSkill-Eval` 文档，不使用公司代码、真实飞书正文、Token 或 App Secret。
 
@@ -77,8 +77,8 @@ Answer accuracy 只有 10%/0%，尽管 Citation grounding 都是 100%。这说�
 [`release_provenance.json`](../demo/results/release_provenance.json)：前者证明三语言 Symbol、
 Relation、Module、Mermaid edge 和 Citation 指标均为 100%，单文件更新只影响 20% 的源码模块页；
 后者是 v0.2.0 的历史发布证据。v0.3.0 的 Wheel/sdist、SHA256、benchmark summary 和
-provenance 由双隔离本地构建生成；原生 Windows confirmation、holdout 与最终 tag 完成前只称
-release candidate，不称已发布。
+provenance 由双隔离本地构建生成。v0.3.0 支持 macOS 与 Linux；Windows 尚未验证，不外推为
+Windows 可用。
 
 当前 Candidate 7 本地门禁为 macOS 599 passed、Linux 596 passed / 3 skipped，coverage 均为
 88%；Wheel/sdist 与 development 字节一致。原生 Windows confirmation 未运行。这组结果只证明

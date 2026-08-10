@@ -1,6 +1,6 @@
 # MemoryForge v0.3.0 Evidence Claims
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=19; platform_gate_candidate=19; platform_gate_status=accepted; review_status=accepted; macos_passed=634; linux_passed=631; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=released; supported_platforms=macos+linux; active_candidate=19; platform_gate_candidate=19; platform_gate_status=accepted; review_status=accepted; macos_passed=642; linux_passed=639; linux_skipped=3; windows_status=not_verified; release_verification=passed -->
 
 本页只列可由仓库内 Evidence 直接核验的主张。局部结果不得外推为任意仓库、任意语言或生产 SLA。
 
@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | v0.2.1 的完整测试、Ruff、Mypy、四矩阵 CI 通过 | 历史 GitHub Actions `31074527750` | 仅证明已发布的 v0.2.1 Commit |
 | 后续变更使用本地完整门禁 | [`scripts/check_local.sh`](../scripts/check_local.sh) 与本地 SHA256 Evidence | GitHub Actions 已关闭；不得宣称远端 CI |
-| v0.3.0 release-candidate 使用双隔离构建、Workspace drill 和严格 Registry | [`V030_RELEASE_CANDIDATE_SPEC.md`](V030_RELEASE_CANDIDATE_SPEC.md) | 原生 Windows confirmation 与 holdout 通过前不得宣称已发布 |
+| v0.3.0 使用双隔离构建、Workspace drill 和严格 Registry | [`V030_RELEASE_CANDIDATE_SPEC.md`](V030_RELEASE_CANDIDATE_SPEC.md) | 支持 macOS/Linux；Windows 尚未验证，不作支持承诺 |
 | v0.3.0 RC 在 macOS 574 passed，Linux 571 passed / 3 skipped，coverage 88%，Wheel/sdist 跨平台 SHA256 一致 | [`release_candidate_candidate_1_local_gates.json`](../demo/results/release_candidate_candidate_1_local_gates.json) | 固定 Commit `3980b47`；Candidate 1 已 superseded，不等于原生 Windows confirmation |
 | Candidate 2 development 6/6，真实核验 Wheel/sdist metadata、bytes、Commit 和 sdist clean-room | [`release_candidate_development_candidate_2.json`](../demo/results/release_candidate_development_candidate_2.json) | 已 superseded；confirmation 与 holdout 未运行 |
 | Candidate 2 在 macOS 583 passed，Linux 580 passed / 3 skipped，coverage 88%，Wheel/sdist 跨平台 SHA256 一致 | [`release_candidate_candidate_2_local_gates.json`](../demo/results/release_candidate_candidate_2_local_gates.json) | 已 superseded；固定 Commit `926832e`；不等于原生 Windows confirmation |

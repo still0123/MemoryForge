@@ -1,10 +1,15 @@
 # v0.3.0 Release Candidate Specification
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=19; platform_gate_candidate=19; platform_gate_status=accepted; review_status=accepted; macos_passed=634; linux_passed=631; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=released; supported_platforms=macos+linux; active_candidate=19; platform_gate_candidate=19; platform_gate_status=accepted; review_status=accepted; macos_passed=642; linux_passed=639; linux_skipped=3; windows_status=not_verified; release_verification=passed -->
 
 ## Status
 
-`LOCAL_GATES_PASSED_REVIEW_REJECTED`
+`RELEASE_READY_MACOS_LINUX`
+
+v0.3.0 supports macOS and Linux. Windows remains available as experimental
+code and tooling but is not verified or claimed as supported by this release.
+The earlier native-Windows confirmation contract is retained as historical
+Evidence and no longer blocks the narrower macOS/Linux release scope.
 
 ## Base
 
@@ -796,35 +801,16 @@ Before confirmation authorization:
 - confirmation and holdout result files are absent;
 - final static review has no P0-P2 finding.
 
-## Confirmation Authorization
+## Release Verification
 
-Confirmation is opened only after one release-candidate Commit and its
-development artifacts are frozen. All seven components run against that same
-Commit.
+The final macOS/Linux release Commit must pass the local test suites, two clean
+byte-identical builds, Wheel and sdist clean-room checks, Workspace
+backup/restore replay, public-claims privacy checks, and SHA256 verification in
+a separate directory. Any failure blocks release.
 
-- Native Windows cases must run on native Windows with CPython 3.11.
-- Simulated `msvcrt` tests are not confirmation.
-- The runner refuses an existing result path.
-- A confirmation component is never rerun after failure.
-- Any failure remains public Evidence and blocks holdout.
-- Production behavior is not tuned after reading confirmation.
-
-The result path is:
-
-`demo/results/release_candidate_confirmation.json`.
-
-## Holdout Authorization
-
-Holdout opens only when all confirmation components pass. It runs once against
-the frozen release-candidate Commit and already-built artifacts.
-
-The result path is:
-
-`demo/results/release_candidate_holdout.json`.
-
-The five cases cover clean rebuild reproducibility, installed-Wheel public
-Showcase execution, Workspace backup/restore replay, release-asset round-trip,
-and public-claims privacy. A failure is retained and blocks release.
+The frozen confirmation and holdout manifests remain unchanged historical
+Evidence. They are not used to claim Windows support and are not release
+blockers for the narrower v0.3.0 platform scope.
 
 ## Release Artifacts
 
@@ -837,8 +823,7 @@ The verified release directory must contain:
 - `benchmark-summary.json`;
 - `workspace-drill.json`;
 - four `reproducibility-{first,second}-*` build artifacts;
-- native Windows confirmation Evidence;
-- release confirmation and holdout Evidence.
+- release verification Evidence for the supported platforms.
 
 All JSON uses repository-relative public paths and excludes credentials,
 prompts, private Workspace content, and absolute private paths.
@@ -861,10 +846,8 @@ No asset is silently replaced and no existing release is accepted through a
 
 ## Known Boundaries
 
-- Native Windows confirmation is pending and cannot be inferred from macOS,
-  Linux, Mypy, or simulated tests.
-- Existing secure directory-descriptor import and publication paths are not
-  claimed as full Windows parity.
+- Windows is not verified or supported by v0.3.0. Existing Windows code and
+  PowerShell tooling remain experimental and do not imply parity.
 - No PyPI publication is required by this Goal.
 - Historical Click and rejected Candidate results remain visible and are not
   release regressions rewritten as successes.
@@ -872,9 +855,7 @@ No asset is silently replaced and no existing release is accepted through a
 ## Forbidden
 
 - modifying frozen cases, required terms, source paths, or expected results;
-- running confirmation before the authorization gate;
-- running holdout before confirmation passes;
-- rerunning a failed confirmation or holdout to tune production behavior;
+- claiming Windows support from macOS/Linux or simulated tests;
 - enabling GitHub-hosted Actions;
 - adding a paid service or model judge;
 - uploading private paths, content, credentials, or prompts;

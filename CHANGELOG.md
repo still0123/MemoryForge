@@ -1,8 +1,10 @@
 # Changelog
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=19; platform_gate_candidate=19; platform_gate_status=accepted; review_status=accepted; macos_passed=634; linux_passed=631; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=released; supported_platforms=macos+linux; active_candidate=19; platform_gate_candidate=19; platform_gate_status=accepted; review_status=accepted; macos_passed=642; linux_passed=639; linux_skipped=3; windows_status=not_verified; release_verification=passed -->
 
-## v0.3.0 — Release Candidate
+## v0.3.0 — 2026-08-10
+
+- 支持范围为 macOS 与 Linux；Windows 尚未验证，不属于 v0.3.0 支持范围。
 
 - 增加审核后会话记忆的 `recall`、一次性 `codex-setup` 自动加载、只读 `history` 与追加式
   `rollback`；回滚同步重建 SQLite 查询投影，不删除 Git 历史。
@@ -81,7 +83,8 @@
   80%，Structlog confirmation 为 66.7%，Citation grounding 均为 100%。
 - 关闭只读 Workspace 与 Source Manifest 校验连接，并让本地门禁拒绝未关闭资源警告。
 
-Release Candidate 尚未完成原生 Windows confirmation、单次 holdout、最终 tag 与 Release 上传。
+最终发布使用双隔离构建、clean-room 安装、Workspace backup/restore、隐私扫描与 SHA256
+回放；不以未验证的 Windows 结果阻断 macOS/Linux 发布。
 
 ## v0.2.1 — 2026-08-06
 

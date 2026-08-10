@@ -48,15 +48,15 @@ DOCUMENT_CLAIMS = {
         "Candidate 12 development",
         "623 passed",
         "620 passed / 3 skipped",
-        "原生 Windows confirmation 未运行",
+        "Windows 尚未验证",
     ),
     DOCUMENTS[1]: (
-        "v0.3.0 — Release Candidate",
+        "v0.3.0 — 2026-08-10",
         "Candidate 12 development",
         "623 passed",
         "620 passed / 3 skipped",
-        "原生 Windows confirmation",
-        "单次 holdout",
+        "支持范围为 macOS 与 Linux",
+        "最终发布使用双隔离构建",
     ),
     DOCUMENTS[2]: (
         "v0.3.0 RC",
@@ -64,18 +64,18 @@ DOCUMENT_CLAIMS = {
         "Candidate 12 development",
         "623 passed",
         "620 passed / 3 skipped",
-        "不等于原生 Windows confirmation",
+        "支持 macOS/Linux",
     ),
     DOCUMENTS[3]: (
-        "release candidate",
+        "支持 macOS 与 Linux",
         "10%/0%",
         "Candidate 12",
         "623 passed",
         "620 passed / 3 skipped",
-        "原生 Windows confirmation",
+        "Windows 尚未验证",
     ),
     DOCUMENTS[4]: (
-        "LOCAL_GATES_PASSED_REVIEW_REJECTED",
+        "RELEASE_READY_MACOS_LINUX",
         "623 passed",
         "620 passed, 3 skipped",
         "Confirmation status: `not_run`",
@@ -83,15 +83,14 @@ DOCUMENT_CLAIMS = {
     ),
 }
 RELEASE_CLAIM_MARKER = (
-    "<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; "
+    "<!-- memoryforge-release-claim: version=0.3.0; status=released; "
+    "supported_platforms=macos+linux; "
     "active_candidate=19; platform_gate_candidate=19; platform_gate_status=accepted; "
     "review_status=accepted; "
-    "macos_passed=634; linux_passed=631; linux_skipped=3; "
-    "windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->"
+    "macos_passed=642; linux_passed=639; linux_skipped=3; "
+    "windows_status=not_verified; release_verification=passed -->"
 )
 FORBIDDEN_RELEASE_CLAIMS = (
-    "v0.3.0 已发布",
-    "v0.3.0 is released",
     "原生 Windows confirmation 已完成",
     "Windows confirmation passed",
     "v0.3.0 holdout 已完成",
