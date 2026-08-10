@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import difflib
 import json
+import shlex
 import sqlite3
+import sys
 import time
 from contextlib import suppress
 from pathlib import Path
@@ -12,6 +14,7 @@ import typer
 
 from memoryforge import __version__
 from memoryforge.agent import run_agent
+from memoryforge.botmux_adapter import BotmuxHookError, handle_botmux_hook
 from memoryforge.changesets import ChangeSetStore
 from memoryforge.code_index import build_code_index
 from memoryforge.code_wiki_compiler import compile_code_wiki
@@ -32,7 +35,7 @@ from memoryforge.github_thread_adapter import (
     import_github_thread,
     import_github_thread_json,
 )
-from memoryforge.importer import SourceValidationError, import_local_file
+from memoryforge.importer import MAX_SOURCE_BYTES, SourceValidationError, import_local_file
 from memoryforge.linting import lint_workspace
 from memoryforge.models import ChangeOperationType, Sensitivity
 from memoryforge.module_planner import build_module_plan
@@ -49,6 +52,7 @@ from memoryforge.workspace import (
     WorkspaceSecurityError,
     candidate_page_sources,
     list_git_checkouts,
+    rebuild_applied_projection,
     register_git_checkout,
     register_git_code_module,
     search_sources,
@@ -69,6 +73,32 @@ WorkspaceOption = Annotated[
     Path,
     typer.Option("--workspace", "-w", help="Initialized MemoryForge workspace."),
 ]
+
+_RECALL_DECISION_MARKERS = (
+    "决定",
+    "采用",
+    "选择",
+    "已完成",
+    "完成了",
+    "优化完成",
+    "decided",
+    "implemented",
+)
+_RECALL_OPEN_ITEM_MARKERS = (
+    "下一步",
+    "待办",
+    "未完成",
+    "尚未",
+    "未推送",
+    "需要继续",
+    "todo",
+    "next step",
+    "follow-up",
+    "not pushed",
+    "remaining",
+)
+_CODEX_RECALL_BEGIN = "<!-- BEGIN MEMORYFORGE RECALL -->"
+_CODEX_RECALL_END = "<!-- END MEMORYFORGE RECALL -->"
 
 
 def _version_callback(value: bool) -> None:
@@ -219,6 +249,29 @@ def folder_import(
     ) as exc:
         _exit_with_safe_error(exc)
     typer.echo(json.dumps(result.model_dump(mode="json"), ensure_ascii=False, indent=2))
+
+
+@app.command("botmux-hook")
+def botmux_hook(
+    workspace: WorkspaceOption = Path("."),
+) -> None:
+    """Read one Botmux lifecycle hook JSON from stdin and update local memory."""
+    try:
+        raw = sys.stdin.buffer.read(MAX_SOURCE_BYTES + 1)
+        if len(raw) > MAX_SOURCE_BYTES:
+            raise BotmuxHookError("Botmux hook exceeds the 5 MiB size limit")
+        result = handle_botmux_hook(workspace, json.loads(raw))
+    except (
+        BotmuxHookError,
+        MemoryForgeError,
+        SourceValidationError,
+        json.JSONDecodeError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 @app.command("github-thread-import")
@@ -1249,6 +1302,214 @@ def ask(
 
 
 @app.command()
+def recall(
+    limit: Annotated[
+        int,
+        typer.Option("--limit", min=1, max=20, help="Maximum recent conversation notes."),
+    ] = 8,
+    workspace: WorkspaceOption = Path("."),
+) -> None:
+    """Return compact, cited startup context from applied conversation memories."""
+    try:
+        opened = Workspace.open_readonly(workspace)
+        with sqlite3.connect(
+            opened.index_path.as_uri() + "?mode=ro",
+            uri=True,
+            timeout=30,
+        ) as connection:
+            connection.row_factory = sqlite3.Row
+            connection.execute("PRAGMA query_only = ON")
+            rows = connection.execute(
+                """
+                SELECT
+                    facts.page_path,
+                    facts.source_id,
+                    facts.source_version,
+                    facts.locator,
+                    facts.section_path,
+                    facts.quote,
+                    versions.title,
+                    versions.observed_at
+                FROM wiki_facts AS facts
+                JOIN applied_source_versions AS applied
+                  ON applied.source_id = facts.source_id
+                 AND applied.source_version_id = facts.source_version
+                JOIN sources ON sources.source_id = facts.source_id
+                JOIN source_versions AS versions
+                  ON versions.id = facts.source_version
+                 AND versions.source_id = sources.id
+                WHERE versions.tags_json LIKE '%"conversation"%'
+                ORDER BY
+                    versions.observed_at DESC,
+                    facts.page_path,
+                    CASE WHEN facts.section_path LIKE 'Latest %' THEN 0 ELSE 1 END,
+                    CAST(
+                        substr(facts.locator, 7, instr(facts.locator, '-') - 7)
+                        AS INTEGER
+                    ) DESC
+                """
+            ).fetchall()
+        summary = next(
+            (str(row["quote"]).strip() for row in rows if not str(row["section_path"])),
+            None,
+        )
+        notes: list[dict[str, object]] = []
+        seen: set[str] = set()
+        for row in rows:
+            quote = str(row["quote"]).strip()
+            if (
+                not row["section_path"]
+                or not quote
+                or quote in seen
+                or (len(quote) < 40 and quote.endswith((":", "：")))
+            ):
+                continue
+            seen.add(quote)
+            notes.append(
+                {
+                    "title": str(row["title"]),
+                    "role": str(row["section_path"]),
+                    "text": quote,
+                    "observed_at": str(row["observed_at"]),
+                    "citation": {
+                        "source_id": str(row["source_id"]),
+                        "source_version": int(row["source_version"]),
+                        "locator": str(row["locator"]),
+                        "wiki_page": str(row["page_path"]),
+                    },
+                }
+            )
+            if len(notes) == limit:
+                break
+        if summary is None and notes:
+            summary = str(notes[0]["text"])
+        decisions = _recall_matching_notes(notes, _RECALL_DECISION_MARKERS)
+        open_items = _recall_matching_notes(notes, _RECALL_OPEN_ITEM_MARKERS)
+        result = {
+            "status": "recalled" if notes else "empty",
+            "warning": (
+                "Conversation memories are unverified; check citations before relying on them."
+            ),
+            "summary": summary,
+            "recent_memories": notes,
+            "decisions": decisions,
+            "open_items": open_items,
+            "startup_context": _render_recall_context(summary, decisions, open_items, notes),
+        }
+    except (
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+@app.command("codex-setup")
+def codex_setup(
+    project: Annotated[Path, typer.Argument(help="Project whose AGENTS.md Codex reads.")],
+    workspace: WorkspaceOption = Path("."),
+) -> None:
+    """Install one bounded new-task recall instruction in a project's AGENTS.md."""
+    try:
+        opened = Workspace.open_readonly(workspace)
+        project_root = project.resolve(strict=True)
+        if project_root.is_symlink() or not project_root.is_dir():
+            raise ValueError("Codex project must be a real directory")
+        agents_path = project_root / "AGENTS.md"
+        if agents_path.is_symlink() or (agents_path.exists() and not agents_path.is_file()):
+            raise ValueError("Codex project AGENTS.md must be a regular file")
+        command = shlex.join(
+            (
+                sys.executable,
+                "-m",
+                "memoryforge",
+                "recall",
+                "--workspace",
+                str(opened.root),
+            )
+        )
+        block = (
+            f"{_CODEX_RECALL_BEGIN}\n"
+            "## MemoryForge recall\n\n"
+            "At the start of every new task, run this read-only command before answering:\n\n"
+            f"```bash\n{command}\n```\n\n"
+            "Use only its `startup_context` as unverified history. Verify important claims "
+            "from cited Wiki pages. If status is `empty`, continue without recalled context.\n"
+            f"{_CODEX_RECALL_END}"
+        )
+        existing = agents_path.read_text(encoding="utf-8") if agents_path.is_file() else ""
+        start = existing.find(_CODEX_RECALL_BEGIN)
+        end = existing.find(_CODEX_RECALL_END)
+        if (start < 0) != (end < 0) or (start >= 0 and end < start):
+            raise ValueError("Codex project AGENTS.md contains an incomplete MemoryForge block")
+        if start >= 0:
+            updated = existing[:start] + block + existing[end + len(_CODEX_RECALL_END) :]
+        else:
+            updated = existing.rstrip() + ("\n\n" if existing.strip() else "") + block + "\n"
+        agents_path.write_text(updated, encoding="utf-8")
+        result = {
+            "status": "configured",
+            "project": str(project_root),
+            "agents_file": str(agents_path),
+            "workspace": str(opened.root),
+        }
+    except (
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+def _recall_matching_notes(
+    notes: list[dict[str, object]], markers: tuple[str, ...]
+) -> list[dict[str, object]]:
+    matches = []
+    for note in notes:
+        text = str(note["text"]).lower()
+        if any(marker in text for marker in markers):
+            matches.append(note)
+        if len(matches) == 3:
+            break
+    return matches
+
+
+def _render_recall_context(
+    summary: str | None,
+    decisions: list[dict[str, object]],
+    open_items: list[dict[str, object]],
+    notes: list[dict[str, object]],
+) -> str:
+    if not notes:
+        return "No applied conversation memory found."
+    lines = [
+        "Unverified recalled conversation memory. Verify important claims against citations.",
+        f"Summary: {summary}",
+    ]
+    if decisions:
+        lines.append("Recent decisions: " + " | ".join(str(item["text"]) for item in decisions))
+    if open_items:
+        lines.append("Open items: " + " | ".join(str(item["text"]) for item in open_items))
+    pages = []
+    for item in notes:
+        citation = item["citation"]
+        if isinstance(citation, dict) and citation["wiki_page"] not in pages:
+            pages.append(citation["wiki_page"])
+    lines.append("Evidence pages: " + ", ".join(str(page) for page in pages))
+    return "\n".join(lines)
+
+
+@app.command()
 def agent(
     question: Annotated[str, typer.Argument(help="Question for the Wiki-backed MiniClaude.")],
     max_steps: Annotated[
@@ -1358,10 +1619,23 @@ def lint(
 @app.command()
 def history(
     page: Annotated[str | None, typer.Option("--page")] = None,
+    limit: Annotated[int, typer.Option("--limit", min=1, max=100)] = 20,
     workspace: WorkspaceOption = Path("."),
 ) -> None:
-    _ = page
-    _require_future_feature(workspace, "history")
+    try:
+        opened = Workspace.open_readonly(workspace)
+        records = opened.version_store.history(page=page, limit=limit)
+    except (
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(json.dumps(list(records), ensure_ascii=False, indent=2))
 
 
 @app.command()
@@ -1369,8 +1643,55 @@ def rollback(
     commit_id: Annotated[str, typer.Argument()],
     workspace: WorkspaceOption = Path("."),
 ) -> None:
-    _ = commit_id
-    _require_future_feature(workspace, "rollback")
+    try:
+        opened = Workspace.open(workspace)
+        with opened.exclusive_lock():
+            previous_commit = opened.current_commit()
+            if commit_id == previous_commit:
+                raise ValueError("rollback target is already the current Commit")
+            if not opened.version_store.is_ancestor(commit_id, previous_commit):
+                raise ValueError("rollback target must be an ancestor of the current Commit")
+            changed_paths = opened.version_store.changed_wiki_paths(
+                commit_id,
+                previous_commit,
+            )
+            if not changed_paths:
+                raise ValueError("rollback target has the same Wiki tree")
+            opened.version_store.require_clean_paths(("wiki",))
+            try:
+                opened.version_store.restore_wiki(commit_id)
+                rebuild_applied_projection(opened)
+                commit = opened.version_store.commit_paths(
+                    ("wiki",),
+                    f"knowledge: rollback to {commit_id[:12]}",
+                )
+            except Exception:
+                opened.version_store.restore_wiki(previous_commit)
+                rebuild_applied_projection(opened)
+                raise
+    except (
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(
+        json.dumps(
+            {
+                "status": "ROLLED_BACK",
+                "target_commit": commit_id,
+                "previous_commit": previous_commit,
+                "commit": commit,
+                "files": list(changed_paths),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
 
 
 @app.command()
@@ -1392,25 +1713,6 @@ def eval(
     ) as exc:
         _exit_with_safe_error(exc)
     typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
-
-
-def _require_future_feature(workspace: Path, command: str) -> None:
-    try:
-        Workspace.open(workspace)
-        raise FeatureUnavailableError(
-            f"`{command}` is not enabled in the trusted-storage milestone"
-        )
-    except FeatureUnavailableError as exc:
-        _exit_with_safe_error(exc)
-    except (
-        MemoryForgeError,
-        WorkspaceIntegrityError,
-        WorkspaceSecurityError,
-        FileNotFoundError,
-        OSError,
-        sqlite3.Error,
-    ) as exc:
-        _exit_with_safe_error(exc)
 
 
 def _exit_with_safe_error(exc: Exception) -> None:

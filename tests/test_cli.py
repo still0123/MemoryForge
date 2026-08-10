@@ -15,7 +15,7 @@ def test_cli_version_exits_without_a_subcommand() -> None:
     result = CliRunner().invoke(app, ["--version"])
 
     assert result.exit_code == 0
-    assert result.stdout == "0.2.1\n"
+    assert result.stdout == "0.3.0\n"
 
 
 def test_cli_init_import_and_search_local_file(
@@ -125,6 +125,27 @@ def test_agent_clear_removes_one_local_session(tmp_path: Path) -> None:
         "status": "CLEARED",
     }
     assert SessionStore(workspace, "chat-clear").load(allow_local=True) == []
+
+
+def test_codex_setup_installs_one_idempotent_recall_block(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    project = tmp_path / "project"
+    project.mkdir()
+    agents = project / "AGENTS.md"
+    agents.write_text("# Existing instructions\n", encoding="utf-8")
+    runner = CliRunner()
+    assert runner.invoke(app, ["init", str(workspace)]).exit_code == 0
+
+    command = ["codex-setup", str(project), "--workspace", str(workspace)]
+    first = runner.invoke(app, command)
+    second = runner.invoke(app, command)
+
+    assert first.exit_code == 0, first.output
+    assert second.exit_code == 0, second.output
+    content = agents.read_text(encoding="utf-8")
+    assert content.startswith("# Existing instructions\n")
+    assert content.count("BEGIN MEMORYFORGE RECALL") == 1
+    assert "memoryforge recall --workspace" in content
 
 
 def test_cli_registers_lists_and_syncs_existing_git_checkout(tmp_path: Path) -> None:

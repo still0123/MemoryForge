@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "suite_id": "release-candidate-delivery",
+  "suite_revision": 1,
+  "split": "confirmation",
+  "status": "not_run",
+  "components": [
+    {
+      "id": "exact-symbol-routing",
+      "path": "demo/evaluation/learn_claude_code_qa_confirm_v031.json",
+      "sha256": "b86fe1f7999c09af9bf7c6bed4951c1c4c565318c39192bea1831d942466c117",
+      "case_count": 5,
+      "required_runtime": "CPython 3.11"
+    },
+    {
+      "id": "support-score",
+      "path": "demo/evaluation/learn_claude_code_qa_confirm_v031.json",
+      "sha256": "b86fe1f7999c09af9bf7c6bed4951c1c4c565318c39192bea1831d942466c117",
+      "case_count": 5,
+      "required_runtime": "CPython 3.11"
+    },
+    {
+      "id": "multi-source-coverage",
+      "path": "demo/evaluation/multi_source_coverage_confirmation.json",
+      "sha256": "2759e7f3cc34e97b575e59a128a21e7c56e07d5d3afe08d8c80d02f4dc5a5a1a",
+      "case_count": 4,
+      "required_runtime": "CPython 3.11"
+    },
+    {
+      "id": "folder-import-lifecycle",
+      "path": "demo/evaluation/folder_import_confirmation.json",
+      "sha256": "099d8a49892e9f0b2e6203891bbeeb6ccac53042be2e86fea110180c426cf45d",
+      "case_count": 3,
+      "required_runtime": "CPython 3.11"
+    },
+    {
+      "id": "github-thread-import-lifecycle",
+      "path": "demo/evaluation/github_thread_import_confirmation.json",
+      "sha256": "45de8d774b8d02b0112571ceb8c3b4d43db589cb0a68dbb96579aa2327ad24b0",
+      "case_count": 3,
+      "required_runtime": "CPython 3.11"
+    },
+    {
+      "id": "static-showcase",
+      "path": "demo/evaluation/static_showcase_confirmation.json",
+      "sha256": "4c64d073a2a1af46a068219af158ed77bc1e99a1b4de6601e01634d63140166e",
+      "case_count": 3,
+      "required_runtime": "CPython 3.11"
+    },
+    {
+      "id": "native-windows-delivery",
+      "path": "demo/evaluation/cross_platform_delivery_confirmation.json",
+      "sha256": "200074acfb79979bf4663b97ae25e9dd62fa0f94359b8aa0d39c4250256660fc",
+      "case_count": 3,
+      "required_runtime": "native Windows, CPython 3.11"
+    }
+  ],
+  "expected_metrics": {
+    "component_pass_rate": 100.0,
+    "failed_cases": 0,
+    "native_windows_smoke": "passed",
+    "confirmation_runs_once": true,
+    "github_actions_enabled": false
+  }
+}

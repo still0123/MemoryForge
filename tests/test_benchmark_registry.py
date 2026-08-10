@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import base64
+import copy
 import hashlib
 import importlib.util
 import io
 import json
 import os
+import shutil
+import subprocess
 import tarfile
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -23,8 +28,8 @@ def test_benchmark_registry_binds_all_release_artifacts() -> None:
     assert summary == {
         "status": "valid",
         "suite_count": 12,
-        "experiment_count": 7,
-        "evidence_count": 95,
+        "experiment_count": 8,
+        "evidence_count": 144,
         "qa_case_count": 121,
         "qa_case_types_present": [
             "code_behavior",
@@ -45,6 +50,17 @@ def test_benchmark_registry_binds_all_release_artifacts() -> None:
     }
 
 
+def test_benchmark_registry_rejects_undeclared_evidence_fields() -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "release-candidate-delivery"
+    )
+    experiment["evidence"][-1]["authorization"] = "Basic dXNlcjpwYXNz"
+
+    with pytest.raises(ValueError, match="Evidence schema changed"):
+        validator.validate_registry_payload(registry)
+
+
 def test_benchmark_registry_rejects_duplicate_suite_ids(tmp_path: Path) -> None:
     registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
     registry["suites"][1]["suite_id"] = registry["suites"][0]["suite_id"]
@@ -52,6 +68,16 @@ def test_benchmark_registry_rejects_duplicate_suite_ids(tmp_path: Path) -> None:
     path.write_text(json.dumps(registry), encoding="utf-8")
 
     with pytest.raises(ValueError, match="suite IDs must be unique"):
+        validator.validate_registry(path)
+
+
+def test_benchmark_registry_rejects_boolean_root_schema(tmp_path: Path) -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    registry["schema_version"] = True
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps(registry), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="unsupported benchmark registry schema"):
         validator.validate_registry(path)
 
 
@@ -231,6 +257,517 @@ def test_benchmark_registry_pins_cross_platform_repository_commit(tmp_path: Path
 
     with pytest.raises(ValueError, match="metadata changed"):
         validator.validate_registry(path)
+
+
+def test_benchmark_registry_cannot_drop_release_candidate_baseline(tmp_path: Path) -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "release-candidate-delivery"
+    )
+    experiment["evidence"] = []
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps(registry), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="requires generated evidence"):
+        validator.validate_registry(path)
+
+
+def test_benchmark_registry_pins_release_candidate_repository_commit(tmp_path: Path) -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "release-candidate-delivery"
+    )
+    experiment["repositories"][0]["commit"] = "0" * 40
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps(registry), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="metadata changed"):
+        validator.validate_registry(path)
+
+
+def test_benchmark_registry_keeps_release_candidate_holdout_closed(tmp_path: Path) -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "release-candidate-delivery"
+    )
+    experiment["splits"]["holdout"]["status"] = "passed"
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps(registry), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="split contract failed"):
+        validator.validate_registry(path)
+
+
+def test_release_split_manifest_status_and_component_counts_are_closed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    confirmation = json.loads(
+        (validator.REPO_ROOT / "demo/evaluation/release_candidate_confirmation.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    confirmation["status"] = "passed"
+    path = tmp_path / "confirmation.json"
+    path.write_text(json.dumps(confirmation), encoding="utf-8")
+    descriptor = {"path": path.name}
+    monkeypatch.setattr(validator, "REPO_ROOT", tmp_path)
+
+    with pytest.raises(ValueError, match="confirmation manifest contract failed"):
+        validator._validate_release_split_manifest(descriptor, split_name="confirmation")
+
+    confirmation["status"] = "not_run"
+    path.write_text(json.dumps(confirmation), encoding="utf-8")
+    result = tmp_path / "demo/results/release_candidate_confirmation.json"
+    result.parent.mkdir(parents=True)
+    result.write_text("{}\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="confirmation manifest contract failed"):
+        validator._validate_release_split_manifest(descriptor, split_name="confirmation")
+    result.unlink()
+
+    confirmation["components"][0]["case_count"] = 500
+    path.write_text(json.dumps(confirmation), encoding="utf-8")
+    monkeypatch.setattr(validator, "_validate_artifact", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(validator, "_suite_cases", lambda _split: (5, set(), set()))
+    with pytest.raises(ValueError, match="component case count changed"):
+        validator._release_confirmation_case_count(descriptor, "release-candidate-delivery")
+
+
+def test_benchmark_registry_binds_rejected_release_candidate_cases() -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "release-candidate-delivery"
+    )
+    artifact = experiment["evidence"][0]
+    payload = json.loads((validator.REPO_ROOT / artifact["path"]).read_text(encoding="utf-8"))
+    payload["development"]["evaluation"]["cases"][0]["status"] = "passed"
+    evaluation_sha256 = hashlib.sha256(
+        json.dumps(
+            payload["development"]["evaluation"],
+            sort_keys=True,
+            ensure_ascii=False,
+        ).encode()
+    ).hexdigest()
+    for run in payload["runs"]:
+        run["evaluation_sha256"] = evaluation_sha256
+
+    with pytest.raises(ValueError, match="rejected release-candidate Evidence changed"):
+        validator._validate_release_candidate_experiment_payload(
+            experiment,
+            artifact,
+            payload,
+            experiment["splits"]["development"],
+            experiment["splits"]["confirmation"],
+        )
+
+
+def test_benchmark_registry_binds_rejected_release_candidate_gates() -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "release-candidate-delivery"
+    )
+    artifact = experiment["evidence"][0]
+    payload = json.loads((validator.REPO_ROOT / artifact["path"]).read_text(encoding="utf-8"))
+    payload["gates"]["failed_cases"] = True
+
+    with pytest.raises(ValueError, match="rejected release-candidate Evidence changed"):
+        validator._validate_release_candidate_experiment_payload(
+            experiment,
+            artifact,
+            payload,
+            experiment["splits"]["development"],
+            experiment["splits"]["confirmation"],
+        )
+
+
+def test_benchmark_registry_rejects_release_candidate_boolean_identities() -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "release-candidate-delivery"
+    )
+    artifact = experiment["evidence"][0]
+    payload = json.loads((validator.REPO_ROOT / artifact["path"]).read_text(encoding="utf-8"))
+    payload["schema_version"] = True
+    payload["suite_revision"] = True
+
+    with pytest.raises(ValueError, match="release-candidate experiment Evidence contract failed"):
+        validator._validate_release_candidate_experiment_payload(
+            experiment,
+            artifact,
+            payload,
+            experiment["splits"]["development"],
+            experiment["splits"]["confirmation"],
+        )
+
+
+def test_benchmark_registry_retains_release_sdist_regression() -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "release-candidate-delivery"
+    )
+    artifact = experiment["evidence"][2]
+    regression = artifact["regression_evidence"]
+    payload = json.loads((validator.REPO_ROOT / regression["path"]).read_text(encoding="utf-8"))
+    payload["release_build"]["output_created"] = True
+
+    with pytest.raises(ValueError, match="sdist regression Evidence changed"):
+        validator._validate_release_sdist_regression(
+            experiment,
+            artifact,
+            payload,
+            experiment["splits"]["confirmation"],
+            regression["memoryforge_commit"],
+        )
+
+
+def test_benchmark_registry_retains_release_static_review_evidence() -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "release-candidate-delivery"
+    )
+    artifact = next(
+        item
+        for item in experiment["evidence"]
+        if item["path"] == "demo/results/release_candidate_development_candidate_2.json"
+    )
+    review = artifact["review_evidence"]
+    payload = json.loads((validator.REPO_ROOT / review["path"]).read_text(encoding="utf-8"))
+    payload["review"]["p1"] = 4
+
+    with pytest.raises(ValueError, match="static review Evidence changed"):
+        validator._validate_release_static_review_regression(
+            experiment,
+            artifact,
+            payload,
+            experiment["splits"]["confirmation"],
+            review["memoryforge_commit"],
+        )
+
+
+def test_benchmark_registry_retains_candidate_7_static_review() -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "release-candidate-delivery"
+    )
+    artifact = next(item for item in experiment["evidence"] if item["evidence_revision"] == 8)
+    review = artifact["review_evidence"]
+    payload = json.loads((validator.REPO_ROOT / review["path"]).read_text(encoding="utf-8"))
+    payload["review"]["p1"] = 9
+
+    with pytest.raises(ValueError, match="static review Evidence changed"):
+        validator._validate_release_static_review_regression(
+            experiment,
+            artifact,
+            payload,
+            experiment["splits"]["confirmation"],
+            review["memoryforge_commit"],
+        )
+
+
+def test_benchmark_registry_requires_release_candidate_local_gates(tmp_path: Path) -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "release-candidate-delivery"
+    )
+    experiment["evidence"][1].pop("acceptance_evidence")
+    path = tmp_path / "registry.json"
+    path.write_text(json.dumps(registry), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="acceptance Evidence history is incomplete"):
+        validator.validate_registry(path)
+
+
+def test_benchmark_registry_binds_release_candidate_platform_results() -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "release-candidate-delivery"
+    )
+    artifact = next(item for item in experiment["evidence"] if item["evidence_revision"] == 13)
+    payload = json.loads(
+        (validator.REPO_ROOT / artifact["acceptance_evidence"]["path"]).read_text(encoding="utf-8")
+    )
+    payload["platforms"]["linux"]["local_gate"]["pytest"]["passed"] = 619
+
+    with pytest.raises(ValueError, match="linux local gate Evidence changed"):
+        validator._validate_release_candidate_acceptance_evidence(
+            experiment,
+            artifact,
+            payload,
+            experiment["splits"]["confirmation"],
+        )
+
+
+def test_benchmark_registry_rejects_boolean_release_acceptance_identities() -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "release-candidate-delivery"
+    )
+    artifact = experiment["evidence"][2]
+    payload = json.loads(
+        (validator.REPO_ROOT / artifact["acceptance_evidence"]["path"]).read_text(encoding="utf-8")
+    )
+    payload["schema_version"] = True
+    payload["suite_revision"] = True
+
+    with pytest.raises(ValueError, match="local gate Evidence contract failed"):
+        validator._validate_release_candidate_acceptance_evidence(
+            experiment,
+            artifact,
+            payload,
+            experiment["splits"]["confirmation"],
+        )
+
+
+def test_benchmark_registry_binds_release_acceptance_commit() -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "release-candidate-delivery"
+    )
+    artifact = next(item for item in experiment["evidence"] if item["evidence_revision"] == 6)
+    payload = json.loads(
+        (validator.REPO_ROOT / artifact["acceptance_evidence"]["path"]).read_text(encoding="utf-8")
+    )
+
+    with pytest.raises(ValueError, match="local gate Evidence contract failed"):
+        validator._validate_release_candidate_acceptance_evidence(
+            experiment,
+            artifact,
+            payload,
+            experiment["splits"]["confirmation"],
+            acceptance_commit="0" * 40,
+        )
+    payload["development_evidence"]["passed"] = 1
+    with pytest.raises(ValueError, match="local gate Evidence contract failed"):
+        validator._validate_release_candidate_acceptance_evidence(
+            experiment,
+            artifact,
+            payload,
+            experiment["splits"]["confirmation"],
+        )
+
+
+def test_benchmark_registry_closes_release_development_artifacts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "release-candidate-delivery"
+    )
+    artifact = experiment["evidence"][-1]
+    evidence = json.loads((validator.REPO_ROOT / artifact["path"]).read_text(encoding="utf-8"))[
+        "release_artifacts"
+    ]
+    source = validator.REPO_ROOT / evidence["artifact_root"]
+    destination = tmp_path / evidence["artifact_root"]
+    destination.parent.mkdir(parents=True)
+    shutil.copytree(source, destination)
+    monkeypatch.setattr(validator, "REPO_ROOT", tmp_path)
+
+    assert validator._validate_release_development_artifacts(
+        evidence,
+        artifact["memoryforge_commit"],
+        evidence_revision=artifact["evidence_revision"],
+    )
+    alternate = destination.parent / "copied-artifacts"
+    destination.rename(alternate)
+    destination.symlink_to(alternate, target_is_directory=True)
+    assert not validator._validate_release_development_artifacts(
+        evidence,
+        artifact["memoryforge_commit"],
+        evidence_revision=artifact["evidence_revision"],
+    )
+    destination.unlink()
+    alternate.rename(destination)
+    (destination / "benchmark-summary.json").unlink()
+    assert not validator._validate_release_development_artifacts(
+        evidence,
+        artifact["memoryforge_commit"],
+        evidence_revision=artifact["evidence_revision"],
+    )
+
+
+def test_benchmark_registry_rejects_loose_release_case_counts() -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "release-candidate-delivery"
+    )
+    artifact = next(item for item in experiment["evidence"] if item["evidence_revision"] == 7)
+    payload = json.loads((validator.REPO_ROOT / artifact["path"]).read_text(encoding="utf-8"))
+    payload["development"]["case_count"] = 6.0
+    payload["development"]["evaluation"]["case_count"] = 6.0
+    evaluation_sha256 = hashlib.sha256(
+        json.dumps(
+            payload["development"]["evaluation"],
+            sort_keys=True,
+            ensure_ascii=False,
+        ).encode()
+    ).hexdigest()
+    for run in payload["runs"]:
+        run["evaluation_sha256"] = evaluation_sha256
+
+    with pytest.raises(ValueError, match="release-candidate experiment Evidence contract failed"):
+        validator._validate_release_candidate_experiment_payload(
+            experiment,
+            artifact,
+            payload,
+            experiment["splits"]["development"],
+            experiment["splits"]["confirmation"],
+        )
+
+
+def test_benchmark_registry_requires_semantic_release_support() -> None:
+    commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=validator.SOURCE_GIT_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    with pytest.raises(ValueError, match="unsupported benchmark summary schema"):
+        validator.build_benchmark_summary(
+            {},
+            {},
+            package_version="0.3.0",
+            memoryforge_commit=commit,
+            schema_version=True,
+        )
+    committed_registry = json.loads(
+        subprocess.run(
+            ["git", "show", f"{commit}:demo/evaluation/registry.json"],
+            cwd=validator.SOURCE_GIT_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+    )
+    with pytest.raises(ValueError, match="package version does not match"):
+        validator.build_benchmark_summary(
+            committed_registry,
+            validator._registry_snapshot_summary(committed_registry),
+            package_version="9.9.9",
+            memoryforge_commit=commit,
+        )
+    assert not validator._release_summary_contract(
+        {"schema_version": 1, "memoryforge_commit": commit},
+        commit,
+    )
+    assert not validator._release_drill_contract(
+        {"schema_version": True, "memoryforge_commit": commit, "passed": True},
+        commit,
+    )
+    historical_commit = "80b111bbd472cacd16ceb773a4c141e70ee97a4a"
+    historical = json.loads(
+        (
+            validator.REPO_ROOT
+            / "demo/results/artifacts/release_candidate_development"
+            / historical_commit
+            / "benchmark-summary.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert validator._release_summary_contract(historical, historical_commit)
+    historical["suites"][0]["suite_id"] = "forged-suite"
+    assert not validator._release_summary_contract(historical, historical_commit)
+    schema_2_commit = "2451f2dae8845b490db1cb46727c7828f0d227f7"
+    schema_2_summary = json.loads(
+        (
+            validator.REPO_ROOT
+            / "demo/results/artifacts/release_candidate_development"
+            / schema_2_commit
+            / "benchmark-summary.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert validator._release_summary_contract(schema_2_summary, schema_2_commit)
+    snapshot = json.loads(
+        validator.subprocess.run(
+            ["git", "show", f"{schema_2_commit}:demo/evaluation/registry.json"],
+            cwd=validator.SOURCE_GIT_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+    )
+    downgraded = validator.build_benchmark_summary(
+        snapshot,
+        validator._registry_snapshot_summary(snapshot),
+        package_version="0.3.0",
+        memoryforge_commit=schema_2_commit,
+        schema_version=1,
+    )
+    assert not validator._release_summary_contract(downgraded, schema_2_commit)
+
+
+def test_retained_sha256sums_must_replay_from_its_directory(tmp_path: Path) -> None:
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    wheel = dist / "memoryforge.whl"
+    provenance = tmp_path / "release-provenance.json"
+    wheel.write_bytes(b"wheel")
+    provenance.write_bytes(b"provenance")
+    sums = {
+        "dist/memoryforge.whl": hashlib.sha256(wheel.read_bytes()).hexdigest(),
+        "release-provenance.json": hashlib.sha256(provenance.read_bytes()).hexdigest(),
+    }
+
+    assert validator._sha256sums_replays(tmp_path, sums)
+    wheel.unlink()
+    assert not validator._sha256sums_replays(tmp_path, sums)
+    assert not validator._sha256sums_replays(tmp_path, {"../outside": "0" * 64})
+
+
+def test_historical_review_scope_stats_are_recomputed() -> None:
+    assert validator._git_diff_stats(
+        "569685c2f0bf790819820b821b4768d180c4ee0d",
+        "26767333bc20a6367bc87f239cdc956cd40e7f4e",
+    ) == {
+        "diff_files": 82,
+        "reviewed_files": 48,
+        "added_lines": 7835,
+        "deleted_lines": 30,
+        "changed_lines": 7865,
+    }
+    assert validator._git_diff_stats(
+        "569685c2f0bf790819820b821b4768d180c4ee0d",
+        "a044337347b9c6884ea660c7568c4e3911c84521",
+    ) == {
+        "diff_files": 132,
+        "reviewed_files": 79,
+        "added_lines": 14086,
+        "deleted_lines": 39,
+        "changed_lines": 14125,
+    }
+    assert validator._git_diff_stats(
+        "569685c2f0bf790819820b821b4768d180c4ee0d",
+        "f4dde0904e5bcaeb78be6d7a32e74a6beae5679a",
+    ) == {
+        "diff_files": 161,
+        "reviewed_files": 97,
+        "added_lines": 17612,
+        "deleted_lines": 192,
+        "changed_lines": 17804,
+    }
+
+
+def test_benchmark_registry_consumes_local_gate_benchmark_provenance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = json.loads(
+        (
+            validator.REPO_ROOT / "demo/results/release_candidate_candidate_6_local_gates.json"
+        ).read_text(encoding="utf-8")
+    )
+    local_gate = payload["platforms"]["macos"]["local_gate"]
+    provenance_path = validator.REPO_ROOT / local_gate["artifact_files"]["provenance"]["path"]
+    provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+    provenance["code_wiki"] = {}
+    monkeypatch.setattr(validator.json, "loads", lambda _value: provenance)
+
+    assert not validator._validate_bound_gate_artifacts(
+        local_gate["artifact_files"],
+        local_gate["artifacts"],
+        payload["memoryforge_commit"],
+        require_clean_sdist=True,
+    )
 
 
 def test_benchmark_registry_rejects_contradictory_cross_platform_case_evidence() -> None:
@@ -510,11 +1047,22 @@ def test_benchmark_registry_hashes_bound_gate_artifact_bytes(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    commit = "1" * 40
+    commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=validator.SOURCE_GIT_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
     wheel = tmp_path / "memoryforge-0.2.1-py3-none-any.whl"
     sdist = tmp_path / "memoryforge-0.2.1.tar.gz"
     provenance = tmp_path / "release-provenance.json"
+    code_evidence = tmp_path / "code-wiki-evidence.json"
     sums = tmp_path / "SHA256SUMS"
+    suite_source = validator.REPO_ROOT / "demo/evaluation/code_wiki_eval.json"
+    suite_target = tmp_path / "demo/evaluation/code_wiki_eval.json"
+    suite_target.parent.mkdir(parents=True)
+    suite_target.write_bytes(suite_source.read_bytes())
     wheel.write_bytes(b"wheel")
     with tarfile.open(sdist, "w:gz") as archive:
         payload = b"[project]\nname = 'memoryforge'\n"
@@ -523,15 +1071,61 @@ def test_benchmark_registry_hashes_bound_gate_artifact_bytes(
         archive.addfile(member, io.BytesIO(payload))
     wheel_sha256 = hashlib.sha256(wheel.read_bytes()).hexdigest()
     sdist_sha256 = hashlib.sha256(sdist.read_bytes()).hexdigest()
+    code_payload = json.loads(
+        (
+            validator.REPO_ROOT / "demo/results/artifacts/release_candidate_delivery_candidate_9/"
+            "macos/code-wiki-evidence.json"
+        ).read_text(encoding="utf-8")
+    )
+    code_payload["memoryforge_commit"] = commit
+    code_metrics = code_payload["evaluation"]["metrics"]
+    code_gates = code_payload["evaluation"]["gates"]
+    code_incremental = code_payload["incremental"]
+    code_evidence.write_text(
+        json.dumps(code_payload),
+        encoding="utf-8",
+    )
+    code_evidence_sha256 = hashlib.sha256(code_evidence.read_bytes()).hexdigest()
     provenance.write_text(
         json.dumps(
             {
+                "schema_version": 1,
                 "memoryforge_commit": commit,
                 "memoryforge_worktree_dirty": False,
                 "package": {
+                    "version": "0.2.1",
                     "wheel": wheel.name,
                     "wheel_sha256": wheel_sha256,
+                    "import_path": ".venv/site-packages/memoryforge/__init__.py",
                     "import_from_fresh_venv": True,
+                    "dependencies": {},
+                },
+                "runtime": {
+                    "implementation": "CPython",
+                    "python": "3.11.15",
+                    "platform": "test-platform",
+                },
+                "checks": {
+                    "pip_check": "passed",
+                    "cli_help": "passed",
+                    "code_wiki_benchmark": "passed",
+                    "public_demo": "not_run",
+                },
+                "commands": [
+                    "python -m pip install <wheel>",
+                    "python -m pip check",
+                    "python -m memoryforge --help",
+                    "python demo/run_code_wiki_benchmark.py",
+                ],
+                "code_wiki": {
+                    "evidence_sha256": code_evidence_sha256,
+                    "metrics": code_metrics,
+                    "gates": code_gates,
+                    "incremental": code_incremental,
+                },
+                "public_demo": {
+                    "status": "not_run",
+                    "required_commit": "93f5dc05229da250b041850ad8deeeec886ef304",
                 },
             }
         ),
@@ -541,12 +1135,14 @@ def test_benchmark_registry_hashes_bound_gate_artifact_bytes(
     sums.write_text(
         f"{wheel_sha256}  dist/{wheel.name}\n"
         f"{sdist_sha256}  dist/{sdist.name}\n"
+        f"{code_evidence_sha256}  code-wiki-evidence.json\n"
         f"{provenance_sha256}  release-provenance.json\n",
         encoding="ascii",
     )
     digests = {
         "wheel_sha256": wheel_sha256,
         "sdist_sha256": sdist_sha256,
+        "code_wiki_evidence_sha256": code_evidence_sha256,
         "provenance_sha256": provenance_sha256,
         "sha256sums_sha256": hashlib.sha256(sums.read_bytes()).hexdigest(),
     }
@@ -555,6 +1151,7 @@ def test_benchmark_registry_hashes_bound_gate_artifact_bytes(
         for name, path in {
             "wheel": wheel,
             "sdist": sdist,
+            "code_wiki_evidence": code_evidence,
             "provenance": provenance,
             "sha256sums": sums,
         }.items()
@@ -566,7 +1163,61 @@ def test_benchmark_registry_hashes_bound_gate_artifact_bytes(
         digests,
         commit,
         require_clean_sdist=True,
+        require_code_evidence=True,
     )
+    platform_smoke = tmp_path / "platform-smoke.json"
+    platform_smoke.write_text('{"passed": true}\n', encoding="utf-8")
+    platform_sha256 = hashlib.sha256(platform_smoke.read_bytes()).hexdigest()
+    digests["platform_smoke_sha256"] = platform_sha256
+    files["platform_smoke"] = {
+        "path": platform_smoke.name,
+        "sha256": platform_sha256,
+    }
+    sums.write_text(
+        f"{wheel_sha256}  dist/{wheel.name}\n"
+        f"{sdist_sha256}  dist/{sdist.name}\n"
+        f"{code_evidence_sha256}  code-wiki-evidence.json\n"
+        f"{platform_sha256}  platform-smoke.json\n"
+        f"{provenance_sha256}  release-provenance.json\n",
+        encoding="ascii",
+    )
+    digests["sha256sums_sha256"] = hashlib.sha256(sums.read_bytes()).hexdigest()
+    files["sha256sums"]["sha256"] = digests["sha256sums_sha256"]
+    assert validator._validate_bound_gate_artifacts(
+        files,
+        digests,
+        commit,
+        require_clean_sdist=True,
+        require_code_evidence=True,
+    )
+    provenance_payload = json.loads(provenance.read_text(encoding="utf-8"))
+    provenance_payload["checks"]["pip_check"] = "failed"
+    provenance_payload["note"] = "copied from /Users/private/workspace"
+    provenance.write_text(json.dumps(provenance_payload), encoding="utf-8")
+    digests["provenance_sha256"] = hashlib.sha256(provenance.read_bytes()).hexdigest()
+    files["provenance"]["sha256"] = digests["provenance_sha256"]
+    sums.write_text(
+        f"{wheel_sha256}  dist/{wheel.name}\n"
+        f"{sdist_sha256}  dist/{sdist.name}\n"
+        f"{code_evidence_sha256}  code-wiki-evidence.json\n"
+        f"{digests['provenance_sha256']}  release-provenance.json\n",
+        encoding="ascii",
+    )
+    digests["sha256sums_sha256"] = hashlib.sha256(sums.read_bytes()).hexdigest()
+    files["sha256sums"]["sha256"] = digests["sha256sums_sha256"]
+    assert not validator._validate_bound_gate_artifacts(
+        files,
+        digests,
+        commit,
+        require_clean_sdist=True,
+        require_code_evidence=True,
+    )
+    provenance_payload["checks"]["pip_check"] = "passed"
+    provenance_payload.pop("note")
+    provenance.write_text(json.dumps(provenance_payload), encoding="utf-8")
+    provenance_sha256 = hashlib.sha256(provenance.read_bytes()).hexdigest()
+    digests["provenance_sha256"] = provenance_sha256
+    files["provenance"]["sha256"] = provenance_sha256
     with tarfile.open(sdist, "w:gz") as archive:
         payload = b"nested wheel"
         member = tarfile.TarInfo(
@@ -579,6 +1230,7 @@ def test_benchmark_registry_hashes_bound_gate_artifact_bytes(
     sums.write_text(
         f"{wheel_sha256}  dist/{wheel.name}\n"
         f"{digests['sdist_sha256']}  dist/{sdist.name}\n"
+        f"{code_evidence_sha256}  code-wiki-evidence.json\n"
         f"{provenance_sha256}  release-provenance.json\n",
         encoding="ascii",
     )
@@ -589,6 +1241,7 @@ def test_benchmark_registry_hashes_bound_gate_artifact_bytes(
         digests,
         commit,
         require_clean_sdist=True,
+        require_code_evidence=True,
     )
 
     wheel.write_bytes(b"tampered")
@@ -598,7 +1251,191 @@ def test_benchmark_registry_hashes_bound_gate_artifact_bytes(
             digests,
             commit,
             require_clean_sdist=True,
+            require_code_evidence=True,
         )
+
+
+def test_benchmark_registry_rejects_private_or_failed_provenance() -> None:
+    assert (
+        validator._payload_private_detail_leaks(
+            {"note": "artifact copied from /Users/private/workspace"}
+        )
+        == 1
+    )
+    assert (
+        validator._payload_private_detail_leaks(
+            {"note": "artifact", "checks": {"pip_check": "failed"}}
+        )
+        == 0
+    )
+    assert (
+        validator._payload_private_detail_leaks(
+            {"credentials": {"api_key": "sk-live-private-value"}}
+        )
+        == 3
+    )
+    assert validator._payload_private_detail_leaks({"Authorization": "Basic Zm9vOmJhcg=="}) == 2
+    for private_path in (
+        "/root",
+        "/root/private/workspace",
+        "/var/folders/private/workspace",
+        "D:/builds/private/workspace",
+        "\\\\server\\private\\workspace",
+    ):
+        assert validator._payload_private_detail_leaks({"path": private_path}) == 1
+    assert validator._payload_private_detail_leaks({"path": "dist/memoryforge.whl"}) == 0
+    development = json.loads(
+        (
+            validator.REPO_ROOT / "demo/results/release_candidate_development_candidate_9.json"
+        ).read_text(encoding="utf-8")
+    )
+    release = development["release_artifacts"]
+    root = validator.REPO_ROOT / release["artifact_root"]
+    provenance = json.loads((root / "release-provenance.json").read_text(encoding="utf-8"))
+    assert validator._release_provenance_contract(
+        provenance,
+        development["memoryforge_commit"],
+        release["package"],
+        release["builds"],
+    )
+    provenance["dependencies"]["private_path"] = "/Users/private/workspace"
+    assert not validator._release_provenance_contract(
+        provenance,
+        development["memoryforge_commit"],
+        release["package"],
+        release["builds"],
+    )
+
+
+def test_accepted_review_reports_reject_conflicts_and_private_details(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scope = "a" * 40 + "..." + "b" * 40
+    stats = {"reviewed_files": 8, "changed_lines": 100}
+    paths = {}
+    clean_reports = {
+        "html_report": (
+            f"{scope}\n未发现缺陷\n"
+            '<span class="count">0</span> P0\n'
+            '<span class="count">0</span> P1\n'
+            '<span class="count">0</span> P2\n'
+            '<div class="defect-list">\n</div>\n'
+            "检查文件 8\n变更行数 100\n"
+        ),
+        "markdown_report": (
+            f"{scope}\n检查文件：8\n变更行数：100\n## 评审结论\n本次评审未发现 P0-P2 级别的缺陷。\n"
+        ),
+    }
+    for name, clean in clean_reports.items():
+        path = tmp_path / f"{name}.txt"
+        path.write_text(clean, encoding="utf-8")
+        paths[name] = {"path": path.name, "sha256": "0" * 64}
+    monkeypatch.setattr(validator, "REPO_ROOT", tmp_path)
+    assert validator._accepted_review_reports_valid(paths, scope, stats)
+
+    for suffix in (
+        "STATUS: FAILED",
+        "P1: 4",
+        "status: rejected",
+        "P1 = 4",
+        "c" * 40 + "..." + "d" * 40,
+        "/Users/private/workspace",
+        "<script>/var/folders/private/workspace</script>",
+        "<script>D:/builds/private/workspace</script>",
+        "Authorization: Basic abc",
+        "<script>Authorization: Basic abc</script>",
+    ):
+        (tmp_path / "html_report.txt").write_text(
+            clean_reports["html_report"] + suffix,
+            encoding="utf-8",
+        )
+        assert not validator._accepted_review_reports_valid(paths, scope, stats)
+
+
+def test_benchmark_registry_replays_package_archive_metadata(tmp_path: Path) -> None:
+    root = (
+        validator.REPO_ROOT / "demo/results/artifacts/release_candidate_development/"
+        "63326fb2f123c336c31bcebf68c76c90dfac86e6"
+    )
+    wheel = root / "memoryforge-0.3.0-py3-none-any.whl"
+    sdist = root / "memoryforge-0.3.0.tar.gz"
+    commit = "63326fb2f123c336c31bcebf68c76c90dfac86e6"
+    assert validator._package_archives_match(wheel, sdist, commit)
+
+    forged_wheel = tmp_path / wheel.name
+    forged_wheel.write_bytes(b"not a wheel")
+    assert not validator._package_archives_match(forged_wheel, sdist, commit)
+
+    metadata = b"Metadata-Version: 2.3\nName: memoryforge\nVersion: 0.3.0\n"
+    with zipfile.ZipFile(forged_wheel, "w") as archive:
+        archive.writestr("memoryforge-0.3.0.dist-info/METADATA", metadata)
+    forged_sdist = tmp_path / sdist.name
+    with tarfile.open(forged_sdist, "w:gz") as archive:
+        changed = metadata + b"Requires-Python: >=99\n"
+        member = tarfile.TarInfo("memoryforge-0.3.0/PKG-INFO")
+        member.size = len(changed)
+        archive.addfile(member, io.BytesIO(changed))
+    assert not validator._package_archives_match(forged_wheel, forged_sdist, commit)
+
+    with zipfile.ZipFile(forged_wheel, "w") as archive:
+        archive.writestr("other-0.3.0.dist-info/METADATA", metadata)
+    assert not validator._package_archives_match(forged_wheel, forged_sdist, commit)
+
+
+def test_benchmark_registry_binds_all_package_sources_to_commit(tmp_path: Path) -> None:
+    commit = "63326fb2f123c336c31bcebf68c76c90dfac86e6"
+    root = validator.REPO_ROOT / "demo/results/artifacts/release_candidate_development" / commit
+    wheel = root / "memoryforge-0.3.0-py3-none-any.whl"
+    sdist = root / "memoryforge-0.3.0.tar.gz"
+    forged_wheel = tmp_path / wheel.name
+    forged_sdist = tmp_path / sdist.name
+    record_path = "memoryforge-0.3.0.dist-info/RECORD"
+    source_path = "memoryforge/__init__.py"
+
+    with zipfile.ZipFile(wheel) as source:
+        entries = {item.filename: source.read(item.filename) for item in source.infolist()}
+    entries[source_path] += b"\n# forged\n"
+    record_lines = []
+    for name, content in entries.items():
+        if name == record_path:
+            continue
+        digest = base64.urlsafe_b64encode(hashlib.sha256(content).digest()).rstrip(b"=").decode()
+        record_lines.append(f"{name},sha256={digest},{len(content)}")
+    record_lines.append(f"{record_path},,")
+    entries[record_path] = ("\n".join(record_lines) + "\n").encode()
+    with zipfile.ZipFile(forged_wheel, "w") as archive:
+        for name, content in entries.items():
+            archive.writestr(name, content)
+
+    with tarfile.open(sdist, "r:gz") as source, tarfile.open(forged_sdist, "w:gz") as output:
+        for member in source.getmembers():
+            payload = source.extractfile(member).read() if member.isfile() else None
+            if member.name.endswith("/src/memoryforge/__init__.py") and payload is not None:
+                payload += b"\n# forged\n"
+                member = copy.copy(member)
+                member.size = len(payload)
+            output.addfile(member, io.BytesIO(payload) if payload is not None else None)
+
+    assert not validator._package_archives_match(forged_wheel, forged_sdist, commit)
+
+
+@pytest.mark.parametrize(
+    ("path", "valid"),
+    (
+        (".venv/lib/python3.11/site-packages/memoryforge/__init__.py", True),
+        (".venv/Lib/site-packages/memoryforge/__init__.py", True),
+        ("/tmp/.venv/lib/python3.11/site-packages/memoryforge/__init__.py", False),
+        ("D:/build/.venv/Lib/site-packages/memoryforge/__init__.py", False),
+        ("\\\\server\\build\\.venv\\Lib\\site-packages\\memoryforge\\__init__.py", False),
+        (".venv/src/memoryforge/__init__.py", False),
+    ),
+)
+def test_benchmark_registry_requires_fresh_venv_import_path(
+    path: str,
+    valid: bool,
+) -> None:
+    assert validator._fresh_venv_import_path(path) is valid
 
 
 def test_benchmark_registry_rejects_contradictory_showcase_case_evidence() -> None:
@@ -862,3 +1699,283 @@ def test_benchmark_registry_recomputes_support_replay_hashes() -> None:
     assert validator._support_runs_are_deterministic(runs)
     runs[1]["structural_sha256"] = "0" * 64
     assert not validator._support_runs_are_deterministic(runs)
+
+
+def test_benchmark_registry_closes_replayable_delivery_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_root = validator.REPO_ROOT
+    gate = json.loads(
+        (source_root / "demo/results/release_candidate_candidate_11_local_gates.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    local_gate = gate["platforms"]["macos"]["local_gate"]
+    source = source_root / "demo/results/artifacts/release_candidate_delivery_candidate_11/macos"
+    target = tmp_path / "gate"
+    shutil.copytree(source, target)
+    suite = tmp_path / "demo/evaluation/code_wiki_eval.json"
+    suite.parent.mkdir(parents=True)
+    suite.write_bytes((source_root / "demo/evaluation/code_wiki_eval.json").read_bytes())
+    prefix = Path("demo/results/artifacts/release_candidate_delivery_candidate_11/macos")
+    files = {
+        name: {
+            "path": (Path("gate") / Path(record["path"]).relative_to(prefix)).as_posix(),
+            "sha256": record["sha256"],
+        }
+        for name, record in local_gate["artifact_files"].items()
+    }
+    monkeypatch.setattr(validator, "REPO_ROOT", tmp_path)
+
+    assert validator._validate_bound_gate_artifacts(
+        files,
+        local_gate["artifacts"],
+        gate["memoryforge_commit"],
+        require_clean_sdist=True,
+        require_replayable_sums=True,
+        require_code_evidence=True,
+    )
+    private = target / "private.txt"
+    private.write_text("not registered", encoding="utf-8")
+    assert not validator._validate_bound_gate_artifacts(
+        files,
+        local_gate["artifacts"],
+        gate["memoryforge_commit"],
+        require_clean_sdist=True,
+        require_replayable_sums=True,
+        require_code_evidence=True,
+    )
+    private.unlink()
+    link = target / "artifact-link"
+    try:
+        link.symlink_to(target / "release-provenance.json")
+    except OSError:
+        pytest.skip("symlink creation is unavailable")
+    assert not validator._validate_bound_gate_artifacts(
+        files,
+        local_gate["artifacts"],
+        gate["memoryforge_commit"],
+        require_clean_sdist=True,
+        require_replayable_sums=True,
+        require_code_evidence=True,
+    )
+
+
+def test_release_candidate_review_state_machine_and_summary() -> None:
+    acceptance = {"passed": True}
+    failed_review = {"passed": False}
+    passed_review = {
+        "path": "review.json",
+        "sha256": "1" * 64,
+        "memoryforge_commit": "2" * 40,
+        "passed": True,
+    }
+    assert validator._release_review_state_valid(
+        "local_gates_passed_review_pending",
+        acceptance,
+        None,
+    )
+    assert validator._release_review_state_valid(
+        "development_passed_review_failed",
+        acceptance,
+        failed_review,
+    )
+    assert validator._release_review_state_valid(
+        "accepted_development",
+        acceptance,
+        passed_review,
+    )
+    assert not validator._release_review_state_valid(
+        "accepted_development",
+        acceptance,
+        failed_review,
+    )
+
+    evidence = {
+        "split": "development",
+        "evidence_revision": 13,
+        "status": "accepted_development",
+        "path": "development.json",
+        "sha256": "3" * 64,
+        "memoryforge_commit": "4" * 40,
+        "passed": True,
+        "acceptance_evidence": acceptance,
+        "review_evidence": passed_review,
+    }
+    experiment = {
+        "suite_id": "release-candidate-delivery",
+        "suite_revision": 1,
+        "repositories": [],
+        "splits": {
+            "development": {},
+            "confirmation": {"status": "not_run"},
+            "holdout": {"status": "not_run"},
+        },
+        "expected_metrics": {},
+        "evidence": [evidence],
+    }
+    summary = validator._benchmark_experiment_summary(
+        experiment,
+        schema_version=3,
+    )
+    assert summary["accepted_evidence"][0]["review"] == passed_review
+    assert not any(
+        result["status"] == "review_rejected"
+        for result in validator._benchmark_negative_results(
+            {"experiments": [experiment], "suites": []},
+            schema_version=3,
+        )
+    )
+
+
+def test_benchmark_registry_accepts_zero_blocker_final_review(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    base = "569685c2f0bf790819820b821b4768d180c4ee0d"
+    development_commit = "a" * 40
+    local_gate_commit = "b" * 40
+    review_commit = "c" * 40
+    stats = {
+        "diff_files": 10,
+        "reviewed_files": 8,
+        "added_lines": 90,
+        "deleted_lines": 10,
+        "changed_lines": 100,
+    }
+    artifacts = {}
+    for key, name, payload in (
+        ("raw_findings", "comments.jsonl", ""),
+        ("top_findings", "final_comments.json", "[]\n"),
+        (
+            "html_report",
+            "report.html",
+            (
+                f"<p>{base}...{review_commit}</p><p>未发现缺陷</p>\n"
+                '<span class="count">0</span> P0\n'
+                '<span class="count">0</span> P1\n'
+                '<span class="count">0</span> P2\n'
+                '<div class="defect-list">\n</div>\n'
+                "检查文件 8\n变更行数 100\n"
+            ),
+        ),
+        (
+            "markdown_report",
+            "report.md",
+            (
+                f"{base}...{review_commit}\n检查文件：8\n变更行数：100\n"
+                "## 评审结论\n本次评审未发现 P0-P2 级别的缺陷。\n"
+            ),
+        ),
+        (
+            "review_scope",
+            "review-scope.json",
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "base_commit": base,
+                    "source_commit": review_commit,
+                    "diff_mode": "merge_base_to_source",
+                    **stats,
+                }
+            ),
+        ),
+    ):
+        (tmp_path / name).write_text(payload, encoding="utf-8")
+        artifacts[key] = {"path": name, "sha256": "0" * 64}
+    confirmation = {
+        "path": "confirmation.json",
+        "sha256": "1" * 64,
+    }
+    holdout = {
+        "path": "holdout.json",
+        "sha256": "2" * 64,
+    }
+    experiment = {
+        "suite_id": "release-candidate-delivery",
+        "suite_revision": 1,
+        "splits": {"holdout": holdout},
+    }
+    development = {
+        "path": "demo/results/release_candidate_development_candidate_12.json",
+        "memoryforge_commit": development_commit,
+        "acceptance_evidence": {
+            "memoryforge_commit": local_gate_commit,
+            "passed": True,
+        },
+    }
+    payload = {
+        "schema_version": 1,
+        "suite_id": "release-candidate-delivery",
+        "suite_revision": 1,
+        "memoryforge_commit": review_commit,
+        "memoryforge_worktree_dirty": False,
+        "candidate": "release-development-candidate-12",
+        "review": {
+            "scope": f"{base}...{review_commit}",
+            "base_commit": base,
+            "source_commit": review_commit,
+            "local_gate_commit": local_gate_commit,
+            "status": "passed",
+            "p0": 0,
+            "p1": 0,
+            "p2": 0,
+            **stats,
+            "artifacts": artifacts,
+        },
+        "confirmation": {**confirmation, "status": "not_run"},
+        "holdout": {**holdout, "status": "not_run"},
+        "passed": True,
+    }
+    monkeypatch.setattr(validator, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(validator, "_validate_artifact", lambda *_args: None)
+    monkeypatch.setattr(validator, "_git_commit_descends_from", lambda *_args: True)
+    monkeypatch.setattr(validator, "_git_diff_stats", lambda *_args: stats)
+
+    assert (
+        validator._validate_release_static_review_acceptance(
+            experiment,
+            development,
+            payload,
+            confirmation,
+            review_commit,
+        )
+        == 1
+    )
+    payload["review"]["p0"] = False
+    with pytest.raises(ValueError, match="accepted review Evidence changed"):
+        validator._validate_release_static_review_acceptance(
+            experiment,
+            development,
+            payload,
+            confirmation,
+            review_commit,
+        )
+    payload["review"]["p0"] = 0
+    (tmp_path / "final_comments.json").write_text(
+        json.dumps(
+            [
+                {
+                    "title": "hidden blocker",
+                    "file": "src/memoryforge/__init__.py",
+                    "start_line": 1,
+                    "end_line": 1,
+                    "severity": "P1",
+                    "category": "LOGIC",
+                    "confidence": 10,
+                    "suggestion": "fix it",
+                    "rationale": "top findings must match raw findings",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="accepted review Evidence changed"):
+        validator._validate_release_static_review_acceptance(
+            experiment,
+            development,
+            payload,
+            confirmation,
+            review_commit,
+        )

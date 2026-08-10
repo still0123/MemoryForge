@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "suite_id": "release-candidate-delivery",
+  "suite_revision": 1,
+  "memoryforge_commit": "26767333bc20a6367bc87f239cdc956cd40e7f4e",
+  "memoryforge_worktree_dirty": false,
+  "candidate": "release-development-candidate-5",
+  "review": {
+    "scope": "origin/main...HEAD",
+    "status": "failed",
+    "p0": 0,
+    "p1": 10,
+    "p2": 2,
+    "failures": [
+      "source_snapshot_toctou",
+      "showcase_privacy_not_measured",
+      "benchmark_summary_content",
+      "sha256sums_contract",
+      "retained_path_alias",
+      "package_identity",
+      "document_claim_contradiction",
+      "reproducibility_binding",
+      "acceptance_commit_binding",
+      "evidence_type_strictness",
+      "retained_support_artifacts",
+      "provenance_schema"
+    ],
+    "artifacts": {
+      "raw_findings": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_5/comments.jsonl",
+        "sha256": "3b20a97512440e1d5a71f3d5f7cab15358442c81e3520dedb7b744a8f3a8e821"
+      },
+      "top_findings": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_5/final_comments.json",
+        "sha256": "34f1263129d1e3f421c26007e47a1ce87e0e7ecbb41b7092c8825e2164a2f459"
+      },
+      "html_report": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_5/report.html",
+        "sha256": "0020c7214756fc82b2ab5065c1a5466b17406a96231ff5b0ef303001b614399f"
+      },
+      "markdown_report": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_5/report.md",
+        "sha256": "07847196414e274eb961ab1e092de1e80076b638be9ae1a1d7568884b8086dc4"
+      }
+    }
+  },
+  "root_cause": {
+    "summary": "Release gates still allowed artifact, provenance, Commit, summary, and privacy claims stronger than retained independently verifiable data.",
+    "fix": "Build from a fixed source snapshot and enforce exact package, provenance, SHA256SUMS, summary, artifact, Commit, document, privacy, and JSON type contracts."
+  },
+  "confirmation": {
+    "path": "demo/evaluation/release_candidate_confirmation.json",
+    "sha256": "3eed08e04592b614a709cd18c6a92951b5da145d7dab4b9997824cd4e002e805",
+    "status": "not_run"
+  },
+  "holdout": {
+    "path": "demo/evaluation/release_candidate_holdout.json",
+    "sha256": "b466644bef2748a96d598540c54633fe49770af97fc71ce6e62e18eda687e8f8",
+    "status": "not_run"
+  },
+  "passed": false
+}

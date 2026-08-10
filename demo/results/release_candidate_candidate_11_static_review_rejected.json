@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "suite_id": "release-candidate-delivery",
+  "suite_revision": 1,
+  "memoryforge_commit": "43d5c80852595c7b49e46c66f70ced82c53cf7d0",
+  "memoryforge_worktree_dirty": false,
+  "candidate": "release-development-candidate-11",
+  "review": {
+    "scope": "569685c2f0bf790819820b821b4768d180c4ee0d...43d5c80852595c7b49e46c66f70ced82c53cf7d0",
+    "base_commit": "569685c2f0bf790819820b821b4768d180c4ee0d",
+    "source_commit": "43d5c80852595c7b49e46c66f70ced82c53cf7d0",
+    "status": "failed",
+    "p0": 0,
+    "p1": 8,
+    "p2": 4,
+    "failures": [
+      "build_extra_package_sources",
+      "package_metadata_contract",
+      "source_version_assignment",
+      "summary_registry_commit_binding",
+      "workspace_verify_evidence",
+      "query_privacy_paths",
+      "retained_import_path",
+      "code_wiki_git_identity",
+      "powershell_initialization_restore",
+      "accepted_review_unreachable",
+      "delivery_artifact_closure",
+      "passed_review_negative_classification"
+    ],
+    "artifacts": {
+      "raw_findings": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_11/comments.jsonl",
+        "sha256": "802a69ed54e7c820cbecdce401c41c05dfb7205fcde58e66f696537ed8b7f5c1"
+      },
+      "top_findings": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_11/final_comments.json",
+        "sha256": "ad1b68ab36cfec759597a0a399f6457dea93228fb2def6ac2981498850bbdcc2"
+      },
+      "html_report": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_11/report.html",
+        "sha256": "b7d8b30dc69f9ec9efdc2c4b6356c74e5fb375f2778c3e375cc1dd87007cd324"
+      },
+      "markdown_report": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_11/report.md",
+        "sha256": "1c2910525e2b940a0eced5adb6aff724cae971adf4fb2ff637d3ef64935ee7db"
+      },
+      "review_scope": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_11/review-scope.json",
+        "sha256": "08d3ca681251583605d32c1f18aa75ab70e94f67f706539c76eb5b3461120cc5"
+      }
+    }
+  },
+  "root_cause": {
+    "summary": "Candidate 11 made retained Evidence replayable, but final review found remaining exact-schema, environment, privacy, artifact-root, and accepted-review transition gaps.",
+    "fix": "Use strict package and query schemas, eliminate every host package-source override, close artifact roots, bind summaries to Git snapshots, and support both failed and passed review sidecars."
+  },
+  "confirmation": {
+    "path": "demo/evaluation/release_candidate_confirmation.json",
+    "sha256": "3eed08e04592b614a709cd18c6a92951b5da145d7dab4b9997824cd4e002e805",
+    "status": "not_run"
+  },
+  "holdout": {
+    "path": "demo/evaluation/release_candidate_holdout.json",
+    "sha256": "b466644bef2748a96d598540c54633fe49770af97fc71ce6e62e18eda687e8f8",
+    "status": "not_run"
+  },
+  "passed": false
+}

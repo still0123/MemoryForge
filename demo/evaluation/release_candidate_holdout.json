@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "suite_id": "release-candidate-delivery",
+  "suite_revision": 1,
+  "split": "holdout",
+  "status": "not_run",
+  "cases": [
+    {
+      "id": "fresh-checkout-double-build",
+      "expected": "two clean builds from the frozen release Commit are byte-identical and contain no retained benchmark artifacts"
+    },
+    {
+      "id": "installed-wheel-public-showcase",
+      "expected": "a fresh Wheel environment runs CLI help/version and builds the public zero-key Showcase without importing the source checkout"
+    },
+    {
+      "id": "workspace-backup-restore-replay",
+      "expected": "a restored public Workspace preserves its Git Commit, SourceVersion, Wiki, lint, query, Citation, and no-pending state"
+    },
+    {
+      "id": "release-assets-round-trip",
+      "expected": "Wheel, sdist, provenance, benchmark summary, and SHA256SUMS survive a separate-directory copy and full digest verification"
+    },
+    {
+      "id": "public-claims-privacy-audit",
+      "expected": "release documents and artifacts contain no private Workspace content, credential, prompt, or absolute private path"
+    }
+  ],
+  "expected_metrics": {
+    "pass_rate": 100.0,
+    "failed_cases": 0,
+    "artifact_sha256_matches": true,
+    "private_detail_leaks": 0,
+    "holdout_runs_once": true
+  }
+}

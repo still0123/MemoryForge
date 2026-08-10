@@ -1,0 +1,235 @@
+{
+  "schema_version": 1,
+  "memoryforge_commit": "4e35729ed42a02518f9017d9742e60643b67f84d",
+  "memoryforge_worktree_dirty": false,
+  "fixture": {
+    "path": "demo/fixtures/code_wiki_project",
+    "suite_sha256": "e2253d9c66acde8e27e6e13c8f9ac9354a9e84ddc9c5d9266fd9b41040a0c106",
+    "initial_commit": "c7a312631c0f4122e82e08d23d69498b1c2881c4",
+    "updated_commit": "eebf184cd82509b0a1c48901fdf643b63f714828"
+  },
+  "workflow": {
+    "wiki_file_count": 8,
+    "lint": {
+      "status": "clean",
+      "checked_pages": 8,
+      "issues": []
+    }
+  },
+  "evaluation": {
+    "suite": "MemoryForge public code Wiki baseline",
+    "schema_version": 1,
+    "counts": {
+      "symbols": 20,
+      "relations": 24,
+      "modules": 8,
+      "architecture_edges": 4
+    },
+    "metrics": {
+      "expected_source_coverage": 100.0,
+      "symbol_recall": 100.0,
+      "core_relation_recall": 100.0,
+      "known_gap_relation_recall": 100.0,
+      "overall_relation_recall": 100.0,
+      "module_assignment_accuracy": 100.0,
+      "citation_grounding_accuracy": 100.0,
+      "architecture_edge_grounding": 100.0,
+      "mermaid_edge_coverage": 100.0,
+      "architecture_citation_coverage": 100.0,
+      "architecture_mermaid_determinism": 100.0,
+      "deterministic_replay": 100.0
+    },
+    "gates": {
+      "core_symbols": true,
+      "core_relations": true,
+      "module_assignment": true,
+      "citations": true,
+      "architecture_wiki": true,
+      "deterministic": true
+    },
+    "cases": {
+      "sources": [
+        {
+          "path": "go/meter/model.go",
+          "found": true
+        },
+        {
+          "path": "go/meter/service.go",
+          "found": true
+        },
+        {
+          "path": "py/app.py",
+          "found": true
+        },
+        {
+          "path": "py/helpers.py",
+          "found": true
+        },
+        {
+          "path": "ts/helper.ts",
+          "found": true
+        },
+        {
+          "path": "ts/service.ts",
+          "found": true
+        }
+      ],
+      "symbols": [
+        {
+          "qualified_name": "py.app.run_local",
+          "kind": "function",
+          "found": true
+        },
+        {
+          "qualified_name": "py.helpers.normalize",
+          "kind": "function",
+          "found": true
+        },
+        {
+          "qualified_name": "go.meter.Meter",
+          "kind": "struct",
+          "found": true
+        },
+        {
+          "qualified_name": "go.meter.Meter.Record",
+          "kind": "method",
+          "found": true
+        },
+        {
+          "qualified_name": "ts.service.Service",
+          "kind": "class",
+          "found": true
+        },
+        {
+          "qualified_name": "ts.service.Service.greet",
+          "kind": "method",
+          "found": true
+        },
+        {
+          "qualified_name": "ts.helper.helper",
+          "kind": "function",
+          "found": true
+        }
+      ],
+      "relations": [
+        {
+          "tier": "core",
+          "type": "calls",
+          "source": "py.app.run_local",
+          "target": "py.app.local",
+          "found": true
+        },
+        {
+          "tier": "core",
+          "type": "calls",
+          "source": "go.meter.Meter.Record",
+          "target": "go.meter.helper",
+          "found": true
+        },
+        {
+          "tier": "core",
+          "type": "calls",
+          "source": "go.meter.Meter.Record",
+          "target": "go.meter.Meter.Reset",
+          "found": true
+        },
+        {
+          "tier": "core",
+          "type": "imports",
+          "source": "ts.service",
+          "target": "ts.helper",
+          "found": true
+        },
+        {
+          "tier": "core",
+          "type": "calls",
+          "source": "ts.service.Service.greet",
+          "target": "ts.helper.helper",
+          "found": true
+        },
+        {
+          "tier": "core",
+          "type": "calls",
+          "source": "ts.service.run",
+          "target": "ts.service.Service",
+          "found": true
+        },
+        {
+          "tier": "known_gap",
+          "type": "imports",
+          "source": "py.app",
+          "target": "py.helpers",
+          "found": true
+        },
+        {
+          "tier": "known_gap",
+          "type": "calls",
+          "source": "py.app.run_imported",
+          "target": "py.helpers.normalize",
+          "found": true
+        },
+        {
+          "tier": "known_gap",
+          "type": "calls",
+          "source": "go.meter.Use",
+          "target": "go.meter.Meter.Reset",
+          "found": true
+        },
+        {
+          "tier": "known_gap",
+          "type": "calls",
+          "source": "ts.service.run",
+          "target": "ts.service.Service.greet",
+          "found": true
+        }
+      ],
+      "modules": [
+        {
+          "symbol": "py.app.run_local",
+          "module_path": "py/app",
+          "found": true
+        },
+        {
+          "symbol": "py.helpers.normalize",
+          "module_path": "py/helpers",
+          "found": true
+        },
+        {
+          "symbol": "go.meter.Meter.Record",
+          "module_path": "go/meter",
+          "found": true
+        },
+        {
+          "symbol": "ts.helper.helper",
+          "module_path": "ts/helper",
+          "found": true
+        },
+        {
+          "symbol": "ts.service.Service.greet",
+          "module_path": "ts/service",
+          "found": true
+        }
+      ]
+    }
+  },
+  "incremental": {
+    "changed_symbols": [
+      "py.app",
+      "py.app.run_local"
+    ],
+    "expected_changed_symbols": [
+      "py.app",
+      "py.app.run_local"
+    ],
+    "changed_pages": [
+      "wiki/pages/code/<repository-id-prefix>/py/app.md"
+    ],
+    "expected_changed_pages": [
+      "wiki/pages/code/<repository-id-prefix>/py/app.md"
+    ],
+    "changed_page_ratio": 0.2,
+    "max_changed_page_ratio": 0.25,
+    "stable_symbol_ids": true,
+    "passed": true
+  }
+}

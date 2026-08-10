@@ -15,6 +15,7 @@ from memoryforge.feishu_bot import (
     reply_to_feishu_text,
 )
 from memoryforge.feishu_service import _send_reply
+from memoryforge.manifests import SourceManifestStore
 from memoryforge.models import GitRepositoryRecord
 from memoryforge.provider import ProviderUnavailableError
 from memoryforge.sessions import SessionStore
@@ -201,6 +202,73 @@ def test_feishu_project_command_scopes_followup_questions(tmp_path: Path, monkey
     assert answer["content"]["text"] == "ok"
     assert captured == ["a" * 64]
     assert SessionStore(workspace, "oc_chat").project_id() == "a" * 64
+
+
+def test_feishu_wiki_command_creates_local_reviewable_memory(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    runner = CliRunner()
+    assert runner.invoke(app, ["init", str(workspace)]).exit_code == 0
+    SessionStore(workspace, "oc_chat_123").append(
+        "Which database did we choose?",
+        "We chose SQLite for local storage.",
+        [],
+        model_safe=False,
+    )
+
+    reply = reply_to_feishu_text(workspace, "/wiki 收录", session_id="oc_chat_123")
+
+    assert reply["content"]["text"].startswith("已生成本地记忆草稿")
+    manifest = SourceManifestStore(workspace / ".memoryforge/manifests/sources").list_all()[0]
+    assert manifest.sensitivity.value == "local_only"
+    assert manifest.tags == ("conversation", "platform:feishu", "unverified")
+    snapshot = (workspace / manifest.snapshot_path).read_text(encoding="utf-8")
+    assert "Which database did we choose?" in snapshot
+    assert "## Assistant (unverified)" in snapshot
+    assert "We chose SQLite for local storage." in snapshot
+
+
+def test_feishu_wiki_auto_updates_memory_after_each_reply(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workspace = tmp_path / "workspace"
+    runner = CliRunner()
+    assert runner.invoke(app, ["init", str(workspace)]).exit_code == 0
+    monkeypatch.setattr(
+        "memoryforge.feishu_bot.answer_question",
+        lambda *_args, **_kwargs: {
+            "status": "answered",
+            "answer": "Use SQLite for local storage.",
+            "citations": [],
+            "wiki_pages": [],
+            "source_id": None,
+            "source_version": None,
+            "locator": None,
+            "quote": None,
+        },
+    )
+
+    enabled = reply_to_feishu_text(workspace, "/wiki auto on", session_id="oc_chat_123")
+    for question in (
+        "Which database?",
+        "Which cache?",
+        "Which queue?",
+        "Which API?",
+    ):
+        reply_to_feishu_text(workspace, question, session_id="oc_chat_123")
+
+    assert enabled["content"]["text"].startswith("自动收录已开启")
+    manifests = SourceManifestStore(workspace / ".memoryforge/manifests/sources").list_all()
+    manifest = max(manifests, key=lambda item: item.observed_at)
+    snapshot = (workspace / manifest.snapshot_path).read_text(encoding="utf-8")
+    assert "Which database?" in snapshot
+    assert "Which API?" in snapshot
+    assert "Use SQLite for local storage." in snapshot
+    assert SessionStore(workspace, "oc_chat_123").auto_memory_enabled() is True
+
+    disabled = reply_to_feishu_text(workspace, "/wiki auto off", session_id="oc_chat_123")
+    assert disabled["content"]["text"].startswith("自动收录已关闭")
+    assert SessionStore(workspace, "oc_chat_123").auto_memory_enabled() is False
 
 
 def test_feishu_resume_command_adds_saved_context_to_followup(tmp_path: Path, monkeypatch) -> None:

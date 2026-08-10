@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "suite_id": "release-candidate-delivery",
+  "suite_revision": 1,
+  "memoryforge_commit": "94b136e0ddda947c14e4ab0297b6505e00b9c63f",
+  "memoryforge_worktree_dirty": false,
+  "candidate": "release-development-candidate-2-preflight",
+  "release_build": {
+    "command": "python scripts/build_release.py --output <external-release-directory>",
+    "status": "failed",
+    "classification": "sdist_clean_room_path_alias",
+    "error": "sdist clean-room import escaped or reported the wrong version",
+    "output_created": false,
+    "confirmation_executed": false,
+    "holdout_executed": false
+  },
+  "root_cause": {
+    "summary": "The macOS /var to /private/var alias made equivalent environment and import paths compare as different paths.",
+    "fix": "Resolve the clean-room environment path before checking import ownership; keep the strict ownership check."
+  },
+  "confirmation": {
+    "path": "demo/evaluation/release_candidate_confirmation.json",
+    "sha256": "3eed08e04592b614a709cd18c6a92951b5da145d7dab4b9997824cd4e002e805",
+    "status": "not_run"
+  },
+  "holdout": {
+    "path": "demo/evaluation/release_candidate_holdout.json",
+    "sha256": "b466644bef2748a96d598540c54633fe49770af97fc71ce6e62e18eda687e8f8",
+    "status": "not_run"
+  },
+  "passed": false
+}

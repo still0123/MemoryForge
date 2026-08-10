@@ -162,6 +162,7 @@ def answer_question(
         focus_terms.update({"field", "fields", "struct", "attribute", "attributes"})
     answer_citation_limit = _answer_citation_limit(question, max_citations)
     prefer_environment_assignments = "环境变量" in question
+    prefer_code_assignments = any(marker in question for marker in ("换算", "计算", "转换", "转成"))
     prefer_failure_facts = bool({"不可", "可用", "失败", "超时"} & base_question_terms)
     use_section_routes = (
         prefer_environment_assignments
@@ -268,6 +269,13 @@ def answer_question(
             if "方法" in base_question_terms and overlap & identifier_terms:
                 sufficient_match = True
             if (
+                code_page
+                and page_rank == 0
+                and len(identifier_terms) >= 2
+                and overlap & identifier_terms
+            ):
+                sufficient_match = True
+            if (
                 identifier_terms
                 and not overlap & identifier_terms
                 and not (
@@ -296,6 +304,7 @@ def answer_question(
         focus_terms=focus_terms,
         prioritize_focus=bool(yes_no_focus_terms and {"依赖", "外部"} <= base_question_terms),
         prefer_environment_assignments=prefer_environment_assignments,
+        prefer_code_assignments=prefer_code_assignments,
         prefer_failure_facts=prefer_failure_facts,
         prefer_code_modules=prefer_code_modules,
         exact_symbol_fact_keys=exact_symbol_fact_keys,
@@ -308,6 +317,7 @@ def answer_question(
         focus_terms=focus_terms,
         prioritize_focus=bool(yes_no_focus_terms and {"依赖", "外部"} <= base_question_terms),
         prefer_environment_assignments=prefer_environment_assignments,
+        prefer_code_assignments=prefer_code_assignments,
         prefer_failure_facts=prefer_failure_facts,
         prefer_code_modules=prefer_code_modules,
         exact_symbol_fact_keys=exact_symbol_fact_keys,
@@ -749,6 +759,11 @@ def _support_score(
     core_terms = (
         question_terms - _SUPPORT_CODE_KIND_TERMS - _RANKING_STOP_WORDS - _QUESTION_NOISE_TERMS
     )
+    code_anchor_terms = {term for term in core_terms if not _CJK.fullmatch(term)}
+    if len(code_anchor_terms) >= 2 and any(
+        page_path in code_page_paths for page_path, _ in selected
+    ):
+        core_terms = code_anchor_terms
     explicit_identifiers = _support_identifiers(question)
     selected_page_paths = {page_path for page_path, _ in selected}
     selected_are_fields = bool(selected) and all(
@@ -1179,7 +1194,7 @@ def _answer_citation_limit(question: str, max_citations: int) -> int:
     if max_citations == 1 and any(marker in question for marker in ("子模块", "字段", "属性")):
         return 6
     if max_citations == 1 and any(
-        marker in question for marker in ("分别", "以及", "、", "，", "什么时候")
+        marker in question for marker in ("分别", "以及", "与", "、", "，", "什么时候")
     ):
         return 2
     return max_citations
@@ -1243,6 +1258,7 @@ def _rank_matches(
     focus_terms: set[str] | None = None,
     prioritize_focus: bool = False,
     prefer_environment_assignments: bool = False,
+    prefer_code_assignments: bool = False,
     prefer_failure_facts: bool = False,
     prefer_code_modules: bool = False,
     exact_symbol_fact_keys: set[tuple[str, str, int, str, str]] | None = None,
@@ -1293,6 +1309,7 @@ def _rank_matches(
                 prefer_environment_assignments
                 and bool(_ENVIRONMENT_ASSIGNMENT.search(citation["quote"]))
             ),
+            int(prefer_code_assignments and "=" in citation["quote"]),
             int(
                 prioritize_focus
                 and bool(focus_overlap)

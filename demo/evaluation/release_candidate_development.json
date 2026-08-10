@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "suite_id": "release-candidate-delivery",
+  "suite_revision": 1,
+  "split": "development",
+  "cases": [
+    {
+      "id": "package-version-consistency",
+      "expected": "pyproject metadata, memoryforge.__version__, CLI version, Wheel metadata, and sdist metadata all report 0.3.0"
+    },
+    {
+      "id": "registry-and-benchmark-summary",
+      "expected": "the strict registry and generated benchmark summary agree on suite, experiment, Evidence, QA, split, repository, Commit, and SHA256 identities"
+    },
+    {
+      "id": "local-reproducible-artifacts",
+      "expected": "two isolated local builds from one clean Commit produce byte-identical Wheel and sdist artifacts"
+    },
+    {
+      "id": "workspace-release-drill",
+      "expected": "an isolated public Workspace completes refresh, review, approve, apply, lint, no-pending ingest, backup, restore, query, and Showcase checks"
+    },
+    {
+      "id": "release-document-consistency",
+      "expected": "README, CHANGELOG, Evidence Claims, known limits, interview script, provenance, and release summary make the same bounded claims"
+    },
+    {
+      "id": "frozen-splits-remain-closed",
+      "expected": "registered release confirmation and holdout results do not exist before their gates open"
+    }
+  ],
+  "expected_metrics": {
+    "pass_rate": 100.0,
+    "failed_cases": 0,
+    "reproducible_artifacts": true,
+    "private_detail_leaks": 0,
+    "confirmation_not_run": true,
+    "holdout_not_run": true
+  }
+}

@@ -1,0 +1,9 @@
+380de5842f8e73b028c7599dcb049b88156185adc25ff9858491376ee569d8fe  benchmark-summary.json
+1176296c53051f5acc2d7015c0aab409a59b500b332fdeeccde8f9f23649e8db  memoryforge-0.3.0-py3-none-any.whl
+40daea26eb78b56fb83ea81b9064fc19e98ecf55b473bed6dac8bdea21a7ca76  memoryforge-0.3.0.tar.gz
+c9a91262a3a9e8f9d6e981a51a856968a8d1b191534cdf177fa22cc769c6e826  release-provenance.json
+1176296c53051f5acc2d7015c0aab409a59b500b332fdeeccde8f9f23649e8db  reproducibility-first-memoryforge-0.3.0-py3-none-any.whl
+40daea26eb78b56fb83ea81b9064fc19e98ecf55b473bed6dac8bdea21a7ca76  reproducibility-first-memoryforge-0.3.0.tar.gz
+1176296c53051f5acc2d7015c0aab409a59b500b332fdeeccde8f9f23649e8db  reproducibility-second-memoryforge-0.3.0-py3-none-any.whl
+40daea26eb78b56fb83ea81b9064fc19e98ecf55b473bed6dac8bdea21a7ca76  reproducibility-second-memoryforge-0.3.0.tar.gz
+b70d27ef9612cdeec421fa05ccb7f48851a82d29762e61651304e1bc8957bf1a  workspace-drill.json

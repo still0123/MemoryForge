@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import json
 import re
+from hashlib import sha256
 from pathlib import Path
-from typing import Any, NotRequired, TypedDict
+from typing import Any, Literal, NotRequired, TypedDict
 
+from memoryforge.importer import import_local_document
+from memoryforge.models import ImportResult, LocalDocument, Sensitivity, SourceCategory
 from memoryforge.workspace import is_public_source_version
 
 _MAX_TURNS = 3
+_MAX_MEMORY_MESSAGES = 100
 _MAX_CONTEXT_CHARS = 3_600
 _MAX_QUESTION_CHARS = 600
 _MAX_ANSWER_CHARS = 1_200
@@ -49,6 +53,9 @@ class SessionTurn(TypedDict):
     citations: list[SessionCitation]
     wiki_pages: list[str]
     model_safe: bool
+
+
+ConversationMessage = tuple[Literal["user", "assistant"], str]
 
 
 def is_valid_session_id(session_id: str) -> bool:
@@ -108,6 +115,8 @@ class SessionStore:
             self.path,
             self.directory / f"{self.session_id}.project",
             self.directory / f"{self.session_id}.context",
+            self.directory / f"{self.session_id}.auto-memory",
+            self.directory / f"{self.session_id}.memory.json",
         ):
             if path.is_file():
                 path.unlink()
@@ -129,6 +138,15 @@ class SessionStore:
         if session_id is not None and not is_valid_session_id(session_id):
             raise ValueError("session ID is invalid")
         _write_pointer(self.directory / f"{self.session_id}.context", session_id)
+
+    def auto_memory_enabled(self) -> bool:
+        return _read_pointer(self.directory / f"{self.session_id}.auto-memory") == "on"
+
+    def set_auto_memory(self, enabled: bool) -> None:
+        _write_pointer(
+            self.directory / f"{self.session_id}.auto-memory",
+            "on" if enabled else None,
+        )
 
 
 def render_context(turns: list[SessionTurn]) -> str:
@@ -211,6 +229,108 @@ def save_turn(
         wiki_pages=wiki_pages,
         model_safe=model_safe,
     )
+
+
+def remember_session(workspace_root: Path, session_id: str) -> ImportResult | None:
+    """Store the bounded Feishu session as a local-only, reviewable source draft."""
+    turns = SessionStore(workspace_root, session_id).load(allow_local=True)
+    messages: list[ConversationMessage] = []
+    for turn in turns:
+        messages.extend((("user", turn["question"]), ("assistant", turn["answer"])))
+    messages = _merge_session_memory(workspace_root, session_id, messages)
+    return remember_conversation(
+        workspace_root,
+        platform="feishu",
+        conversation_id=session_id,
+        messages=messages,
+    )
+
+
+def _merge_session_memory(
+    workspace_root: Path,
+    session_id: str,
+    recent: list[ConversationMessage],
+) -> list[ConversationMessage]:
+    path = workspace_root / ".memoryforge" / "sessions" / f"{session_id}.memory.json"
+    existing: list[ConversationMessage] = []
+    if path.is_file():
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            for message in payload.get("messages", []):
+                role, content = message
+                if role not in {"user", "assistant"} or not isinstance(content, str):
+                    raise ValueError
+                existing.append((role, content))
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
+            raise ValueError("stored conversation memory is invalid") from exc
+    overlap = 0
+    for size in range(min(len(existing), len(recent)), 0, -1):
+        if existing[-size:] == recent[:size]:
+            overlap = size
+            break
+    # ponytail: 100 messages keeps one small local file; use a transcript DB when
+    # longer retained conversations become a measured need.
+    merged = (existing + recent[overlap:])[-_MAX_MEMORY_MESSAGES:]
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    path.write_text(
+        json.dumps({"messages": merged}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    path.chmod(0o600)
+    return merged
+
+
+def remember_conversation(
+    workspace_root: Path,
+    *,
+    platform: Literal["feishu", "botmux"],
+    conversation_id: str,
+    messages: list[ConversationMessage],
+) -> ImportResult | None:
+    """Store normalized conversation messages as one local-only source."""
+    if not messages:
+        return None
+    source_id = sha256(f"conversation:{platform}:{conversation_id}".encode()).hexdigest()
+    first_user = next((content for role, content in messages if role == "user"), "")
+    topic = " ".join(first_user.split()).strip("# ")
+    if len(topic) > 72:
+        topic = topic[:71].rstrip() + "…"
+    title = (
+        f"{platform.title()} conversation: {topic}" if topic else f"{platform.title()} conversation"
+    )
+    return import_local_document(
+        workspace_root,
+        LocalDocument(
+            source_uri=f"mf://source/{source_id}",
+            source_path=f"conversations/{platform}/{source_id[:16]}.md",
+            media_type="text/markdown",
+            category=SourceCategory.NOTES,
+            suffix=".md",
+            title=title,
+            content=_render_memory_source(title, messages),
+            sensitivity=Sensitivity.LOCAL_ONLY,
+            tags=("conversation", f"platform:{platform}", "unverified"),
+        ),
+        source_id=source_id,
+    )
+
+
+def _render_memory_source(title: str, messages: list[ConversationMessage]) -> str:
+    lines = [
+        f"# {title}",
+        "",
+        "> Conversation draft. Assistant responses are unverified until review and apply.",
+    ]
+    for role, content in messages:
+        lines.extend(
+            (
+                "",
+                "## User" if role == "user" else "## Assistant (unverified)",
+                "",
+                content,
+            )
+        )
+    return "\n".join(lines) + "\n"
 
 
 def _looks_like_followup(question: str) -> bool:

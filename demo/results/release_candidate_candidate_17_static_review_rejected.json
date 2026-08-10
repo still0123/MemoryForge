@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "suite_id": "release-candidate-delivery",
+  "suite_revision": 1,
+  "memoryforge_commit": "b0dfd3ac91d6f97b3cfd1e8dfad3160237bfdec0",
+  "memoryforge_worktree_dirty": false,
+  "candidate": "release-development-candidate-17",
+  "review": {
+    "scope": "569685c2f0bf790819820b821b4768d180c4ee0d...b0dfd3ac91d6f97b3cfd1e8dfad3160237bfdec0",
+    "base_commit": "569685c2f0bf790819820b821b4768d180c4ee0d",
+    "source_commit": "b0dfd3ac91d6f97b3cfd1e8dfad3160237bfdec0",
+    "status": "failed",
+    "p0": 0,
+    "p1": 4,
+    "p2": 0,
+    "failures": [
+      "development_live_worktree_binding",
+      "benchmark_summary_live_worktree_binding",
+      "accepted_review_report_exact_contract",
+      "accepted_review_raw_html_privacy"
+    ],
+    "artifacts": {
+      "raw_findings": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_17/comments.jsonl",
+        "sha256": "4ed218c81d3eaa3f37fdc6da5b1cd238a016b58125ece4a7010c931b3a02ebc6"
+      },
+      "top_findings": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_17/final_comments.json",
+        "sha256": "722f18679ce608036f39e865ed568bd5ed66b6ff0385a23c75073cafef418e0a"
+      },
+      "html_report": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_17/report.html",
+        "sha256": "7e7edeaac233c313b8f6a5d89960aa2406fa1077b8c5cc51f8817766b5b96b6f"
+      },
+      "markdown_report": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_17/report.md",
+        "sha256": "94a530f5a71e5702a6aea809797cc09c4b2f51cad97867ff0bfbb0fa51660340"
+      },
+      "review_scope": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_17/review-scope.json",
+        "sha256": "44a7d50cf56a4561df3b53a2b9bb89b945b52760263324b919b685a00d0616f5"
+      }
+    }
+  },
+  "root_cause": {
+    "summary": "Candidate 17 passed both platform gates, but final review found live-worktree identity gaps and incomplete accepted-report validation.",
+    "fix": "Execute public producers from fixed detached snapshots and validate accepted reports against an exact structured contract while scanning raw archives for private details."
+  },
+  "confirmation": {
+    "path": "demo/evaluation/release_candidate_confirmation.json",
+    "sha256": "3eed08e04592b614a709cd18c6a92951b5da145d7dab4b9997824cd4e002e805",
+    "status": "not_run"
+  },
+  "holdout": {
+    "path": "demo/evaluation/release_candidate_holdout.json",
+    "sha256": "b466644bef2748a96d598540c54633fe49770af97fc71ce6e62e18eda687e8f8",
+    "status": "not_run"
+  },
+  "passed": false
+}

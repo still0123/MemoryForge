@@ -83,7 +83,8 @@ def parse_page_citations(content: str) -> list[CitationPayload]:
     if not _page_matches_frontmatter(content):
         return []
     section_matches = re.finditer(
-        r"^## (?P<name>Verified facts|Verified symbols|Verified dependencies)\s*$"
+        r"^## (?P<name>Verified facts|Verified symbols|Verified dependencies|"
+        r"Conversation notes \(unverified\))\s*$"
         r"\n(?P<section>.*?)(?=^## |\Z)",
         content,
         re.MULTILINE | re.DOTALL,

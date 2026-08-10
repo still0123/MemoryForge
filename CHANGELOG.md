@@ -1,9 +1,77 @@
 # Changelog
 
-## Unreleased
+<!-- memoryforge-release-claim: version=0.3.0; status=released; supported_platforms=macos+linux; active_candidate=19; platform_gate_candidate=19; platform_gate_status=accepted; review_status=accepted; macos_passed=642; linux_passed=639; linux_skipped=3; windows_status=not_verified; release_verification=passed -->
+
+## v0.3.0 — 2026-08-10
+
+- 支持范围为 macOS 与 Linux；Windows 尚未验证，不属于 v0.3.0 支持范围。
+
+- 增加审核后会话记忆的 `recall`、一次性 `codex-setup` 自动加载、只读 `history` 与追加式
+  `rollback`；回滚同步重建 SQLite 查询投影，不删除 Git 历史。
+- 修复中文改写代码问题已命中正确页面却无法选择分散赋值事实的问题；私有三题冒烟从
+  Answer 66.7% / Citation 50% 提升到 Answer 100% / Citation 100%。
 
 - 关闭 GitHub Actions 并移除 hosted CI/Release workflow；
 - 新增本地零付费质量门禁，覆盖 Ruff、Mypy、pytest、Wheel/sdist 双 clean-room 和 SHA256。
+- 建立 12 Suite / 8 Experiment 的严格 Benchmark Registry，分离 package version、
+  suite revision 与 Evidence revision，并保留全部 rejected/superseded Evidence；
+- 增加 SQLite FTS5 Wiki Fact 索引、精确 Code Index 路由、覆盖式多来源选择与可解释
+  support score；development Answer/Selective Accuracy 为 100%，Coverage 为 90%，Risk 为 0%；
+- 增加递归 Folder Import、单个公开 GitHub Issue/PR Thread Import 与离线 JSON 重放；
+- 增加零 Key 只读静态 Showcase，展示 SourceVersion、Wiki、ChangeSet、Citation Trace、
+  Benchmark、拒答案例与 Mermaid 架构；
+- 增加 POSIX `fcntl` / Windows `msvcrt` 锁边界、PowerShell 本地门禁与 Linux clean-room
+  Evidence；原生 Windows confirmation 仍冻结为 `not_run`；
+- 增加双隔离 release build、Workspace backup/restore drill、benchmark summary 与本地
+  provenance；Candidate 3 门禁在 macOS 为 586 passed、Linux 为 583 passed / 3 skipped，
+  Wheel/sdist 跨平台 SHA256 一致；retained artifacts 不进入 sdist。
+- 强化 release gate：核验实际 Wheel/sdist metadata 和 bytes，增加独立 sdist clean-room 与
+  atomic publish；保留 macOS 路径 alias 导致的 preflight 失败。
+- 保留 Candidate 4 文档门禁负结果；修复当前 RC claim 校验误扫历史平台 Evidence 的问题，
+  不删除或改写旧的 macOS/Linux 计数。
+- Candidate 5 development 6/6；macOS 586 passed、Linux 583 passed / 3 skipped，
+  coverage 均为 88%，Wheel/sdist 跨平台 SHA256 一致。
+- Candidate 5 最终静态审查发现 0 P0 / 10 P1 / 2 P2，结果 rejected；原始与 Top 5 报告均保留。
+- Candidate 6 development 6/6；构建改用 detached Commit 快照，并严格绑定 package、
+  provenance、summary、SHA256SUMS、retained artifacts、Workspace privacy 与 Registry Commit。
+- Candidate 6 本地门禁在 macOS 为 594 passed、Linux 为 591 passed / 3 skipped，
+  coverage 均为 88%，Wheel/sdist 跨平台 SHA256 一致。
+- Candidate 6 最终静态审查发现 0 P0 / 9 P1 / 3 P2，结果 rejected；原始与 Top 5 报告均保留。
+- Candidate 7 固定 package metadata/sdist 输入与构建 epoch，并要求 development 与 local-gate
+  Wheel/sdist SHA256 完全一致；development 6/6 通过。
+- Candidate 7 macOS 首次门禁为 598 passed / 1 failed，因旧测试仍要求已移除的
+  `sdist.exclude` 合同而 rejected；Linux 未运行，失败 Evidence 已保留。
+- Candidate 7 修复测试合同后本地门禁通过：macOS 599 passed，Linux 596 passed / 3 skipped，
+  coverage 均为 88%；两端 Wheel/sdist 与 development 制品逐字节一致。
+- Candidate 7 静态终审发现 0 P0 / 10 P1 / 3 P2，结果 rejected；原始 13 条、Top 5 与固定
+  Commit 范围报告均保留。
+- Candidate 8 development 6/6；固定 checkout EOL，闭合 Summary/manifest/case identity，
+  拒绝 symlink，并真实验证 Workspace answer、Citation、unknown 与 backup/restore replay。
+- Candidate 8 本地门禁通过：macOS 604 passed，Linux 601 passed / 3 skipped；coverage 88%，
+  package bytes 与 development 一致，双平台 retained SHA256SUMS 可原位重放。
+- Candidate 8 静态终审发现 0 P0 / 4 P1 / 2 P2，结果 rejected；全部 6 条发现与固定 Commit
+  范围报告保留。
+- Candidate 9 development 6/6；拒绝 Summary schema 降级与布尔 schema 别名，复算历史评审
+  范围，隔离版本探针，并保留、哈希和验证完整 Code Wiki Evidence。
+- Candidate 9 本地门禁通过：macOS 607 passed，Linux 604 passed / 3 skipped；coverage 88%，
+  Wheel、sdist 与 raw Code Wiki Evidence 跨平台 SHA256 一致。
+- Candidate 9 静态终审发现 0 P0 / 10 P1 / 4 P2，结果 rejected；全部 14 条与固定 Commit
+  范围报告保留，confirmation/holdout 未运行。
+- Candidate 10 development 生成 Summary schema 3 与 Workspace drill schema 2，但旧 consumer
+  仍要求 drill schema 1，结果 5/6 rejected；完整 artifacts 与失败 Evidence 保留。
+- Candidate 11 development 6/6；consumer 复用 schema-aware Registry contract，保留可重算
+  answer/Citation/unknown/replay、完整 experiment identity 与显式 review 状态。
+- Candidate 11 本地门禁通过：macOS 609 passed，Linux 606 passed / 3 skipped；coverage 88%，
+  Wheel、sdist 与 raw Code Wiki Evidence 跨平台同字节。
+- Candidate 11 静态终审发现 0 P0 / 8 P1 / 4 P2，结果 rejected；12 条独立根因与固定
+  Commit 范围报告保留。
+- Candidate 12 development 6/6；关闭 package metadata、Registry-to-Commit、Workspace
+  verify Evidence、跨平台隐私路径、clean-room import、Git fixture identity、artifact root 与
+  passed-review 状态合同。
+- Candidate 12 本地门禁通过：macOS 623 passed，Linux 620 passed / 3 skipped；coverage 88%，
+  Wheel、sdist 与 raw Code Wiki Evidence 跨平台同字节。
+- Candidate 12 静态终审发现 0 P0 / 9 P1 / 7 P2，结果 rejected；20 条 raw findings、16 条
+  去重后独立根因、Top 5 和固定 Commit 范围报告均保留。
 - 强化回答准确率契约，要求关键事实和冻结来源同时命中；AgentSkill-Eval 30 题严格 Answer 为
   96.7%，Citation grounding 为 100%，Source recall@3 为 96.2%；
 - 追加独立 Click 20 题复评；回答准确率 5.0%、来源召回 16.7%，再次确认外部有效性缺口；
@@ -14,6 +82,9 @@
 - 增加候选页内英文词形匹配和 page-aware fact 排序；Watchfiles grounded Answer 从 20% 提升至
   80%，Structlog confirmation 为 66.7%，Citation grounding 均为 100%。
 - 关闭只读 Workspace 与 Source Manifest 校验连接，并让本地门禁拒绝未关闭资源警告。
+
+最终发布使用双隔离构建、clean-room 安装、Workspace backup/restore、隐私扫描与 SHA256
+回放；不以未验证的 Windows 结果阻断 macOS/Linux 发布。
 
 ## v0.2.1 — 2026-08-06
 

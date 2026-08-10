@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "suite_id": "release-candidate-delivery",
+  "suite_revision": 1,
+  "memoryforge_commit": "2fff47c47f0cc3c4bbb98eb02c0acb77bce1718e",
+  "memoryforge_worktree_dirty": false,
+  "candidate": "release-development-candidate-13",
+  "review": {
+    "scope": "569685c2f0bf790819820b821b4768d180c4ee0d...2fff47c47f0cc3c4bbb98eb02c0acb77bce1718e",
+    "base_commit": "569685c2f0bf790819820b821b4768d180c4ee0d",
+    "source_commit": "2fff47c47f0cc3c4bbb98eb02c0acb77bce1718e",
+    "status": "failed",
+    "p0": 0,
+    "p1": 10,
+    "p2": 0,
+    "failures": [
+      "local_gate_worktree_snapshot_binding",
+      "local_gate_python_checkout_binding",
+      "local_gate_package_source_environment",
+      "workspace_drill_git_environment",
+      "development_runner_git_environment",
+      "powershell_python_path",
+      "registry_artifact_exact_schema",
+      "accepted_review_archive_consistency"
+    ],
+    "artifacts": {
+      "raw_findings": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_13/comments.jsonl",
+        "sha256": "13a40d85a5f5837e6e655e6642456cd25619f97094327d9f00005f885c6ac630"
+      },
+      "top_findings": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_13/final_comments.json",
+        "sha256": "cabfc5ccc343b3ffe6c6bcc979b1bfcfc1230c449a3e39e59438d5e7bc855b05"
+      },
+      "html_report": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_13/report.html",
+        "sha256": "c40857942bd2d3fc5032b0d2da53ec406c41f5fcc0f3053b5f8989611a07c188"
+      },
+      "markdown_report": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_13/report.md",
+        "sha256": "536911849dab2fe1b8dbb0e8e5512248a7a1d242a7795591cdb0eadcb0878e87"
+      },
+      "review_scope": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_13/review-scope.json",
+        "sha256": "47d3a617a06b9399135ed83f43fbe09298f6c6bd0be5144a3d22db5b43509cb1"
+      }
+    }
+  },
+  "root_cause": {
+    "summary": "Candidate 13 closed Candidate 12 findings, but final review found local-gate source identity, package-source environment, Git-environment, Registry schema, and accepted-review archive gaps.",
+    "fix": "Run every gate against one clean fixed Commit and its package source, scrub Git and package-manager environments, require exact Registry schemas, and bind accepted review archives to the zero-finding result."
+  },
+  "confirmation": {
+    "path": "demo/evaluation/release_candidate_confirmation.json",
+    "sha256": "3eed08e04592b614a709cd18c6a92951b5da145d7dab4b9997824cd4e002e805",
+    "status": "not_run"
+  },
+  "holdout": {
+    "path": "demo/evaluation/release_candidate_holdout.json",
+    "sha256": "b466644bef2748a96d598540c54633fe49770af97fc71ce6e62e18eda687e8f8",
+    "status": "not_run"
+  },
+  "passed": false
+}

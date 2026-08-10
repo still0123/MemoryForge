@@ -1,0 +1,83 @@
+{
+  "builds": [
+    {
+      "name": "first",
+      "sdist": {
+        "path": "memoryforge-0.3.0.tar.gz",
+        "retained_path": "reproducibility-first-memoryforge-0.3.0.tar.gz",
+        "sha256": "4f65684facf5ab1f7c30d0785dc252a7ab8cfb562743cd7624c5986bfd3ed8c3",
+        "size": 869529
+      },
+      "wheel": {
+        "path": "memoryforge-0.3.0-py3-none-any.whl",
+        "retained_path": "reproducibility-first-memoryforge-0.3.0-py3-none-any.whl",
+        "sha256": "ff9af0543c2eb765a391d9c52af8b709f8954a651b33ee3b9724b5821e7fd0f4",
+        "size": 183908
+      }
+    },
+    {
+      "name": "second",
+      "sdist": {
+        "path": "memoryforge-0.3.0.tar.gz",
+        "retained_path": "reproducibility-second-memoryforge-0.3.0.tar.gz",
+        "sha256": "4f65684facf5ab1f7c30d0785dc252a7ab8cfb562743cd7624c5986bfd3ed8c3",
+        "size": 869529
+      },
+      "wheel": {
+        "path": "memoryforge-0.3.0-py3-none-any.whl",
+        "retained_path": "reproducibility-second-memoryforge-0.3.0-py3-none-any.whl",
+        "sha256": "ff9af0543c2eb765a391d9c52af8b709f8954a651b33ee3b9724b5821e7fd0f4",
+        "size": 183908
+      }
+    }
+  ],
+  "checks": {
+    "benchmark_summary": "passed",
+    "sdist_clean_room": {
+      "cli_version": "passed",
+      "import": "passed",
+      "install": "passed",
+      "pip_check": "passed"
+    },
+    "sdist_members": "passed",
+    "wheel_clean_room": {
+      "cli_help": "passed",
+      "cli_version": "passed",
+      "code_wiki_benchmark": "passed",
+      "pip_check": "passed",
+      "public_demo": "not_run"
+    },
+    "workspace_drill": "passed"
+  },
+  "confirmation": {
+    "status": "not_run"
+  },
+  "dependencies": {
+    "pydantic": "2.13.4",
+    "tree-sitter": "0.25.2",
+    "tree-sitter-go": "0.25.0",
+    "tree-sitter-python": "0.25.0",
+    "tree-sitter-typescript": "0.23.2",
+    "typer": "0.27.1"
+  },
+  "holdout": {
+    "status": "not_run"
+  },
+  "memoryforge_commit": "9a6c145a3f052c78b47c4d8f882d4a3191c4a2f4",
+  "memoryforge_worktree_dirty": false,
+  "package": {
+    "sdist": "memoryforge-0.3.0.tar.gz",
+    "sdist_sha256": "4f65684facf5ab1f7c30d0785dc252a7ab8cfb562743cd7624c5986bfd3ed8c3",
+    "version": "0.3.0",
+    "wheel": "memoryforge-0.3.0-py3-none-any.whl",
+    "wheel_sha256": "ff9af0543c2eb765a391d9c52af8b709f8954a651b33ee3b9724b5821e7fd0f4"
+  },
+  "reproducible_artifacts": true,
+  "runtime": {
+    "implementation": "CPython",
+    "machine": "arm64",
+    "python": "3.11.15",
+    "system": "Darwin"
+  },
+  "schema_version": 1
+}

@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "suite_id": "release-candidate-delivery",
+  "suite_revision": 1,
+  "memoryforge_commit": "433f33c001c963cd69dd507346ac836895b7c36b",
+  "memoryforge_worktree_dirty": false,
+  "candidate": "release-development-candidate-2",
+  "review": {
+    "scope": "origin/main...HEAD",
+    "status": "failed",
+    "p0": 0,
+    "p1": 5,
+    "p2": 1,
+    "failures": [
+      "benchmark_summary_source_race",
+      "isolated_build_evidence_duplication",
+      "document_claim_contradiction",
+      "clean_room_not_run",
+      "secret_key_privacy",
+      "acceptance_boolean_identity"
+    ]
+  },
+  "root_cause": {
+    "summary": "Release Evidence checks still allowed claims stronger than retained independently verifiable data.",
+    "fix": "Retain both isolated builds, bind a structured release claim, require exact clean-room checks, scan secret-valued keys, and recheck source identity before summary publication."
+  },
+  "confirmation": {
+    "path": "demo/evaluation/release_candidate_confirmation.json",
+    "sha256": "3eed08e04592b614a709cd18c6a92951b5da145d7dab4b9997824cd4e002e805",
+    "status": "not_run"
+  },
+  "holdout": {
+    "path": "demo/evaluation/release_candidate_holdout.json",
+    "sha256": "b466644bef2748a96d598540c54633fe49770af97fc71ce6e62e18eda687e8f8",
+    "status": "not_run"
+  },
+  "passed": false
+}

@@ -84,9 +84,16 @@ _MARKDOWN_LIST_ITEM = re.compile(
     r"(?P<fact>[^\n]+(?:\n(?![ \t]*(?:[-*+]|\d+[.)])[ \t]+)[ \t]+\S[^\n]*)*)[ \t]*$",
     re.MULTILINE,
 )
+_CONVERSATION_ROLE_HEADING = re.compile(
+    r"^## (?P<role>User|Assistant \(unverified\)|用户|Codex)\s*$",
+    re.MULTILINE,
+)
 # Markdown lists are compiled as separate facts. Keep enough facts to retain
 # later sections of a normal README instead of truncating after the quick-start.
 _LOCAL_FACT_LIMIT = 48
+_CONVERSATION_TURN_LIMIT = 8
+_CONVERSATION_FACTS_PER_TURN = 3
+_CONVERSATION_FACT_CHAR_LIMIT = 600
 
 
 @dataclass(frozen=True)
@@ -324,6 +331,8 @@ def _compile_deterministically(
             content = _read_source_text(workspace, source)
             if "code" in source.tags:
                 candidate_files[path] = _render_code_page(source, content)
+            elif "conversation" in source.tags:
+                candidate_files[path] = _render_conversation_page(source, content)
             else:
                 candidate_files[path] = _render_page(source, _meaningful_paragraphs(content))
         else:
@@ -494,6 +503,8 @@ def _compile_stale_pages(
             content = _read_source_text(workspace, source)
             if "code" in source.tags:
                 candidate_files[stale_page.path] = _render_code_page(source, content)
+            elif "conversation" in source.tags:
+                candidate_files[stale_page.path] = _render_conversation_page(source, content)
             else:
                 candidate_files[stale_page.path] = _render_page(
                     source,
@@ -1778,7 +1789,14 @@ def _target_page_path(
     return _canonical_page_path(change.source_ids)
 
 
-def _render_page(source: CurrentSource, facts: list[SourceFact]) -> str:
+def _render_page(
+    source: CurrentSource,
+    facts: list[SourceFact],
+    *,
+    section_title: str = "Verified facts",
+    summary_fact: SourceFact | None = None,
+    section_preamble: tuple[str, ...] = (),
+) -> str:
     displayed_facts = [
         SourceFact(
             quote=" ".join(line.strip() for line in fact.quote.splitlines()),
@@ -1787,7 +1805,12 @@ def _render_page(source: CurrentSource, facts: list[SourceFact]) -> str:
         )
         for fact in facts
     ]
-    first_fact = displayed_facts[0]
+    raw_summary = summary_fact or facts[0]
+    first_fact = SourceFact(
+        quote=" ".join(line.strip() for line in raw_summary.quote.splitlines()),
+        start=raw_summary.start,
+        section_path=raw_summary.section_path,
+    )
     summary_prefix = " / ".join(first_fact.section_path)
     summary = f"{summary_prefix}: {first_fact.quote}" if summary_prefix else first_fact.quote
     tags = tuple(dict.fromkeys((source.category, *source.tags)))
@@ -1804,8 +1827,9 @@ def _render_page(source: CurrentSource, facts: list[SourceFact]) -> str:
         "",
         f"# {source.title}",
         "",
-        "## Verified facts",
+        f"## {section_title}",
         "",
+        *section_preamble,
     ]
     section_path: tuple[str, ...] = ()
     for index, fact in enumerate(displayed_facts, start=1):
@@ -1822,6 +1846,79 @@ def _render_page(source: CurrentSource, facts: list[SourceFact]) -> str:
             f"`{source.source_version}` · `chars:{fact.start}-{end}`"
         )
     return "\n".join(lines) + "\n"
+
+
+def _render_conversation_page(source: CurrentSource, content: str) -> str:
+    """Keep recent, unverified conversation notes; retain full transcript as evidence."""
+    facts = _conversation_facts(content)
+    if not facts:
+        return _render_page(source, _meaningful_paragraphs(content))
+    summary_fact = next(
+        (fact for fact in facts if "assistant" in fact.section_path[-1].lower()),
+        facts[0],
+    )
+    summary_quote = summary_fact.quote
+    if len(summary_quote) > 180:
+        summary_quote = summary_quote[:179].rstrip() + "…"
+    summary_fact = SourceFact(
+        quote=summary_quote,
+        start=summary_fact.start,
+        section_path=(),
+    )
+    return _render_page(
+        source,
+        facts,
+        section_title="Conversation notes (unverified)",
+        summary_fact=summary_fact,
+        section_preamble=(
+            "> Latest messages first. Full transcript remains in immutable raw evidence.",
+            "",
+        ),
+    )
+
+
+def _conversation_facts(content: str) -> list[SourceFact]:
+    matches = list(_CONVERSATION_ROLE_HEADING.finditer(content))
+    turns: list[tuple[str, list[SourceFact]]] = []
+    for index, match in enumerate(matches):
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(content)
+        raw_body = content[match.end() : end]
+        leading = len(raw_body) - len(raw_body.lstrip())
+        body = raw_body.strip()
+        if not body:
+            continue
+        body_start = match.end() + leading
+        try:
+            body_facts = _meaningful_paragraphs(body)[:_CONVERSATION_FACTS_PER_TURN]
+        except ValueError:
+            continue
+        role = "Assistant" if match.group("role") in {"Assistant (unverified)", "Codex"} else "User"
+        turns.append(
+            (
+                role,
+                [
+                    SourceFact(
+                        quote=fact.quote[:_CONVERSATION_FACT_CHAR_LIMIT].rstrip(),
+                        start=body_start + fact.start,
+                        section_path=(),
+                    )
+                    for fact in body_facts
+                ],
+            )
+        )
+    recent = turns[-_CONVERSATION_TURN_LIMIT:]
+    facts: list[SourceFact] = []
+    for recency, (role, turn_facts) in enumerate(reversed(recent)):
+        label = f"{'Latest' if recency == 0 else 'Earlier'} {role.lower()} message"
+        facts.extend(
+            SourceFact(
+                quote=fact.quote,
+                start=fact.start,
+                section_path=(label,),
+            )
+            for fact in turn_facts
+        )
+    return facts
 
 
 def _render_code_page(source: CurrentSource, content: str) -> str:

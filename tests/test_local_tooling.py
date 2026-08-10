@@ -14,14 +14,17 @@ run_release_check = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(run_release_check)
 
 
-def test_package_and_cli_versions_match_v021() -> None:
+def test_package_and_cli_versions_match_v030() -> None:
     root = Path(__file__).resolve().parent.parent
     project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
 
-    assert project["project"]["version"] == "0.2.1"
-    assert memoryforge.__version__ == "0.2.1"
-    assert project["tool"]["hatch"]["build"]["targets"]["sdist"]["exclude"] == [
-        "/demo/results/artifacts"
+    assert project["project"]["version"] == "0.3.0"
+    assert memoryforge.__version__ == "0.3.0"
+    assert project["project"]["readme"] == "PACKAGE_README.md"
+    assert project["tool"]["hatch"]["build"]["targets"]["sdist"]["include"] == [
+        "/PACKAGE_README.md",
+        "/pyproject.toml",
+        "/src",
     ]
 
 
@@ -36,10 +39,20 @@ def test_local_check_keeps_the_quality_and_artifact_contract() -> None:
         "demo/validate_benchmark_registry.py",
         "pytest -W error::ResourceWarning",
         "error::pytest.PytestUnraisableExceptionWarning",
+        'python="$(cd "$(dirname "$python")" && pwd)/$(basename "$python")"',
+        "core.hooksPath=/dev/null",
+        'worktree add --detach "$snapshot" "$commit"',
+        'export PYTHONPATH="$snapshot/src"',
+        'output="$root/${output#./}"',
+        '"$name" == PIP_* || "$name" == UV_*',
         '"$workdir/build/bin/python" -m build',
         "--wheel --sdist --no-isolation",
         "uv pip install",
+        "--no-config --default-index https://pypi.org/simple",
+        "--isolated --index-url https://pypi.org/simple",
         "demo/run_release_check.py",
+        "--code-evidence-output",
+        "code-wiki-evidence.json",
         "PIP_CONSTRAINT=",
         "pip install",
         "hatchling",
@@ -55,6 +68,8 @@ def test_local_check_keeps_the_quality_and_artifact_contract() -> None:
         "SHA256SUMS",
     ):
         assert required in script
+    assert script.index("worktree add --detach") < script.index("pytest -W")
+    assert script.index('output="$root/${output#./}"') < script.index('mkdir -p "$output/dist"')
 
 
 def test_powershell_gate_uses_literal_paths_and_isolated_sdist_probe() -> None:
@@ -69,6 +84,17 @@ def test_powershell_gate_uses_literal_paths_and_isolated_sdist_probe() -> None:
         "Get-FileHash -Algorithm SHA256 -LiteralPath",
         "Set-Content -LiteralPath",
         "Remove-Item Env:PYTHONPATH",
+        '"core.hooksPath=NUL"',
+        '"worktree", "add", "--detach", $Snapshot, $Commit',
+        '$env:PYTHONPATH = Join-Path $Snapshot "src"',
+        '$_ -Like "PIP_*" -or $_ -Like "UV_*"',
+        '"--no-config", "--default-index", "https://pypi.org/simple"',
+        '"--isolated", "--index-url", "https://pypi.org/simple"',
+        "$OriginalEnvironment",
+        "[Environment]::SetEnvironmentVariable",
+        "Set-Location -LiteralPath $PreviousLocation.Path",
+        "--code-evidence-output",
+        "code-wiki-evidence.json",
         'Invoke-External $SdistPython @("-I", "-m", "pip", "check")',
         "sdist import escaped clean environment",
         "sdist contains retained or nested artifacts",
@@ -76,6 +102,11 @@ def test_powershell_gate_uses_literal_paths_and_isolated_sdist_probe() -> None:
         'Invoke-External $SdistPython @("-I", "-m", "memoryforge", "--version")',
     ):
         assert required in script
+    assert script.index("$Workdir = $null") < script.index("try {")
+    assert script.index("try {") < script.index("Set-Location -LiteralPath $Root")
+    assert "if ($Workdir)" in script
+    assert "$OriginalEnvironment.ContainsKey($Name)" in script
+    assert script.index('"worktree", "add", "--detach"') < script.index('"-m", "pytest"')
 
 
 def test_github_actions_workflows_are_removed() -> None:

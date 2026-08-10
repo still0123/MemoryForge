@@ -1,0 +1,133 @@
+{
+  "schema_version": 1,
+  "suite_id": "release-candidate-delivery",
+  "suite_revision": 1,
+  "memoryforge_commit": "bced2a660ef38dfc4c0c6a0f994897d6af895574",
+  "memoryforge_worktree_dirty": false,
+  "development": {
+    "path": "demo/evaluation/release_candidate_development.json",
+    "sha256": "8d9fe33359b71ac0b86b6fa42b0bc5ee34080126af3ae0b9bf2fa2c0121cf2a6",
+    "case_count": 6,
+    "evaluation": {
+      "case_count": 6,
+      "metrics": {
+        "pass_rate": 100.0,
+        "failed_cases": 0,
+        "reproducible_artifacts": true,
+        "private_detail_leaks": 0,
+        "confirmation_not_run": true,
+        "holdout_not_run": true
+      },
+      "cases": [
+        {
+          "id": "package-version-consistency",
+          "status": "passed",
+          "error_classification": "none"
+        },
+        {
+          "id": "registry-and-benchmark-summary",
+          "status": "passed",
+          "error_classification": "none"
+        },
+        {
+          "id": "local-reproducible-artifacts",
+          "status": "passed",
+          "error_classification": "none"
+        },
+        {
+          "id": "workspace-release-drill",
+          "status": "passed",
+          "error_classification": "none"
+        },
+        {
+          "id": "release-document-consistency",
+          "status": "passed",
+          "error_classification": "none"
+        },
+        {
+          "id": "frozen-splits-remain-closed",
+          "status": "passed",
+          "error_classification": "none"
+        }
+      ]
+    }
+  },
+  "confirmation": {
+    "path": "demo/evaluation/release_candidate_confirmation.json",
+    "sha256": "3eed08e04592b614a709cd18c6a92951b5da145d7dab4b9997824cd4e002e805",
+    "status": "not_run"
+  },
+  "holdout": {
+    "path": "demo/evaluation/release_candidate_holdout.json",
+    "sha256": "b466644bef2748a96d598540c54633fe49770af97fc71ce6e62e18eda687e8f8",
+    "status": "not_run"
+  },
+  "release_artifacts": {
+    "package": {
+      "sdist": "memoryforge-0.3.0.tar.gz",
+      "sdist_sha256": "2cbe617826ce0b9b7e2bd3da66f22bb7b5c05cd894426d80ee1d47a140ac7a05",
+      "version": "0.3.0",
+      "wheel": "memoryforge-0.3.0-py3-none-any.whl",
+      "wheel_sha256": "fd3a0ab7cd24e5148408250a220db44eb378ff705770593784c17ec687878096"
+    },
+    "builds": [
+      {
+        "name": "first",
+        "sdist": {
+          "path": "memoryforge-0.3.0.tar.gz",
+          "retained_path": "reproducibility-first-memoryforge-0.3.0.tar.gz",
+          "sha256": "2cbe617826ce0b9b7e2bd3da66f22bb7b5c05cd894426d80ee1d47a140ac7a05",
+          "size": 155875
+        },
+        "wheel": {
+          "path": "memoryforge-0.3.0-py3-none-any.whl",
+          "retained_path": "reproducibility-first-memoryforge-0.3.0-py3-none-any.whl",
+          "sha256": "fd3a0ab7cd24e5148408250a220db44eb378ff705770593784c17ec687878096",
+          "size": 176449
+        }
+      },
+      {
+        "name": "second",
+        "sdist": {
+          "path": "memoryforge-0.3.0.tar.gz",
+          "retained_path": "reproducibility-second-memoryforge-0.3.0.tar.gz",
+          "sha256": "2cbe617826ce0b9b7e2bd3da66f22bb7b5c05cd894426d80ee1d47a140ac7a05",
+          "size": 155875
+        },
+        "wheel": {
+          "path": "memoryforge-0.3.0-py3-none-any.whl",
+          "retained_path": "reproducibility-second-memoryforge-0.3.0-py3-none-any.whl",
+          "sha256": "fd3a0ab7cd24e5148408250a220db44eb378ff705770593784c17ec687878096",
+          "size": 176449
+        }
+      }
+    ],
+    "sha256sums_sha256": "3256b782f2187520aaa4b278dfd3db0e808a5c6b63f9bd9b51cd46f742cf4e24",
+    "provenance_sha256": "c7e9b2021d3453dce041e265c62463ad4235d0c9ec8fa68ffcb738eabe53d8bb",
+    "benchmark_summary_sha256": "bae7db889dbae4a682e7ccbe138234098355fc1e49eec11543a7fc4cfa6c877c",
+    "workspace_drill_sha256": "95f80606d29390ee0b9d8cd2a87854ba7fdfb459d4245df636ab4575ed47fcc1",
+    "artifact_root": "demo/results/artifacts/release_candidate_development/bced2a660ef38dfc4c0c6a0f994897d6af895574"
+  },
+  "runs": [
+    {
+      "name": "first",
+      "evaluation_sha256": "e7986cc7727e8f68c5eb1cc40c05f53def943e8dc77706d1f555ad606e19f8cc"
+    },
+    {
+      "name": "second",
+      "evaluation_sha256": "e7986cc7727e8f68c5eb1cc40c05f53def943e8dc77706d1f555ad606e19f8cc"
+    }
+  ],
+  "gates": {
+    "pass_rate": true,
+    "failed_cases": true,
+    "reproducible_artifacts": true,
+    "private_detail_leaks": true,
+    "confirmation_not_run": true,
+    "holdout_not_run": true,
+    "deterministic_replay": true,
+    "stable_memoryforge_commit": true,
+    "clean_worktree_after_run": true
+  },
+  "passed": true
+}

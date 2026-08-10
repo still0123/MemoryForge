@@ -1,0 +1,57 @@
+[
+  {
+    "title": "pip 隔离模式使 sdist clean-room 约束文件失效",
+    "file": "scripts/build_release.py",
+    "start_line": 301,
+    "end_line": 313,
+    "severity": "P1",
+    "category": "ROBUSTNESS",
+    "confidence": 10,
+    "suggestion": "不要通过 PIP_CONSTRAINT 环境变量传约束；像 _isolated_build 一样，在两条 pip install 命令中显式加入 -c str(constraints)。",
+    "rationale": "_check_sdist_clean_room 设置 PIP_CONSTRAINT 后又使用 pip --isolated；隔离模式忽略 PIP_* 环境选项，因此 hatchling 和 sdist 运行时依赖实际不受冻结约束。"
+  },
+  {
+    "title": "Retained package bytes are not bound to the declared Commit",
+    "file": "demo/validate_benchmark_registry.py",
+    "start_line": 2406,
+    "end_line": 2434,
+    "severity": "P1",
+    "category": "BUSINESS_SEMANTICS",
+    "confidence": 10,
+    "suggestion": "比较 Wheel 与 sdist 的完整 memoryforge 源码成员，并把每个打包源码文件绑定到声明 Commit 的 Git blob；同时验证 Wheel RECORD。",
+    "rationale": "_package_archives_match 只比较 METADATA 与 PKG-INFO。Wheel 与 sdist 可包含不同源码，或包含不属于声明 Commit 的源码，只要同步更新自声明摘要仍会被 retained consumer 接受。"
+  },
+  {
+    "title": "Published acceptance is not bound to the passed-review Commit",
+    "file": "demo/validate_benchmark_registry.py",
+    "start_line": 2582,
+    "end_line": 2592,
+    "severity": "P1",
+    "category": "BUSINESS_SEMANTICS",
+    "confidence": 10,
+    "suggestion": "发布 accepted summary 时要求当前 Commit 同时后继 development、local-gate 和 passed-review 三个 Commit。",
+    "rationale": "schema 3 发布只校验 development 与 acceptance_evidence ancestry，未校验 passed review Commit；在兄弟分支登记 accepted Evidence 时可能授权未被该 review 覆盖的源码。"
+  },
+  {
+    "title": "Malformed final-review findings are treated as non-blockers",
+    "file": "demo/validate_benchmark_registry.py",
+    "start_line": 4150,
+    "end_line": 4179,
+    "severity": "P1",
+    "category": "BUSINESS_SEMANTICS",
+    "confidence": 10,
+    "suggestion": "严格验证 finding schema 与 severity 枚举，从 raw findings 重算 p0/p1/p2；passed review 遇到 malformed finding 必须 fail closed。",
+    "rationale": "当前仅拒绝 severity 精确为 P0/P1/P2 的对象；缺失 severity、lowercase p1 和布尔计数可绕过，从而让损坏的 review sidecar 授权 accepted_development。"
+  },
+  {
+    "title": "Summary package version is outside the Commit snapshot binding",
+    "file": "demo/build_benchmark_summary.py",
+    "start_line": 43,
+    "end_line": 51,
+    "severity": "P1",
+    "category": "BUSINESS_SEMANTICS",
+    "confidence": 10,
+    "suggestion": "从声明 Git Commit 读取 pyproject.toml，并要求 project.version 等于 Registry package_release_target。",
+    "rationale": "Registry 已绑定声明 Commit，但 package_version 独立读取可变工作树；合法 Registry 可生成报告任意 package version 的 schema 3 summary。"
+  }
+]

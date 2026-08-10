@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "suite_id": "release-candidate-delivery",
+  "suite_revision": 1,
+  "memoryforge_commit": "e7d3fef9312b4b6c1683e12984ae00cd1b21b343",
+  "memoryforge_worktree_dirty": false,
+  "candidate": "release-development-candidate-12",
+  "review": {
+    "scope": "569685c2f0bf790819820b821b4768d180c4ee0d...e7d3fef9312b4b6c1683e12984ae00cd1b21b343",
+    "base_commit": "569685c2f0bf790819820b821b4768d180c4ee0d",
+    "source_commit": "e7d3fef9312b4b6c1683e12984ae00cd1b21b343",
+    "status": "failed",
+    "p0": 0,
+    "p1": 9,
+    "p2": 7,
+    "failures": [
+      "sdist_constraint_bypass",
+      "snapshot_post_checkout_hook",
+      "accepted_review_commit_ancestry",
+      "malformed_passed_review_findings",
+      "release_split_result_absence",
+      "summary_package_commit_binding",
+      "passed_review_candidate_identity",
+      "powershell_artifact_contract",
+      "development_output_immutability",
+      "package_source_blob_binding",
+      "drill_basic_credentials",
+      "drill_workspace_commit_identity",
+      "drill_citation_source_identity",
+      "candidate2_review_binding",
+      "candidate2_review_scope_replay",
+      "code_wiki_suite_commit_binding"
+    ],
+    "artifacts": {
+      "raw_findings": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_12/comments.jsonl",
+        "sha256": "de7dd7ee078e57e37f11371a1f05f0246420a4eec990128f93070de6b69485ee"
+      },
+      "top_findings": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_12/final_comments.json",
+        "sha256": "4301c1ce292f7fe73f4e0e4026d1784283573ad188369eb84823c766d9686d1f"
+      },
+      "html_report": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_12/report.html",
+        "sha256": "058299f48a25b00e6b4ec5887d41c7df6e3fc9fb090d4e9bd94e38fb41bff1de"
+      },
+      "markdown_report": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_12/report.md",
+        "sha256": "2cae8c03b30ae96139d8679bd5e1a312265c07b3ea6e738caee488ba641c3760"
+      },
+      "review_scope": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_12/review-scope.json",
+        "sha256": "5c0d68d1a025bf09daf07fa2ab34dea4566217c3cd4702a33fe26f9a0bbaecc6"
+      }
+    }
+  },
+  "root_cause": {
+    "summary": "Candidate 12 closed the prior exact-schema findings, but final review found remaining source-snapshot, package-member, split-closure, platform-publication, and accepted-review identity gaps.",
+    "fix": "Bind every producer and consumer to the same Commit snapshot, fail closed on malformed review and credential data, make publication atomic, and close POSIX/PowerShell artifact contracts."
+  },
+  "confirmation": {
+    "path": "demo/evaluation/release_candidate_confirmation.json",
+    "sha256": "3eed08e04592b614a709cd18c6a92951b5da145d7dab4b9997824cd4e002e805",
+    "status": "not_run"
+  },
+  "holdout": {
+    "path": "demo/evaluation/release_candidate_holdout.json",
+    "sha256": "b466644bef2748a96d598540c54633fe49770af97fc71ce6e62e18eda687e8f8",
+    "status": "not_run"
+  },
+  "passed": false
+}

@@ -11,16 +11,56 @@ elif [[ -x "$root/.venv/bin/python" ]]; then
 else
   python="python3"
 fi
+if [[ "$python" == */* ]]; then
+  python="$(cd "$(dirname "$python")" && pwd)/$(basename "$python")"
+else
+  python="$(command -v "$python")"
+fi
+
+unset PYTHONPATH PYTHONHOME
+while IFS='=' read -r name _; do
+  if [[ "$name" == GIT_* || "$name" == PIP_* || "$name" == UV_* ]]; then
+    unset "$name"
+  fi
+done < <(env)
+export PYTHONNOUSERSITE=1
+export SOURCE_DATE_EPOCH=315532800
+export PIP_CONFIG_FILE=/dev/null
+export PIP_INDEX_URL=https://pypi.org/simple
+export UV_DEFAULT_INDEX=https://pypi.org/simple
 
 output="${1:-$root/local-evidence/$(date -u +%Y%m%dT%H%M%SZ)}"
+if [[ "$output" != /* ]]; then
+  output="$root/${output#./}"
+fi
 if [[ -e "$output" ]]; then
   echo "output already exists: $output" >&2
   exit 1
 fi
+commit="$(git rev-parse HEAD)"
+if [[ -n "$(git status --porcelain --untracked-files=all)" ]]; then
+  echo "MemoryForge worktree must be clean" >&2
+  exit 1
+fi
 
 workdir="$(mktemp -d "${TMPDIR:-/tmp}/memoryforge-local-check.XXXXXX")"
-trap 'rm -rf "$workdir"' EXIT
+snapshot="$workdir/source"
+snapshot_added=0
+cleanup() {
+  cd "$root"
+  if [[ "$snapshot_added" == 1 ]]; then
+    git worktree remove --force "$snapshot" >/dev/null 2>&1 || true
+  fi
+  rm -rf "$workdir"
+}
+trap cleanup EXIT
 mkdir -p "$output/dist"
+
+git -c core.autocrlf=false -c core.eol=lf -c core.hooksPath=/dev/null \
+  worktree add --detach "$snapshot" "$commit"
+snapshot_added=1
+cd "$snapshot"
+export PYTHONPATH="$snapshot/src"
 
 "$python" -m ruff check --no-cache .
 "$python" -m ruff format --check .
@@ -41,13 +81,18 @@ fi
 "$python" -m venv "$workdir/build"
 if command -v uv >/dev/null 2>&1; then
   uv pip install --python "$workdir/build/bin/python" \
-    -c "$root/constraints/dev.txt" build hatchling
+    --no-config --default-index https://pypi.org/simple \
+    -c "$snapshot/constraints/dev.txt" build hatchling
 else
   "$workdir/build/bin/python" -m pip install \
-    -c "$root/constraints/dev.txt" build hatchling
+    --isolated --index-url https://pypi.org/simple \
+    -c "$snapshot/constraints/dev.txt" build hatchling
 fi
-"$workdir/build/bin/python" -m build \
-  --wheel --sdist --no-isolation --outdir "$output/dist"
+(
+  cd "$snapshot"
+  "$workdir/build/bin/python" -m build \
+    --wheel --sdist --no-isolation --outdir "$output/dist"
+)
 "$workdir/build/bin/python" - "$output"/dist/memoryforge-*.tar.gz <<'PY'
 import sys
 import tarfile
@@ -63,16 +108,22 @@ if forbidden:
     raise SystemExit(f"sdist contains retained or nested artifacts: {forbidden[:3]}")
 PY
 
-PIP_CONSTRAINT="$root/constraints/dev.txt" "$python" demo/run_release_check.py \
-  --wheel "$output"/dist/memoryforge-*.whl \
-  --workdir "$workdir/wheel" \
-  --output "$output/release-provenance.json"
+(
+  cd "$snapshot"
+  PIP_CONSTRAINT="$snapshot/constraints/dev.txt" "$python" demo/run_release_check.py \
+    --wheel "$output"/dist/memoryforge-*.whl \
+    --workdir "$workdir/wheel" \
+    --code-evidence-output "$output/code-wiki-evidence.json" \
+    --output "$output/release-provenance.json"
+)
 
 "$python" -m venv "$workdir/sdist"
 "$workdir/sdist/bin/python" -m pip install \
-  -c "$root/constraints/dev.txt" hatchling
+  --isolated --index-url https://pypi.org/simple \
+  -c "$snapshot/constraints/dev.txt" hatchling
 "$workdir/sdist/bin/python" -m pip install \
-  -c "$root/constraints/dev.txt" \
+  --isolated --index-url https://pypi.org/simple \
+  -c "$snapshot/constraints/dev.txt" \
   --no-build-isolation "$output"/dist/memoryforge-*.tar.gz
 (
   cd "$workdir"
@@ -101,7 +152,10 @@ import sys
 from pathlib import Path
 
 root = Path(sys.argv[1])
-artifacts = sorted((root / "dist").iterdir()) + [root / "release-provenance.json"]
+artifacts = sorted((root / "dist").iterdir()) + [
+    root / "code-wiki-evidence.json",
+    root / "release-provenance.json",
+]
 lines = [
     f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(root)}"
     for path in artifacts
@@ -111,5 +165,12 @@ for line in lines:
     digest, relative = line.split("  ", 1)
     assert hashlib.sha256((root / relative).read_bytes()).hexdigest() == digest
 PY
+
+cd "$root"
+if [[ "$(git rev-parse HEAD)" != "$commit" ]] || \
+  [[ -n "$(git status --porcelain --untracked-files=all)" ]]; then
+  echo "MemoryForge source changed during local checks" >&2
+  exit 1
+fi
 
 echo "Local checks passed. Evidence: $output"

@@ -1,5 +1,7 @@
 # 秋招演示与面试说明
 
+<!-- memoryforge-release-claim: version=0.3.0; status=released; supported_platforms=macos+linux; active_candidate=19; platform_gate_candidate=19; platform_gate_status=accepted; review_status=accepted; macos_passed=642; linux_passed=639; linux_skipped=3; windows_status=not_verified; release_verification=passed -->
+
 这份文档用于把 MemoryForge 讲成一个完整项目。演示只使用公开的 `AgentSkill-Eval` 文档，不使用公司代码、真实飞书正文、Token 或 App Secret。
 
 ## 一句话介绍
@@ -74,8 +76,57 @@ Answer accuracy 只有 10%/0%，尽管 Citation grounding 都是 100%。这说�
 再打开 [`code_wiki_public.json`](../demo/results/code_wiki_public.json) 和
 [`release_provenance.json`](../demo/results/release_provenance.json)：前者证明三语言 Symbol、
 Relation、Module、Mermaid edge 和 Citation 指标均为 100%，单文件更新只影响 20% 的源码模块页；
-后者是 v0.2.0 的历史发布证据。v0.2.1 的 Wheel/sdist、SHA256 和 provenance 以 GitHub Release
-资产为准；后续版本使用本地门禁生成相同类型的 Evidence。
+后者是 v0.2.0 的历史发布证据。v0.3.0 的 Wheel/sdist、SHA256、benchmark summary 和
+provenance 由双隔离本地构建生成。v0.3.0 支持 macOS 与 Linux；Windows 尚未验证，不外推为
+Windows 可用。
+
+当前 Candidate 7 本地门禁为 macOS 599 passed、Linux 596 passed / 3 skipped，coverage 均为
+88%；Wheel/sdist 与 development 字节一致。原生 Windows confirmation 未运行。这组结果只证明
+固定 Commit 的本地交付链路，不外推为 Windows 成功。
+
+Candidate 5 最终静态审查为 0 P0 / 10 P1 / 2 P2，结果 rejected。审查失败优先于本地门禁成功，
+因此不得授权 confirmation。
+
+Candidate 6 development 已 6/6 通过，并从 detached Commit 快照构建；最终静态审查为
+0 P0 / 9 P1 / 3 P2，结果 rejected。development 与本地门禁制品不一致，故不得授权 confirmation。
+
+Candidate 7 已固定 package 输入和构建 epoch；development 6/6 通过。macOS 首次本地门禁因旧
+`sdist.exclude` 测试合同而 598/599 rejected，失败保留。修复测试合同后，同一 package bytes
+通过双平台门禁。最终静态审查发现 0 P0 / 10 P1 / 3 P2，结果 rejected；13 条原始发现保留，
+因此不得授权 confirmation。
+
+Candidate 8 development 已 6/6 通过：固定 checkout EOL；Summary schema 2 绑定 acceptance 与
+negative Commit；冻结 manifest 从实际哈希题集计数；Workspace drill 验证正确 answer、Citation、
+unknown 和恢复重放。本地门禁为 macOS 604 passed、Linux 601 passed / 3 skipped；两端 package
+bytes 与 development 一致，retained SHA256SUMS 可原位重放。终审发现 0 P0 / 4 P1 / 2 P2，
+结果 rejected；6 条发现保留，因此不得授权 confirmation。
+
+Candidate 9 development 已 6/6 通过：版本探针不再继承 coverage 环境，历史 review sidecar
+从固定 Commit 复算，Showcase 指标与最终 case 一致，Code Wiki 的 12 项 metrics、6 项 gates、
+incremental 与原始 Evidence 完整绑定。本地门禁为 macOS 607 passed、Linux 604 passed / 3 skipped；
+Wheel、sdist 与 raw Code Wiki Evidence 跨平台同字节。终审发现 0 P0 / 10 P1 / 4 P2，结果
+rejected；14 条发现保留，confirmation 继续关闭。
+
+Candidate 10 已生成完整 Summary schema 3 与可重算的 Workspace drill schema 2；旧 development
+consumer 仍要求 schema 1，故结果为 5/6 rejected。该负结果及全部 artifacts 已保留，未运行
+confirmation/holdout。
+
+Candidate 11 统一使用 schema-aware consumer 后 development 6/6 通过。公开 Evidence 现可直接
+复算 answer、Citation、unknown、backup/restore replay，并保留 experiment repository、development
+split 和完整历史身份。本地门禁为 macOS 609 passed、Linux 606 passed / 3 skipped；package 与
+raw Code Wiki Evidence 跨平台同字节。终审发现 0 P0 / 8 P1 / 4 P2，结果 rejected；12 条独立
+发现保留，confirmation 继续关闭。
+
+Candidate 12 development 6/6 通过，并关闭 Candidate 11 的 12 个审查根因：package metadata、
+Registry-to-Commit、verify Evidence/support、跨平台隐私路径、clean-room import、Git fixture
+identity、PowerShell 恢复、artifact root 和 passed-review 状态均由确定性 consumer 重放。
+Candidate 12 本地门禁为 macOS 623 passed、Linux 620 passed / 3 skipped；Wheel、sdist 与 raw
+Code Wiki Evidence 跨平台同字节。终审发现 0 P0 / 9 P1 / 7 P2，结果 rejected；20 条 raw
+findings 与 16 条去重后独立根因保留，confirmation 继续关闭。
+
+随后展示 support-score development：Answer 与 Selective Accuracy 为 100%，Coverage 为 90%，
+Risk 为 0%；同时明确 confirmation 尚未运行。这样可以说明“有正向指标，但不越过冻结 split
+提前外推”。
 
 ### 3. 展示带引用的回答
 
