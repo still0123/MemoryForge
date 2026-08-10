@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any, Literal
 
@@ -26,6 +27,10 @@ _IGNORED_USER_PREFIXES = (
     "<image ",
     "</image>",
     "The user has the in-app browser open.",
+)
+_PRIVATE_PATH = re.compile(
+    r"(?:(?:file://)?/(?:Users|home)/[^/\s)]+|/data\d+/home/[^/\s)]+"
+    r"|(?:/private)?/var/folders/[^\s)]+)(?:/[^\s)]+)*"
 )
 
 
@@ -108,6 +113,7 @@ def _conversation_message(
             continue
         if role == "user":
             text = _strip_codex_ui_metadata(text)
+        text = _PRIVATE_PATH.sub("<local-path>", text)
         if text:
             parts.append(text)
     if not parts:

@@ -52,7 +52,12 @@ def test_codex_import_keeps_only_conversation_text(tmp_path: Path) -> None:
             "payload": {
                 "type": "message",
                 "role": "assistant",
-                "content": [{"type": "output_text", "text": "We chose SQLite."}],
+                "content": [
+                    {
+                        "type": "output_text",
+                        "text": "We chose SQLite. See file:///home/alice/repo/db.py#L1.",
+                    }
+                ],
             },
         },
     ]
@@ -77,6 +82,8 @@ def test_codex_import_keeps_only_conversation_text(tmp_path: Path) -> None:
     snapshot = (workspace / manifest.snapshot_path).read_text(encoding="utf-8")
     assert "Which database did we choose?" in snapshot
     assert "We chose SQLite." in snapshot
+    assert "file:///home/alice" not in snapshot
+    assert "<local-path>" in snapshot
     assert "environment_context" not in snapshot
     assert "/var/folders" not in snapshot
     assert "turn_aborted" not in snapshot
