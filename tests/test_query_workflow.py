@@ -99,6 +99,43 @@ def test_ask_uses_top_page_summary_for_cjk_paraphrase(tmp_path: Path) -> None:
     assert result["wiki_pages"] == ["wiki/pages/a-statistics.md"]
 
 
+def test_code_page_answers_cjk_paraphrase_from_two_english_facts(tmp_path: Path) -> None:
+    pages = tmp_path / "wiki" / "pages"
+    pages.mkdir(parents=True)
+    source_id = "a" * 64
+    page = (
+        "---\n"
+        'title: "Code: common/standard_page.go"\n'
+        "type: concept\n"
+        'summary: "Pagination offset and limit conversion."\n'
+        f'sources: ["{source_id}"]\n'
+        "---\n"
+        "# Pagination\n\n"
+        "## Verified symbols\n\n"
+        "### TransformPageToOffsetLimit\n\n"
+        "- `offset = int((pageNumber - 1) * pageSize)` [^source-1]\n"
+        "- `limit = int(pageSize)` [^source-2]\n\n"
+        f"[^source-1]: source `{source_id}` · revision `1` · `chars:0-41`\n"
+        f"[^source-2]: source `{source_id}` · revision `1` · `chars:42-63`\n"
+    )
+    (tmp_path / "wiki/INDEX.md").write_text(
+        "# Knowledge Index\n\n"
+        "- [Code: common/standard_page.go](pages/page.md) — "
+        "Pagination offset and limit conversion.\n",
+        encoding="utf-8",
+    )
+    (pages / "page.md").write_text(page, encoding="utf-8")
+
+    result = query_module.answer_question(
+        tmp_path,
+        "分页页码和每页数量怎样换算成数据库查询的 offset 与 limit？",
+    )
+
+    assert result["status"] == "answered"
+    assert "offset = int((pageNumber - 1) * pageSize)" in result["answer"]
+    assert "limit = int(pageSize)" in result["answer"]
+
+
 def test_ask_does_not_relax_top_summary_without_matching_negation(tmp_path: Path) -> None:
     pages = tmp_path / "wiki" / "pages"
     pages.mkdir(parents=True)

@@ -1,6 +1,6 @@
 # MemoryForge v0.3.0 Evidence Claims
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=12; platform_gate_candidate=12; platform_gate_status=accepted; review_status=rejected; macos_passed=623; linux_passed=620; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=19; platform_gate_candidate=19; platform_gate_status=accepted; review_status=accepted; macos_passed=634; linux_passed=631; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 本页只列可由仓库内 Evidence 直接核验的主张。局部结果不得外推为任意仓库、任意语言或生产 SLA。
 

@@ -2294,6 +2294,93 @@ def candidate_page_sources(candidate_files: Mapping[str, str]) -> dict[str, tupl
     return page_sources
 
 
+def rebuild_applied_projection(workspace: Workspace) -> None:
+    """Rebuild applied source, page, and fact indexes from the stable Wiki tree."""
+    pages_root = workspace.root / "wiki/pages"
+    candidate_files: dict[str, str] = {}
+    if pages_root.is_dir() and not pages_root.is_symlink():
+        for page in sorted(pages_root.rglob("*.md")):
+            if page.is_symlink() or not page.is_file():
+                raise WorkspaceSecurityError("Wiki projection rejects unsafe page paths")
+            candidate_files[page.relative_to(workspace.root).as_posix()] = page.read_text(
+                encoding="utf-8"
+            )
+    page_sources = candidate_page_sources(candidate_files)
+    page_facts = {
+        path: parse_page_facts(path, content) for path, content in candidate_files.items()
+    }
+    source_versions: dict[str, int] = {}
+    for facts in page_facts.values():
+        for fact in facts:
+            previous = source_versions.setdefault(fact.source_id, fact.source_version)
+            if previous != fact.source_version:
+                raise WorkspaceIntegrityError("Wiki projection mixes SourceVersions")
+    if set(source_versions) != {
+        source_id for source_ids in page_sources.values() for source_id in source_ids
+    }:
+        raise WorkspaceIntegrityError("Wiki projection sources do not match cited facts")
+
+    with _connect(workspace.index_path) as connection:
+        repositories: dict[tuple[str, int], str | None] = {}
+        for source_id, source_version in source_versions.items():
+            row = connection.execute(
+                """
+                SELECT revisions.repository_id
+                FROM sources
+                JOIN source_versions ON source_versions.source_id = sources.id
+                LEFT JOIN git_source_revisions AS revisions
+                  ON revisions.source_version_id = source_versions.id
+                WHERE sources.source_id = ? AND source_versions.id = ?
+                """,
+                (source_id, source_version),
+            ).fetchone()
+            if row is None:
+                raise WorkspaceIntegrityError("Wiki projection cites an unknown SourceVersion")
+            repositories[(source_id, source_version)] = (
+                str(row["repository_id"]) if row["repository_id"] is not None else None
+            )
+        connection.execute("DELETE FROM wiki_facts")
+        connection.execute("DELETE FROM page_sources")
+        connection.execute("DELETE FROM applied_source_versions")
+        connection.executemany(
+            "INSERT INTO applied_source_versions(source_id, source_version_id) VALUES (?, ?)",
+            sorted(source_versions.items()),
+        )
+        connection.executemany(
+            "INSERT INTO page_sources(page_path, source_id) VALUES (?, ?)",
+            (
+                (page_path, source_id)
+                for page_path, source_ids in sorted(page_sources.items())
+                for source_id in source_ids
+            ),
+        )
+        connection.executemany(
+            """
+            INSERT INTO wiki_facts(
+                fact_id, page_path, repository_id, source_id, source_version,
+                locator, section_path, quote, routing_text, symbol, relation_type
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                (
+                    fact.fact_id,
+                    fact.page_path,
+                    repositories[(fact.source_id, fact.source_version)],
+                    fact.source_id,
+                    fact.source_version,
+                    fact.locator,
+                    fact.section_path,
+                    fact.quote,
+                    fact.routing_text,
+                    fact.symbol,
+                    fact.relation_type,
+                )
+                for path in sorted(page_facts)
+                for fact in sorted(page_facts[path], key=lambda item: item.fact_id)
+            ),
+        )
+
+
 def is_generated_repository_overview(content: str) -> bool:
     """Recognize local navigation pages that deliberately have no source ownership."""
     return _generated_navigation_kind(content) == "repository_overview"

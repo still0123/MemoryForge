@@ -1,10 +1,12 @@
 # MemoryForge
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=12; platform_gate_candidate=12; platform_gate_status=accepted; review_status=rejected; macos_passed=623; linux_passed=620; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=19; platform_gate_candidate=19; platform_gate_status=accepted; review_status=accepted; macos_passed=634; linux_passed=631; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 > 把散落在代码仓库、设计文档、飞书和 AI 对话里的技术资料，编译成一套可维护、可追溯、可以直接在飞书提问的个人技术 Wiki。
 
-> **当前开发验收：Candidate 19 已接受。** macOS `634 passed`；Linux `631 passed / 3 skipped`；原生 Windows confirmation 未运行，holdout 也尚未运行。v0.3.0 仍未发布。
+> **当前开发验收：Candidate 19 已接受。** Candidate 19 为 macOS `634 passed`、Linux
+> `631 passed / 3 skipped`；当前分支新增记忆、历史与查询改进后 macOS `642 passed`。
+> 原生 Windows confirmation 未运行，holdout 也未运行，v0.3.0 仍未发布。
 
 ![MemoryForge 工作流](assets/memoryforge-flow.svg)
 
@@ -334,10 +336,13 @@ memoryforge watch --interval 60 --workspace <workspace>
 memoryforge review <changeset-id> --workspace <workspace>
 memoryforge approve <changeset-id> --workspace <workspace>
 memoryforge apply <changeset-id> --workspace <workspace>
+memoryforge history --workspace <workspace>
+memoryforge rollback <historical-commit> --workspace <workspace>
 memoryforge lint --workspace <workspace>
 
 # 问答与展示
 memoryforge ask '<question>' --workspace <workspace>
+memoryforge recall --workspace <workspace>
 memoryforge agent '<question>' --workspace <workspace>
 memoryforge showcase build --workspace <workspace> --output <directory>
 memoryforge feishu-serve --workspace <workspace>
@@ -373,6 +378,11 @@ AI 回复按未验证材料处理；审核通过后，新会话即可从同一 W
 完整对话仍保存在不可变 raw Evidence 中，不会整段塞进日常查询上下文。
 新建 AI 会话时可运行 `memoryforge recall --workspace <workspace>`；命令只读取已应用的
 会话页面，返回近期摘要、决策、未完成事项和引用，不调用模型，也不修改 Workspace。
+执行一次 `memoryforge codex-setup <project> --workspace <workspace>` 后，MemoryForge 会在项目
+`AGENTS.md` 写入有界、可重复更新的 recall 指令；之后 Codex 新任务自动先读取近期记忆。
+
+`history` 只读列出 Wiki Commit；`rollback` 只接受当前 Commit 的祖先，并追加一个新的恢复
+Commit，同时重建 SQLite 查询投影。它不会删除原 Git 历史。
 
 Botmux 托管的 Codex 等会话可用生命周期 Hook 自动收录。将下面配置写入
 `~/.botmux/data/hooks.json`；把命令和 Workspace 改为绝对路径：

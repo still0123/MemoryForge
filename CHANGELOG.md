@@ -1,8 +1,13 @@
 # Changelog
 
-<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=12; platform_gate_candidate=12; platform_gate_status=accepted; review_status=rejected; macos_passed=623; linux_passed=620; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
+<!-- memoryforge-release-claim: version=0.3.0; status=release_candidate; active_candidate=19; platform_gate_candidate=19; platform_gate_status=accepted; review_status=accepted; macos_passed=634; linux_passed=631; linux_skipped=3; windows_confirmation=not_run; confirmation=not_run; holdout=not_run -->
 
 ## v0.3.0 — Release Candidate
+
+- 增加审核后会话记忆的 `recall`、一次性 `codex-setup` 自动加载、只读 `history` 与追加式
+  `rollback`；回滚同步重建 SQLite 查询投影，不删除 Git 历史。
+- 修复中文改写代码问题已命中正确页面却无法选择分散赋值事实的问题；私有三题冒烟从
+  Answer 66.7% / Citation 50% 提升到 Answer 100% / Citation 100%。
 
 - 关闭 GitHub Actions 并移除 hosted CI/Release workflow；
 - 新增本地零付费质量门禁，覆盖 Ruff、Mypy、pytest、Wheel/sdist 双 clean-room 和 SHA256。

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import difflib
 import json
+import shlex
 import sqlite3
 import sys
 import time
@@ -51,6 +52,7 @@ from memoryforge.workspace import (
     WorkspaceSecurityError,
     candidate_page_sources,
     list_git_checkouts,
+    rebuild_applied_projection,
     register_git_checkout,
     register_git_code_module,
     search_sources,
@@ -95,6 +97,8 @@ _RECALL_OPEN_ITEM_MARKERS = (
     "not pushed",
     "remaining",
 )
+_CODEX_RECALL_BEGIN = "<!-- BEGIN MEMORYFORGE RECALL -->"
+_CODEX_RECALL_END = "<!-- END MEMORYFORGE RECALL -->"
 
 
 def _version_callback(value: bool) -> None:
@@ -1405,6 +1409,68 @@ def recall(
     typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
 
 
+@app.command("codex-setup")
+def codex_setup(
+    project: Annotated[Path, typer.Argument(help="Project whose AGENTS.md Codex reads.")],
+    workspace: WorkspaceOption = Path("."),
+) -> None:
+    """Install one bounded new-task recall instruction in a project's AGENTS.md."""
+    try:
+        opened = Workspace.open_readonly(workspace)
+        project_root = project.resolve(strict=True)
+        if project_root.is_symlink() or not project_root.is_dir():
+            raise ValueError("Codex project must be a real directory")
+        agents_path = project_root / "AGENTS.md"
+        if agents_path.is_symlink() or (agents_path.exists() and not agents_path.is_file()):
+            raise ValueError("Codex project AGENTS.md must be a regular file")
+        command = shlex.join(
+            (
+                sys.executable,
+                "-m",
+                "memoryforge",
+                "recall",
+                "--workspace",
+                str(opened.root),
+            )
+        )
+        block = (
+            f"{_CODEX_RECALL_BEGIN}\n"
+            "## MemoryForge recall\n\n"
+            "At the start of every new task, run this read-only command before answering:\n\n"
+            f"```bash\n{command}\n```\n\n"
+            "Use only its `startup_context` as unverified history. Verify important claims "
+            "from cited Wiki pages. If status is `empty`, continue without recalled context.\n"
+            f"{_CODEX_RECALL_END}"
+        )
+        existing = agents_path.read_text(encoding="utf-8") if agents_path.is_file() else ""
+        start = existing.find(_CODEX_RECALL_BEGIN)
+        end = existing.find(_CODEX_RECALL_END)
+        if (start < 0) != (end < 0) or (start >= 0 and end < start):
+            raise ValueError("Codex project AGENTS.md contains an incomplete MemoryForge block")
+        if start >= 0:
+            updated = existing[:start] + block + existing[end + len(_CODEX_RECALL_END) :]
+        else:
+            updated = existing.rstrip() + ("\n\n" if existing.strip() else "") + block + "\n"
+        agents_path.write_text(updated, encoding="utf-8")
+        result = {
+            "status": "configured",
+            "project": str(project_root),
+            "agents_file": str(agents_path),
+            "workspace": str(opened.root),
+        }
+    except (
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+
+
 def _recall_matching_notes(
     notes: list[dict[str, object]], markers: tuple[str, ...]
 ) -> list[dict[str, object]]:
@@ -1553,10 +1619,23 @@ def lint(
 @app.command()
 def history(
     page: Annotated[str | None, typer.Option("--page")] = None,
+    limit: Annotated[int, typer.Option("--limit", min=1, max=100)] = 20,
     workspace: WorkspaceOption = Path("."),
 ) -> None:
-    _ = page
-    _require_future_feature(workspace, "history")
+    try:
+        opened = Workspace.open_readonly(workspace)
+        records = opened.version_store.history(page=page, limit=limit)
+    except (
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(json.dumps(list(records), ensure_ascii=False, indent=2))
 
 
 @app.command()
@@ -1564,8 +1643,55 @@ def rollback(
     commit_id: Annotated[str, typer.Argument()],
     workspace: WorkspaceOption = Path("."),
 ) -> None:
-    _ = commit_id
-    _require_future_feature(workspace, "rollback")
+    try:
+        opened = Workspace.open(workspace)
+        with opened.exclusive_lock():
+            previous_commit = opened.current_commit()
+            if commit_id == previous_commit:
+                raise ValueError("rollback target is already the current Commit")
+            if not opened.version_store.is_ancestor(commit_id, previous_commit):
+                raise ValueError("rollback target must be an ancestor of the current Commit")
+            changed_paths = opened.version_store.changed_wiki_paths(
+                commit_id,
+                previous_commit,
+            )
+            if not changed_paths:
+                raise ValueError("rollback target has the same Wiki tree")
+            opened.version_store.require_clean_paths(("wiki",))
+            try:
+                opened.version_store.restore_wiki(commit_id)
+                rebuild_applied_projection(opened)
+                commit = opened.version_store.commit_paths(
+                    ("wiki",),
+                    f"knowledge: rollback to {commit_id[:12]}",
+                )
+            except Exception:
+                opened.version_store.restore_wiki(previous_commit)
+                rebuild_applied_projection(opened)
+                raise
+    except (
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(
+        json.dumps(
+            {
+                "status": "ROLLED_BACK",
+                "target_commit": commit_id,
+                "previous_commit": previous_commit,
+                "commit": commit,
+                "files": list(changed_paths),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
 
 
 @app.command()
@@ -1587,25 +1713,6 @@ def eval(
     ) as exc:
         _exit_with_safe_error(exc)
     typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
-
-
-def _require_future_feature(workspace: Path, command: str) -> None:
-    try:
-        Workspace.open(workspace)
-        raise FeatureUnavailableError(
-            f"`{command}` is not enabled in the trusted-storage milestone"
-        )
-    except FeatureUnavailableError as exc:
-        _exit_with_safe_error(exc)
-    except (
-        MemoryForgeError,
-        WorkspaceIntegrityError,
-        WorkspaceSecurityError,
-        FileNotFoundError,
-        OSError,
-        sqlite3.Error,
-    ) as exc:
-        _exit_with_safe_error(exc)
 
 
 def _exit_with_safe_error(exc: Exception) -> None:

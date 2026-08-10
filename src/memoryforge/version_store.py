@@ -169,6 +169,45 @@ class GitVersionStore:
             == 0
         )
 
+    def history(self, *, page: str | None = None, limit: int = 20) -> tuple[dict[str, str], ...]:
+        """List bounded stable-Wiki Commit history without reading worktree content."""
+        if not 1 <= limit <= 100:
+            raise ValueError("history limit must be between 1 and 100")
+        arguments = [
+            "log",
+            f"-n{limit}",
+            "--format=%H%x1f%cI%x1f%s",
+        ]
+        if page is not None:
+            head = self.head()
+            if head is None:
+                raise WorkspaceError("workspace is missing its Git baseline commit")
+            self.read_text_at(head, page)
+            arguments.extend(("--", page))
+        completed = self._run(arguments, check=True)
+        records = []
+        for line in completed.stdout.splitlines():
+            commit, committed_at, subject = line.split("\x1f", maxsplit=2)
+            records.append({"commit": commit, "committed_at": committed_at, "subject": subject})
+        return tuple(records)
+
+    def changed_wiki_paths(self, older: str, newer: str) -> tuple[str, ...]:
+        self._require_commit(older)
+        self._require_commit(newer)
+        completed = self._run(
+            ["diff", "--name-only", older, newer, "--", "wiki"],
+            check=True,
+        )
+        return tuple(path for path in completed.stdout.splitlines() if path)
+
+    def restore_wiki(self, commit: str) -> None:
+        """Restore the tracked Wiki tree from one validated Commit."""
+        self._require_commit(commit)
+        self._run(
+            ["restore", "--source", commit, "--staged", "--worktree", "--", "wiki"],
+            check=True,
+        )
+
     def commit_paths(self, paths: tuple[str, ...], message: str) -> str:
         """Commit only the stable Wiki paths produced by one approved ChangeSet."""
         if not paths:
