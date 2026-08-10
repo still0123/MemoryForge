@@ -28,6 +28,7 @@ from memoryforge.models import (
 )
 from memoryforge.provider import OpenAICompatibleProvider
 from memoryforge.query import EvidencePayload
+from memoryforge.wiki_facts import conversation_conclusion_text, is_conversation_process_note
 from memoryforge.workspace import (
     Workspace,
     candidate_page_sources,
@@ -1858,7 +1859,7 @@ def _render_conversation_page(source: CurrentSource, content: str) -> str:
     if not facts:
         return _render_page(source, _meaningful_paragraphs(content))
     assistant_facts = [
-        SourceFact(fact.quote, fact.start, ("Assistant conclusions",))
+        SourceFact(conversation_conclusion_text(fact.quote), fact.start, ("Assistant conclusions",))
         for fact in facts
         if "assistant" in fact.section_path[-1].lower()
     ]
@@ -1877,6 +1878,7 @@ def _render_conversation_page(source: CurrentSource, content: str) -> str:
         if len(fact.quote) >= 40
         and not fact.quote.lstrip().startswith(("```", "func ", "def "))
         and not any(marker in fact.quote for marker in ("你偏好", "值得“记忆”", "你常做的是"))
+        and not is_conversation_process_note(fact.quote)
     ]
     summary_fact = max(
         eligible_facts,

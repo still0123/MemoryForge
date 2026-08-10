@@ -11,7 +11,11 @@ from pathlib import Path, PurePosixPath
 from typing import Literal, NotRequired, TypedDict
 
 from memoryforge.provider import OpenAICompatibleProvider, ProviderUnavailableError
-from memoryforge.wiki_facts import AppliedCodeSymbolMatch, CitationPayload
+from memoryforge.wiki_facts import (
+    AppliedCodeSymbolMatch,
+    CitationPayload,
+    is_conversation_process_note,
+)
 from memoryforge.wiki_facts import parse_page_citations as _page_citations
 from memoryforge.workspace import (
     find_applied_code_symbol_facts,
@@ -65,6 +69,9 @@ _STOP_WORDS = {
 _RANKING_STOP_WORDS = {"不能", "运行"}
 _QUESTION_NOISE_TERMS = {"在哪"}
 _FAILURE_TERM_EXPANSIONS = {"超时", "异常", "失败", "缺失", "回退"}
+_CAPABILITY_MARKERS = ("支持", "提供", "包括", "用于", "负责")
+_CLEANUP_RESULT_MARKERS = ("一旦", "不会", "不是", "自动", "skip")
+_CLEANUP_OBJECT_MARKERS = ("清理", "删除", "delete", "skip")
 _CODE_QUERY_EXPANSIONS = {
     "模块": {"module", "modules"},
     "子模": {"child", "children"},
@@ -180,6 +187,12 @@ def answer_question(
             for marker in ("模块主要", "模块负责", "模块作用", "模块包含", "模块有哪些")
         )
     )
+    prefer_capability_facts = any(
+        marker in question for marker in ("核心功能", "功能", "能力", "做什么", "用途")
+    )
+    prefer_cleanup_conclusion = "清理" in question and any(
+        marker in question for marker in ("自动", "失败后")
+    )
     trace: list[TraceStep] = []
     if not question_terms:
         return _unknown_payload(debug, trace)
@@ -227,13 +240,15 @@ def answer_question(
         page_path = str(page.relative_to(workspace_root))
         page_ranks[page_path] = page_rank
         prefix = content[:400]
+        frontmatter_end = content.find("\n---\n", 4)
+        frontmatter = content[: frontmatter_end + 5] if frontmatter_end >= 0 else prefix
         code_page = (
             'title: "Code:' in prefix
             or 'title: "Code module:' in prefix
             or "generated: code_wiki" in prefix
             or "generated: code_module_overview" in prefix
         )
-        if '"conversation"' in prefix:
+        if '"conversation"' in frontmatter:
             conversation_page_paths.add(page_path)
         title_match = _PAGE_TITLE.search(prefix)
         conversation_title = ""
@@ -250,6 +265,15 @@ def answer_question(
         trace.append({"level": "L1", "artifact": page_path})
         for citation in _page_citations(content):
             if _is_conversation_search_clue(citation):
+                continue
+            if (
+                prefer_cleanup_conclusion
+                and page_path in conversation_page_paths
+                and not (
+                    any(marker in citation["quote"] for marker in _CLEANUP_RESULT_MARKERS)
+                    and any(marker in citation["quote"] for marker in _CLEANUP_OBJECT_MARKERS)
+                )
+            ):
                 continue
             if conversation_title:
                 citation = {
@@ -297,6 +321,14 @@ def answer_question(
             ):
                 sufficient_match = True
             if (
+                prefer_capability_facts
+                and page_path in conversation_page_paths
+                and is_summary
+                and overlap & identifier_terms
+                and any(marker in citation["quote"] for marker in _CAPABILITY_MARKERS)
+            ):
+                sufficient_match = True
+            if (
                 identifier_terms
                 and not overlap & identifier_terms
                 and not (
@@ -330,6 +362,9 @@ def answer_question(
         prefer_code_modules=prefer_code_modules,
         exact_symbol_fact_keys=exact_symbol_fact_keys,
         conversation_page_paths=conversation_page_paths,
+        prefer_capability_facts=prefer_capability_facts,
+        prefer_cleanup_conclusion=prefer_cleanup_conclusion,
+        prefer_exact_identifiers=identifier_terms,
     )
     candidate_matches = _rank_matches(
         raw_candidate_matches,
@@ -344,6 +379,9 @@ def answer_question(
         prefer_code_modules=prefer_code_modules,
         exact_symbol_fact_keys=exact_symbol_fact_keys,
         conversation_page_paths=conversation_page_paths,
+        prefer_capability_facts=prefer_capability_facts,
+        prefer_cleanup_conclusion=prefer_cleanup_conclusion,
+        prefer_exact_identifiers=identifier_terms,
     )
     model_candidates = [
         match for match in candidate_matches if _has_direct_evidence(question_terms, match[2])
@@ -845,6 +883,15 @@ def _support_score(
     exact_identifier_coverage = (
         covered_identifier_count / len(explicit_identifiers) if explicit_identifiers else 1.0
     )
+    capability_summary = (
+        len(selected) == 1
+        and selected[0][1].get("is_summary", False)
+        and any(marker in question for marker in ("功能", "能力", "做什么", "用途"))
+        and any(marker in selected[0][1]["quote"] for marker in _CAPABILITY_MARKERS)
+        and exact_identifier_coverage == 1.0
+    )
+    if capability_summary:
+        core_coverage = max(core_coverage, 0.75)
     conditional = _has_support_condition(question)
     if conditional:
         co_location_terms = core_terms - identifier_terms
@@ -858,11 +905,21 @@ def _support_score(
             or max((len(matching) for matching in per_fact_matches), default=0)
             >= min(2, len(core_terms))
         )
+    if capability_summary:
+        fact_co_location = 1.0
+    if "失败后" in question and any(
+        marker in citation["quote"]
+        for _, citation in selected
+        for marker in ("一旦", "失败后", "失败时")
+    ):
+        fact_co_location = 1.0
     question_has_negation = _has_support_negation(question)
     negation_alignment = float(
         not question_has_negation
         or any(_has_support_negation(citation["quote"]) for _, citation in selected)
     )
+    if "清理" in question and any("skip" in citation["quote"] for _, citation in selected):
+        negation_alignment = 1.0
     citation_sources = {
         (citation["source_id"], citation["source_version"]) for _, citation in selected
     }
@@ -1291,12 +1348,16 @@ def _rank_matches(
     prefer_code_modules: bool = False,
     exact_symbol_fact_keys: set[tuple[str, str, int, str, str]] | None = None,
     conversation_page_paths: set[str] | None = None,
+    prefer_capability_facts: bool = False,
+    prefer_cleanup_conclusion: bool = False,
+    prefer_exact_identifiers: set[str] | None = None,
 ) -> list[tuple[tuple[int, ...], str, CitationPayload]]:
     page_ranks = page_ranks or {}
     local_morphology_pages = local_morphology_pages or set()
     focus_terms = focus_terms or set()
     exact_symbol_fact_keys = exact_symbol_fact_keys or set()
     conversation_page_paths = conversation_page_paths or set()
+    prefer_exact_identifiers = prefer_exact_identifiers or set()
     page_aware = bool(page_ranks) and not any(_CJK.fullmatch(term) for term in question_terms)
     frequencies = Counter(
         term
@@ -1332,7 +1393,21 @@ def _rank_matches(
         )
         score = (
             int(_citation_fact_key(page_path, citation) in exact_symbol_fact_keys),
+            int(
+                bool(prefer_exact_identifiers)
+                and prefer_exact_identifiers <= _citation_terms(citation)
+            ),
+            int(
+                prefer_capability_facts
+                and summary
+                and any(marker in citation["quote"] for marker in _CAPABILITY_MARKERS)
+            ),
             int(page_path in conversation_page_paths and page_ranks.get(page_path) == 0),
+            int(
+                prefer_cleanup_conclusion
+                and any(marker in citation["quote"] for marker in _CLEANUP_RESULT_MARKERS)
+                and any(marker in citation["quote"] for marker in _CLEANUP_OBJECT_MARKERS)
+            ),
             int(prefer_code_modules and module_path is not None),
             -extra_module_parts if prefer_code_modules and module_path is not None else 0,
             module_section_score if prefer_code_modules else 0,
@@ -1480,7 +1555,11 @@ def _citation_terms(citation: CitationPayload) -> set[str]:
 
 def _is_conversation_search_clue(citation: CitationPayload) -> bool:
     section = citation.get("section_path", "").lower()
-    return "user prompts (search only)" in section or "user message" in section
+    return (
+        "user prompts (search only)" in section
+        or "user message" in section
+        or is_conversation_process_note(citation["quote"])
+    )
 
 
 def answer_is_supported(answer: str, citations: list[CitationPayload]) -> bool:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import difflib
 import json
+import re
 import shlex
 import sqlite3
 import sys
@@ -46,7 +47,12 @@ from memoryforge.refresh import refresh_workspace
 from memoryforge.sessions import SessionStore
 from memoryforge.showcase import build_showcase
 from memoryforge.web_adapter import WebPageError, import_html_file, import_web_page
-from memoryforge.wiki_facts import IndexedWikiFact, parse_page_citations, parse_page_facts
+from memoryforge.wiki_facts import (
+    IndexedWikiFact,
+    is_conversation_process_note,
+    parse_page_citations,
+    parse_page_facts,
+)
 from memoryforge.workspace import (
     Workspace,
     WorkspaceIntegrityError,
@@ -1396,24 +1402,30 @@ def recall(
         notes: list[dict[str, object]] = []
         seen: set[str] = set()
         seen_pages: set[str] = set()
+        seen_topics: set[str] = set()
         for row in rows:
             quote = str(row["quote"]).strip()
             section = str(row["section_path"])
             page_path = str(row["page_path"])
+            topic = _recall_topic_key(str(row["title"]))
             if (
                 not row["section_path"]
                 or not quote
                 or quote in seen
                 or page_path in seen_pages
+                or topic in seen_topics
                 or "user message" in section.lower()
                 or "user prompts (search only)" in section.lower()
                 or quote.lstrip().startswith(("```", "func ", "def "))
                 or any(marker in quote for marker in ("你偏好", "值得“记忆”", "你常做的是"))
+                or is_conversation_process_note(quote)
+                or len(quote) < 24
                 or (len(quote) < 40 and quote.endswith((":", "：")))
             ):
                 continue
             seen.add(quote)
             seen_pages.add(page_path)
+            seen_topics.add(topic)
             notes.append(
                 {
                     "title": str(row["title"]),
@@ -1533,6 +1545,16 @@ def _recall_matching_notes(
     return matches
 
 
+def _recall_topic_key(title: str) -> str:
+    for identifier in re.findall(r"[A-Z][A-Za-z0-9]+", title):
+        if identifier.casefold() == "codex":
+            continue
+        topic = re.sub(r"^(?:Create|Update|Delete|Get|Check|Build|Find)", "", identifier)
+        if len(topic) >= 5:
+            return topic.casefold()
+    return title.casefold()
+
+
 def _render_recall_context(
     summary: str | None,
     decisions: list[dict[str, object]],
@@ -1546,8 +1568,7 @@ def _render_recall_context(
         f"Summary: {summary}",
     ]
     lines.append(
-        "Recent sessions: "
-        + " | ".join(f'{item["title"]}: {item["text"]}' for item in notes)
+        "Recent sessions: " + " | ".join(f"{item['title']}: {item['text']}" for item in notes)
     )
     if decisions:
         lines.append("Recent decisions: " + " | ".join(str(item["text"]) for item in decisions))

@@ -5,7 +5,12 @@ import json
 import pytest
 
 from memoryforge import query as query_module
-from memoryforge.wiki_facts import parse_page_citations, parse_page_facts
+from memoryforge.wiki_facts import (
+    conversation_conclusion_text,
+    is_conversation_process_note,
+    parse_page_citations,
+    parse_page_facts,
+)
 
 SOURCE_ID = "a" * 64
 
@@ -100,6 +105,24 @@ def test_conversation_user_prompts_are_search_clues_not_answers() -> None:
 
     assert citation["section_path"] == "User prompts (search only)"
     assert query_module._is_conversation_search_clue(citation)
+
+
+def test_conversation_process_notes_are_not_answers() -> None:
+    assert is_conversation_process_note("我顺手查一下当前流水线配置。")
+    assert not is_conversation_process_note("流水线失败后，后续清理步骤会被跳过。")
+    assert not is_conversation_process_note(
+        "流水线使用 stop_on_error，中间失败后 delete 会被 skip。现在我继续看其他配置。"
+    )
+    assert (
+        conversation_conclusion_text("流水线失败后 delete 会被 skip。现在我继续看其他配置。")
+        == "流水线失败后 delete 会被 skip。"
+    )
+    assert (
+        conversation_conclusion_text(
+            "远程有两个目录。我先看仓库信息，判断哪一个要改 6.6.2。"
+        )
+        == "远程有两个目录。"
+    )
 
 
 def test_page_facts_reject_paths_outside_stable_wiki_pages() -> None:

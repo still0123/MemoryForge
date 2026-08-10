@@ -26,6 +26,19 @@ _FOOTNOTE = re.compile(
 _FRONTMATTER = re.compile(r"\A---\n(?P<fields>.*?)\n---\n", re.DOTALL)
 _FACT_SECTION = re.compile(r"^#{3,6} (?P<section>.+?)\s*$", re.MULTILINE)
 _STABLE_PAGE = re.compile(r"^wiki/pages/(?:[^/]+/)*[^/]+\.md$")
+_CONVERSATION_PROCESS_MARKERS = (
+    "我先",
+    "我会",
+    "我来",
+    "我去",
+    "我按",
+    "我用一下",
+    "我顺手查一下",
+    "接下来我",
+    "现在查看",
+    "先看一下",
+    "继续看",
+)
 
 
 class CitationPayload(TypedDict):
@@ -76,6 +89,22 @@ class WikiFactSearchResult(IndexedWikiFact):
 class AppliedCodeSymbolMatch(IndexedWikiFact):
     identifier: str
     match_kind: Literal["qualified_name", "display_name"]
+
+
+def is_conversation_process_note(text: str) -> bool:
+    """Return whether an assistant note describes intended work, not a result."""
+    prefix = text.lstrip()[:24]
+    return any(marker in prefix for marker in _CONVERSATION_PROCESS_MARKERS)
+
+
+def conversation_conclusion_text(text: str) -> str:
+    """Drop a trailing next-action sentence from an otherwise useful conclusion."""
+    stripped = text.strip()
+    for boundary in re.finditer(r"[。！？]|[.!?](?!\d)", stripped):
+        tail = stripped[boundary.end() :].lstrip()
+        if tail and is_conversation_process_note(tail):
+            return stripped[: boundary.end()].rstrip()
+    return text
 
 
 def parse_page_citations(content: str) -> list[CitationPayload]:

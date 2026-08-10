@@ -74,6 +74,53 @@ def test_conversation_support_also_enforces_score_threshold(tmp_path: Path) -> N
     assert "score_below_threshold" in support["failed_hard_gates"]
 
 
+def test_conversation_summary_supports_a_named_capability_question(tmp_path: Path) -> None:
+    citation = {
+        **_citation("MemoryForge 支持代码仓库和飞书文档导入、自动编译 Wiki，并提供知识问答。"),
+        "section_path": "Assistant conclusions",
+        "routing_text": "Codex 会话：MemoryForge Wiki 项目建设",
+        "is_summary": True,
+    }
+    question = "MemoryForge 当前完成了哪些核心功能？"
+
+    support = query_module._support_score(
+        tmp_path,
+        question,
+        query_module._expanded_question_terms(query_module._terms(question)),
+        [("wiki/pages/memoryforge.md", citation)],
+        symbol_matches=(),
+        exact_symbol_fact_keys=set(),
+        required_sources=1,
+        code_page_paths=set(),
+    )
+
+    assert support["sufficient"]
+    assert support["components"]["core_term_coverage"] >= 0.75
+
+
+def test_cleanup_skip_aligns_with_a_negative_cleanup_question(tmp_path: Path) -> None:
+    citation = {
+        **_citation("YAML 使用 stop_on_error；一旦中间步骤失败，后面的 delete 清理会被 skip。"),
+        "section_path": "Assistant conclusions",
+        "routing_text": "Codex 会话：查流水线失败原因",
+    }
+    question = "流水线失败后有没有自动清理？"
+
+    support = query_module._support_score(
+        tmp_path,
+        question,
+        query_module._expanded_question_terms(query_module._terms(question)),
+        [("wiki/pages/pipeline.md", citation)],
+        symbol_matches=(),
+        exact_symbol_fact_keys=set(),
+        required_sources=1,
+        code_page_paths=set(),
+    )
+
+    assert support["sufficient"]
+    assert support["components"]["negation_alignment"] == 1.0
+
+
 def test_support_requires_aligned_negation(tmp_path: Path) -> None:
     page_path = "wiki/pages/code/repository/cache.md"
     citation = _citation("Cache entries expire after sixty seconds.")

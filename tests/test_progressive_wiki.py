@@ -174,13 +174,13 @@ def test_recall_returns_one_assistant_memory_per_conversation(
     for title, answer in (
         ("Cleanup investigation", "Cleanup requires the finalizer."),
         ("DataFlow concurrency", "CreateDataFlow uses an idempotency key."),
+        ("CreateDataFlow review", "CreateDataFlow serializes duplicate names."),
     ):
         _import(
             runner,
             workspace,
             workspace.parent / f"{title}.md",
-            f"# {title}\n\n## User\n\nWhat happened?\n\n"
-            f"## Assistant (unverified)\n\n{answer}\n",
+            f"# {title}\n\n## User\n\nWhat happened?\n\n## Assistant (unverified)\n\n{answer}\n",
             "notes",
             tags=("conversation", "platform:codex", "unverified"),
         )
@@ -191,7 +191,7 @@ def test_recall_returns_one_assistant_memory_per_conversation(
     assert recalled.exit_code == 0, recalled.output
     memories = json.loads(recalled.stdout)["recent_memories"]
     assert [memory["title"] for memory in memories] == [
-        "DataFlow concurrency",
+        "CreateDataFlow review",
         "Cleanup investigation",
     ]
     assert len({memory["citation"]["wiki_page"] for memory in memories}) == 2
