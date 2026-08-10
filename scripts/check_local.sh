@@ -30,6 +30,9 @@ export PIP_INDEX_URL=https://pypi.org/simple
 export UV_DEFAULT_INDEX=https://pypi.org/simple
 
 output="${1:-$root/local-evidence/$(date -u +%Y%m%dT%H%M%SZ)}"
+if [[ "$output" != /* ]]; then
+  output="$root/${output#./}"
+fi
 if [[ -e "$output" ]]; then
   echo "output already exists: $output" >&2
   exit 1

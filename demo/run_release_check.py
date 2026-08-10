@@ -45,14 +45,26 @@ def main(argv: list[str] | None = None) -> None:
     env_dir = workdir / ".venv"
     venv.EnvBuilder(with_pip=True).create(env_dir)
     python = env_dir / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-    env = {key: value for key, value in os.environ.items() if key != "PYTHONPATH"}
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if key not in {"PYTHONPATH", "PYTHONHOME"}
+        and not key.startswith(("GIT_", "PIP_", "UV_"))
+    }
     env["PYTHONNOUSERSITE"] = "1"
+    env["PIP_CONFIG_FILE"] = os.devnull
+    env["PIP_INDEX_URL"] = "https://pypi.org/simple"
 
     _run(
         python,
         "-m",
         "pip",
         "install",
+        "--isolated",
+        "--index-url",
+        "https://pypi.org/simple",
+        "--constraint",
+        str(REPO_ROOT / "constraints/dev.txt"),
         "--disable-pip-version-check",
         str(wheel),
         cwd=workdir,
@@ -266,8 +278,14 @@ def _run(
 
 
 def _git_output(root: Path, *args: str) -> str:
+    environment = {
+        key: value for key, value in os.environ.items() if not key.startswith("GIT_")
+    }
+    environment["GIT_CONFIG_NOSYSTEM"] = "1"
+    environment["GIT_CONFIG_GLOBAL"] = os.devnull
     return subprocess.run(
-        ["git", "-C", str(root), *args],
+        ["git", "-c", f"core.hooksPath={os.devnull}", "-C", str(root), *args],
+        env=environment,
         check=True,
         capture_output=True,
         text=True,

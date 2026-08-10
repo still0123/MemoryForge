@@ -22,6 +22,8 @@ def test_code_wiki_benchmark_closes_known_gaps_without_regression(
     monkeypatch.setenv("GIT_COMMITTER_NAME", "Host Committer")
     monkeypatch.setenv("GIT_COMMITTER_EMAIL", "host@example.invalid")
     monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "missing.gitconfig"))
+    monkeypatch.setenv("GIT_DIR", str(tmp_path / "missing.git"))
+    monkeypatch.setenv("GIT_WORK_TREE", str(tmp_path / "missing-worktree"))
     assert evidence == run_code_wiki_benchmark.build_evidence(tmp_path / "benchmark-replay")
 
     metrics = evidence["evaluation"]["metrics"]

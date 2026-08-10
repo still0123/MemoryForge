@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import os
 import subprocess
 import tomllib
 from pathlib import Path
@@ -54,9 +55,15 @@ def build_summary(*, memoryforge_commit: str | None = None) -> dict[str, Any]:
 
 
 def _git(*args: str) -> str:
+    environment = {
+        key: value for key, value in os.environ.items() if not key.startswith("GIT_")
+    }
+    environment["GIT_CONFIG_NOSYSTEM"] = "1"
+    environment["GIT_CONFIG_GLOBAL"] = os.devnull
     return subprocess.run(
-        ["git", *args],
+        ["git", "-c", f"core.hooksPath={os.devnull}", *args],
         cwd=REPO_ROOT,
+        env=environment,
         check=True,
         capture_output=True,
         text=True,

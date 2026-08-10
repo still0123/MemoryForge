@@ -94,6 +94,32 @@ def test_release_builder_git_ignores_caller_git_environment(
     assert not any(key.startswith("GIT_") for key in captured)
 
 
+def test_public_producers_ignore_caller_git_and_package_sources(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[dict[str, str]] = []
+
+    def fake_run(*_args: object, **kwargs: object) -> object:
+        captured.append(kwargs["env"])  # type: ignore[arg-type]
+        return type("Completed", (), {"stdout": "head\n"})()
+
+    monkeypatch.setenv("GIT_DIR", "/private/tmp/untrusted")
+    monkeypatch.setenv("PIP_FIND_LINKS", "/private/tmp/untrusted")
+    monkeypatch.setenv("UV_EXTRA_INDEX_URL", "https://example.invalid/simple")
+    monkeypatch.setattr(summary_builder.subprocess, "run", fake_run)
+    assert summary_builder._git("rev-parse", "HEAD") == "head"
+    monkeypatch.setattr(release_check.subprocess, "run", fake_run)
+    assert release_check._git_output(release_check.REPO_ROOT, "rev-parse", "HEAD") == "head"
+    assert all("GIT_DIR" not in env for env in captured)
+    assert all(env["GIT_CONFIG_NOSYSTEM"] == "1" for env in captured)
+    assert all(env["GIT_CONFIG_GLOBAL"] == os.devnull for env in captured)
+
+    source = (release_check.REPO_ROOT / "demo/run_release_check.py").read_text(encoding="utf-8")
+    assert 'not key.startswith(("GIT_", "PIP_", "UV_"))' in source
+    assert '"--isolated"' in source
+    assert '"--constraint"' in source
+
+
 def test_sdist_clean_room_passes_constraints_to_isolated_pip(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

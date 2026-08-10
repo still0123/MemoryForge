@@ -7,6 +7,7 @@ import argparse
 import base64
 import csv
 import hashlib
+import html as html_lib
 import importlib.util
 import io
 import json
@@ -4454,13 +4455,38 @@ def _release_review_finding_valid(finding: object) -> bool:
 
 def _accepted_review_reports_valid(artifacts: dict[str, Any], scope: str) -> bool:
     try:
-        reports = [
-            (REPO_ROOT / str(artifacts[name]["path"])).read_text(encoding="utf-8")
-            for name in ("html_report", "markdown_report")
-        ]
+        html = (REPO_ROOT / str(artifacts["html_report"]["path"])).read_text(
+            encoding="utf-8"
+        )
+        markdown = (REPO_ROOT / str(artifacts["markdown_report"]["path"])).read_text(
+            encoding="utf-8"
+        )
     except (OSError, KeyError, TypeError, UnicodeError):
         return False
-    return all(scope in report and "未发现缺陷" in report for report in reports)
+    visible_html = re.sub(r"<(script|style)\b.*?</\1>", " ", html, flags=re.I | re.S)
+    visible_html = html_lib.unescape(re.sub(r"<[^>]*>", " ", visible_html))
+    visible_html = visible_html.replace("/10", " per 10")
+    reports = (visible_html, markdown)
+    common_valid = all(
+        scope in report
+        and not re.search(r"\bfailed\b|失败", report, re.IGNORECASE)
+        and not re.search(r"P[012]\s*[:：]\s*[1-9][0-9]*", report)
+        and _payload_private_detail_leaks(report) == 0
+        for report in reports
+    )
+    html_counts_valid = all(
+        f'<span class="count">0</span> P{severity}' in html for severity in range(3)
+    )
+    return (
+        common_valid
+        and "未发现缺陷" in visible_html
+        and "本次评审未发现 P0-P2 级别的缺陷" in markdown
+        and html_counts_valid
+        and bool(re.search(r'<div class="defect-list">\s*</div>', html))
+        and "## 评审结论" in markdown
+        and "## 缺陷统计" not in markdown
+        and "## 缺陷详情" not in markdown
+    )
 
 
 def _validate_release_sdist_regression(

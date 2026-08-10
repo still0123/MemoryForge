@@ -43,6 +43,7 @@ def test_local_check_keeps_the_quality_and_artifact_contract() -> None:
         "core.hooksPath=/dev/null",
         'worktree add --detach "$snapshot" "$commit"',
         'export PYTHONPATH="$snapshot/src"',
+        'output="$root/${output#./}"',
         '"$name" == PIP_* || "$name" == UV_*',
         '"$workdir/build/bin/python" -m build',
         "--wheel --sdist --no-isolation",
@@ -68,6 +69,7 @@ def test_local_check_keeps_the_quality_and_artifact_contract() -> None:
     ):
         assert required in script
     assert script.index("worktree add --detach") < script.index("pytest -W")
+    assert script.index('output="$root/${output#./}"') < script.index('mkdir -p "$output/dist"')
 
 
 def test_powershell_gate_uses_literal_paths_and_isolated_sdist_probe() -> None:

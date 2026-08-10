@@ -204,6 +204,7 @@ def _cli(*args: str) -> str:
     completed = subprocess.run(
         [sys.executable, "-m", "memoryforge", *args],
         cwd=REPO_ROOT,
+        env=_git_environment(),
         capture_output=True,
         text=True,
     )
@@ -217,17 +218,6 @@ def _cli_json(*args: str) -> Any:
 
 
 def _git(root: Path, *args: str) -> None:
-    env = {
-        **{key: value for key, value in os.environ.items() if not key.startswith("GIT_")},
-        "GIT_AUTHOR_NAME": "MemoryForge Benchmark",
-        "GIT_AUTHOR_EMAIL": "benchmark@example.com",
-        "GIT_COMMITTER_NAME": "MemoryForge Benchmark",
-        "GIT_COMMITTER_EMAIL": "benchmark@example.com",
-        "GIT_AUTHOR_DATE": "2026-01-01T00:00:00Z",
-        "GIT_COMMITTER_DATE": "2026-01-01T00:00:00Z",
-        "GIT_CONFIG_NOSYSTEM": "1",
-        "GIT_CONFIG_GLOBAL": os.devnull,
-    }
     subprocess.run(
         [
             "git",
@@ -238,17 +228,33 @@ def _git(root: Path, *args: str) -> None:
             *args,
         ],
         cwd=root,
-        env=env,
+        env=_git_environment(),
         check=True,
         capture_output=True,
         text=True,
     )
 
 
+def _git_environment() -> dict[str, str]:
+    environment = {
+        **{key: value for key, value in os.environ.items() if not key.startswith("GIT_")},
+        "GIT_AUTHOR_NAME": "MemoryForge Benchmark",
+        "GIT_AUTHOR_EMAIL": "benchmark@example.com",
+        "GIT_COMMITTER_NAME": "MemoryForge Benchmark",
+        "GIT_COMMITTER_EMAIL": "benchmark@example.com",
+        "GIT_AUTHOR_DATE": "2026-01-01T00:00:00Z",
+        "GIT_COMMITTER_DATE": "2026-01-01T00:00:00Z",
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CONFIG_GLOBAL": os.devnull,
+    }
+    return environment
+
+
 def _git_output(root: Path, *args: str) -> str:
     return subprocess.run(
-        ["git", *args],
+        ["git", "-c", f"core.hooksPath={os.devnull}", *args],
         cwd=root,
+        env=_git_environment(),
         check=True,
         capture_output=True,
         text=True,
