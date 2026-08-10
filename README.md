@@ -4,6 +4,8 @@
 
 > 把散落在代码仓库、设计文档和飞书里的技术资料，编译成一套可维护、可追溯、可以直接在飞书提问的个人技术 Wiki。
 
+> **当前开发验收：Candidate 19 已接受。** macOS `634 passed`；Linux `631 passed / 3 skipped`；原生 Windows confirmation 未运行，holdout 也尚未运行。v0.3.0 仍未发布。
+
 ![MemoryForge 工作流](assets/memoryforge-flow.svg)
 
 ![Showcase 来源、Wiki、ChangeSet 与 Query Trace](assets/memoryforge-showcase-01.png)
@@ -57,24 +59,9 @@ Wiki 树、Diff、Citation Trace、Benchmark、保留的失败案例、正确拒
 | learn-claude-code support score development | Answer / selective accuracy **100%**，coverage **90%**，risk **0%** | 10 题；confirmation 未运行 |
 | Click 外部迁移 | development / holdout Answer **10% / 0%** | 真实负结果，未隐藏 |
 | Static Showcase development | **4/4**，本地详情泄漏 **0**，Workspace 变更 **0** | confirmation 未运行 |
-| v0.3.0 RC Candidate 12 development | **6/6**；exact package/query/privacy/artifact contracts | 本地双平台门禁通过；终审 rejected；confirmation 未运行 |
-| v0.3.0 RC Candidate 12 本地门禁 | macOS **623 passed**；Debian **620 passed / 3 skipped** | package 与 raw Code Wiki Evidence 跨平台同字节 |
-| v0.3.0 RC Candidate 12 静态终审 | **0 P0 / 9 P1 / 7 P2** | rejected；16 条独立发现保留；confirmation 未运行 |
-| v0.3.0 RC Candidate 11 development | **6/6**；Summary schema 3；可重算 query Evidence | 本地双平台门禁通过；终审 rejected |
-| v0.3.0 RC Candidate 11 本地门禁 | macOS **609 passed**；Debian **606 passed / 3 skipped** | package 与 raw Code Wiki Evidence 跨平台同字节 |
-| v0.3.0 RC Candidate 11 静态终审 | **0 P0 / 8 P1 / 4 P2** | rejected；12 条独立发现保留；confirmation 未运行 |
-| v0.3.0 RC Candidate 10 development | **5/6**；schema 3 与 drill schema 2 已生成 | 旧 consumer 误拒绝新 drill；rejected Evidence 保留 |
-| v0.3.0 RC Candidate 9 development | **6/6**；12 项 Code Wiki provenance 闭包 | 本地双平台门禁通过；终审 rejected |
-| v0.3.0 RC Candidate 9 本地门禁 | macOS **607 passed**；Debian **604 passed / 3 skipped** | package 与 raw Code Wiki Evidence 跨平台同字节 |
-| v0.3.0 RC Candidate 9 静态终审 | **0 P0 / 10 P1 / 4 P2** | rejected；14 条发现保留；confirmation 未运行 |
-| v0.3.0 RC Candidate 8 development | **6/6**；Summary schema 2；真实 query/replay gate | 本地双平台门禁通过；终审 rejected |
-| v0.3.0 RC Candidate 8 本地门禁 | macOS **604 passed**；Debian **601 passed / 3 skipped** | package bytes 与 development 一致；终审 rejected |
-| v0.3.0 RC Candidate 8 静态终审 | **0 P0 / 4 P1 / 2 P2** | rejected；6 条发现保留；confirmation 未运行 |
-| v0.3.0 RC Candidate 7 本地门禁 | macOS **599 passed**；Debian **596 passed / 3 skipped** | Wheel/sdist 与 development 字节一致；终审 rejected |
-| v0.3.0 RC Candidate 7 静态终审 | **0 P0 / 10 P1 / 3 P2** | rejected；原始 13 条保留；confirmation 未运行 |
-| v0.3.0 RC Candidate 7 首次门禁 | macOS **598/599** | 旧 `sdist.exclude` 测试合同导致 rejected；失败保留 |
-| v0.3.0 RC Candidate 6 本地门禁 | macOS **594 passed**；Debian **591 passed / 3 skipped** | final review rejected；原生 Windows confirmation 未运行 |
-| v0.3.0 RC Candidate 5 本地门禁 | macOS **586 passed**；Debian **583 passed / 3 skipped** | historical；final review rejected |
+| v0.3.0 RC Candidate 19 development | **6/6**；package/query/privacy/artifact contracts | accepted；静态终审 **0 P0/P1/P2** |
+| v0.3.0 RC Candidate 19 本地门禁 | macOS **634 passed**；Linux **631 passed / 3 skipped** | package 与 raw Code Wiki Evidence 跨平台同字节 |
+| 历史：v0.3.0 RC Candidate 12 development | macOS **623 passed**；Debian **620 passed / 3 skipped** | 静态终审 rejected；详细记录在 Evidence registry |
 
 ## 它解决了什么问题？
 
@@ -179,6 +166,16 @@ memoryforge feishu-serve --llm --allow-local-llm --workspace ./my-wiki
 ```
 
 飞书服务只处理私聊文本并回复原消息。资料仍要先走 `feishu-import → ingest → review → apply`，它不会自动抓取飞书空间或后台同步全部文档。完整配置见 [FEISHU_MVP_SPEC.md](FEISHU_MVP_SPEC.md)。
+
+### 飞书试跑
+
+先确认本地 Workspace 能回答一个已知问题：
+
+```bash
+memoryforge feishu-reply '你的测试问题' --workspace ./my-wiki
+```
+
+再用 `lark-cli config init --new` 写入自建应用配置，启动 `feishu-serve`，并私聊机器人同一问题。回复应带 `来源 Wiki：wiki/pages/...`；App Secret 只保留在本机，不提交仓库。
 
 ## MiniClaude Agent 在哪里？
 
