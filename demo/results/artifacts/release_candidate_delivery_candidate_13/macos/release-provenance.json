@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "memoryforge_commit": "94db14e619cb912910321b7a10cfe023d28da2fb",
+  "memoryforge_worktree_dirty": false,
+  "package": {
+    "version": "0.3.0",
+    "wheel": "memoryforge-0.3.0-py3-none-any.whl",
+    "wheel_sha256": "1176296c53051f5acc2d7015c0aab409a59b500b332fdeeccde8f9f23649e8db",
+    "import_path": ".venv/lib/python3.11/site-packages/memoryforge/__init__.py",
+    "import_from_fresh_venv": true,
+    "dependencies": {
+      "pydantic": "2.13.4",
+      "tree-sitter": "0.25.2",
+      "tree-sitter-go": "0.25.0",
+      "tree-sitter-python": "0.25.0",
+      "tree-sitter-typescript": "0.23.2",
+      "typer": "0.27.1"
+    }
+  },
+  "runtime": {
+    "implementation": "CPython",
+    "python": "3.11.15",
+    "platform": "macOS-26.5.2-arm64-arm-64bit"
+  },
+  "commands": [
+    "python -m pip install <wheel>",
+    "python -m pip check",
+    "python -m memoryforge --help",
+    "python -m memoryforge --version",
+    "python demo/run_code_wiki_benchmark.py"
+  ],
+  "checks": {
+    "pip_check": "passed",
+    "cli_help": "passed",
+    "cli_version": "passed",
+    "code_wiki_benchmark": "passed",
+    "public_demo": "not_run"
+  },
+  "code_wiki": {
+    "evidence_sha256": "b90c1bb651b422f26a1f96a0033435e26c9fc52b89162ff8efdb970a07e9dfde",
+    "metrics": {
+      "expected_source_coverage": 100.0,
+      "symbol_recall": 100.0,
+      "core_relation_recall": 100.0,
+      "known_gap_relation_recall": 100.0,
+      "overall_relation_recall": 100.0,
+      "module_assignment_accuracy": 100.0,
+      "citation_grounding_accuracy": 100.0,
+      "architecture_edge_grounding": 100.0,
+      "mermaid_edge_coverage": 100.0,
+      "architecture_citation_coverage": 100.0,
+      "architecture_mermaid_determinism": 100.0,
+      "deterministic_replay": 100.0
+    },
+    "gates": {
+      "core_symbols": true,
+      "core_relations": true,
+      "module_assignment": true,
+      "citations": true,
+      "architecture_wiki": true,
+      "deterministic": true
+    },
+    "incremental": {
+      "changed_symbols": [
+        "py.app",
+        "py.app.run_local"
+      ],
+      "expected_changed_symbols": [
+        "py.app",
+        "py.app.run_local"
+      ],
+      "changed_pages": [
+        "wiki/pages/code/<repository-id-prefix>/py/app.md"
+      ],
+      "expected_changed_pages": [
+        "wiki/pages/code/<repository-id-prefix>/py/app.md"
+      ],
+      "changed_page_ratio": 0.2,
+      "max_changed_page_ratio": 0.25,
+      "stable_symbol_ids": true,
+      "passed": true
+    }
+  },
+  "public_demo": {
+    "status": "not_run",
+    "required_commit": "93f5dc05229da250b041850ad8deeeec886ef304"
+  }
+}
