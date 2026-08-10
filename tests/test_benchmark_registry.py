@@ -1841,12 +1841,18 @@ def test_benchmark_registry_accepts_zero_blocker_final_review(
         (
             "html_report",
             "report.html",
-            f"<p>{base}...{review_commit}</p><p>未发现缺陷</p>\n",
+            (
+                f"<p>{base}...{review_commit}</p><p>未发现缺陷</p>\n"
+                '<span class="count">0</span> P0\n'
+                '<span class="count">0</span> P1\n'
+                '<span class="count">0</span> P2\n'
+                '<div class="defect-list">\n</div>\n'
+            ),
         ),
         (
             "markdown_report",
             "report.md",
-            f"{base}...{review_commit}\n未发现缺陷\n",
+            (f"{base}...{review_commit}\n## 评审结论\n本次评审未发现 P0-P2 级别的缺陷。\n"),
         ),
         (
             "review_scope",
