@@ -72,6 +72,30 @@ WorkspaceOption = Annotated[
     typer.Option("--workspace", "-w", help="Initialized MemoryForge workspace."),
 ]
 
+_RECALL_DECISION_MARKERS = (
+    "决定",
+    "采用",
+    "选择",
+    "已完成",
+    "完成了",
+    "优化完成",
+    "decided",
+    "implemented",
+)
+_RECALL_OPEN_ITEM_MARKERS = (
+    "下一步",
+    "待办",
+    "未完成",
+    "尚未",
+    "未推送",
+    "需要继续",
+    "todo",
+    "next step",
+    "follow-up",
+    "not pushed",
+    "remaining",
+)
+
 
 def _version_callback(value: bool) -> None:
     if value:
@@ -1271,6 +1295,152 @@ def ask(
     ) as exc:
         _exit_with_safe_error(exc)
     typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+@app.command()
+def recall(
+    limit: Annotated[
+        int,
+        typer.Option("--limit", min=1, max=20, help="Maximum recent conversation notes."),
+    ] = 8,
+    workspace: WorkspaceOption = Path("."),
+) -> None:
+    """Return compact, cited startup context from applied conversation memories."""
+    try:
+        opened = Workspace.open_readonly(workspace)
+        with sqlite3.connect(
+            opened.index_path.as_uri() + "?mode=ro",
+            uri=True,
+            timeout=30,
+        ) as connection:
+            connection.row_factory = sqlite3.Row
+            connection.execute("PRAGMA query_only = ON")
+            rows = connection.execute(
+                """
+                SELECT
+                    facts.page_path,
+                    facts.source_id,
+                    facts.source_version,
+                    facts.locator,
+                    facts.section_path,
+                    facts.quote,
+                    versions.title,
+                    versions.observed_at
+                FROM wiki_facts AS facts
+                JOIN applied_source_versions AS applied
+                  ON applied.source_id = facts.source_id
+                 AND applied.source_version_id = facts.source_version
+                JOIN sources ON sources.source_id = facts.source_id
+                JOIN source_versions AS versions
+                  ON versions.id = facts.source_version
+                 AND versions.source_id = sources.id
+                WHERE versions.tags_json LIKE '%"conversation"%'
+                ORDER BY
+                    versions.observed_at DESC,
+                    facts.page_path,
+                    CASE WHEN facts.section_path LIKE 'Latest %' THEN 0 ELSE 1 END,
+                    CAST(
+                        substr(facts.locator, 7, instr(facts.locator, '-') - 7)
+                        AS INTEGER
+                    ) DESC
+                """
+            ).fetchall()
+        summary = next(
+            (str(row["quote"]).strip() for row in rows if not str(row["section_path"])),
+            None,
+        )
+        notes: list[dict[str, object]] = []
+        seen: set[str] = set()
+        for row in rows:
+            quote = str(row["quote"]).strip()
+            if (
+                not row["section_path"]
+                or not quote
+                or quote in seen
+                or (len(quote) < 40 and quote.endswith((":", "：")))
+            ):
+                continue
+            seen.add(quote)
+            notes.append(
+                {
+                    "title": str(row["title"]),
+                    "role": str(row["section_path"]),
+                    "text": quote,
+                    "observed_at": str(row["observed_at"]),
+                    "citation": {
+                        "source_id": str(row["source_id"]),
+                        "source_version": int(row["source_version"]),
+                        "locator": str(row["locator"]),
+                        "wiki_page": str(row["page_path"]),
+                    },
+                }
+            )
+            if len(notes) == limit:
+                break
+        if summary is None and notes:
+            summary = str(notes[0]["text"])
+        decisions = _recall_matching_notes(notes, _RECALL_DECISION_MARKERS)
+        open_items = _recall_matching_notes(notes, _RECALL_OPEN_ITEM_MARKERS)
+        result = {
+            "status": "recalled" if notes else "empty",
+            "warning": (
+                "Conversation memories are unverified; check citations before relying on them."
+            ),
+            "summary": summary,
+            "recent_memories": notes,
+            "decisions": decisions,
+            "open_items": open_items,
+            "startup_context": _render_recall_context(summary, decisions, open_items, notes),
+        }
+    except (
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+def _recall_matching_notes(
+    notes: list[dict[str, object]], markers: tuple[str, ...]
+) -> list[dict[str, object]]:
+    matches = []
+    for note in notes:
+        text = str(note["text"]).lower()
+        if any(marker in text for marker in markers):
+            matches.append(note)
+        if len(matches) == 3:
+            break
+    return matches
+
+
+def _render_recall_context(
+    summary: str | None,
+    decisions: list[dict[str, object]],
+    open_items: list[dict[str, object]],
+    notes: list[dict[str, object]],
+) -> str:
+    if not notes:
+        return "No applied conversation memory found."
+    lines = [
+        "Unverified recalled conversation memory. Verify important claims against citations.",
+        f"Summary: {summary}",
+    ]
+    if decisions:
+        lines.append("Recent decisions: " + " | ".join(str(item["text"]) for item in decisions))
+    if open_items:
+        lines.append("Open items: " + " | ".join(str(item["text"]) for item in open_items))
+    pages = []
+    for item in notes:
+        citation = item["citation"]
+        if isinstance(citation, dict) and citation["wiki_page"] not in pages:
+            pages.append(citation["wiki_page"])
+    lines.append("Evidence pages: " + ", ".join(str(page) for page in pages))
+    return "\n".join(lines)
 
 
 @app.command()

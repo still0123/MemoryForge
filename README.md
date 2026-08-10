@@ -135,6 +135,9 @@ memoryforge apply <changeset-id> --workspace ./my-wiki
 
 # 4. 提问
 memoryforge ask '缓存多久过期？' --workspace ./my-wiki
+
+# 5. 新 AI 会话加载已审核的近期记忆
+memoryforge recall --workspace ./my-wiki
 ```
 
 生成后的 Workspace 大致如下：
@@ -368,6 +371,8 @@ memoryforge import codex-session.md --category notes \
 AI 回复按未验证材料处理；审核通过后，新会话即可从同一 Wiki 检索这些长期记忆。
 编译会话来源时，Wiki 页面只保留最近 8 条消息的少量可检索片段并按最新优先展示；
 完整对话仍保存在不可变 raw Evidence 中，不会整段塞进日常查询上下文。
+新建 AI 会话时可运行 `memoryforge recall --workspace <workspace>`；命令只读取已应用的
+会话页面，返回近期摘要、决策、未完成事项和引用，不调用模型，也不修改 Workspace。
 
 Botmux 托管的 Codex 等会话可用生命周期 Hook 自动收录。将下面配置写入
 `~/.botmux/data/hooks.json`；把命令和 Workspace 改为绝对路径：

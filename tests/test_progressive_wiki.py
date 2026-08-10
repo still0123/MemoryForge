@@ -132,6 +132,27 @@ def test_conversation_page_prefers_recent_unverified_notes(
     assert "Historical status 0" not in page
     assert "Candidate 19 is accepted" in index
 
+    applied = runner.invoke(
+        app,
+        [
+            "apply",
+            json.loads(proposal.stdout)["changeset_id"],
+            "--approve",
+            "--workspace",
+            str(workspace),
+        ],
+    )
+    recalled = runner.invoke(app, ["recall", "--workspace", str(workspace)])
+
+    assert applied.exit_code == 0, applied.output
+    assert recalled.exit_code == 0, recalled.output
+    memory = json.loads(recalled.stdout)
+    assert memory["status"] == "recalled"
+    assert memory["summary"] == "Candidate 19 is accepted. Conversation memory is enabled."
+    assert memory["recent_memories"][0]["role"] == "Latest assistant message"
+    assert "Historical status 0" not in memory["startup_context"]
+    assert memory["recent_memories"][0]["citation"]["wiki_page"].startswith("wiki/pages/")
+
 
 def test_ask_uses_index_to_select_a_page_then_returns_its_source(
     tmp_path: Path,
