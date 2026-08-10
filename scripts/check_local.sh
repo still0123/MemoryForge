@@ -19,7 +19,7 @@ fi
 
 unset PYTHONPATH PYTHONHOME
 while IFS='=' read -r name _; do
-  if [[ "$name" == GIT_* ]]; then
+  if [[ "$name" == GIT_* || "$name" == PIP_* || "$name" == UV_* ]]; then
     unset "$name"
   fi
 done < <(env)
@@ -34,11 +34,17 @@ if [[ -e "$output" ]]; then
   echo "output already exists: $output" >&2
   exit 1
 fi
+commit="$(git rev-parse HEAD)"
+if [[ -n "$(git status --porcelain --untracked-files=all)" ]]; then
+  echo "MemoryForge worktree must be clean" >&2
+  exit 1
+fi
 
 workdir="$(mktemp -d "${TMPDIR:-/tmp}/memoryforge-local-check.XXXXXX")"
 snapshot="$workdir/source"
 snapshot_added=0
 cleanup() {
+  cd "$root"
   if [[ "$snapshot_added" == 1 ]]; then
     git worktree remove --force "$snapshot" >/dev/null 2>&1 || true
   fi
@@ -46,6 +52,12 @@ cleanup() {
 }
 trap cleanup EXIT
 mkdir -p "$output/dist"
+
+git -c core.autocrlf=false -c core.eol=lf -c core.hooksPath=/dev/null \
+  worktree add --detach "$snapshot" "$commit"
+snapshot_added=1
+cd "$snapshot"
+export PYTHONPATH="$snapshot/src"
 
 "$python" -m ruff check --no-cache .
 "$python" -m ruff format --check .
@@ -62,10 +74,6 @@ fi
 "$python" -m pytest -W error::ResourceWarning \
   -W error::pytest.PytestUnraisableExceptionWarning \
   --cov=memoryforge --cov-report=term-missing
-
-git -c core.autocrlf=false -c core.eol=lf -c core.hooksPath=/dev/null \
-  worktree add --detach "$snapshot" HEAD
-snapshot_added=1
 
 "$python" -m venv "$workdir/build"
 if command -v uv >/dev/null 2>&1; then
@@ -154,5 +162,12 @@ for line in lines:
     digest, relative = line.split("  ", 1)
     assert hashlib.sha256((root / relative).read_bytes()).hexdigest() == digest
 PY
+
+cd "$root"
+if [[ "$(git rev-parse HEAD)" != "$commit" ]] || \
+  [[ -n "$(git status --porcelain --untracked-files=all)" ]]; then
+  echo "MemoryForge source changed during local checks" >&2
+  exit 1
+fi
 
 echo "Local checks passed. Evidence: $output"

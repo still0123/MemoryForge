@@ -370,12 +370,14 @@ def _cli_json(*args: str) -> dict[str, Any]:
 
 def _git(root: Path, *args: str) -> None:
     environment = {
-        **os.environ,
+        **{key: value for key, value in os.environ.items() if not key.startswith("GIT_")},
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CONFIG_GLOBAL": os.devnull,
         "GIT_AUTHOR_DATE": "2026-01-01T00:00:00Z",
         "GIT_COMMITTER_DATE": "2026-01-01T00:00:00Z",
     }
     subprocess.run(
-        ["git", *args],
+        ["git", "-c", f"core.hooksPath={os.devnull}", "-c", "commit.gpgSign=false", *args],
         cwd=root,
         env=environment,
         check=True,
@@ -384,9 +386,13 @@ def _git(root: Path, *args: str) -> None:
 
 
 def _git_output(root: Path, *args: str) -> str:
+    environment = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    environment["GIT_CONFIG_NOSYSTEM"] = "1"
+    environment["GIT_CONFIG_GLOBAL"] = os.devnull
     return subprocess.run(
-        ["git", *args],
+        ["git", "-c", f"core.hooksPath={os.devnull}", "-c", "commit.gpgSign=false", *args],
         cwd=root,
+        env=environment,
         check=True,
         capture_output=True,
         text=True,

@@ -41,7 +41,9 @@ def test_local_check_keeps_the_quality_and_artifact_contract() -> None:
         "error::pytest.PytestUnraisableExceptionWarning",
         'python="$(cd "$(dirname "$python")" && pwd)/$(basename "$python")"',
         "core.hooksPath=/dev/null",
-        'worktree add --detach "$snapshot" HEAD',
+        'worktree add --detach "$snapshot" "$commit"',
+        'export PYTHONPATH="$snapshot/src"',
+        '"$name" == PIP_* || "$name" == UV_*',
         '"$workdir/build/bin/python" -m build',
         "--wheel --sdist --no-isolation",
         "uv pip install",
@@ -65,6 +67,7 @@ def test_local_check_keeps_the_quality_and_artifact_contract() -> None:
         "SHA256SUMS",
     ):
         assert required in script
+    assert script.index("worktree add --detach") < script.index("pytest -W")
 
 
 def test_powershell_gate_uses_literal_paths_and_isolated_sdist_probe() -> None:
@@ -80,7 +83,9 @@ def test_powershell_gate_uses_literal_paths_and_isolated_sdist_probe() -> None:
         "Set-Content -LiteralPath",
         "Remove-Item Env:PYTHONPATH",
         '"core.hooksPath=NUL"',
-        '"worktree", "add", "--detach", $Snapshot, "HEAD"',
+        '"worktree", "add", "--detach", $Snapshot, $Commit',
+        '$env:PYTHONPATH = Join-Path $Snapshot "src"',
+        '$_ -Like "PIP_*" -or $_ -Like "UV_*"',
         '"--no-config", "--default-index", "https://pypi.org/simple"',
         '"--isolated", "--index-url", "https://pypi.org/simple"',
         "$OriginalEnvironment",
@@ -99,6 +104,7 @@ def test_powershell_gate_uses_literal_paths_and_isolated_sdist_probe() -> None:
     assert script.index("try {") < script.index("Set-Location -LiteralPath $Root")
     assert "if ($Workdir)" in script
     assert "$OriginalEnvironment.ContainsKey($Name)" in script
+    assert script.index('"worktree", "add", "--detach"') < script.index('"-m", "pytest"')
 
 
 def test_github_actions_workflows_are_removed() -> None:

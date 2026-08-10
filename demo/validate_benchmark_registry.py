@@ -1899,6 +1899,31 @@ def _validate_experiments(experiments: list[dict[str, Any]]) -> int:
                 != expected_linux
             ):
                 raise ValueError(f"Linux Evidence history is incomplete: {suite_id}")
+            references = {
+                "regression_evidence": (regression_evidence, expected_regression),
+                "review_evidence": (review_evidence, expected_review),
+                "acceptance_evidence": (acceptance_evidence, expected_acceptance),
+                "linux_evidence": (linux_evidence, expected_linux),
+            }
+            expected_artifact_keys = {
+                "split",
+                "evidence_revision",
+                "status",
+                "path",
+                "sha256",
+                "memoryforge_commit",
+                "passed",
+                *(name for name, (_, expected) in references.items() if expected is not None),
+            }
+            if (
+                set(artifact) != expected_artifact_keys
+                or _payload_private_detail_leaks(artifact) != 0
+                or any(
+                    expected is not None and not _evidence_reference_valid(reference)
+                    for reference, expected in references.values()
+                )
+            ):
+                raise ValueError(f"experiment Evidence schema changed: {suite_id}")
             statuses.add(status)
             if COMMIT.fullmatch(commit) is None:
                 raise ValueError(f"invalid experiment Evidence Commit: {suite_id}")
@@ -4359,6 +4384,8 @@ def _validate_release_static_review_acceptance(
         or any(not _release_review_finding_valid(finding) for finding in raw_findings)
         or not isinstance(top_findings, list)
         or any(not _release_review_finding_valid(finding) for finding in top_findings)
+        or not _strict_json_value(top_findings, raw_findings)
+        or not _accepted_review_reports_valid(artifacts, f"{base_commit}...{commit}")
         or not _strict_mapping(
             payload.get("confirmation"),
             {
@@ -4407,6 +4434,17 @@ def _release_review_finding_valid(finding: object) -> bool:
         and type(finding.get("confidence")) is int
         and 0 <= finding["confidence"] <= 10
     )
+
+
+def _accepted_review_reports_valid(artifacts: dict[str, Any], scope: str) -> bool:
+    try:
+        reports = [
+            (REPO_ROOT / str(artifacts[name]["path"])).read_text(encoding="utf-8")
+            for name in ("html_report", "markdown_report")
+        ]
+    except (OSError, KeyError, TypeError, UnicodeError):
+        return False
+    return all(scope in report and "未发现缺陷" in report for report in reports)
 
 
 def _validate_release_sdist_regression(
@@ -5318,15 +5356,13 @@ def _validate_release_static_review_regression(
                 },
                 "html_report": {
                     "path": (
-                        "demo/results/artifacts/release_candidate_review_candidate_13/"
-                        "report.html"
+                        "demo/results/artifacts/release_candidate_review_candidate_13/report.html"
                     ),
                     "sha256": "c40857942bd2d3fc5032b0d2da53ec406c41f5fcc0f3053b5f8989611a07c188",
                 },
                 "markdown_report": {
                     "path": (
-                        "demo/results/artifacts/release_candidate_review_candidate_13/"
-                        "report.md"
+                        "demo/results/artifacts/release_candidate_review_candidate_13/report.md"
                     ),
                     "sha256": "536911849dab2fe1b8dbb0e8e5512248a7a1d242a7795591cdb0eadcb0878e87",
                 },
@@ -6374,6 +6410,17 @@ def _validate_artifact(artifact: dict[str, Any], suite_id: str) -> None:
     actual_sha = hashlib.sha256(path.read_bytes()).hexdigest()
     if actual_sha != expected_sha:
         raise ValueError(f"registered artifact SHA256 mismatch: {suite_id}")
+
+
+def _evidence_reference_valid(reference: object) -> bool:
+    return (
+        isinstance(reference, dict)
+        and set(reference) == {"path", "sha256", "memoryforge_commit", "passed"}
+        and SHA256.fullmatch(str(reference.get("sha256"))) is not None
+        and COMMIT.fullmatch(str(reference.get("memoryforge_commit"))) is not None
+        and type(reference.get("passed")) is bool
+        and _payload_private_detail_leaks(reference) == 0
+    )
 
 
 def _suite_cases(split: dict[str, Any]) -> tuple[int, set[str], set[str]]:

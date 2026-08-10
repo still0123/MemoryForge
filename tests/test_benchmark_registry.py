@@ -50,6 +50,17 @@ def test_benchmark_registry_binds_all_release_artifacts() -> None:
     }
 
 
+def test_benchmark_registry_rejects_undeclared_evidence_fields() -> None:
+    registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+    experiment = next(
+        item for item in registry["experiments"] if item["suite_id"] == "release-candidate-delivery"
+    )
+    experiment["evidence"][-1]["authorization"] = "Basic dXNlcjpwYXNz"
+
+    with pytest.raises(ValueError, match="Evidence schema changed"):
+        validator.validate_registry_payload(registry)
+
+
 def test_benchmark_registry_rejects_duplicate_suite_ids(tmp_path: Path) -> None:
     registry = json.loads(validator.DEFAULT_REGISTRY.read_text(encoding="utf-8"))
     registry["suites"][1]["suite_id"] = registry["suites"][0]["suite_id"]
@@ -1791,8 +1802,16 @@ def test_benchmark_registry_accepts_zero_blocker_final_review(
     for key, name, payload in (
         ("raw_findings", "comments.jsonl", ""),
         ("top_findings", "final_comments.json", "[]\n"),
-        ("html_report", "report.html", "<p>0 P0-P2</p>\n"),
-        ("markdown_report", "report.md", "0 P0-P2\n"),
+        (
+            "html_report",
+            "report.html",
+            f"<p>{base}...{review_commit}</p><p>未发现缺陷</p>\n",
+        ),
+        (
+            "markdown_report",
+            "report.md",
+            f"{base}...{review_commit}\n未发现缺陷\n",
+        ),
         (
             "review_scope",
             "review-scope.json",
@@ -1879,7 +1898,21 @@ def test_benchmark_registry_accepts_zero_blocker_final_review(
         )
     payload["review"]["p0"] = 0
     (tmp_path / "final_comments.json").write_text(
-        '[{"severity": "P1"}]\n',
+        json.dumps(
+            [
+                {
+                    "title": "hidden blocker",
+                    "file": "src/memoryforge/__init__.py",
+                    "start_line": 1,
+                    "end_line": 1,
+                    "severity": "P1",
+                    "category": "LOGIC",
+                    "confidence": 10,
+                    "suggestion": "fix it",
+                    "rationale": "top findings must match raw findings",
+                }
+            ]
+        ),
         encoding="utf-8",
     )
     with pytest.raises(ValueError, match="accepted review Evidence changed"):
