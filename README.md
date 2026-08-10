@@ -338,18 +338,30 @@ memoryforge showcase build --workspace <workspace> --output <directory>
 memoryforge feishu-serve --workspace <workspace>
 ```
 
-飞书私聊还支持两条轻量上下文命令：
+飞书私聊还支持以下轻量上下文命令：
 
 ```text
 /project efs-mgr       # 当前聊天固定到某个已登记仓库
 /project clear         # 清除项目范围
 /resume <session-id>   # 恢复本机保存的另一段会话
 /resume clear          # 退出恢复会话
+/wiki 收录             # 将当前会话最近 3 轮生成本地记忆草稿
 ```
 
 `/project` 只改变当前聊天的 Wiki 检索范围，`/resume` 只读取本机保存的有限会话上下文；
-它们不会把公司代码、飞书正文或会话上传到 GitHub。`watch` 只生成待审核 ChangeSet，
-不会自动覆盖正式 Wiki。
+`/wiki 收录` 生成 `local_only` 来源，仍须执行 `ingest → review → approve → apply` 才会进入
+正式 Wiki。它们不会把公司代码、飞书正文或会话上传到 GitHub。`watch` 只生成待审核
+ChangeSet，不会自动覆盖正式 Wiki。
+
+Codex、Claude 等 AI 对话无需专用适配器：先导出为 Markdown 或 TXT，再复用安全导入路径：
+
+```bash
+memoryforge import codex-session.md --category notes \
+  --tag conversation --tag platform:codex --local-only \
+  --workspace <workspace>
+```
+
+AI 回复按未验证材料处理；审核通过后，新会话即可从同一 Wiki 检索这些长期记忆。
 
 更多命令请运行 `memoryforge --help`。实现细节与数据模型见 [SPEC.md](SPEC.md)，下一阶段的完整实施计划见 [NEXT_PHASE_SPEC.md](NEXT_PHASE_SPEC.md)。
 

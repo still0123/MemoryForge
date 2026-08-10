@@ -7,12 +7,14 @@ from pathlib import Path
 from typing import Any
 
 from memoryforge.errors import MemoryForgeError
+from memoryforge.importer import SourceValidationError
 from memoryforge.provider import OpenAICompatibleProvider
 from memoryforge.query import AskPayload, answer_question
 from memoryforge.sessions import (
     SessionStore,
     SessionTurn,
     is_valid_session_id,
+    remember_session,
     render_context,
     rewrite_query,
     save_turn,
@@ -95,14 +97,26 @@ def _control_reply(
     session_id: str | None,
 ) -> dict[str, Any] | None:
     parts = text.strip().split(maxsplit=1)
-    if not parts or parts[0].lower() not in {"/project", "/resume"}:
+    if not parts or parts[0].lower() not in {"/project", "/resume", "/wiki"}:
         return None
     if session_id is None:
-        return _plain_reply("当前消息没有可用的会话 ID，无法保存项目或恢复上下文。")
+        return _plain_reply("当前消息没有可用的会话 ID，无法保存会话状态。")
 
     store = SessionStore(workspace, session_id)
     command = parts[0].lower()
     argument = parts[1].strip() if len(parts) == 2 else ""
+    if command == "/wiki":
+        if argument not in {"收录", "remember", "save"}:
+            return _plain_reply("用法：/wiki 收录")
+        try:
+            result = remember_session(workspace, session_id)
+        except SourceValidationError:
+            return _plain_reply("当前对话含疑似密钥，未生成记忆草稿。")
+        if result is None:
+            return _plain_reply("当前会话还没有可收录内容。")
+        return _plain_reply(
+            "已生成本地记忆草稿。请在终端执行 ingest、review、approve、apply 后写入 Wiki。"
+        )
     if command == "/project":
         if argument.lower() in {"clear", "none", "off"}:
             store.set_project(None)

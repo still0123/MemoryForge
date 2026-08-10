@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import json
 import re
+from hashlib import sha256
 from pathlib import Path
 from typing import Any, NotRequired, TypedDict
 
+from memoryforge.importer import import_local_document
+from memoryforge.models import ImportResult, LocalDocument, Sensitivity, SourceCategory
 from memoryforge.workspace import is_public_source_version
 
 _MAX_TURNS = 3
@@ -211,6 +214,53 @@ def save_turn(
         wiki_pages=wiki_pages,
         model_safe=model_safe,
     )
+
+
+def remember_session(workspace_root: Path, session_id: str) -> ImportResult | None:
+    """Store the bounded Feishu session as a local-only, reviewable source draft."""
+    turns = SessionStore(workspace_root, session_id).load(allow_local=True)
+    if not turns:
+        return None
+    source_id = sha256(f"conversation:feishu:{session_id}".encode()).hexdigest()
+    return import_local_document(
+        workspace_root,
+        LocalDocument(
+            source_uri=f"mf://source/{source_id}",
+            source_path=f"conversations/feishu/{source_id[:16]}.md",
+            media_type="text/markdown",
+            category=SourceCategory.NOTES,
+            suffix=".md",
+            title="Feishu conversation memory",
+            content=_render_memory_source(turns),
+            sensitivity=Sensitivity.LOCAL_ONLY,
+            tags=("conversation", "platform:feishu", "unverified"),
+        ),
+        source_id=source_id,
+    )
+
+
+def _render_memory_source(turns: list[SessionTurn]) -> str:
+    lines = [
+        "# Feishu conversation memory",
+        "",
+        "> Conversation draft. Assistant responses are unverified until review and apply.",
+    ]
+    for index, turn in enumerate(turns, start=1):
+        lines.extend(
+            (
+                "",
+                f"## Turn {index}",
+                "",
+                "### User",
+                "",
+                turn["question"],
+                "",
+                "### Assistant (unverified)",
+                "",
+                turn["answer"],
+            )
+        )
+    return "\n".join(lines) + "\n"
 
 
 def _looks_like_followup(question: str) -> bool:
