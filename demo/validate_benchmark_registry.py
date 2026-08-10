@@ -518,7 +518,7 @@ REQUIRED_EXPERIMENT_EVIDENCE = {
         ),
         _RESULTS + "release_candidate_development_candidate_17.json": (
             18,
-            "local_gates_passed_review_pending",
+            "development_passed_review_failed",
             "f80cb31a24161c7c1a73b1a41662bd02c729490a14b06e9b0782748f8a05bdca",
             "f9814230083e970f58f2ce35006d49d8f8c40c44",
         ),
@@ -671,6 +671,11 @@ REQUIRED_REVIEW_EVIDENCE = {
             _RESULTS + "release_candidate_candidate_14_static_review_rejected.json",
             "742bc9ea21f7482bab66c846daac781182c33698d42b4bc659c279a9ba81a76e",
             "be3560e37baa908e01a0404a88631ad1a1fa39d7",
+        ),
+        _RESULTS + "release_candidate_development_candidate_17.json": (
+            _RESULTS + "release_candidate_candidate_17_static_review_rejected.json",
+            "3bc30cf3abe72eb0dbec68239f50b5f80681fdd168aec6033c9c13ad2b84b8d4",
+            "b0dfd3ac91d6f97b3cfd1e8dfad3160237bfdec0",
         ),
     },
 }
@@ -5573,6 +5578,90 @@ def _validate_release_static_review_regression(
             and _git_diff_stats(
                 str(expected_review["base_commit"]),
                 str(expected_review["source_commit"]),
+            )
+            == expected_stats
+            and _strict_mapping(
+                scope_payload,
+                {
+                    "schema_version": 1,
+                    "base_commit": expected_review["base_commit"],
+                    "source_commit": expected_review["source_commit"],
+                    "diff_mode": "merge_base_to_source",
+                    **expected_stats,
+                },
+            )
+        )
+    elif candidate == "release-development-candidate-17":
+        review_root = "demo/results/artifacts/release_candidate_review_candidate_17/"
+        expected_review = {
+            "scope": (
+                "569685c2f0bf790819820b821b4768d180c4ee0d..."
+                "b0dfd3ac91d6f97b3cfd1e8dfad3160237bfdec0"
+            ),
+            "base_commit": "569685c2f0bf790819820b821b4768d180c4ee0d",
+            "source_commit": "b0dfd3ac91d6f97b3cfd1e8dfad3160237bfdec0",
+            "status": "failed",
+            "p0": 0,
+            "p1": 4,
+            "p2": 0,
+            "failures": [
+                "development_live_worktree_binding",
+                "benchmark_summary_live_worktree_binding",
+                "accepted_review_report_exact_contract",
+                "accepted_review_raw_html_privacy",
+            ],
+            "artifacts": {
+                "raw_findings": {
+                    "path": review_root + "comments.jsonl",
+                    "sha256": "4ed218c81d3eaa3f37fdc6da5b1cd238a016b58125ece4a7010c931b3a02ebc6",
+                },
+                "top_findings": {
+                    "path": review_root + "final_comments.json",
+                    "sha256": "722f18679ce608036f39e865ed568bd5ed66b6ff0385a23c75073cafef418e0a",
+                },
+                "html_report": {
+                    "path": review_root + "report.html",
+                    "sha256": "7e7edeaac233c313b8f6a5d89960aa2406fa1077b8c5cc51f8817766b5b96b6f",
+                },
+                "markdown_report": {
+                    "path": review_root + "report.md",
+                    "sha256": "94a530f5a71e5702a6aea809797cc09c4b2f51cad97867ff0bfbb0fa51660340",
+                },
+                "review_scope": {
+                    "path": review_root + "review-scope.json",
+                    "sha256": "44a7d50cf56a4561df3b53a2b9bb89b945b52760263324b919b685a00d0616f5",
+                },
+            },
+        }
+        expected_root_cause = {
+            "summary": (
+                "Candidate 17 passed both platform gates, but final review found "
+                "live-worktree identity gaps and incomplete accepted-report validation."
+            ),
+            "fix": (
+                "Execute public producers from fixed detached snapshots and validate accepted "
+                "reports against an exact structured contract while scanning raw archives for "
+                "private details."
+            ),
+        }
+        for artifact in expected_review["artifacts"].values():
+            _validate_artifact(artifact, "release-candidate static review")
+        scope_payload = json.loads(
+            (REPO_ROOT / str(expected_review["artifacts"]["review_scope"]["path"])).read_text(
+                encoding="utf-8"
+            )
+        )
+        expected_stats = {
+            "diff_files": 366,
+            "reviewed_files": 216,
+            "added_lines": 54346,
+            "deleted_lines": 507,
+            "changed_lines": 54853,
+        }
+        review_ancestry_valid = (
+            _git_commit_descends_from(commit, development_artifact["memoryforge_commit"])
+            and _git_diff_stats(
+                str(expected_review["base_commit"]), str(expected_review["source_commit"])
             )
             == expected_stats
             and _strict_mapping(
