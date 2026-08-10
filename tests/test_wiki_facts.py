@@ -118,9 +118,7 @@ def test_conversation_process_notes_are_not_answers() -> None:
         == "流水线失败后 delete 会被 skip。"
     )
     assert (
-        conversation_conclusion_text(
-            "远程有两个目录。我先看仓库信息，判断哪一个要改 6.6.2。"
-        )
+        conversation_conclusion_text("远程有两个目录。我先看仓库信息，判断哪一个要改 6.6.2。")
         == "远程有两个目录。"
     )
 

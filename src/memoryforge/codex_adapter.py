@@ -38,9 +38,7 @@ class CodexImportError(MemoryForgeError):
     """Raised when a Codex rollout cannot become conversation memory."""
 
 
-def import_codex_rollout(
-    workspace: Path, path: Path, *, title: str | None = None
-) -> ImportResult:
+def import_codex_rollout(workspace: Path, path: Path, *, title: str | None = None) -> ImportResult:
     """Import user and assistant text, excluding system and tool records."""
     path = path.expanduser()
     if path.is_symlink() or not path.is_file():
@@ -139,9 +137,7 @@ def _strip_codex_ui_metadata(text: str) -> str:
     return "\n".join(kept).strip()
 
 
-def _append_message(
-    messages: list[ConversationMessage], message: ConversationMessage
-) -> None:
+def _append_message(messages: list[ConversationMessage], message: ConversationMessage) -> None:
     role, content = message
     if messages and messages[-1][0] == role:
         previous = messages[-1][1]
