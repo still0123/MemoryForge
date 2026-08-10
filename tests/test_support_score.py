@@ -52,6 +52,28 @@ def test_code_support_accepts_an_exact_signature(tmp_path: Path) -> None:
     assert support["failed_hard_gates"] == []
 
 
+def test_conversation_support_also_enforces_score_threshold(tmp_path: Path) -> None:
+    citation = {
+        **_citation("DataFlow is a service."),
+        "section_path": "Assistant conclusions",
+    }
+
+    support = query_module._support_score(
+        tmp_path,
+        "How is concurrent CreateDataFlow duplication prevented?",
+        query_module._terms("How is concurrent CreateDataFlow duplication prevented?"),
+        [("wiki/pages/dataflow.md", citation)],
+        symbol_matches=(),
+        exact_symbol_fact_keys=set(),
+        required_sources=1,
+        code_page_paths=set(),
+    )
+
+    assert support["enforced"]
+    assert not support["sufficient"]
+    assert "score_below_threshold" in support["failed_hard_gates"]
+
+
 def test_support_requires_aligned_negation(tmp_path: Path) -> None:
     page_path = "wiki/pages/code/repository/cache.md"
     citation = _citation("Cache entries expire after sixty seconds.")

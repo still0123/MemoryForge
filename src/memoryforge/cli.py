@@ -46,7 +46,7 @@ from memoryforge.refresh import refresh_workspace
 from memoryforge.sessions import SessionStore
 from memoryforge.showcase import build_showcase
 from memoryforge.web_adapter import WebPageError, import_html_file, import_web_page
-from memoryforge.wiki_facts import IndexedWikiFact, parse_page_facts
+from memoryforge.wiki_facts import IndexedWikiFact, parse_page_citations, parse_page_facts
 from memoryforge.workspace import (
     Workspace,
     WorkspaceIntegrityError,
@@ -1332,7 +1332,7 @@ def recall(
     limit: Annotated[
         int,
         typer.Option("--limit", min=1, max=20, help="Maximum recent conversation notes."),
-    ] = 8,
+    ] = 3,
     workspace: WorkspaceOption = Path("."),
 ) -> None:
     """Return compact, cited startup context from applied conversation memories."""
@@ -1368,40 +1368,63 @@ def recall(
                 ORDER BY
                     versions.observed_at DESC,
                     facts.page_path,
-                    CASE WHEN facts.section_path LIKE 'Latest %' THEN 0 ELSE 1 END,
-                    CAST(
-                        substr(facts.locator, 7, instr(facts.locator, '-') - 7)
-                        AS INTEGER
-                    ) DESC
+                    facts.rowid
                 """
             ).fetchall()
+        summary_locators: dict[str, str] = {}
+        for row in rows:
+            page_path = str(row["page_path"])
+            if page_path in summary_locators:
+                continue
+            page = opened.root / page_path
+            if page.is_file() and not page.is_symlink():
+                citations = parse_page_citations(page.read_text(encoding="utf-8"))
+                if citations:
+                    summary_locators[page_path] = citations[0]["locator"]
+        rows = sorted(
+            rows,
+            key=lambda row: (
+                str(row["observed_at"]),
+                str(row["locator"]) == summary_locators.get(str(row["page_path"])),
+            ),
+            reverse=True,
+        )
         summary = next(
             (str(row["quote"]).strip() for row in rows if not str(row["section_path"])),
             None,
         )
         notes: list[dict[str, object]] = []
         seen: set[str] = set()
+        seen_pages: set[str] = set()
         for row in rows:
             quote = str(row["quote"]).strip()
+            section = str(row["section_path"])
+            page_path = str(row["page_path"])
             if (
                 not row["section_path"]
                 or not quote
                 or quote in seen
+                or page_path in seen_pages
+                or "user message" in section.lower()
+                or "user prompts (search only)" in section.lower()
+                or quote.lstrip().startswith(("```", "func ", "def "))
+                or any(marker in quote for marker in ("你偏好", "值得“记忆”", "你常做的是"))
                 or (len(quote) < 40 and quote.endswith((":", "：")))
             ):
                 continue
             seen.add(quote)
+            seen_pages.add(page_path)
             notes.append(
                 {
                     "title": str(row["title"]),
-                    "role": str(row["section_path"]),
+                    "role": section,
                     "text": quote,
                     "observed_at": str(row["observed_at"]),
                     "citation": {
                         "source_id": str(row["source_id"]),
                         "source_version": int(row["source_version"]),
                         "locator": str(row["locator"]),
-                        "wiki_page": str(row["page_path"]),
+                        "wiki_page": page_path,
                     },
                 }
             )
@@ -1522,6 +1545,10 @@ def _render_recall_context(
         "Unverified recalled conversation memory. Verify important claims against citations.",
         f"Summary: {summary}",
     ]
+    lines.append(
+        "Recent sessions: "
+        + " | ".join(f'{item["title"]}: {item["text"]}' for item in notes)
+    )
     if decisions:
         lines.append("Recent decisions: " + " | ".join(str(item["text"]) for item in decisions))
     if open_items:

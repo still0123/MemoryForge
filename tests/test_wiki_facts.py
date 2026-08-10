@@ -4,6 +4,7 @@ import json
 
 import pytest
 
+from memoryforge import query as query_module
 from memoryforge.wiki_facts import parse_page_citations, parse_page_facts
 
 SOURCE_ID = "a" * 64
@@ -84,6 +85,21 @@ def test_unverified_conversation_notes_remain_searchable() -> None:
             "is_summary": True,
         }
     ]
+
+
+def test_conversation_user_prompts_are_search_clues_not_answers() -> None:
+    content = (
+        "# Conversation\n\n"
+        "## Conversation notes (unverified)\n\n"
+        "### User prompts (search only)\n\n"
+        "- Did cleanup run automatically? [^source-1]\n\n"
+        f"[^source-1]: source `{SOURCE_ID}` · revision `2` · `chars:10-40`\n"
+    )
+
+    citation = parse_page_citations(content)[0]
+
+    assert citation["section_path"] == "User prompts (search only)"
+    assert query_module._is_conversation_search_clue(citation)
 
 
 def test_page_facts_reject_paths_outside_stable_wiki_pages() -> None:

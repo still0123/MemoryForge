@@ -6,6 +6,7 @@ import json
 import math
 import re
 from collections import Counter
+from contextlib import suppress
 from pathlib import Path, PurePosixPath
 from typing import Literal, NotRequired, TypedDict
 
@@ -25,6 +26,7 @@ _INDEX_ENTRY = re.compile(
     r"^- \[(?P<title>(?:\\.|[^\]])+)\]\((?P<path>[^)]+)\) — (?P<summary>.+)$",
     re.MULTILINE,
 )
+_PAGE_TITLE = re.compile(r"^title: (?P<title>.+)$", re.MULTILINE)
 _WORDS = re.compile(r"[a-z0-9]+|[\u4e00-\u9fff]+", re.IGNORECASE)
 _CAMEL_CASE_PARTS = re.compile(r"[A-Z]+(?=[A-Z][a-z]|$)|[A-Z]?[a-z]+")
 _CJK = re.compile(r"^[\u4e00-\u9fff]+$")
@@ -206,6 +208,7 @@ def answer_question(
     page_ranks: dict[str, int] = {}
     local_morphology_pages: set[str] = set()
     code_page_paths: set[str] = set()
+    conversation_page_paths: set[str] = set()
     code_page_identifiers: dict[str, set[str]] = {}
 
     for page_rank, page in enumerate(
@@ -230,6 +233,15 @@ def answer_question(
             or "generated: code_wiki" in prefix
             or "generated: code_module_overview" in prefix
         )
+        if '"conversation"' in prefix:
+            conversation_page_paths.add(page_path)
+        title_match = _PAGE_TITLE.search(prefix)
+        conversation_title = ""
+        if page_path in conversation_page_paths and title_match is not None:
+            with suppress(json.JSONDecodeError):
+                parsed_title = json.loads(title_match.group("title"))
+                if isinstance(parsed_title, str):
+                    conversation_title = parsed_title
         if code_page and _is_code_file_content(content):
             code_page_paths.add(page_path)
             code_page_identifiers[page_path] = _code_identifier_tokens(_code_fact_text(content))
@@ -237,6 +249,15 @@ def answer_question(
             local_morphology_pages.add(page_path)
         trace.append({"level": "L1", "artifact": page_path})
         for citation in _page_citations(content):
+            if _is_conversation_search_clue(citation):
+                continue
+            if conversation_title:
+                citation = {
+                    **citation,
+                    "routing_text": " ".join(
+                        filter(None, (citation.get("routing_text", ""), conversation_title))
+                    ),
+                }
             exact_overlap = (
                 _section_matching_terms(question_terms, citation)
                 if use_section_routes
@@ -308,6 +329,7 @@ def answer_question(
         prefer_failure_facts=prefer_failure_facts,
         prefer_code_modules=prefer_code_modules,
         exact_symbol_fact_keys=exact_symbol_fact_keys,
+        conversation_page_paths=conversation_page_paths,
     )
     candidate_matches = _rank_matches(
         raw_candidate_matches,
@@ -321,6 +343,7 @@ def answer_question(
         prefer_failure_facts=prefer_failure_facts,
         prefer_code_modules=prefer_code_modules,
         exact_symbol_fact_keys=exact_symbol_fact_keys,
+        conversation_page_paths=conversation_page_paths,
     )
     model_candidates = [
         match for match in candidate_matches if _has_direct_evidence(question_terms, match[2])
@@ -880,13 +903,18 @@ def _support_score(
         ),
         1,
     )
-    enforced = any(page_path in code_page_paths for page_path, _ in selected)
+    code_enforced = any(page_path in code_page_paths for page_path, _ in selected)
+    enforced = code_enforced or any(
+        "assistant conclusions" in citation.get("section_path", "").lower()
+        or "assistant message" in citation.get("section_path", "").lower()
+        for _, citation in selected
+    )
     failed_hard_gates = []
-    if enforced:
-        if explicit_identifiers and exact_identifier_coverage < 1:
-            failed_hard_gates.append("exact_identifier_not_covered")
-        if score < _SUPPORT_THRESHOLD:
-            failed_hard_gates.append("score_below_threshold")
+    if code_enforced and explicit_identifiers and exact_identifier_coverage < 1:
+        failed_hard_gates.append("exact_identifier_not_covered")
+    if enforced and score < _SUPPORT_THRESHOLD:
+        failed_hard_gates.append("score_below_threshold")
+    if code_enforced:
         if conditional and not fact_co_location:
             failed_hard_gates.append("condition_not_co_located")
         if question_has_negation and not negation_alignment:
@@ -1262,11 +1290,13 @@ def _rank_matches(
     prefer_failure_facts: bool = False,
     prefer_code_modules: bool = False,
     exact_symbol_fact_keys: set[tuple[str, str, int, str, str]] | None = None,
+    conversation_page_paths: set[str] | None = None,
 ) -> list[tuple[tuple[int, ...], str, CitationPayload]]:
     page_ranks = page_ranks or {}
     local_morphology_pages = local_morphology_pages or set()
     focus_terms = focus_terms or set()
     exact_symbol_fact_keys = exact_symbol_fact_keys or set()
+    conversation_page_paths = conversation_page_paths or set()
     page_aware = bool(page_ranks) and not any(_CJK.fullmatch(term) for term in question_terms)
     frequencies = Counter(
         term
@@ -1302,6 +1332,7 @@ def _rank_matches(
         )
         score = (
             int(_citation_fact_key(page_path, citation) in exact_symbol_fact_keys),
+            int(page_path in conversation_page_paths and page_ranks.get(page_path) == 0),
             int(prefer_code_modules and module_path is not None),
             -extra_module_parts if prefer_code_modules and module_path is not None else 0,
             module_section_score if prefer_code_modules else 0,
@@ -1445,6 +1476,11 @@ def _citation_terms(citation: CitationPayload) -> set[str]:
     return _terms(
         f"{citation.get('section_path', '')} {citation.get('routing_text', '')} {citation['quote']}"
     )
+
+
+def _is_conversation_search_clue(citation: CitationPayload) -> bool:
+    section = citation.get("section_path", "").lower()
+    return "user prompts (search only)" in section or "user message" in section
 
 
 def answer_is_supported(answer: str, citations: list[CitationPayload]) -> bool:

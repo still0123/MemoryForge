@@ -182,6 +182,10 @@ def compile_pending_sources(
     stale_pages = _stale_pages(workspace, selected)
     if stale_pages:
         return _compile_stale_pages(workspace, stale_pages)
+    if not pending and selected:
+        selected_sources = _load_current_sources(workspace, selected)
+        if selected_sources and all("conversation" in source.tags for source in selected_sources):
+            pending = list(selected_sources)
     if not pending:
         return _compile_missing_repository_overviews(workspace) if not selected else None
 
@@ -1853,10 +1857,34 @@ def _render_conversation_page(source: CurrentSource, content: str) -> str:
     facts = _conversation_facts(content)
     if not facts:
         return _render_page(source, _meaningful_paragraphs(content))
-    summary_fact = next(
-        (fact for fact in facts if "assistant" in fact.section_path[-1].lower()),
-        facts[0],
+    assistant_facts = [
+        SourceFact(fact.quote, fact.start, ("Assistant conclusions",))
+        for fact in facts
+        if "assistant" in fact.section_path[-1].lower()
+    ]
+    user_facts = [
+        SourceFact(fact.quote, fact.start, ("User prompts (search only)",))
+        for fact in facts
+        if "user" in fact.section_path[-1].lower()
+    ]
+    title_terms = {
+        term.casefold()
+        for term in re.findall(r"[A-Za-z_][A-Za-z0-9_]*|[\u4e00-\u9fff]{2,}", source.title)
+    }
+    eligible_facts = [
+        fact
+        for fact in assistant_facts
+        if len(fact.quote) >= 40
+        and not fact.quote.lstrip().startswith(("```", "func ", "def "))
+        and not any(marker in fact.quote for marker in ("你偏好", "值得“记忆”", "你常做的是"))
+    ]
+    summary_fact = max(
+        eligible_facts,
+        key=lambda fact: sum(term in fact.quote.casefold() for term in title_terms),
+        default=assistant_facts[0] if assistant_facts else user_facts[0],
     )
+    assistant_facts = [summary_fact, *(fact for fact in assistant_facts if fact != summary_fact)]
+    displayed_facts = assistant_facts + user_facts
     summary_quote = summary_fact.quote
     if len(summary_quote) > 180:
         summary_quote = summary_quote[:179].rstrip() + "…"
@@ -1867,11 +1895,12 @@ def _render_conversation_page(source: CurrentSource, content: str) -> str:
     )
     return _render_page(
         source,
-        facts,
+        displayed_facts,
         section_title="Conversation notes (unverified)",
         summary_fact=summary_fact,
         section_preamble=(
-            "> Latest messages first. Full transcript remains in immutable raw evidence.",
+            "> Assistant conclusions may answer questions. User prompts are search clues only. "
+            "Full transcript remains in immutable raw evidence.",
             "",
         ),
     )

@@ -94,7 +94,7 @@ def test_conversation_page_prefers_recent_unverified_notes(
     messages.extend(
         (
             "## User\n\nWhat is current status?",
-            "## Assistant (unverified)\n\n"
+            "## Assistant (unverified)\n\nfunc currentStatus() string\n\n"
             "Candidate 19 is accepted. Conversation memory is enabled.",
         )
     )
@@ -128,7 +128,11 @@ def test_conversation_page_prefers_recent_unverified_notes(
     index = candidates["wiki/INDEX.md"]
     assert "## Conversation notes (unverified)" in page
     assert "## Verified facts" not in page
-    assert page.index("Candidate 19 is accepted") < page.index("Historical status 5")
+    assert "### Assistant conclusions" in page
+    assert "### User prompts (search only)" in page
+    assert "User prompts are search clues only" in page
+    assert page.index("Candidate 19 is accepted") < page.index("What is current status?")
+    assert page.index("Candidate 19 is accepted") < page.index("func currentStatus")
     assert "Historical status 0" not in page
     assert "Candidate 19 is accepted" in index
 
@@ -149,9 +153,90 @@ def test_conversation_page_prefers_recent_unverified_notes(
     memory = json.loads(recalled.stdout)
     assert memory["status"] == "recalled"
     assert memory["summary"] == "Candidate 19 is accepted. Conversation memory is enabled."
-    assert memory["recent_memories"][0]["role"] == "Latest assistant message"
+    assert memory["recent_memories"][0]["role"] == "Assistant conclusions"
     assert "Historical status 0" not in memory["startup_context"]
     assert memory["recent_memories"][0]["citation"]["wiki_page"].startswith("wiki/pages/")
+
+    rebuilt = runner.invoke(
+        app,
+        ["ingest", "--source", str(imported["source_id"]), "--workspace", str(workspace)],
+    )
+
+    assert rebuilt.exit_code == 0, rebuilt.output
+    assert json.loads(rebuilt.stdout)["status"] == "PROPOSED"
+
+
+def test_recall_returns_one_assistant_memory_per_conversation(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    runner, workspace = _initialized_workspace(tmp_path, monkeypatch)
+    for title, answer in (
+        ("Cleanup investigation", "Cleanup requires the finalizer."),
+        ("DataFlow concurrency", "CreateDataFlow uses an idempotency key."),
+    ):
+        _import(
+            runner,
+            workspace,
+            workspace.parent / f"{title}.md",
+            f"# {title}\n\n## User\n\nWhat happened?\n\n"
+            f"## Assistant (unverified)\n\n{answer}\n",
+            "notes",
+            tags=("conversation", "platform:codex", "unverified"),
+        )
+        _apply_pending(runner, workspace)
+
+    recalled = runner.invoke(app, ["recall", "--workspace", str(workspace)])
+
+    assert recalled.exit_code == 0, recalled.output
+    memories = json.loads(recalled.stdout)["recent_memories"]
+    assert [memory["title"] for memory in memories] == [
+        "DataFlow concurrency",
+        "Cleanup investigation",
+    ]
+    assert len({memory["citation"]["wiki_page"] for memory in memories}) == 2
+    assert all(memory["role"] == "Assistant conclusions" for memory in memories)
+    assert "What happened?" not in recalled.stdout
+
+
+def test_conversation_route_beats_a_generic_topic_summary(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    runner, workspace = _initialized_workspace(tmp_path, monkeypatch)
+    _import(
+        runner,
+        workspace,
+        workspace.parent / "generic.md",
+        "# DataFlow\n\nDataFlow provides storage tiering.\n",
+        "notes",
+    )
+    _import(
+        runner,
+        workspace,
+        workspace.parent / "conversation.md",
+        "# CreateDataFlow 并发\n\n## User\n\n如何避免重复创建？\n\n"
+        "## Assistant (unverified)\n\nCreateDataFlow 并发创建使用 uid + name 锁，"
+        "避免同名重复策略并把写入串行化。\n",
+        "notes",
+        tags=("conversation", "platform:codex", "unverified"),
+    )
+    _apply_pending(runner, workspace)
+
+    result = runner.invoke(
+        app,
+        [
+            "ask",
+            "CreateDataFlow 并发创建重复策略如何解决？",
+            "--workspace",
+            str(workspace),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    answer = json.loads(result.stdout)
+    assert answer["status"] == "answered"
+    assert answer["answer"].startswith("CreateDataFlow 并发创建使用 uid + name 锁")
 
 
 def test_ask_uses_index_to_select_a_page_then_returns_its_source(
