@@ -8,10 +8,16 @@
 > `639 passed / 3 skipped`。Windows 尚未验证，不属于本版本支持范围。最终状态与 SHA256 以 GitHub Release
 > 为准。
 
+[60 秒演示](#60-秒公开演示) · [5 分钟跑通](#5-分钟跑通) · [飞书接入](#用飞书展示项目) ·
+[AI 会话记忆](#ai-会话如何变成长效记忆) · [设计边界](#当前边界)
+
 ![MemoryForge 工作流](assets/memoryforge-flow.svg)
 
-![Showcase 来源、Wiki、ChangeSet 与 Query Trace](assets/memoryforge-showcase-01.png)
-![Showcase 指标、失败案例与 Code Wiki 架构](assets/memoryforge-showcase-02.png)
+<p align="center">
+  <img src="assets/memoryforge-showcase-01.png" width="49%" alt="Showcase 的来源、Wiki、ChangeSet 与查询链路" />
+  <img src="assets/memoryforge-showcase-02.png" width="49%" alt="Showcase 的指标、失败案例与 Code Wiki 架构" />
+</p>
+<p align="center"><sub>同一份只读 Showcase：左侧看来源与版本，右侧看指标、失败案例和代码架构。</sub></p>
 
 ## 这是什么项目？
 
@@ -19,11 +25,14 @@
 
 **MemoryForge 先把资料和对话沉淀为人也能直接阅读的 Markdown Wiki，再提供带来源的渐进式检索和一个最小 Agent。** 它不是把所有内容直接塞进提示词的聊天机器人，而是一个本地优先的“技术知识编译器”。
 
-一句话理解：
+运行后，你会得到：
 
-```text
-资料和对话进来 -> 生成并审核 Wiki -> 通过 CLI / 飞书提问 -> 得到可回溯的答案
-```
+- 一套可直接阅读和 Git 版本化的 Markdown Wiki；
+- 每条事实对应的来源版本、原文位置和审核记录；
+- CLI、飞书机器人和最小 Agent 三种问答入口；
+- AI 换新会话后可按需加载、不会整库灌入上下文的长期记忆。
+
+适合个人开发者、小团队技术负责人、需要整理多个仓库或长期维护项目知识的人。若你要的是公网 SaaS、企业权限平台或不经审核的全自动 RAG，本项目暂不适合。
 
 ## 60 秒公开演示
 
@@ -91,22 +100,33 @@ Wiki 树、Diff、Citation Trace、Benchmark、保留的失败案例、正确拒
 - **只读展示**：`memoryforge showcase build` 生成自包含静态 Evidence 页面；默认隐藏
   `local_only` 来源、页面、ChangeSet 和 Citation 细节。
 
+### 一份资料如何进入正式 Wiki？
+
+```mermaid
+flowchart LR
+    A["代码 / 文档 / 飞书 / AI 对话"] --> B["不可变来源快照"]
+    B --> C["WikiCompiler 生成 ChangeSet"]
+    C --> D["review：查看页面与 Diff"]
+    D --> E["approve：独立授权"]
+    E --> F["apply：写入 Wiki + Git Commit"]
+    D -->|"不接受"| G["reject：保留记录，不改 Wiki"]
+```
+
+生成和授权分开。`watch`、Botmux Hook 或飞书自动收录都只能生成草稿，不能绕过审核直接改正式 Wiki。
+
 ## 一次提问是怎么完成的？
 
-```text
-“数据面是什么意思？”
-          │
-          ▼
-先读 INDEX.md 和 SQLite FTS5 候选
-          │
-          ▼
-最多展开少量相关 Wiki 页面
-          │
-          ├─ 默认：直接基于已验证事实回答
-          └─ 可选：模型仅阅读命中的证据，整理成自然语言
-          │
-          ▼
-回答 + Wiki 页面标题 + 可回读的原文定位
+```mermaid
+flowchart TD
+    Q["问题：数据面是什么意思？"] --> I["读取 INDEX.md + SQLite FTS5 候选"]
+    I --> P["最多展开少量相关 Wiki 页面"]
+    P --> S{"support score 足够？"}
+    S -->|"否"| U["返回 unknown，不猜"]
+    S -->|"是"| A["基于已验证事实回答"]
+    A --> V{"需要原文核验？"}
+    V -->|"否"| C["答案 + Wiki 引用"]
+    V -->|"是"| E["读取对应 Evidence 片段"]
+    E --> C
 ```
 
 这个路径的重点不是“让模型读得越多越好”，而是让每一步都有明确边界：日常查询不读原文，只有 `--verify` 或 Agent 的 `read_evidence` 才展开对应片段。
@@ -116,7 +136,7 @@ Wiki 树、Diff、Citation Trace、Benchmark、保留的失败案例、正确拒
 环境要求：Python 3.11+，macOS 或 Linux。
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/still0123/MemoryForge.git
 cd MemoryForge
 
 python -m venv .venv
@@ -313,6 +333,16 @@ Windows PowerShell 提供实验性本地检查，但 v0.3.0 未验证 Windows：
 
 ## 资料与模型边界
 
+```mermaid
+flowchart LR
+    L["本地 Workspace<br/>代码、飞书、真实对话"] --> W["审核后的 Markdown Wiki"]
+    W --> Q["本地确定性查询"]
+    W -->|"只有显式 --allow-local-llm"| M["已配置模型"]
+    Q --> R["带 Citation 的回答"]
+    M --> R
+    L -. "默认禁止" .-> P["公开 GitHub / Showcase"]
+```
+
 - 公开 GitHub 仓库只提交代码、虚构或公开 Demo、脱敏评测结果。
 - 公司代码、真实飞书正文、真实 Wiki、Token、App Secret 与运行日志都留在本机，不能提交或上传到 GitHub。
 - Git/飞书资料默认标为 `local_only`，不会被模型读取。
@@ -347,6 +377,23 @@ memoryforge agent '<question>' --workspace <workspace>
 memoryforge showcase build --workspace <workspace> --output <directory>
 memoryforge feishu-serve --workspace <workspace>
 ```
+
+## AI 会话如何变成长效记忆
+
+MemoryForge 不把整个聊天记录塞进每次提示词。它保留完整本地 Evidence，只把审核后的近期结论、决策和未完成事项渐进式提供给新会话。
+
+```mermaid
+flowchart LR
+    A["Codex / Claude / 飞书对话"] --> B["local_only 会话草稿"]
+    B --> C["过滤系统提示、推理、工具输出和过程噪音"]
+    C --> D["review → approve → apply"]
+    D --> E["会话 Wiki：结论、决策、未完成事项"]
+    E --> F["recall：新会话只加载少量近期记忆"]
+    F --> G["引用原 Wiki 页面继续工作"]
+    G -. "新结论再次收录" .-> B
+```
+
+三种收录方式：飞书中手动 `/wiki 收录`、Botmux Hook 自动生成草稿、Codex rollout JSONL 本地导入。三种方式都不会自动批准。
 
 飞书私聊还支持以下轻量上下文命令：
 
