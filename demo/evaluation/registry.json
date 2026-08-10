@@ -1412,6 +1412,15 @@
             "passed": true
           },
           "passed": true
+        },
+        {
+          "split": "development",
+          "evidence_revision": 20,
+          "status": "development_passed_gate_pending",
+          "path": "demo/results/release_candidate_development_candidate_19.json",
+          "sha256": "a3e813aef90872a945093260994849ba7c997aaab1e934657d430904975bbc80",
+          "memoryforge_commit": "a24729ab5f254ad3f42d091d1a68c97804a42e2d",
+          "passed": true
         }
       ]
     }
