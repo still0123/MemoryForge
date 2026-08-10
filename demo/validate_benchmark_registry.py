@@ -518,7 +518,7 @@ REQUIRED_EXPERIMENT_EVIDENCE = {
         ),
         _RESULTS + "release_candidate_development_candidate_17.json": (
             18,
-            "development_passed_gate_pending",
+            "local_gates_passed_review_pending",
             "f80cb31a24161c7c1a73b1a41662bd02c729490a14b06e9b0782748f8a05bdca",
             "f9814230083e970f58f2ce35006d49d8f8c40c44",
         ),
@@ -864,6 +864,11 @@ REQUIRED_ACCEPTANCE_EVIDENCE = {
             _RESULTS + "release_candidate_candidate_14_local_gates.json",
             "739a3927e170dedd5d4e784cd350093cce5a47062a3a03dd820a857514a64a2d",
             "4e35729ed42a02518f9017d9742e60643b67f84d",
+        ),
+        _RESULTS + "release_candidate_development_candidate_17.json": (
+            _RESULTS + "release_candidate_candidate_17_local_gates.json",
+            "85c883d8001ff23c6edbd9bc1cf337acc502c35a9e7003376696211d5fcdd60f",
+            "08656ff59341b4f5bf62008c6487ec0415dd4c1b",
         ),
     },
 }
@@ -6276,6 +6281,38 @@ def _validate_release_candidate_acceptance_evidence(
             "provenance_sha256": "f0e22eb554de6edd8ad1e316b75d49ae325fb6b833be410e2cefe939eff69346",
             "sha256sums_sha256": "6532ee08d86d78d76ecb1ac16aa8d79d5883a5ea40ccc19432b80cc7217859b8",
         }
+    elif evidence_revision == 18:
+        contracts["macos"]["pytest"] = {
+            "passed": 631,
+            "skipped": 0,
+            "failed": 0,
+            "coverage_percent": 88,
+        }
+        contracts["macos"]["artifacts"] = {
+            "wheel_sha256": "1176296c53051f5acc2d7015c0aab409a59b500b332fdeeccde8f9f23649e8db",
+            "sdist_sha256": "40daea26eb78b56fb83ea81b9064fc19e98ecf55b473bed6dac8bdea21a7ca76",
+            "code_wiki_evidence_sha256": (
+                "f1782755351ecbd02a6a819b75590cea1cbf8cfdb50227c43afcc18397ed0f9a"
+            ),
+            "provenance_sha256": "329df41449c670489f49a773226ed631064c44494f837ed9a0fcb17c6737b012",
+            "sha256sums_sha256": "997ce80c2a79ebaa31eaa7ac81942207587d9d5b7a5d14698d38f4bcec8ccac0",
+        }
+        contracts["linux"]["runtime"]["kernel"] = "Linux 6.1.0-52-cloud-arm64"
+        contracts["linux"]["pytest"] = {
+            "passed": 628,
+            "skipped": 3,
+            "failed": 0,
+            "coverage_percent": 88,
+        }
+        contracts["linux"]["artifacts"] = {
+            "wheel_sha256": "1176296c53051f5acc2d7015c0aab409a59b500b332fdeeccde8f9f23649e8db",
+            "sdist_sha256": "40daea26eb78b56fb83ea81b9064fc19e98ecf55b473bed6dac8bdea21a7ca76",
+            "code_wiki_evidence_sha256": (
+                "f1782755351ecbd02a6a819b75590cea1cbf8cfdb50227c43afcc18397ed0f9a"
+            ),
+            "provenance_sha256": "131bd9f870f2b9ef47621162fb8eead06e6b9c4c0f72fed36de266cbc2c7d7f8",
+            "sha256sums_sha256": "5c7f53de19ed83a75baf492d58cb41b23f5f90e25fd4ef363bd3162a51d8832b",
+        }
     elif evidence_revision != 2:
         raise ValueError("unknown release-candidate local gate revision")
     if (
@@ -6350,6 +6387,7 @@ def _validate_release_candidate_acceptance_evidence(
             13: 126,
             14: 129,
             15: 132,
+            18: 137,
         }[evidence_revision],
         "qa_case_count": 121,
     }
