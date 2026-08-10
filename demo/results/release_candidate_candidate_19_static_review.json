@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "suite_id": "release-candidate-delivery",
+  "suite_revision": 1,
+  "memoryforge_commit": "0ff8e53696034380ed8f6cf476f7063883b32fad",
+  "memoryforge_worktree_dirty": false,
+  "candidate": "release-development-candidate-19",
+  "review": {
+    "scope": "569685c2f0bf790819820b821b4768d180c4ee0d...0ff8e53696034380ed8f6cf476f7063883b32fad",
+    "base_commit": "569685c2f0bf790819820b821b4768d180c4ee0d",
+    "source_commit": "0ff8e53696034380ed8f6cf476f7063883b32fad",
+    "local_gate_commit": "7122ad9592c52d670fc07d0fad43c4ad6ee7efc7",
+    "status": "passed",
+    "p0": 0,
+    "p1": 0,
+    "p2": 0,
+    "diff_files": 416,
+    "reviewed_files": 245,
+    "added_lines": 62562,
+    "deleted_lines": 508,
+    "changed_lines": 63070,
+    "artifacts": {
+      "raw_findings": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_19/comments.jsonl",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "top_findings": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_19/final_comments.json",
+        "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+      },
+      "html_report": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_19/report.html",
+        "sha256": "854a90e4b20c6e4aef1b684f5a19d746b604ec779a764a6a7db8f8afe5f6afcf"
+      },
+      "markdown_report": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_19/report.md",
+        "sha256": "bd96604b41212d514a057c413cd1eebc18e877a3f01b1e006a9a55902783f325"
+      },
+      "review_scope": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_19/review-scope.json",
+        "sha256": "58032045035452ea4d4ea7c5e8f4051b9e7ac36b5a759051ca7d2b5bc77d43f9"
+      }
+    }
+  },
+  "confirmation": {
+    "path": "demo/evaluation/release_candidate_confirmation.json",
+    "sha256": "3eed08e04592b614a709cd18c6a92951b5da145d7dab4b9997824cd4e002e805",
+    "status": "not_run"
+  },
+  "holdout": {
+    "path": "demo/evaluation/release_candidate_holdout.json",
+    "sha256": "b466644bef2748a96d598540c54633fe49770af97fc71ce6e62e18eda687e8f8",
+    "status": "not_run"
+  },
+  "passed": true
+}

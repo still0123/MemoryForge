@@ -530,7 +530,7 @@ REQUIRED_EXPERIMENT_EVIDENCE = {
         ),
         _RESULTS + "release_candidate_development_candidate_19.json": (
             20,
-            "local_gates_passed_review_pending",
+            "accepted_development",
             "a3e813aef90872a945093260994849ba7c997aaab1e934657d430904975bbc80",
             "a24729ab5f254ad3f42d091d1a68c97804a42e2d",
         ),
@@ -688,6 +688,11 @@ REQUIRED_REVIEW_EVIDENCE = {
             _RESULTS + "release_candidate_candidate_17_static_review_rejected.json",
             "3bc30cf3abe72eb0dbec68239f50b5f80681fdd168aec6033c9c13ad2b84b8d4",
             "b0dfd3ac91d6f97b3cfd1e8dfad3160237bfdec0",
+        ),
+        _RESULTS + "release_candidate_development_candidate_19.json": (
+            _RESULTS + "release_candidate_candidate_19_static_review.json",
+            "5b9ab38aed164a50abd06d39e1ff74573e97af4ab95253dc8a86e800c9d69b2c",
+            "0ff8e53696034380ed8f6cf476f7063883b32fad",
         ),
     },
 }
