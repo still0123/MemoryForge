@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>代码评审报告 — MemoryForge</title>
+  <style>
+    :root {
+      --color-p0: #dc2626;
+      --color-p0-bg: #fef2f2;
+      --color-p0-border: #fca5a5;
+      --color-p1: #d97706;
+      --color-p1-bg: #fffbeb;
+      --color-p1-border: #fcd34d;
+      --color-p2: #2563eb;
+      --color-p2-bg: #eff6ff;
+      --color-p2-border: #93c5fd;
+      --color-bg: #f8fafc;
+      --color-card: #ffffff;
+      --color-border: #e2e8f0;
+      --color-text: #1e293b;
+      --color-text-secondary: #64748b;
+      --color-code-bg: #f1f5f9;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans SC", sans-serif;
+      background: var(--color-bg);
+      color: var(--color-text);
+      line-height: 1.6;
+      padding: 24px;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+    }
+
+    /* --- Header --- */
+    .report-header {
+      background: var(--color-card);
+      border: 1px solid var(--color-border);
+      border-radius: 12px;
+      padding: 28px 32px;
+      margin-bottom: 20px;
+    }
+
+    .report-header h1 {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 16px;
+    }
+
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+    }
+
+    .meta-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      color: var(--color-text-secondary);
+    }
+
+    .meta-item .label { font-weight: 600; color: var(--color-text); }
+
+    /* --- P0 Alert Banner --- */
+    .p0-alert {
+      background: var(--color-p0-bg);
+      border: 1px solid var(--color-p0-border);
+      border-left: 4px solid var(--color-p0);
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      display: none;
+    }
+
+    .p0-alert-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--color-p0);
+      margin-bottom: 8px;
+    }
+
+    .p0-alert-list {
+      list-style: none;
+      font-size: 14px;
+    }
+
+    .p0-alert-list li {
+      padding: 2px 0;
+      color: var(--color-text);
+    }
+
+    /* --- Summary Bar --- */
+    .summary-bar {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+
+    .summary-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      background: var(--color-card);
+      border: 1px solid var(--color-border);
+    }
+
+    .summary-chip .count {
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .summary-chip.p0 { border-color: var(--color-p0); color: var(--color-p0); }
+    .summary-chip.p1 { border-color: var(--color-p1); color: var(--color-p1); }
+    .summary-chip.p2 { border-color: var(--color-p2); color: var(--color-p2); }
+    .summary-chip.total { border-color: var(--color-text); color: var(--color-text); }
+
+    /* --- Defect Cards --- */
+    .defect-list { display: flex; flex-direction: column; gap: 16px; }
+
+    .defect-card {
+      background: var(--color-card);
+      border: 1px solid var(--color-border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .defect-card.severity-P0 { border-left: 4px solid var(--color-p0); }
+    .defect-card.severity-P1 { border-left: 4px solid var(--color-p1); }
+    .defect-card.severity-P2 { border-left: 4px solid var(--color-p2); }
+
+    .defect-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--color-border);
+      flex-wrap: wrap;
+    }
+
+    .severity-badge {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .severity-badge.P0 { background: var(--color-p0); }
+    .severity-badge.P1 { background: var(--color-p1); }
+    .severity-badge.P2 { background: var(--color-p2); }
+
+    .category-badge {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+      background: var(--color-code-bg);
+      color: var(--color-text-secondary);
+    }
+
+    .defect-title {
+      font-size: 15px;
+      font-weight: 600;
+      flex: 1;
+    }
+
+    .confidence-tag {
+      font-size: 12px;
+      color: var(--color-text-secondary);
+      white-space: nowrap;
+    }
+
+    .defect-body { padding: 20px; }
+
+    .defect-location {
+      font-size: 13px;
+      color: var(--color-text-secondary);
+      margin-bottom: 12px;
+      font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+    }
+
+    .defect-section { margin-bottom: 16px; }
+    .defect-section:last-child { margin-bottom: 0; }
+
+    .defect-section-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--color-text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+
+    .defect-section p {
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    .code-block {
+      background: var(--color-code-bg);
+      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      padding: 12px 16px;
+      font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    /* --- Empty State --- */
+    .empty-state {
+      text-align: center;
+      padding: 64px 32px;
+      background: var(--color-card);
+      border: 1px solid var(--color-border);
+      border-radius: 12px;
+    }
+
+    .empty-state h2 {
+      font-size: 18px;
+      color: #16a34a;
+      margin-bottom: 8px;
+    }
+
+    .empty-state p {
+      font-size: 14px;
+      color: var(--color-text-secondary);
+    }
+
+    /* --- Footer --- */
+    .report-footer {
+      text-align: center;
+      padding: 20px;
+      font-size: 12px;
+      color: var(--color-text-secondary);
+    }
+
+    /* --- Responsive --- */
+    @media (max-width: 640px) {
+      body { padding: 12px; }
+      .report-header { padding: 20px; }
+      .defect-header { padding: 12px 16px; }
+      .defect-body { padding: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- ====== Header ====== -->
+    <div class="report-header">
+      <h1>代码评审报告</h1>
+      <div class="meta-grid">
+        <div class="meta-item">
+          <span class="label">仓库：</span>
+          <span>MemoryForge</span>
+        </div>
+        <div class="meta-item">
+          <span class="label">检测模式：</span>
+          <span>通用检测</span>
+        </div>
+        <div class="meta-item">
+          <span class="label">检测范围：</span>
+          <span>569685c2f0bf790819820b821b4768d180c4ee0d...be3560e37baa908e01a0404a88631ad1a1fa39d7</span>
+        </div>
+        <div class="meta-item">
+          <span class="label">生成时间：</span>
+          <span>2026-08-10 12:46</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====== P0 Alert (hidden when no P0) ====== -->
+    <div class="p0-alert">
+      <div class="p0-alert-title">高优先级告警 — 发现 P0 级别缺陷，建议立即处理</div>
+      <ul class="p0-alert-list">
+        
+      </ul>
+    </div>
+
+    <!-- ====== Summary ====== -->
+    <div class="summary-bar">
+      <div class="summary-chip p0"><span class="count">0</span> P0</div>
+      <div class="summary-chip p1"><span class="count">5</span> P1</div>
+      <div class="summary-chip p2"><span class="count">0</span> P2</div>
+      <div class="summary-chip total"><span class="count">5</span> 合计</div>
+    </div>
+
+    <!-- ====== Defect List ====== -->
+    <div class="defect-list">
+      
+    <div class="defect-card severity-P1">
+      <div class="defect-header">
+        <span class="severity-badge P1">P1</span>
+        <span class="category-badge">安全漏洞</span>
+        <span class="defect-title">[P1] 对通过态评审报告做内容级校验</span>
+        <span class="confidence-tag">置信度 10/10</span>
+      </div>
+      <div class="defect-body">
+        <div class="defect-location">demo/validate_benchmark_registry.py:4450-4458</div>
+        <div class="defect-section">
+          <div class="defect-section-title">问题描述</div>
+          <p>新增 helper 只要求 HTML/Markdown 同时包含 scope 和“未发现缺陷”，未验证其他内容，也未调用 `_payload_private_detail_leaks`。可复现：两份报告都写入正确 scope 和“未发现缺陷”，再追加 `STATUS: FAILED`、`P1: 4`、`/Users/private/workspace` 或 `Authorization: Basic ...`，`_accepted_review_reports_valid` 仍返回 True。因此 Candidate 14 后续可被标为 accepted，同时保留明确失败、非零缺陷或敏感信息的公开归档；本次修复没有真正闭合报告一致性和隐私门禁。</p>
+        </div>
+        <div class="defect-section">
+          <div class="defect-section-title">修复建议</div>
+          <p>不要用两个肯定子串代表报告一致。至少拒绝 failed/P0/P1/P2 非零等矛盾状态，校验结构化状态、各级计数、base/source Commit 与 Evidence 完全一致，并对两份报告运行隐私/凭证扫描；更稳妥的是由已验证的结构化 Evidence 确定性生成归档后逐字比对。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="defect-card severity-P1">
+      <div class="defect-header">
+        <span class="severity-badge P1">P1</span>
+        <span class="category-badge">健壮性问题</span>
+        <span class="defect-title">Code Wiki producer 只隔离写命令，读取 Commit 时重新继承 GIT_*</span>
+        <span class="confidence-tag">置信度 10/10</span>
+      </div>
+      <div class="defect-body">
+        <div class="defect-location">demo/run_code_wiki_benchmark.py:248-255</div>
+        <div class="defect-section">
+          <div class="defect-section-title">问题描述</div>
+          <p>fixture 的 init/add/commit 已通过第 219 行 `_git` 使用清洁环境，但紧接着第 62、108 行调用此未隔离 helper 读取 initial/updated Commit。只要调用环境存在 GIT_DIR（run_release_check 的独立调用会原样传入），rev-parse 就会忽略 root fixture，读取外部仓库 HEAD；producer 因而把错误 Commit 写进 raw Evidence，随后固定身份 consumer 确定拒绝。相同 helper 还会把 memoryforge_commit/worktree_dirty 绑定到被重定向仓库，破坏 producer 自报身份。</p>
+        </div>
+        <div class="defect-section">
+          <div class="defect-section-title">修复建议</div>
+          <p>让 `_git_output` 与 `_git` 共用完全相同的 env 和 `-c` 参数，清除 GIT_*、禁用 system/global config、签名与 hooks。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="defect-card severity-P1">
+      <div class="defect-header">
+        <span class="severity-badge P1">P1</span>
+        <span class="category-badge">逻辑错误</span>
+        <span class="defect-title">相对输出路径在切换快照后写入临时 worktree 并被清理</span>
+        <span class="confidence-tag">置信度 10/10</span>
+      </div>
+      <div class="defect-body">
+        <div class="defect-location">scripts/check_local.sh:54-60</div>
+        <div class="defect-section">
+          <div class="defect-section-title">问题描述</div>
+          <p>output 保留调用者传入的相对值，但第 59 行新增全局 `cd &quot;$snapshot&quot;`。文档明确推荐 `./scripts/check_local.sh local-evidence/v0.3.0`：第 54 行先在仓库创建空的 `local-evidence/v0.3.0/dist`，切换后第 91、111-114、124、146 行却把真实产物写到临时 snapshot 下的同名相对目录；脚本最后仍可打印 Local checks passed，EXIT cleanup 随即删除真正 Evidence，用户看到的仓库输出目录为空。默认绝对路径不触发，但文档给出的命名发布路径确定触发。</p>
+        </div>
+        <div class="defect-section">
+          <div class="defect-section-title">修复建议</div>
+          <p>在首次检查和 mkdir 前把 output 规范化为绝对路径，例如以初始 `$root` 为基准解析；之后所有构建、发布和摘要步骤只使用该绝对路径。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="defect-card severity-P1">
+      <div class="defect-header">
+        <span class="severity-badge P1">P1</span>
+        <span class="category-badge">安全漏洞</span>
+        <span class="defect-title">独立 Wheel clean-room 仍允许额外包源替换运行时依赖</span>
+        <span class="confidence-tag">置信度 9/10</span>
+      </div>
+      <div class="defect-body">
+        <div class="defect-location">demo/run_release_check.py:48-59</div>
+        <div class="defect-section">
+          <div class="defect-section-title">问题描述</div>
+          <p>fresh venv 的安装环境只删除 PYTHONPATH，pip 命令没有 `--isolated`、固定 index 或显式 constraints。README/demo README 都指导用户直接运行该脚本；若宿主设置 PIP_EXTRA_INDEX_URL、PIP_FIND_LINKS 或 pip.conf，fresh venv 会从额外来源解析 Wheel 的依赖。提供满足版本范围（或与 constraints 同版本）的替代依赖即可在后续 CLI/benchmark 中执行，provenance 只记录版本字符串并仍会把 clean-room 标为 passed。check_local/build_release 上游虽已清环境，独立且公开支持的 release-check 路径仍不具备同一供应链契约。</p>
+        </div>
+        <div class="defect-section">
+          <div class="defect-section-title">修复建议</div>
+          <p>在 producer 内删除全部 PIP_*/UV_* 与用户配置影响，pip install 使用 `--isolated --index-url https://pypi.org/simple -c &lt;fixed constraints&gt;`；发布级验证最好使用带 hash 的约束或只读 wheelhouse。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="defect-card severity-P1">
+      <div class="defect-header">
+        <span class="severity-badge P1">P1</span>
+        <span class="category-badge">业务语义问题</span>
+        <span class="defect-title">Wheel release check 的仓库与 public-source 身份可被 GIT_* 伪造</span>
+        <span class="confidence-tag">置信度 9/10</span>
+      </div>
+      <div class="defect-body">
+        <div class="defect-location">demo/run_release_check.py:268-274</div>
+        <div class="defect-section">
+          <div class="defect-section-title">问题描述</div>
+          <p>该公开文档直接暴露的 release producer 用此 helper 校验 public_source 固定 Commit、校验 raw Code Wiki 的 MemoryForge Commit，并写 provenance.memoryforge_commit/worktree_dirty，但 `git -C` 仍会被 GIT_DIR/GIT_WORK_TREE/GIT_INDEX_FILE 覆盖。调用者可令这些变量指向另一个干净 checkout，使错误 public-source 路径通过 pinned Commit 检查，或让真实 MemoryForge 未提交 evaluator 参与运行而 provenance 仍声称 clean HEAD；上游 check_local/build_release 当前会清理环境，但 README 中的独立调用没有该保护。</p>
+        </div>
+        <div class="defect-section">
+          <div class="defect-section-title">修复建议</div>
+          <p>所有 Git 查询使用清洁环境并禁用 global/system config；对 MemoryForge 和 public source 都显式绑定各自 git-dir/work-tree，且在运行前后复核同一 Commit 和 clean 状态。</p>
+        </div>
+      </div>
+    </div>
+    </div>
+
+    <!-- ====== Empty State (shown when no defects) ====== -->
+    <!-- __EMPTY_STATE_START__
+    <div class="empty-state">
+      <h2>未发现缺陷</h2>
+      <p>本次评审未发现 P0-P2 级别的缺陷。共检查 189 个文件，约 44569 行变更。</p>
+    </div>
+    __EMPTY_STATE_END__ -->
+
+    <div class="report-footer">
+      bits-code-guard &middot; 由 AI 辅助生成 &middot; 2026-08-10 12:46
+    </div>
+
+  </div>
+</body>
+</html>
+
+<!--
+╔══════════════════════════════════════════════════════════════╗
+║                        占位符说明                           ║
+╠══════════════════════════════════════════════════════════════╣
+║                                                              ║
+║  --- 报告元信息 ---                                          ║
+║  MemoryForge           仓库名称                            ║
+║  通用检测         检测模式                            ║
+║  569685c2f0bf790819820b821b4768d180c4ee0d...be3560e37baa908e01a0404a88631ad1a1fa39d7          检测范围描述                         ║
+║  2026-08-10 12:46        报告生成时间 (YYYY-MM-DD HH:mm)     ║
+║                                                              ║
+║  --- 统计数据 ---                                            ║
+║  0            P0 缺陷数量                         ║
+║  5            P1 缺陷数量                         ║
+║  0            P2 缺陷数量                         ║
+║  5         缺陷总数                            ║
+║                                                              ║
+║  --- P0 告警 ---                                             ║
+║  none    有 P0 时为 "block"，无 P0 时为      ║
+║                          "none"                              ║
+║        P0 缺陷摘要列表，每项格式：         ║
+║    <li>[P0][类型] file:line | {title}</li>                   ║
+║                                                              ║
+║  --- 缺陷卡片 ---                                            ║
+║  
+    <div class="defect-card severity-P1">
+      <div class="defect-header">
+        <span class="severity-badge P1">P1</span>
+        <span class="category-badge">安全漏洞</span>
+        <span class="defect-title">[P1] 对通过态评审报告做内容级校验</span>
+        <span class="confidence-tag">置信度 10/10</span>
+      </div>
+      <div class="defect-body">
+        <div class="defect-location">demo/validate_benchmark_registry.py:4450-4458</div>
+        <div class="defect-section">
+          <div class="defect-section-title">问题描述</div>
+          <p>新增 helper 只要求 HTML/Markdown 同时包含 scope 和“未发现缺陷”，未验证其他内容，也未调用 `_payload_private_detail_leaks`。可复现：两份报告都写入正确 scope 和“未发现缺陷”，再追加 `STATUS: FAILED`、`P1: 4`、`/Users/private/workspace` 或 `Authorization: Basic ...`，`_accepted_review_reports_valid` 仍返回 True。因此 Candidate 14 后续可被标为 accepted，同时保留明确失败、非零缺陷或敏感信息的公开归档；本次修复没有真正闭合报告一致性和隐私门禁。</p>
+        </div>
+        <div class="defect-section">
+          <div class="defect-section-title">修复建议</div>
+          <p>不要用两个肯定子串代表报告一致。至少拒绝 failed/P0/P1/P2 非零等矛盾状态，校验结构化状态、各级计数、base/source Commit 与 Evidence 完全一致，并对两份报告运行隐私/凭证扫描；更稳妥的是由已验证的结构化 Evidence 确定性生成归档后逐字比对。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="defect-card severity-P1">
+      <div class="defect-header">
+        <span class="severity-badge P1">P1</span>
+        <span class="category-badge">健壮性问题</span>
+        <span class="defect-title">Code Wiki producer 只隔离写命令，读取 Commit 时重新继承 GIT_*</span>
+        <span class="confidence-tag">置信度 10/10</span>
+      </div>
+      <div class="defect-body">
+        <div class="defect-location">demo/run_code_wiki_benchmark.py:248-255</div>
+        <div class="defect-section">
+          <div class="defect-section-title">问题描述</div>
+          <p>fixture 的 init/add/commit 已通过第 219 行 `_git` 使用清洁环境，但紧接着第 62、108 行调用此未隔离 helper 读取 initial/updated Commit。只要调用环境存在 GIT_DIR（run_release_check 的独立调用会原样传入），rev-parse 就会忽略 root fixture，读取外部仓库 HEAD；producer 因而把错误 Commit 写进 raw Evidence，随后固定身份 consumer 确定拒绝。相同 helper 还会把 memoryforge_commit/worktree_dirty 绑定到被重定向仓库，破坏 producer 自报身份。</p>
+        </div>
+        <div class="defect-section">
+          <div class="defect-section-title">修复建议</div>
+          <p>让 `_git_output` 与 `_git` 共用完全相同的 env 和 `-c` 参数，清除 GIT_*、禁用 system/global config、签名与 hooks。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="defect-card severity-P1">
+      <div class="defect-header">
+        <span class="severity-badge P1">P1</span>
+        <span class="category-badge">逻辑错误</span>
+        <span class="defect-title">相对输出路径在切换快照后写入临时 worktree 并被清理</span>
+        <span class="confidence-tag">置信度 10/10</span>
+      </div>
+      <div class="defect-body">
+        <div class="defect-location">scripts/check_local.sh:54-60</div>
+        <div class="defect-section">
+          <div class="defect-section-title">问题描述</div>
+          <p>output 保留调用者传入的相对值，但第 59 行新增全局 `cd &quot;$snapshot&quot;`。文档明确推荐 `./scripts/check_local.sh local-evidence/v0.3.0`：第 54 行先在仓库创建空的 `local-evidence/v0.3.0/dist`，切换后第 91、111-114、124、146 行却把真实产物写到临时 snapshot 下的同名相对目录；脚本最后仍可打印 Local checks passed，EXIT cleanup 随即删除真正 Evidence，用户看到的仓库输出目录为空。默认绝对路径不触发，但文档给出的命名发布路径确定触发。</p>
+        </div>
+        <div class="defect-section">
+          <div class="defect-section-title">修复建议</div>
+          <p>在首次检查和 mkdir 前把 output 规范化为绝对路径，例如以初始 `$root` 为基准解析；之后所有构建、发布和摘要步骤只使用该绝对路径。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="defect-card severity-P1">
+      <div class="defect-header">
+        <span class="severity-badge P1">P1</span>
+        <span class="category-badge">安全漏洞</span>
+        <span class="defect-title">独立 Wheel clean-room 仍允许额外包源替换运行时依赖</span>
+        <span class="confidence-tag">置信度 9/10</span>
+      </div>
+      <div class="defect-body">
+        <div class="defect-location">demo/run_release_check.py:48-59</div>
+        <div class="defect-section">
+          <div class="defect-section-title">问题描述</div>
+          <p>fresh venv 的安装环境只删除 PYTHONPATH，pip 命令没有 `--isolated`、固定 index 或显式 constraints。README/demo README 都指导用户直接运行该脚本；若宿主设置 PIP_EXTRA_INDEX_URL、PIP_FIND_LINKS 或 pip.conf，fresh venv 会从额外来源解析 Wheel 的依赖。提供满足版本范围（或与 constraints 同版本）的替代依赖即可在后续 CLI/benchmark 中执行，provenance 只记录版本字符串并仍会把 clean-room 标为 passed。check_local/build_release 上游虽已清环境，独立且公开支持的 release-check 路径仍不具备同一供应链契约。</p>
+        </div>
+        <div class="defect-section">
+          <div class="defect-section-title">修复建议</div>
+          <p>在 producer 内删除全部 PIP_*/UV_* 与用户配置影响，pip install 使用 `--isolated --index-url https://pypi.org/simple -c &lt;fixed constraints&gt;`；发布级验证最好使用带 hash 的约束或只读 wheelhouse。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="defect-card severity-P1">
+      <div class="defect-header">
+        <span class="severity-badge P1">P1</span>
+        <span class="category-badge">业务语义问题</span>
+        <span class="defect-title">Wheel release check 的仓库与 public-source 身份可被 GIT_* 伪造</span>
+        <span class="confidence-tag">置信度 9/10</span>
+      </div>
+      <div class="defect-body">
+        <div class="defect-location">demo/run_release_check.py:268-274</div>
+        <div class="defect-section">
+          <div class="defect-section-title">问题描述</div>
+          <p>该公开文档直接暴露的 release producer 用此 helper 校验 public_source 固定 Commit、校验 raw Code Wiki 的 MemoryForge Commit，并写 provenance.memoryforge_commit/worktree_dirty，但 `git -C` 仍会被 GIT_DIR/GIT_WORK_TREE/GIT_INDEX_FILE 覆盖。调用者可令这些变量指向另一个干净 checkout，使错误 public-source 路径通过 pinned Commit 检查，或让真实 MemoryForge 未提交 evaluator 参与运行而 provenance 仍声称 clean HEAD；上游 check_local/build_release 当前会清理环境，但 README 中的独立调用没有该保护。</p>
+        </div>
+        <div class="defect-section">
+          <div class="defect-section-title">修复建议</div>
+          <p>所有 Git 查询使用清洁环境并禁用 global/system config；对 MemoryForge 和 public source 都显式绑定各自 git-dir/work-tree，且在运行前后复核同一 Commit 和 clean 状态。</p>
+        </div>
+      </div>
+    </div>        所有缺陷卡片的 HTML，单张卡片格式：  ║
+║                                                              ║
+║    <div class="defect-card severity-{severity}">             ║
+║      <div class="defect-header">                             ║
+║        <span class="severity-badge {severity}">              ║
+║          {severity}</span>                                   ║
+║        <span class="category-badge">                         ║
+║          {category_zh}</span>                                ║
+║        <span class="defect-title">                           ║
+║          {title}</span>                                       ║
+║        <span class="confidence-tag">                         ║
+║          置信度 {confidence}/10</span>                       ║
+║      </div>                                                  ║
+║      <div class="defect-body">                               ║
+║        <div class="defect-location">                         ║
+║          {file}:{start_line}-{end_line}</div>                ║
+║        <div class="defect-section">                          ║
+║          <div class="defect-section-title">                  ║
+║            问题描述</div>                                    ║
+║          <p>{rationale}</p>                                  ║
+║        </div>                                                ║
+║        <div class="defect-section">                          ║
+║          <div class="defect-section-title">                  ║
+║            问题代码</div>                                    ║
+║          <div class="code-block">                            ║
+║            {代码片段}</div>                                  ║
+║        </div>                                                ║
+║        <div class="defect-section">                          ║
+║          <div class="defect-section-title">                  ║
+║            修复建议</div>                                    ║
+║          <p>{suggestion}</p>                                 ║
+║        </div>                                                ║
+║      </div>                                                  ║
+║    </div>                                                    ║
+║                                                              ║
+║  --- 空状态 ---                                              ║
+║  无缺陷时：取消注释 __EMPTY_STATE_START__ 到                 ║
+║  __EMPTY_STATE_END__ 之间的内容，并删除 defect-list 区块      ║
+║  189          检查的文件数                         ║
+║  44569          变更行数                            ║
+║                                                              ║
+║  --- category 中英文映射 ---                                  ║
+║  LOGIC       → 逻辑错误                                     ║
+║  BUSINESS_SEMANTICS → 业务语义问题                           ║
+║  SECURITY    → 安全漏洞                                      ║
+║  CONCURRENCY → 并发问题                                      ║
+║  ROBUSTNESS  → 健壮性问题                                    ║
+║  PERFORMANCE → 性能问题                                      ║
+║  QUALITY     → 代码质量问题                                  ║
+║                                                              ║
+╚══════════════════════════════════════════════════════════════╝
+-->

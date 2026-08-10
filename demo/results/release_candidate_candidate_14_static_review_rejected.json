@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "suite_id": "release-candidate-delivery",
+  "suite_revision": 1,
+  "memoryforge_commit": "be3560e37baa908e01a0404a88631ad1a1fa39d7",
+  "memoryforge_worktree_dirty": false,
+  "candidate": "release-development-candidate-14",
+  "review": {
+    "scope": "569685c2f0bf790819820b821b4768d180c4ee0d...be3560e37baa908e01a0404a88631ad1a1fa39d7",
+    "base_commit": "569685c2f0bf790819820b821b4768d180c4ee0d",
+    "source_commit": "be3560e37baa908e01a0404a88631ad1a1fa39d7",
+    "status": "failed",
+    "p0": 0,
+    "p1": 6,
+    "p2": 0,
+    "failures": [
+      "local_gate_relative_output_path",
+      "benchmark_summary_git_environment",
+      "code_wiki_git_environment",
+      "release_check_git_environment",
+      "release_check_package_source_environment",
+      "accepted_review_report_consistency"
+    ],
+    "artifacts": {
+      "raw_findings": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_14/comments.jsonl",
+        "sha256": "f27757dc160b8c8f6b5b846e8e1844d4b4d388d6367410c755781bdabe37d56b"
+      },
+      "top_findings": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_14/final_comments.json",
+        "sha256": "e1103ce252d080857370acff132b28cf3ac196a0ed88e0e9756f63a04ec6f53e"
+      },
+      "html_report": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_14/report.html",
+        "sha256": "4b9e66b9a0a0871202bd0c34a114b9a6088c223c299b7485d425deb656001793"
+      },
+      "markdown_report": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_14/report.md",
+        "sha256": "9c76dd5a941cffa8877bb2214cff7b9fc9d5876190275c79fc86b1ecd063316a"
+      },
+      "review_scope": {
+        "path": "demo/results/artifacts/release_candidate_review_candidate_14/review-scope.json",
+        "sha256": "2413b85000602a487c50b155652abd2cb4d9c8fbd40854658c1aef80162c86e5"
+      }
+    }
+  },
+  "root_cause": {
+    "summary": "Candidate 14 closed Candidate 13 findings, but final review found relative artifact-path loss, remaining Git/package-source environment leaks, and weak accepted-report validation.",
+    "fix": "Resolve artifact paths before snapshot entry, isolate every public producer from Git and package-manager environments, and validate accepted reports as consistent private-detail-free archives."
+  },
+  "confirmation": {
+    "path": "demo/evaluation/release_candidate_confirmation.json",
+    "sha256": "3eed08e04592b614a709cd18c6a92951b5da145d7dab4b9997824cd4e002e805",
+    "status": "not_run"
+  },
+  "holdout": {
+    "path": "demo/evaluation/release_candidate_holdout.json",
+    "sha256": "b466644bef2748a96d598540c54633fe49770af97fc71ce6e62e18eda687e8f8",
+    "status": "not_run"
+  },
+  "passed": false
+}

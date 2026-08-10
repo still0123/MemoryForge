@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "base_commit": "569685c2f0bf790819820b821b4768d180c4ee0d",
+  "source_commit": "be3560e37baa908e01a0404a88631ad1a1fa39d7",
+  "diff_mode": "merge_base_to_source",
+  "diff_files": 316,
+  "reviewed_files": 189,
+  "added_lines": 44070,
+  "deleted_lines": 499,
+  "changed_lines": 44569
+}
