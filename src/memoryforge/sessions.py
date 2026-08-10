@@ -283,9 +283,11 @@ def _merge_session_memory(
 def remember_conversation(
     workspace_root: Path,
     *,
-    platform: Literal["feishu", "botmux"],
+    platform: Literal["feishu", "botmux", "codex"],
     conversation_id: str,
     messages: list[ConversationMessage],
+    extra_tags: tuple[str, ...] = (),
+    title_override: str | None = None,
 ) -> ImportResult | None:
     """Store normalized conversation messages as one local-only source."""
     if not messages:
@@ -295,7 +297,8 @@ def remember_conversation(
     topic = " ".join(first_user.split()).strip("# ")
     if len(topic) > 72:
         topic = topic[:71].rstrip() + "…"
-    title = (
+    supplied_title = " ".join((title_override or "").split()).strip("# ")[:120]
+    title = supplied_title or (
         f"{platform.title()} conversation: {topic}" if topic else f"{platform.title()} conversation"
     )
     return import_local_document(
@@ -309,7 +312,7 @@ def remember_conversation(
             title=title,
             content=_render_memory_source(title, messages),
             sensitivity=Sensitivity.LOCAL_ONLY,
-            tags=("conversation", f"platform:{platform}", "unverified"),
+            tags=("conversation", f"platform:{platform}", "unverified", *extra_tags),
         ),
         source_id=source_id,
     )

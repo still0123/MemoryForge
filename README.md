@@ -365,7 +365,16 @@ memoryforge feishu-serve --workspace <workspace>
 正式 Wiki。它们不会把公司代码、飞书正文或会话上传到 GitHub。`watch` 只生成待审核
 ChangeSet，不会自动覆盖正式 Wiki。
 
-Codex、Claude 等 AI 对话无需专用适配器：先导出为 Markdown 或 TXT，再复用安全导入路径：
+Codex 本地对话可直接从 rollout JSONL 收录，只保留 user / assistant 文本；系统提示、
+推理和工具输出会被排除：
+
+```bash
+memoryforge codex-import ~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl \
+  --title '本次讨论主题' --workspace <workspace>
+```
+
+命令一次导入一个会话，默认 `local_only`，重复执行会更新同一来源。Claude 等其他对话
+可先导出为 Markdown 或 TXT，再复用安全导入路径：
 
 ```bash
 memoryforge import codex-session.md --category notes \

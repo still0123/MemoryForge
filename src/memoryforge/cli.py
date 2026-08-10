@@ -18,6 +18,7 @@ from memoryforge.botmux_adapter import BotmuxHookError, handle_botmux_hook
 from memoryforge.changesets import ChangeSetStore
 from memoryforge.code_index import build_code_index
 from memoryforge.code_wiki_compiler import compile_code_wiki
+from memoryforge.codex_adapter import CodexImportError, import_codex_rollout
 from memoryforge.compiler import (
     compilation_payload,
     compile_pending_sources,
@@ -272,6 +273,31 @@ def botmux_hook(
     ) as exc:
         _exit_with_safe_error(exc)
     typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+@app.command("codex-import")
+def codex_import(
+    path: Annotated[Path, typer.Argument(help="Local Codex rollout JSONL file.")],
+    workspace: WorkspaceOption = Path("."),
+    title: Annotated[
+        str | None,
+        typer.Option("--title", help="Stable Wiki title for this conversation."),
+    ] = None,
+) -> None:
+    """Import one Codex conversation as a local-only memory draft."""
+    try:
+        result = import_codex_rollout(workspace, path, title=title)
+    except (
+        CodexImportError,
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(json.dumps(result.model_dump(mode="json"), ensure_ascii=False, indent=2))
 
 
 @app.command("github-thread-import")
