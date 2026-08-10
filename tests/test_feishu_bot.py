@@ -223,8 +223,52 @@ def test_feishu_wiki_command_creates_local_reviewable_memory(tmp_path: Path) -> 
     assert manifest.tags == ("conversation", "platform:feishu", "unverified")
     snapshot = (workspace / manifest.snapshot_path).read_text(encoding="utf-8")
     assert "Which database did we choose?" in snapshot
-    assert "### Assistant (unverified)" in snapshot
+    assert "## Assistant (unverified)" in snapshot
     assert "We chose SQLite for local storage." in snapshot
+
+
+def test_feishu_wiki_auto_updates_memory_after_each_reply(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workspace = tmp_path / "workspace"
+    runner = CliRunner()
+    assert runner.invoke(app, ["init", str(workspace)]).exit_code == 0
+    monkeypatch.setattr(
+        "memoryforge.feishu_bot.answer_question",
+        lambda *_args, **_kwargs: {
+            "status": "answered",
+            "answer": "Use SQLite for local storage.",
+            "citations": [],
+            "wiki_pages": [],
+            "source_id": None,
+            "source_version": None,
+            "locator": None,
+            "quote": None,
+        },
+    )
+
+    enabled = reply_to_feishu_text(workspace, "/wiki auto on", session_id="oc_chat_123")
+    for question in (
+        "Which database?",
+        "Which cache?",
+        "Which queue?",
+        "Which API?",
+    ):
+        reply_to_feishu_text(workspace, question, session_id="oc_chat_123")
+
+    assert enabled["content"]["text"].startswith("自动收录已开启")
+    manifests = SourceManifestStore(workspace / ".memoryforge/manifests/sources").list_all()
+    manifest = max(manifests, key=lambda item: item.observed_at)
+    snapshot = (workspace / manifest.snapshot_path).read_text(encoding="utf-8")
+    assert "Which database?" in snapshot
+    assert "Which API?" in snapshot
+    assert "Use SQLite for local storage." in snapshot
+    assert SessionStore(workspace, "oc_chat_123").auto_memory_enabled() is True
+
+    disabled = reply_to_feishu_text(workspace, "/wiki auto off", session_id="oc_chat_123")
+    assert disabled["content"]["text"].startswith("自动收录已关闭")
+    assert SessionStore(workspace, "oc_chat_123").auto_memory_enabled() is False
 
 
 def test_feishu_resume_command_adds_saved_context_to_followup(tmp_path: Path, monkeypatch) -> None:

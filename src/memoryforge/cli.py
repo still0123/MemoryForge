@@ -3,6 +3,7 @@ from __future__ import annotations
 import difflib
 import json
 import sqlite3
+import sys
 import time
 from contextlib import suppress
 from pathlib import Path
@@ -12,6 +13,7 @@ import typer
 
 from memoryforge import __version__
 from memoryforge.agent import run_agent
+from memoryforge.botmux_adapter import BotmuxHookError, handle_botmux_hook
 from memoryforge.changesets import ChangeSetStore
 from memoryforge.code_index import build_code_index
 from memoryforge.code_wiki_compiler import compile_code_wiki
@@ -32,7 +34,7 @@ from memoryforge.github_thread_adapter import (
     import_github_thread,
     import_github_thread_json,
 )
-from memoryforge.importer import SourceValidationError, import_local_file
+from memoryforge.importer import MAX_SOURCE_BYTES, SourceValidationError, import_local_file
 from memoryforge.linting import lint_workspace
 from memoryforge.models import ChangeOperationType, Sensitivity
 from memoryforge.module_planner import build_module_plan
@@ -219,6 +221,29 @@ def folder_import(
     ) as exc:
         _exit_with_safe_error(exc)
     typer.echo(json.dumps(result.model_dump(mode="json"), ensure_ascii=False, indent=2))
+
+
+@app.command("botmux-hook")
+def botmux_hook(
+    workspace: WorkspaceOption = Path("."),
+) -> None:
+    """Read one Botmux lifecycle hook JSON from stdin and update local memory."""
+    try:
+        raw = sys.stdin.buffer.read(MAX_SOURCE_BYTES + 1)
+        if len(raw) > MAX_SOURCE_BYTES:
+            raise BotmuxHookError("Botmux hook exceeds the 5 MiB size limit")
+        result = handle_botmux_hook(workspace, json.loads(raw))
+    except (
+        BotmuxHookError,
+        MemoryForgeError,
+        SourceValidationError,
+        json.JSONDecodeError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 @app.command("github-thread-import")

@@ -346,6 +346,8 @@ memoryforge feishu-serve --workspace <workspace>
 /resume <session-id>   # 恢复本机保存的另一段会话
 /resume clear          # 退出恢复会话
 /wiki 收录             # 将当前会话最近 3 轮生成本地记忆草稿
+/wiki auto on          # 后续每轮自动更新本地记忆草稿
+/wiki auto off         # 停止自动更新；保留已有草稿
 ```
 
 `/project` 只改变当前聊天的 Wiki 检索范围，`/resume` 只读取本机保存的有限会话上下文；
@@ -362,6 +364,42 @@ memoryforge import codex-session.md --category notes \
 ```
 
 AI 回复按未验证材料处理；审核通过后，新会话即可从同一 Wiki 检索这些长期记忆。
+
+Botmux 托管的 Codex 等会话可用生命周期 Hook 自动收录。将下面配置写入
+`~/.botmux/data/hooks.json`；把命令和 Workspace 改为绝对路径：
+
+```json
+[
+  {
+    "event": "topic.new",
+    "command": "/absolute/MemoryForge/.venv/bin/memoryforge botmux-hook --workspace /absolute/my-wiki",
+    "redact": { "fullContentEvents": ["topic.new"] }
+  },
+  {
+    "event": "thread.reply",
+    "command": "/absolute/MemoryForge/.venv/bin/memoryforge botmux-hook --workspace /absolute/my-wiki",
+    "redact": { "fullContentEvents": ["thread.reply"] }
+  },
+  {
+    "event": "outbound.send",
+    "command": "/absolute/MemoryForge/.venv/bin/memoryforge botmux-hook --workspace /absolute/my-wiki",
+    "redact": { "fullContentEvents": ["outbound.send"] }
+  },
+  {
+    "event": "outbound.reply",
+    "command": "/absolute/MemoryForge/.venv/bin/memoryforge botmux-hook --workspace /absolute/my-wiki",
+    "redact": { "fullContentEvents": ["outbound.reply"] }
+  },
+  {
+    "event": "session.exit",
+    "command": "/absolute/MemoryForge/.venv/bin/memoryforge botmux-hook --workspace /absolute/my-wiki"
+  }
+]
+```
+
+执行 `botmux restart` 后生效。Hook 只收录文本，忽略流式卡片 JSON；内容默认
+`local_only`，不会自动批准或应用。Botmux Hook 格式见
+[官方文档](https://deepcoldy.github.io/botmux/hooks.html)。
 
 更多命令请运行 `memoryforge --help`。实现细节与数据模型见 [SPEC.md](SPEC.md)，下一阶段的完整实施计划见 [NEXT_PHASE_SPEC.md](NEXT_PHASE_SPEC.md)。
 

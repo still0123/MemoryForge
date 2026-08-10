@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -88,6 +89,9 @@ def _session_answer(
         citations=[dict(citation) for citation in result["citations"]],
         wiki_pages=result["wiki_pages"],
     )
+    if current_store is not None and current_store.auto_memory_enabled():
+        with suppress(MemoryForgeError, SourceValidationError, OSError):
+            remember_session(workspace, current_store.session_id)
     return result
 
 
@@ -106,12 +110,26 @@ def _control_reply(
     command = parts[0].lower()
     argument = parts[1].strip() if len(parts) == 2 else ""
     if command == "/wiki":
-        if argument not in {"收录", "remember", "save"}:
-            return _plain_reply("用法：/wiki 收录")
+        normalized = argument.lower()
+        if normalized in {"auto on", "自动开启"}:
+            store.set_auto_memory(True)
+            try:
+                remember_session(workspace, session_id)
+            except (MemoryForgeError, SourceValidationError, OSError):
+                return _plain_reply("自动收录已开启；当前历史含疑似密钥或无法保存，暂未生成草稿。")
+            return _plain_reply("自动收录已开启。后续回复会更新本地记忆草稿。")
+        if normalized in {"auto off", "自动关闭"}:
+            store.set_auto_memory(False)
+            return _plain_reply("自动收录已关闭；已有本地草稿保留。")
+        if normalized in {"status", "状态"}:
+            status = "开启" if store.auto_memory_enabled() else "关闭"
+            return _plain_reply(f"自动收录：{status}。")
+        if normalized not in {"收录", "remember", "save"}:
+            return _plain_reply("用法：/wiki 收录 | /wiki auto on | /wiki auto off")
         try:
             result = remember_session(workspace, session_id)
-        except SourceValidationError:
-            return _plain_reply("当前对话含疑似密钥，未生成记忆草稿。")
+        except (MemoryForgeError, SourceValidationError, OSError):
+            return _plain_reply("当前对话含疑似密钥或无法保存，未生成记忆草稿。")
         if result is None:
             return _plain_reply("当前会话还没有可收录内容。")
         return _plain_reply(
