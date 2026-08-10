@@ -1416,10 +1416,16 @@
         {
           "split": "development",
           "evidence_revision": 20,
-          "status": "development_passed_gate_pending",
+          "status": "local_gates_passed_review_pending",
           "path": "demo/results/release_candidate_development_candidate_19.json",
           "sha256": "a3e813aef90872a945093260994849ba7c997aaab1e934657d430904975bbc80",
           "memoryforge_commit": "a24729ab5f254ad3f42d091d1a68c97804a42e2d",
+          "acceptance_evidence": {
+            "path": "demo/results/release_candidate_candidate_19_local_gates.json",
+            "sha256": "3de427ee03e5a0affe38cedf6decb98716a4c1a2581c87096834a47787b1721a",
+            "memoryforge_commit": "7122ad9592c52d670fc07d0fad43c4ad6ee7efc7",
+            "passed": true
+          },
           "passed": true
         }
       ]
