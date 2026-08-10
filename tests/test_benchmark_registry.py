@@ -1321,9 +1321,7 @@ def test_accepted_review_reports_reject_conflicts_and_private_details(
             '<span class="count">0</span> P2\n'
             '<div class="defect-list">\n</div>\n'
         ),
-        "markdown_report": (
-            f"{scope}\n## 评审结论\n本次评审未发现 P0-P2 级别的缺陷。\n"
-        ),
+        "markdown_report": (f"{scope}\n## 评审结论\n本次评审未发现 P0-P2 级别的缺陷。\n"),
     }
     for name, clean in clean_reports.items():
         path = tmp_path / f"{name}.txt"

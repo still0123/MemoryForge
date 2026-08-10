@@ -4461,9 +4461,7 @@ def _release_review_finding_valid(finding: object) -> bool:
 
 def _accepted_review_reports_valid(artifacts: dict[str, Any], scope: str) -> bool:
     try:
-        html = (REPO_ROOT / str(artifacts["html_report"]["path"])).read_text(
-            encoding="utf-8"
-        )
+        html = (REPO_ROOT / str(artifacts["html_report"]["path"])).read_text(encoding="utf-8")
         markdown = (REPO_ROOT / str(artifacts["markdown_report"]["path"])).read_text(
             encoding="utf-8"
         )

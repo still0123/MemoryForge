@@ -48,8 +48,7 @@ def main(argv: list[str] | None = None) -> None:
     env = {
         key: value
         for key, value in os.environ.items()
-        if key not in {"PYTHONPATH", "PYTHONHOME"}
-        and not key.startswith(("GIT_", "PIP_", "UV_"))
+        if key not in {"PYTHONPATH", "PYTHONHOME"} and not key.startswith(("GIT_", "PIP_", "UV_"))
     }
     env["PYTHONNOUSERSITE"] = "1"
     env["PIP_CONFIG_FILE"] = os.devnull
@@ -278,9 +277,7 @@ def _run(
 
 
 def _git_output(root: Path, *args: str) -> str:
-    environment = {
-        key: value for key, value in os.environ.items() if not key.startswith("GIT_")
-    }
+    environment = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
     environment["GIT_CONFIG_NOSYSTEM"] = "1"
     environment["GIT_CONFIG_GLOBAL"] = os.devnull
     return subprocess.run(
