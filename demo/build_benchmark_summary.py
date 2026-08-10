@@ -27,10 +27,12 @@ def main(argv: list[str] | None = None) -> None:
     output = args.output.resolve()
     if output.is_relative_to(REPO_ROOT):
         raise SystemExit("--output must remain outside the repository")
+    _require_visible_index()
     commit = _git("rev-parse", "HEAD")
     if _git("status", "--porcelain"):
         raise SystemExit("MemoryForge worktree must be clean")
     summary = build_summary(memoryforge_commit=commit)
+    _require_visible_index()
     if _git("rev-parse", "HEAD") != commit or _git("status", "--porcelain"):
         raise SystemExit("benchmark summary source changed during generation")
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -66,6 +68,12 @@ def _git(*args: str) -> str:
         capture_output=True,
         text=True,
     ).stdout.strip()
+
+
+def _require_visible_index() -> None:
+    hidden = [line for line in _git("ls-files", "-v").splitlines() if line[:1] in {"h", "S"}]
+    if hidden:
+        raise SystemExit("Git assume-unchanged/skip-worktree flags are not allowed")
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:

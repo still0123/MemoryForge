@@ -1312,6 +1312,7 @@ def test_accepted_review_reports_reject_conflicts_and_private_details(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     scope = "a" * 40 + "..." + "b" * 40
+    stats = {"reviewed_files": 8, "changed_lines": 100}
     paths = {}
     clean_reports = {
         "html_report": (
@@ -1320,27 +1321,34 @@ def test_accepted_review_reports_reject_conflicts_and_private_details(
             '<span class="count">0</span> P1\n'
             '<span class="count">0</span> P2\n'
             '<div class="defect-list">\n</div>\n'
+            "检查文件 8\n变更行数 100\n"
         ),
-        "markdown_report": (f"{scope}\n## 评审结论\n本次评审未发现 P0-P2 级别的缺陷。\n"),
+        "markdown_report": (
+            f"{scope}\n检查文件：8\n变更行数：100\n## 评审结论\n本次评审未发现 P0-P2 级别的缺陷。\n"
+        ),
     }
     for name, clean in clean_reports.items():
         path = tmp_path / f"{name}.txt"
         path.write_text(clean, encoding="utf-8")
         paths[name] = {"path": path.name, "sha256": "0" * 64}
     monkeypatch.setattr(validator, "REPO_ROOT", tmp_path)
-    assert validator._accepted_review_reports_valid(paths, scope)
+    assert validator._accepted_review_reports_valid(paths, scope, stats)
 
     for suffix in (
         "STATUS: FAILED",
         "P1: 4",
+        "status: rejected",
+        "P1 = 4",
+        "c" * 40 + "..." + "d" * 40,
         "/Users/private/workspace",
         "Authorization: Basic abc",
+        "<script>Authorization: Basic abc</script>",
     ):
         (tmp_path / "html_report.txt").write_text(
             clean_reports["html_report"] + suffix,
             encoding="utf-8",
         )
-        assert not validator._accepted_review_reports_valid(paths, scope)
+        assert not validator._accepted_review_reports_valid(paths, scope, stats)
 
 
 def test_benchmark_registry_replays_package_archive_metadata(tmp_path: Path) -> None:
@@ -1847,12 +1855,16 @@ def test_benchmark_registry_accepts_zero_blocker_final_review(
                 '<span class="count">0</span> P1\n'
                 '<span class="count">0</span> P2\n'
                 '<div class="defect-list">\n</div>\n'
+                "检查文件 8\n变更行数 100\n"
             ),
         ),
         (
             "markdown_report",
             "report.md",
-            (f"{base}...{review_commit}\n## 评审结论\n本次评审未发现 P0-P2 级别的缺陷。\n"),
+            (
+                f"{base}...{review_commit}\n检查文件：8\n变更行数：100\n"
+                "## 评审结论\n本次评审未发现 P0-P2 级别的缺陷。\n"
+            ),
         ),
         (
             "review_scope",

@@ -24,6 +24,10 @@ summary_builder = _module("build_benchmark_summary", "demo/build_benchmark_summa
 workspace_drill = _module("run_release_workspace_drill", "demo/run_release_workspace_drill.py")
 release_builder = _module("build_release", "scripts/build_release.py")
 release_check = _module("run_release_check", "demo/run_release_check.py")
+release_candidate = _module(
+    "run_release_candidate_benchmark",
+    "demo/run_release_candidate_benchmark.py",
+)
 
 
 def test_release_builder_reads_version_from_current_source() -> None:
@@ -118,6 +122,16 @@ def test_public_producers_ignore_caller_git_and_package_sources(
     assert 'not key.startswith(("GIT_", "PIP_", "UV_"))' in source
     assert '"--isolated"' in source
     assert '"--constraint"' in source
+
+
+@pytest.mark.parametrize("producer", (summary_builder, release_candidate))
+def test_public_producers_reject_hidden_index_flags(
+    producer: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(producer, "_git", lambda *_args: "h hidden.py\nH visible.py")
+    with pytest.raises(SystemExit, match="assume-unchanged/skip-worktree"):
+        producer._require_visible_index()
 
 
 def test_sdist_clean_room_passes_constraints_to_isolated_pip(

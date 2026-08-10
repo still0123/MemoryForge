@@ -146,6 +146,7 @@ def main(argv: list[str] | None = None) -> None:
         raise SystemExit("--output must remain outside --release-dir")
     if output.exists():
         raise SystemExit(f"--output already exists: {output}")
+    _require_visible_index()
     release_dir.mkdir(parents=True, exist_ok=True)
     memoryforge_commit = _git("rev-parse", "HEAD")
     if _git("status", "--porcelain"):
@@ -170,6 +171,7 @@ def main(argv: list[str] | None = None) -> None:
         "stable_memoryforge_commit": _git("rev-parse", "HEAD") == memoryforge_commit,
         "clean_worktree_after_run": not bool(_git("status", "--porcelain")),
     }
+    _require_visible_index()
     evidence = {
         "schema_version": 1,
         "suite_id": development["suite_id"],
@@ -775,6 +777,12 @@ def _git(*args: str) -> str:
         capture_output=True,
         text=True,
     ).stdout.strip()
+
+
+def _require_visible_index() -> None:
+    hidden = [line for line in _git("ls-files", "-v").splitlines() if line[:1] in {"h", "S"}]
+    if hidden:
+        raise SystemExit("Git assume-unchanged/skip-worktree flags are not allowed")
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:

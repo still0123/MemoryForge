@@ -4430,7 +4430,11 @@ def _validate_release_static_review_acceptance(
         or not isinstance(top_findings, list)
         or any(not _release_review_finding_valid(finding) for finding in top_findings)
         or not _strict_json_value(top_findings, raw_findings)
-        or not _accepted_review_reports_valid(artifacts, f"{base_commit}...{commit}")
+        or not _accepted_review_reports_valid(
+            artifacts,
+            f"{base_commit}...{commit}",
+            stats,
+        )
         or not _strict_mapping(
             payload.get("confirmation"),
             {
@@ -4481,7 +4485,11 @@ def _release_review_finding_valid(finding: object) -> bool:
     )
 
 
-def _accepted_review_reports_valid(artifacts: dict[str, Any], scope: str) -> bool:
+def _accepted_review_reports_valid(
+    artifacts: dict[str, Any],
+    scope: str,
+    stats: dict[str, object],
+) -> bool:
     try:
         html = (REPO_ROOT / str(artifacts["html_report"]["path"])).read_text(encoding="utf-8")
         markdown = (REPO_ROOT / str(artifacts["markdown_report"]["path"])).read_text(
@@ -4493,10 +4501,16 @@ def _accepted_review_reports_valid(artifacts: dict[str, Any], scope: str) -> boo
     visible_html = html_lib.unescape(re.sub(r"<[^>]*>", " ", visible_html))
     visible_html = visible_html.replace("/10", " per 10")
     reports = (visible_html, markdown)
+    scope_pattern = re.compile(r"[0-9a-f]{40}\.\.\.[0-9a-f]{40}")
+    forbidden_status = re.compile(
+        r"\b(?:failed|rejected|failure)\b|失败|拒绝",
+        re.IGNORECASE,
+    )
+    nonzero_severity = re.compile(r"P[012]\s*[:：=]\s*[1-9][0-9]*")
     common_valid = all(
-        scope in report
-        and not re.search(r"\bfailed\b|失败", report, re.IGNORECASE)
-        and not re.search(r"P[012]\s*[:：]\s*[1-9][0-9]*", report)
+        scope_pattern.findall(report) == [scope]
+        and forbidden_status.search(report) is None
+        and nonzero_severity.search(report) is None
         and _payload_private_detail_leaks(report) == 0
         for report in reports
     )
@@ -4512,6 +4526,27 @@ def _accepted_review_reports_valid(artifacts: dict[str, Any], scope: str) -> boo
         and "## 评审结论" in markdown
         and "## 缺陷统计" not in markdown
         and "## 缺陷详情" not in markdown
+        and f"检查文件：{stats['reviewed_files']}" in markdown
+        and f"变更行数：{stats['changed_lines']}" in markdown
+        and re.search(rf"检查文件\s+{stats['reviewed_files']}\b", visible_html) is not None
+        and re.search(rf"变更行数\s+{stats['changed_lines']}\b", visible_html) is not None
+        and not _report_raw_private_detail_leaks(html, markdown)
+    )
+
+
+def _report_raw_private_detail_leaks(html: str, markdown: str) -> bool:
+    raw = f"{html}\n{markdown}"
+    return (
+        re.search(
+            r"(?i)(?:"
+            r"/Users/|/home/|/private/(?:tmp|var)/|/tmp/|C:\\Users\\|"
+            r"authorization\s*:|bearer\s+|basic\s+|api[_-]?key|password\s*=|"
+            r"secret\s*=|token\s*=|sk-|ghp_|github_pat_|akia|"
+            r"https?://[^/\s:@]+:[^@\s/]+@"
+            r")",
+            raw,
+        )
+        is not None
     )
 
 
