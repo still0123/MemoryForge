@@ -78,6 +78,61 @@ def test_ingest_creates_typed_pages_with_frontmatter_and_an_index(
     assert "Checkout Postmortem" in index
 
 
+def test_conversation_page_prefers_recent_unverified_notes(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    runner, workspace = _initialized_workspace(tmp_path, monkeypatch)
+    messages = []
+    for index in range(6):
+        messages.extend(
+            (
+                f"## User\n\nWhat is status {index}?",
+                f"## Assistant (unverified)\n\nHistorical status {index}.",
+            )
+        )
+    messages.extend(
+        (
+            "## User\n\nWhat is current status?",
+            "## Assistant (unverified)\n\n"
+            "Candidate 19 is accepted. Conversation memory is enabled.",
+        )
+    )
+    imported = _import(
+        runner,
+        workspace,
+        workspace.parent / "conversation.md",
+        "# Codex conversation\n\n" + "\n\n".join(messages) + "\n",
+        "notes",
+        tags=("conversation", "platform:codex", "unverified"),
+    )
+
+    proposal = runner.invoke(
+        app,
+        ["ingest", "--source", str(imported["source_id"]), "--workspace", str(workspace)],
+    )
+
+    assert proposal.exit_code == 0, proposal.output
+    reviewed = runner.invoke(
+        app,
+        [
+            "review",
+            json.loads(proposal.stdout)["changeset_id"],
+            "--workspace",
+            str(workspace),
+        ],
+    )
+    assert reviewed.exit_code == 0, reviewed.output
+    candidates = json.loads(reviewed.stdout)["candidate_files"]
+    page = next(content for path, content in candidates.items() if path != "wiki/INDEX.md")
+    index = candidates["wiki/INDEX.md"]
+    assert "## Conversation notes (unverified)" in page
+    assert "## Verified facts" not in page
+    assert page.index("Candidate 19 is accepted") < page.index("Historical status 5")
+    assert "Historical status 0" not in page
+    assert "Candidate 19 is accepted" in index
+
+
 def test_ask_uses_index_to_select_a_page_then_returns_its_source(
     tmp_path: Path,
     monkeypatch,

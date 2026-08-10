@@ -366,6 +366,8 @@ memoryforge import codex-session.md --category notes \
 ```
 
 AI 回复按未验证材料处理；审核通过后，新会话即可从同一 Wiki 检索这些长期记忆。
+编译会话来源时，Wiki 页面只保留最近 8 条消息的少量可检索片段并按最新优先展示；
+完整对话仍保存在不可变 raw Evidence 中，不会整段塞进日常查询上下文。
 
 Botmux 托管的 Codex 等会话可用生命周期 Hook 自动收录。将下面配置写入
 `~/.botmux/data/hooks.json`；把命令和 Workspace 改为绝对路径：

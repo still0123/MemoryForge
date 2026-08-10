@@ -291,7 +291,13 @@ def remember_conversation(
     if not messages:
         return None
     source_id = sha256(f"conversation:{platform}:{conversation_id}".encode()).hexdigest()
-    title = f"{platform.title()} conversation memory"
+    first_user = next((content for role, content in messages if role == "user"), "")
+    topic = " ".join(first_user.split()).strip("# ")
+    if len(topic) > 72:
+        topic = topic[:71].rstrip() + "…"
+    title = (
+        f"{platform.title()} conversation: {topic}" if topic else f"{platform.title()} conversation"
+    )
     return import_local_document(
         workspace_root,
         LocalDocument(

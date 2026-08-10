@@ -59,6 +59,33 @@ def test_page_fact_identity_is_deterministic() -> None:
     assert first == second
 
 
+def test_unverified_conversation_notes_remain_searchable() -> None:
+    content = (
+        "---\n"
+        'title: "Conversation"\n'
+        "type: concept\n"
+        "---\n"
+        "# Conversation\n\n"
+        "## Conversation notes (unverified)\n\n"
+        "### Latest assistant message\n\n"
+        "- Candidate 19 is accepted. [^source-1]\n\n"
+        f"[^source-1]: source `{SOURCE_ID}` · revision `2` · `chars:10-35`\n"
+    )
+
+    citations = parse_page_citations(content)
+
+    assert citations == [
+        {
+            "source_id": SOURCE_ID,
+            "source_version": 2,
+            "locator": "chars:10-35",
+            "quote": "Candidate 19 is accepted.",
+            "section_path": "Latest assistant message",
+            "is_summary": True,
+        }
+    ]
+
+
 def test_page_facts_reject_paths_outside_stable_wiki_pages() -> None:
     with pytest.raises(ValueError, match="below wiki/pages"):
         parse_page_facts("../wiki/pages/note.md", "# Note")
