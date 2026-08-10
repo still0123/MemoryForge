@@ -4550,7 +4550,8 @@ def _report_raw_private_detail_leaks(html: str, markdown: str) -> bool:
     return (
         re.search(
             r"(?i)(?:"
-            r"/Users/|/home/|/private/(?:tmp|var)/|/tmp/|C:\\Users\\|"
+            r"/Users/|/home/|/private/(?:tmp|var)/|/var/folders/|/tmp/|"
+            r"(?<![A-Za-z0-9:])[A-Z]:[\\/]|"
             r"authorization\s*:|bearer\s+|basic\s+|api[_-]?key|password\s*=|"
             r"secret\s*=|token\s*=|sk-|ghp_|github_pat_|akia|"
             r"https?://[^/\s:@]+:[^@\s/]+@"

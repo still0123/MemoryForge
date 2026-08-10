@@ -1341,6 +1341,8 @@ def test_accepted_review_reports_reject_conflicts_and_private_details(
         "P1 = 4",
         "c" * 40 + "..." + "d" * 40,
         "/Users/private/workspace",
+        "<script>/var/folders/private/workspace</script>",
+        "<script>D:/builds/private/workspace</script>",
         "Authorization: Basic abc",
         "<script>Authorization: Basic abc</script>",
     ):

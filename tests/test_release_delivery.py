@@ -34,6 +34,30 @@ def test_release_builder_reads_version_from_current_source() -> None:
     assert release_builder._source_module_version() == "0.3.0"
 
 
+def test_release_builder_reserves_output_before_building(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output = tmp_path / "release"
+    commit = "a" * 40
+    monkeypatch.setattr(
+        release_builder,
+        "_git",
+        lambda *args, **_kwargs: commit if args == ("rev-parse", "HEAD") else "",
+    )
+
+    def build(staging: Path, *, repo_root: Path, commit: str) -> None:
+        assert staging == output
+        assert staging.is_dir()
+        assert commit == "a" * 40
+        (staging / "ready").write_text(repo_root.name, encoding="utf-8")
+
+    monkeypatch.setattr(release_builder, "_build_release", build)
+    release_builder.main(["--output", str(output)])
+
+    assert (output / "ready").exists()
+
+
 def test_release_package_inputs_and_build_environment_are_stable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

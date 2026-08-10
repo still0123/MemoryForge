@@ -41,8 +41,6 @@ def main(argv: list[str] | None = None) -> None:
     output = args.output.resolve()
     if output.is_relative_to(REPO_ROOT):
         raise SystemExit("--output must remain outside the repository")
-    if output.exists():
-        raise SystemExit(f"--output already exists: {output}")
     if platform.python_implementation() != "CPython" or sys.version_info[:2] != (3, 11):
         raise SystemExit("release build requires CPython 3.11")
     commit = _git("rev-parse", "HEAD")
@@ -50,21 +48,23 @@ def main(argv: list[str] | None = None) -> None:
         raise SystemExit("MemoryForge worktree must be clean")
 
     output.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        output.mkdir()
+    except FileExistsError as exc:
+        raise SystemExit(f"--output already exists: {output}") from exc
     with tempfile.TemporaryDirectory(
         prefix=f".{output.name}-snapshot-",
         dir=output.parent,
     ) as snapshot_parent:
         parent = Path(snapshot_parent)
         snapshot = parent / "source"
-        staging = parent / "release"
         _git(*WORKTREE_CHECKOUT_OPTIONS, "worktree", "add", "--detach", str(snapshot), commit)
         try:
-            _build_release(staging, repo_root=snapshot, commit=commit)
+            _build_release(output, repo_root=snapshot, commit=commit)
         finally:
             _git("worktree", "remove", "--force", str(snapshot))
         if _git("rev-parse", "HEAD") != commit or _git("status", "--porcelain"):
             raise SystemExit("release build changed the source Commit or worktree")
-        staging.replace(output)
     print(f"Release artifacts built at {output}")
 
 
@@ -76,7 +76,7 @@ def _build_release(staging: Path, *, repo_root: Path, commit: str) -> None:
     ):
         raise SystemExit("release source snapshot is not clean at the requested Commit")
     _require_version(repo_root, source_root)
-    staging.mkdir()
+    staging.mkdir(exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="memoryforge-release-build-") as temporary:
         workdir = Path(temporary)
         builds = [

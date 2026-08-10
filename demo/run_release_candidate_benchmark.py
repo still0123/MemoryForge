@@ -12,6 +12,7 @@ import re
 import subprocess
 import sys
 import tarfile
+import tempfile
 import tomllib
 import zipfile
 from email.parser import BytesParser
@@ -203,9 +204,13 @@ def main(argv: list[str] | None = None) -> None:
         "passed": all(gates.values()),
     }
     output.parent.mkdir(parents=True, exist_ok=True)
-    temporary = output.with_name(f".{output.name}.{os.getpid()}.tmp")
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{output.name}.", suffix=".tmp", dir=output.parent
+    )
+    temporary = Path(temporary_name)
     try:
-        temporary.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps(evidence, indent=2) + "\n")
         os.link(temporary, output)
     except FileExistsError as exc:
         raise SystemExit(f"--output already exists: {output}") from exc
