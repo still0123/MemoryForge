@@ -1375,6 +1375,15 @@
           "sha256": "cc53022d72594b8d1df8f96da3e27396f82aff0d153a70d4051028dafdfb5faf",
           "memoryforge_commit": "894cd9417ac3d69dad180259b0cf26e58c2864d2",
           "passed": true
+        },
+        {
+          "split": "development",
+          "evidence_revision": 18,
+          "status": "development_passed_gate_pending",
+          "path": "demo/results/release_candidate_development_candidate_17.json",
+          "sha256": "f80cb31a24161c7c1a73b1a41662bd02c729490a14b06e9b0782748f8a05bdca",
+          "memoryforge_commit": "f9814230083e970f58f2ce35006d49d8f8c40c44",
+          "passed": true
         }
       ]
     }

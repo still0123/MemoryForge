@@ -516,6 +516,12 @@ REQUIRED_EXPERIMENT_EVIDENCE = {
             "cc53022d72594b8d1df8f96da3e27396f82aff0d153a70d4051028dafdfb5faf",
             "894cd9417ac3d69dad180259b0cf26e58c2864d2",
         ),
+        _RESULTS + "release_candidate_development_candidate_17.json": (
+            18,
+            "development_passed_gate_pending",
+            "f80cb31a24161c7c1a73b1a41662bd02c729490a14b06e9b0782748f8a05bdca",
+            "f9814230083e970f58f2ce35006d49d8f8c40c44",
+        ),
     },
 }
 RELEASE_CANDIDATE_REJECTED_FAILURES = {
