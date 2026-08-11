@@ -1,12 +1,13 @@
 # MemoryForge
 
+<!-- memoryforge-release-claim: version=0.4.0; status=released; supported_platforms=macos; macos_passed=656; linux_status=not_rerun; windows_status=not_verified; release_verification=passed -->
+
 <!-- memoryforge-release-claim: version=0.3.0; status=released; supported_platforms=macos+linux; active_candidate=19; platform_gate_candidate=19; platform_gate_status=accepted; review_status=accepted; macos_passed=642; linux_passed=639; linux_skipped=3; windows_status=not_verified; release_verification=passed -->
 
 > 把散落在代码仓库、设计文档、飞书和 AI 对话里的技术资料，编译成一套可维护、可追溯、可以直接在飞书提问的个人技术 Wiki。
 
-> **v0.3.0 发布范围：macOS 与 Linux。** macOS `642 passed`；Linux
-> `639 passed / 3 skipped`。Windows 尚未验证，不属于本版本支持范围。最终状态与 SHA256 以 GitHub Release
-> 为准。
+> **v0.4.0 发布范围：macOS。** 完整本地门禁 `656 passed`。Linux 未在本版本重跑；
+> Windows 尚未验证。最终状态与 SHA256 以 GitHub Release 为准。
 
 [60 秒演示](#60-秒公开演示) · [5 分钟跑通](#5-分钟跑通) · [飞书接入](#用飞书展示项目) ·
 [AI 会话记忆](#ai-会话如何变成长效记忆) · [设计边界](#当前边界)
@@ -14,10 +15,10 @@
 ![MemoryForge 工作流](assets/memoryforge-flow.svg)
 
 <p align="center">
-  <img src="assets/memoryforge-showcase-01.png" width="49%" alt="Showcase 的来源、Wiki、ChangeSet 与查询链路" />
-  <img src="assets/memoryforge-showcase-02.png" width="49%" alt="Showcase 的指标、失败案例与 Code Wiki 架构" />
+  <img src="assets/memoryforge-portal-overview.png" width="49%" alt="本地技术 Wiki 的概览、搜索和项目目录" />
+  <img src="assets/memoryforge-portal-wiki.png" width="49%" alt="本地技术 Wiki 的页面树、Markdown 阅读器和引用依据" />
 </p>
-<p align="center"><sub>同一份只读 Showcase：左侧看来源与版本，右侧看指标、失败案例和代码架构。</sub></p>
+<p align="center"><sub>v0.4.0 本地只读 Wiki：概览、检索、最近页面、Markdown 阅读器和引用依据。</sub></p>
 
 ## 这是什么项目？
 
@@ -46,6 +47,16 @@ python demo/run_showcase_demo.py \
 open /private/tmp/memoryforge-showcase/index.html
 ```
 
+如果 Codex 内置浏览器对 `file://` 页面提示“无法加载”，在输出目录启动一个
+仅绑定本机的静态服务器，再打开 `http://127.0.0.1:8765/index.html`：
+
+```bash
+cd /private/tmp/memoryforge-showcase
+/path/to/MemoryForge/.venv/bin/python -m http.server 8765 --bind 127.0.0.1
+```
+
+该服务器只读、只监听本机，不会上传 Wiki 内容；终端保持运行即可浏览页面。
+
 它从仓库内固定的 Python、Go、TypeScript 公开夹具开始，真实执行
 `import → Code Index → ChangeSet → review → approve → apply → query → showcase`，并展示来源版本、
 Wiki 树、Diff、Citation Trace、Benchmark、保留的失败案例、正确拒答和 Mermaid 架构。输出只有
@@ -65,6 +76,8 @@ Wiki 树、Diff、Citation Trace、Benchmark、保留的失败案例、正确拒
 
 | 结果 | 指标 | 边界 |
 | --- | ---: | --- |
+| v0.4.0 本地门禁 | macOS **656 passed** | Linux 未在本版本重跑；Windows 未验证 |
+| v0.4.0 本地 Wiki Portal | 公开夹具浏览器验收通过 | 无远程脚本、无模型 Key、只读 |
 | 三语言 Code Wiki | Symbol / core Relation / Mermaid / Citation 均为 **100%** | 固定公开夹具 |
 | AgentSkill-Eval 文档 Wiki | Answer **96.7%**，Citation **100%** | 单一公开仓库 30 题 |
 | learn-claude-code support score development | Answer / selective accuracy **100%**，coverage **90%**，risk **0%** | 10 题；confirmation 未运行 |
@@ -282,7 +295,7 @@ Demo。脚本会拒绝从源码 checkout 导入 `memoryforge`：
 ```bash
 uv build --wheel --out-dir dist
 .venv/bin/python demo/run_release_check.py \
-  --wheel dist/memoryforge-0.3.0-py3-none-any.whl \
+  --wheel dist/memoryforge-0.4.0-py3-none-any.whl \
   --workdir /private/tmp/memoryforge-release-check \
   --output /private/tmp/memoryforge-release-provenance.json \
   --code-evidence-output demo/results/code_wiki_public.json \
@@ -292,7 +305,7 @@ uv build --wheel --out-dir dist
 
 公开仓库必须 checkout 到 `93f5dc05229da250b041850ad8deeeec886ef304`。提交的
 [`release_provenance.json`](demo/results/release_provenance.json) 是 v0.2.0 的历史发布证据。
-v0.3.0 的实际 import 路径、依赖版本、Wheel/sdist SHA256 和 tag Commit 以 GitHub Release
+v0.4.0 的实际 import 路径、依赖版本、Wheel/sdist SHA256 和 tag Commit 以 GitHub Release
 中的 `release-provenance.json` 与 `SHA256SUMS` 为准。
 
 ### 本地零付费门禁
@@ -305,10 +318,10 @@ Evidence 在本机执行：
 
 # release-candidate 双隔离构建
 python scripts/build_release.py \
-  --output /private/tmp/memoryforge-v0.3.0-release
+  --output /private/tmp/memoryforge-v0.4.0-release
 ```
 
-Windows PowerShell 提供实验性本地检查，但 v0.3.0 未验证 Windows：
+Windows PowerShell 提供实验性本地检查，但 v0.4.0 未验证 Windows：
 
 ```powershell
 .\scripts\check_local.ps1

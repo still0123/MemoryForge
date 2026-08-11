@@ -628,7 +628,7 @@ def test_benchmark_registry_requires_semantic_release_support() -> None:
         validator.build_benchmark_summary(
             {},
             {},
-            package_version="0.3.0",
+            package_version="0.4.0",
             memoryforge_commit=commit,
             schema_version=True,
         )

@@ -923,6 +923,28 @@ def list_git_checkouts(workspace: Path) -> tuple[GitRepositoryRecord, ...]:
     return tuple(_git_repository_record(row) for row in rows)
 
 
+def find_code_module_repositories(
+    workspace: Path,
+    module_path: str,
+) -> tuple[GitRepositoryRecord, ...]:
+    """List repositories that own an applied code-module page."""
+    opened = Workspace.open_readonly(workspace)
+    section_path = f"Code module: {module_path} / Identity"
+    with _connect_readonly(opened.index_path) as connection:
+        rows = connection.execute(
+            """
+            SELECT DISTINCT repositories.*
+            FROM wiki_facts AS facts
+            JOIN git_repositories AS repositories
+              ON repositories.repository_id = facts.repository_id
+            WHERE facts.section_path = ?
+            ORDER BY repositories.name, repositories.repository_id
+            """,
+            (section_path,),
+        ).fetchall()
+    return tuple(_git_repository_record(row) for row in rows)
+
+
 def get_git_checkout_readonly(workspace: Path, repository_id: str) -> GitRepositoryRecord:
     """Read one registered Git checkout without upgrading or writing the workspace."""
 
@@ -1916,6 +1938,63 @@ def find_applied_page_paths(
         if len(paths) == limit:
             break
     return tuple(paths)
+
+
+def find_applied_wiki_fact_page_paths(
+    workspace: Path,
+    terms: Iterable[str],
+    *,
+    limit: int = 10,
+    repository_id: str | None = None,
+) -> tuple[str, ...]:
+    """Find applied pages by substring terms already stored as Wiki facts."""
+    normalized = tuple(dict.fromkeys(term.strip() for term in terms if term.strip()))[:32]
+    if not normalized:
+        return ()
+    if limit < 1 or limit > 100:
+        raise ValueError("fact page result limit must be between 1 and 100")
+
+    values = ", ".join("(?)" for _ in normalized)
+    parameters: list[object] = list(normalized)
+    repository_filter = ""
+    opened = Workspace.open_readonly(workspace)
+    with _connect_readonly(opened.index_path) as connection:
+        if repository_id is not None:
+            _validate_repository_scope(connection, repository_id)
+            repository_filter = "AND facts.repository_id = ?"
+            parameters.append(repository_id)
+        parameters.append(limit)
+        rows = connection.execute(
+            f"""
+            WITH query_terms(term) AS (VALUES {values}),
+            hits AS (
+                SELECT DISTINCT facts.page_path, query_terms.term
+                FROM wiki_facts AS facts
+                JOIN applied_source_versions AS applied
+                  ON applied.source_id = facts.source_id
+                 AND applied.source_version_id = facts.source_version
+                JOIN query_terms
+                  ON instr(facts.quote, query_terms.term) > 0
+                  OR instr(facts.routing_text, query_terms.term) > 0
+                WHERE 1 = 1 {repository_filter}
+            ),
+            frequencies AS (
+                SELECT term, COUNT(*) AS page_count
+                FROM hits
+                GROUP BY term
+            )
+            SELECT hits.page_path
+            FROM hits
+            JOIN frequencies USING (term)
+            GROUP BY hits.page_path
+            ORDER BY SUM(1.0 / frequencies.page_count) DESC,
+                     COUNT(*) DESC,
+                     hits.page_path
+            LIMIT ?
+            """,
+            tuple(parameters),
+        ).fetchall()
+    return tuple(str(row["page_path"]) for row in rows)
 
 
 def find_applied_code_symbol_facts(

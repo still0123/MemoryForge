@@ -21,7 +21,7 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SOURCE_ROOT = REPO_ROOT / "src"
-TARGET_VERSION = "0.3.0"
+TARGET_VERSION = "0.4.0"
 CONSTRAINTS = REPO_ROOT / "constraints/dev.txt"
 FORBIDDEN_SDIST_PARTS = ("/demo/results/artifacts/",)
 SOURCE_DATE_EPOCH = "315532800"

@@ -97,6 +97,18 @@ def _build_snapshot(
         workspace_commit=workspace_commit,
         include_local=include_local,
     )
+    source_details = {
+        (str(source["source_id"]), int(version["version_id"])): version
+        for source in sources
+        for version in source["versions"]
+    }
+    for page in pages:
+        for item in page["evidence"]:
+            version = source_details.get((item["source_id"], item["source_version"]))
+            if version is not None:
+                item["source_title"] = version["title"]
+                item["source_category"] = version["category"]
+                item["source_sensitivity"] = version["sensitivity"]
     query = _query_snapshot(
         evidence_payload,
         public_source_versions=public_source_versions,
@@ -205,28 +217,40 @@ def _wiki_snapshot(
         """
         SELECT
             facts.page_path,
+            facts.repository_id,
             facts.source_id,
             facts.source_version,
-            versions.sensitivity
+            versions.sensitivity,
+            repositories.name AS repository_name
         FROM wiki_facts AS facts
         JOIN source_versions AS versions
           ON versions.id = facts.source_version
+        LEFT JOIN git_repositories AS repositories
+          ON repositories.repository_id = facts.repository_id
         ORDER BY facts.page_path, facts.source_id, facts.source_version
         """,
     )
     owners: dict[str, set[str]] = defaultdict(set)
+    evidence: dict[str, set[tuple[str, int]]] = defaultdict(set)
+    repositories: dict[str, set[tuple[str, str]]] = defaultdict(set)
     private_pages: set[str] = set()
     for row in rows:
         page_path = str(row["page_path"])
-        owners[page_path].add(str(row["source_id"]))
+        source_id = str(row["source_id"])
+        owners[page_path].add(source_id)
+        evidence[page_path].add((source_id, int(row["source_version"])))
+        if row["repository_id"] is not None and row["repository_name"] is not None:
+            repositories[page_path].add((str(row["repository_id"]), str(row["repository_name"])))
         if str(row["sensitivity"]) != "public":
             private_pages.add(page_path)
+    contents = workspace.version_store.read_wiki_texts_at(workspace_commit)
     pages = []
     for path, source_ids in sorted(owners.items()):
         if not include_local and (not source_ids or path in private_pages):
             continue
-        content = workspace.version_store.read_text_at(workspace_commit, path)
+        content = contents.get(path)
         if content is None:
+            workspace.version_store.read_text_at(workspace_commit, path)
             raise ShowcaseBuildError("Showcase Wiki page is missing from its fixed Commit")
         match = _HEADING.search(content)
         pages.append(
@@ -234,6 +258,15 @@ def _wiki_snapshot(
                 "path": path,
                 "title": match.group(1) if match else Path(path).stem,
                 "source_ids": sorted(source_ids),
+                "repositories": [
+                    {"repository_id": repository_id, "name": name}
+                    for repository_id, name in sorted(repositories[path], key=lambda item: item[1])
+                ],
+                "evidence": [
+                    {"source_id": source_id, "source_version": source_version}
+                    for source_id, source_version in sorted(evidence[path])
+                ],
+                "content": content,
                 "content_sha256": hashlib.sha256(content.encode("utf-8")).hexdigest(),
             }
         )
@@ -264,9 +297,8 @@ def _changeset_snapshot(
             raise ShowcaseBuildError("Applied ChangeSet proposal status is invalid")
         source_ids = set(record.changeset.source_ids)
         source_versions = set(record.changeset.source_versions.items())
-        if not include_local and (
-            not source_versions or not source_versions <= public_source_versions
-        ):
+        local_only = not source_versions or not source_versions <= public_source_versions
+        if not include_local and local_only:
             continue
         proposal_sha256 = hashlib.sha256(record_payload).hexdigest()
         review_payload = _read_optional_hashed_file(entry, "review.json", "review.sha256")
@@ -283,6 +315,8 @@ def _changeset_snapshot(
             proposal_sha256,
         )
         if review is None or approval is None:
+            if include_local and local_only:
+                continue
             raise ShowcaseBuildError("Applied ChangeSet lacks review or approval Evidence")
         receipt = _read_json_file(entry / "receipt.json")
         if (
@@ -472,11 +506,10 @@ def _architecture_snapshot(
     workspace_commit: str,
     pages: list[dict[str, Any]],
 ) -> dict[str, Any]:
+    del workspace, workspace_commit
     for page in pages:
         path = str(page["path"])
-        content = workspace.version_store.read_text_at(workspace_commit, path)
-        if content is None:
-            raise ShowcaseBuildError("Code Wiki architecture page is missing from its Commit")
+        content = str(page["content"])
         match = _MERMAID.search(content)
         if match is None:
             continue
@@ -524,47 +557,169 @@ def _render_html(snapshot: dict[str, Any]) -> str:
     query = snapshot["query"]
     benchmark = snapshot["benchmark"]
     architecture = snapshot["architecture"]
+    overview_section = _overview_html(snapshot)
     sources_section = _sources_html(sources, snapshot["privacy"])
     query_section = _query_html(query, snapshot["rejection"])
     architecture_section = _architecture_html(architecture)
+    short_commit = _short_identifier(snapshot["workspace_commit"], head=8, tail=0)
     return f"""<!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MemoryForge Showcase</title>
+<title>我的技术 Wiki · MemoryForge</title>
 <style>
-:root {{ color-scheme: dark; --bg:#0b1020; --panel:#151d32; --line:#2b3858;
-  --text:#e8edf8; --muted:#9eabc5; --accent:#71d1b3; --bad:#ff8f8f; }}
+:root {{ color-scheme: dark; --bg:#0b1020; --panel:#151d32; --panel-2:#10182b;
+  --line:#2b3858; --text:#e8edf8; --muted:#9eabc5; --accent:#71d1b3;
+  --accent-2:#9bb7ff; --bad:#ff8f8f; }}
 * {{ box-sizing:border-box }} body {{ margin:0; background:var(--bg); color:var(--text);
-  font:15px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace }}
-main {{ max-width:1120px; margin:auto; padding:32px 20px 80px }}
-h1 {{ font-size:34px }} h2 {{ margin-top:42px; border-bottom:1px solid var(--line);
+  font:15px/1.6 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif }}
+main {{ max-width:1440px; margin:auto; padding:28px 24px 80px }}
+h1 {{ margin:4px 0 8px; font-size:34px }} h2 {{ margin-top:42px;
+  border-bottom:1px solid var(--line);
   padding-bottom:10px }} h3 {{ color:var(--accent) }}
-.meta,.grid {{ display:grid; gap:14px; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)) }}
+.portal-header {{ padding:24px; background:linear-gradient(135deg,#172440,#10182b);
+  border:1px solid var(--line);
+  border-radius:14px }} .kicker {{ color:var(--accent); font-size:12px; letter-spacing:.12em }}
+.personal-search {{ margin-top:20px; padding-top:16px; border-top:1px solid var(--line) }}
+.personal-search label {{ display:block; margin-bottom:7px; color:var(--accent-2);
+  font-weight:600 }}
+.search-row {{ display:flex; gap:8px }} .global-search {{ flex:1; min-width:0; padding:12px 14px;
+  color:var(--text); background:#080d19; border:1px solid var(--line); border-radius:8px;
+  font:inherit }} .search-button {{ padding:0 16px; color:#081019; background:var(--accent);
+  border:0; border-radius:8px; cursor:pointer; font:inherit; font-weight:600 }}
+.search-button:hover {{ filter:brightness(1.08) }}
+.commit {{ display:inline-block; margin-top:4px; color:var(--accent-2) }}
+.commit summary {{ padding:3px 7px; border:1px solid var(--line); border-radius:6px }}
+.commit code {{ display:block; margin-top:6px; padding:6px 8px; color:var(--muted);
+  background:#080d19; border-radius:6px }}
+.meta,.grid {{ display:grid; gap:14px; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)) }}
 .card {{ background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px;
   overflow:auto }} .muted {{ color:var(--muted) }} .good {{ color:var(--accent) }}
-.bad {{ color:var(--bad) }} code,pre {{ white-space:pre-wrap; overflow-wrap:anywhere }}
+.bad {{ color:var(--bad) }} code,pre {{ white-space:pre-wrap; overflow-wrap:anywhere;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace }}
 pre {{ background:#080d19; border:1px solid var(--line); border-radius:8px; padding:14px }}
 table {{ width:100%; border-collapse:collapse }} th,td {{ text-align:left; padding:8px;
   border-bottom:1px solid var(--line); vertical-align:top }}
-nav a {{ color:var(--accent); margin-right:14px }} svg {{ width:100%; min-height:180px }}
+nav {{ position:sticky; top:0; z-index:3; margin:14px 0; padding:11px 14px;
+  background:rgba(11,16,32,.94);
+  border:1px solid var(--line); border-radius:9px; backdrop-filter:blur(8px) }}
+nav a {{ color:var(--accent); margin-right:14px; text-decoration:none }}
+nav a:hover {{ text-decoration:underline }}
+svg {{ width:100%; min-height:180px }} .secondary-section details {{ background:var(--panel-2);
+  border:1px solid var(--line); border-radius:10px; padding:0 14px }}
+details summary {{ cursor:pointer; padding:12px 0; color:var(--accent-2) }}
+.overview-grid {{ display:grid; gap:14px;
+  grid-template-columns:repeat(auto-fit,minmax(180px,1fr)) }}
+.overview-card {{ background:var(--panel); border:1px solid var(--line);
+  border-radius:10px; padding:16px }}
+.overview-card strong {{ color:var(--muted); font-size:12px; text-transform:uppercase }}
+.overview-card span {{ display:block; margin-top:4px; font-size:24px; color:var(--accent) }}
+.overview-panels {{ display:grid; grid-template-columns:minmax(0,1.4fr) minmax(260px,1fr);
+  gap:14px; margin-top:14px }} .overview-panel h3 {{ margin-top:0 }}
+.directory-grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr));
+  gap:8px; margin-top:14px }}
+.directory-item {{ display:flex; justify-content:space-between; gap:8px; padding:9px 11px;
+  color:var(--text); background:var(--panel-2); border:1px solid var(--line); border-radius:8px;
+  text-align:left; cursor:pointer; font:inherit }}
+.directory-item:hover {{ background:#202b47 }}
+.directory-item span {{ color:var(--accent); font-variant-numeric:tabular-nums }}
+.recent-list {{ margin:0; padding-left:24px }} .recent-list li {{ margin:8px 0 }}
+.recent-list small {{ display:block; color:var(--muted) }}
+.recent-opened {{ display:block; width:100%; margin:5px 0; padding:8px 10px; color:var(--text);
+  background:#202b47; border:1px solid var(--line); border-radius:7px; text-align:left;
+  cursor:pointer }}
+.recent-opened:hover {{ background:#293859 }}
+.recent-opened small {{ display:block; color:var(--muted) }}
+.quick-links {{ display:grid; gap:8px }} .quick-link {{ display:block; padding:10px 12px;
+  color:var(--accent-2); background:#202b47; border:1px solid var(--line); border-radius:7px;
+  text-decoration:none }} .quick-link:hover {{ background:#293859 }}
+.wiki-layout {{ display:grid; grid-template-columns:minmax(250px,310px) minmax(0,1fr);
+  gap:14px; align-items:start }}
+.wiki-list {{ position:sticky; top:64px; max-height:calc(100vh - 88px); overflow:auto }}
+.wiki-search {{ width:100%; margin-bottom:10px; padding:10px 12px; color:var(--text);
+  background:#080d19; border:1px solid var(--line); border-radius:8px }}
+.wiki-group {{ margin:8px 0; border:1px solid var(--line); border-radius:8px; overflow:hidden }}
+.wiki-group summary {{ padding:9px 10px; background:var(--panel-2); font-size:13px }}
+.wiki-result {{ display:block; width:100%; padding:10px; color:var(--text); background:none;
+  border:0; border-bottom:1px solid var(--line); text-align:left; cursor:pointer }}
+.wiki-result:hover,.wiki-result[aria-selected="true"] {{ background:#202b47 }}
+.wiki-result small {{ display:block; color:var(--muted) }}
+.wiki-reader {{ min-height:320px; min-width:0 }} .wiki-page[hidden] {{ display:none }}
+.wiki-page h3 {{ margin-top:0; font-size:24px }} .wiki-meta {{ display:flex;
+  flex-wrap:wrap; gap:8px;
+  align-items:center }} .wiki-meta code {{ color:var(--muted) }}
+.page-meta {{ margin:8px 0 14px; border:1px solid var(--line); border-radius:7px }}
+.page-meta summary {{ padding:7px 10px; font-size:12px }}
+.page-meta .wiki-meta {{ padding:0 10px 9px }}
+.page-outline {{ margin:14px 0; padding:10px 12px; background:var(--panel-2);
+  border-left:3px solid var(--accent-2) }}
+.page-outline strong {{ display:block; margin-bottom:5px }}
+.page-outline a {{ display:block; margin:3px 0; color:var(--accent-2); text-decoration:none }}
+.page-outline a:hover {{ text-decoration:underline }}
+.page-summary {{ margin:16px 0; padding:12px 14px; border-left:3px solid var(--accent);
+  background:var(--panel-2); color:var(--text) }}
+.wiki-evidence {{ display:flex; flex-wrap:wrap; gap:6px; margin:16px 0; padding:10px 0;
+  border-top:1px solid var(--line); border-bottom:1px solid var(--line) }}
+.evidence-chip {{ display:inline-flex; flex-direction:column; gap:1px; padding:6px 8px;
+  background:#202b47; border:1px solid var(--line); border-radius:7px; font-size:12px }}
+.evidence-chip small {{ color:var(--muted) }}
+.wiki-markdown {{ max-width:950px;
+  font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  line-height:1.7 }} .wiki-markdown h1,.wiki-markdown h2,.wiki-markdown h3,.wiki-markdown h4,
+.wiki-markdown h5,.wiki-markdown h6 {{ color:var(--text); border:0;
+  margin:1.3em 0 .45em; padding:0 }}
+.wiki-markdown p {{ margin:.7em 0 }} .wiki-markdown ul,.wiki-markdown ol {{ padding-left:24px }}
+.wiki-markdown li {{ margin:3px 0 }} .wiki-markdown code {{ padding:2px 4px;
+  background:#202b47; border-radius:4px }}
+.wiki-markdown pre {{ margin:12px 0; font-family:ui-monospace,SFMono-Regular,Menlo,monospace }}
+.wiki-markdown pre code {{ padding:0; background:transparent }} .md-link {{ color:var(--accent-2) }}
+.citation-ref {{ color:var(--accent-2) }}
+.citation-details {{ margin-top:18px; padding:0 12px; background:var(--panel-2);
+  border:1px solid var(--line); border-radius:8px }}
+.citation-details pre {{ margin:0 0 12px; color:var(--muted) }}
+.source-identity {{ margin:8px 0 }} .source-identity code {{ display:block; padding:7px 9px;
+  background:#080d19; border-radius:6px }}
+@media (max-width:760px) {{ .wiki-layout {{ grid-template-columns:1fr }}
+  .overview-panels {{ grid-template-columns:1fr }}
+  .wiki-list {{ position:static; max-height:42vh }} nav {{ position:static }}
+  main {{ padding:16px 12px 56px }} }}
 </style>
 </head>
 <body><main>
-<h1>MemoryForge Showcase</h1>
-<p class="muted">Read-only evidence snapshot at Commit
-<code>{_h(snapshot["workspace_commit"])}</code>.</p>
-<nav>{_nav()}</nav>
-<section id="sources"><h2>Sources and versions</h2>{sources_section}</section>
-<section id="wiki"><h2>Wiki page tree</h2>{_pages_html(pages)}</section>
-<section id="changeset-diff"><h2>ChangeSet diff</h2>{_diff_html(changeset)}</section>
-<section id="lifecycle"><h2>Review / approve / apply</h2>{_lifecycle_html(changeset)}</section>
-<section id="query-trace"><h2>Query routing and Citation trace</h2>{query_section}</section>
-<section id="benchmarks"><h2>Benchmark metrics</h2>{_metrics_html(benchmark)}</section>
-<section id="failures"><h2>Failures and abstentions</h2>{_failures_html(benchmark)}</section>
-<section id="architecture"><h2>Code Wiki Mermaid architecture</h2>{architecture_section}</section>
-</main></body></html>
+<header class="portal-header">
+<div class="kicker">MemoryForge · 本机只读</div>
+<h1>我的技术 Wiki</h1>
+<p class="muted">代码、项目资料和 AI 对话集中到一处。先找页面，再按需查看依据。</p>
+<details class="commit"><summary>知识快照 {_h(short_commit)}</summary>
+<code>{_h(snapshot["workspace_commit"])}</code></details>
+<div class="personal-search"><label for="global-search">查找记忆</label>
+<div class="search-row"><input id="global-search" class="global-search" type="search"
+placeholder="搜索项目、AI 对话、代码或关键词"><button id="global-search-button"
+class="search-button" type="button">检索</button></div>
+<small class="muted">按 Enter，或使用 ⌘K / Ctrl+K 聚焦搜索。</small></div>
+</header>
+<nav aria-label="门户导航">{_nav()}</nav>
+<section id="overview"><h2>概览</h2>{overview_section}</section>
+<section id="wiki"><h2>Wiki 页面树</h2><p class="muted">按标题、来源路径或正文搜索；
+选择页面查看渲染后的 Markdown 与依据。</p>
+{_pages_html(pages)}</section>
+<section id="sources" class="secondary-section"><h2>来源与版本</h2>
+<details><summary>来源登记 · {_h(len(sources))} 个来源</summary>
+{sources_section}</details></section>
+<section id="changeset-diff" class="secondary-section"><h2>ChangeSet 差异</h2>
+<details><summary>查看已应用的差异</summary>{_diff_html(changeset)}</details></section>
+<section id="lifecycle" class="secondary-section"><h2>评审 / 审批 / 应用</h2>
+<details><summary>查看生命周期记录</summary>{_lifecycle_html(changeset)}</details></section>
+<section id="query-trace" class="secondary-section"><h2>查询路由与引用链路</h2>
+<details open><summary>查看最近一次有依据的查询</summary>{query_section}</details></section>
+<section id="benchmarks" class="secondary-section"><h2>基准指标</h2>
+<details><summary>查看评测指标</summary>{_metrics_html(benchmark)}</details></section>
+<section id="failures" class="secondary-section"><h2>失败与正确拒答</h2>
+<details><summary>查看评测案例</summary>{_failures_html(benchmark)}</details></section>
+<section id="architecture" class="secondary-section"><h2>代码 Wiki 架构</h2>
+<details><summary>查看生成的架构</summary>{architecture_section}</details></section>
+</main>{_portal_script()}</body></html>
 """
 
 
@@ -572,39 +727,104 @@ def _nav() -> str:
     return " ".join(
         f'<a href="#{identifier}">{_h(label)}</a>'
         for identifier, label in (
-            ("sources", "Sources"),
+            ("overview", "首页"),
             ("wiki", "Wiki"),
-            ("changeset-diff", "Diff"),
-            ("lifecycle", "Lifecycle"),
-            ("query-trace", "Query"),
-            ("benchmarks", "Metrics"),
-            ("failures", "Failures"),
-            ("architecture", "Architecture"),
+            ("query-trace", "查询"),
+            ("architecture", "架构"),
+            ("sources", "来源与审计"),
         )
+    )
+
+
+def _overview_html(snapshot: dict[str, Any]) -> str:
+    pages = snapshot["wiki"]["pages"]
+    group_counts: dict[str, int] = defaultdict(int)
+    project_counts: dict[str, int] = defaultdict(int)
+    for page in pages:
+        group_counts[_page_group(str(page["title"]), page.get("repositories"))] += 1
+        project = _page_project(page.get("repositories"))
+        if project:
+            project_counts[project] += 1
+    ai_count = group_counts.get("AI 对话", 0)
+    code_count = sum(count for group, count in group_counts.items() if group.startswith("代码 · "))
+    other_count = len(pages) - ai_count - code_count
+    values = (
+        ("全部页面", len(pages)),
+        ("AI 对话", ai_count),
+        ("代码知识", code_count),
+        ("其他主题", other_count),
+        ("知识来源", len(snapshot["sources"])),
+    )
+    recent: list[tuple[str, str, str]] = []
+    for page in pages:
+        metadata, _ = _markdown_document(str(page["content"]))
+        updated = metadata.get("updated", "")
+        if updated:
+            title = str(page["title"])
+            recent.append(
+                (updated, _display_title(title), _page_group(title, page.get("repositories")))
+            )
+    recent_items = "".join(
+        f"<li><strong>{_h(title)}</strong><small>{_h(group)} · {_h(updated)}</small></li>"
+        for updated, title, group in sorted(recent, reverse=True)[:6]
+    )
+    recent_html = f'<ol class="recent-list">{recent_items}</ol>' if recent_items else _empty()
+    ordered_groups = ([("AI 对话", ai_count, "AI 对话", "group")] if ai_count else []) + [
+        (f"项目 · {name}", count, name, "project")
+        for name, count in sorted(project_counts.items(), key=lambda item: (-item[1], item[0]))
+    ]
+    if other_count:
+        ordered_groups.append(("专题与文档", other_count, "", "text"))
+    directory_html = "".join(
+        f'<button class="directory-item" type="button" data-wiki-filter="{_h(filter_value)}" '
+        f'data-wiki-filter-mode="{mode}">'
+        f"<strong>{_h(group)}</strong><span>{count}</span></button>"
+        for group, count, filter_value, mode in ordered_groups
+    )
+    return (
+        '<div class="overview-grid">'
+        + "".join(
+            f'<div class="overview-card"><strong>{_h(label)}</strong><span>{_h(value)}</span></div>'
+            for label, value in values
+        )
+        + '</div><div class="overview-panels">'
+        + '<article class="card overview-panel"><h3>你的 Wiki 目录</h3>'
+        + '<p class="muted">按项目和内容类型整理。完整目录在下方页面树。</p>'
+        + f'<div class="directory-grid">{directory_html}</div></article>'
+        + '<article class="card overview-panel"><h3>最近打开</h3>'
+        + '<div id="recent-opened-list"><p class="muted">还没有打开过页面。</p></div>'
+        + "<h3>最近更新</h3>"
+        + recent_html
+        + "</article></div>"
     )
 
 
 def _sources_html(sources: list[dict[str, Any]], privacy: dict[str, Any]) -> str:
     cards = []
     for source in sources:
+        current_versions = [version for version in source["versions"] if version["current"]]
+        identity_version = current_versions[-1] if current_versions else source["versions"][-1]
         versions = "".join(
             "<tr>"
             f"<td>{version['version_id']}</td><td>{_h(version['title'])}</td>"
-            f"<td>{_h(version['category'])}</td><td>{_h(version['sensitivity'])}</td>"
-            f"<td>{'yes' if version['current'] else 'no'}</td>"
+            f"<td>{_category_label(version['category'])}</td>"
+            f"<td>{_sensitivity_label(version['sensitivity'])}</td>"
+            f"<td>{'是' if version['current'] else '否'}</td>"
             f"<td><code>{_h(str(version['content_sha256'])[:12])}</code></td></tr>"
             for version in source["versions"]
         )
         cards.append(
-            '<article class="card"><h3>Source '
-            f"<code>{_h(str(source['source_id'])[:12])}</code></h3>"
-            "<table><thead><tr><th>Version</th><th>Title</th><th>Category</th>"
-            f"<th>Sensitivity</th><th>Current</th><th>SHA</th></tr></thead><tbody>{versions}"
+            f'<article class="card"><h3>{_h(identity_version["title"])}</h3>'
+            '<details class="source-identity"><summary>来源标识 '
+            f"{_h(_short_identifier(str(source['source_id'])))}</summary>"
+            f"<code>{_h(source['source_id'])}</code></details>"
+            "<table><thead><tr><th>版本</th><th>标题</th><th>类别</th>"
+            f"<th>敏感级别</th><th>当前版本</th><th>内容哈希</th></tr></thead><tbody>{versions}"
             "</tbody></table></article>"
         )
     redacted = (
-        f'<p class="muted">Redacted local-only sources: {privacy["redacted_source_count"]}; '
-        f"versions: {privacy['redacted_version_count']}.</p>"
+        f'<p class="muted">已隐藏的本地来源：{privacy["redacted_source_count"]} 个；'
+        f"版本：{privacy['redacted_version_count']} 个。</p>"
     )
     return redacted + ('<div class="grid">' + "".join(cards) + "</div>" if cards else _empty())
 
@@ -612,13 +832,467 @@ def _sources_html(sources: list[dict[str, Any]], privacy: dict[str, Any]) -> str
 def _pages_html(pages: list[dict[str, Any]]) -> str:
     if not pages:
         return _empty()
-    return (
-        "<ul>"
-        + "".join(
-            f"<li><code>{_h(page['path'])}</code> - {_h(page['title'])}</li>" for page in pages
+    results = []
+    readers = []
+    groups: dict[str, list[str]] = defaultdict(list)
+    ordered_pages = sorted(pages, key=_page_sort_key, reverse=True)
+    for index, page in enumerate(ordered_pages):
+        selected = "true" if index == 0 else "false"
+        hidden = "" if index == 0 else " hidden"
+        target = f"wiki-page-{index}"
+        page_group = _page_group(str(page["title"]), page.get("repositories"))
+        page_project = _page_project(page.get("repositories"))
+        groups[page_group].append(target)
+        display_title = _display_title(str(page["title"]))
+        source_chips = []
+        for item in page["evidence"]:
+            source_title = _display_title(str(item.get("source_title", item["source_id"][:12])))
+            source_chips.append(
+                '<span class="evidence-chip">'
+                f"<strong>{_h(source_title)}</strong>"
+                f"<small>{_category_label(item.get('source_category', 'source'))} · "
+                f"v{_h(item['source_version'])}</small></span>"
+            )
+        sources = "".join(source_chips)
+        metadata, body = _markdown_document(str(page["content"]))
+        body = _without_duplicate_title(body, str(page["title"]))
+        updated = metadata.get("updated", "")
+        context = f"{page_group} · {updated}" if updated else page_group
+        results.append(
+            f'<button class="wiki-result" type="button" data-wiki-target="{target}" '
+            f'data-wiki-key="{_h(page["path"])}" '
+            f'data-wiki-group="{_h(page_group)}" data-wiki-project="{_h(page_project)}" '
+            f'aria-selected="{selected}"><strong>{_h(display_title)}</strong>'
+            f"<small>{_h(context)}</small></button>"
         )
-        + "</ul>"
+        summary = metadata.get("summary", "")
+        summary_html = (
+            f'<p class="page-summary">{_markdown_inline(_display_wiki_text(summary))}</p>'
+            if summary
+            else ""
+        )
+        updated_html = f"<span>更新时间：{_h(updated)}</span>" if updated else ""
+        source_identities = "".join(
+            '<details class="source-identity"><summary>来源标识 '
+            f"{_h(_short_identifier(str(item['source_id'])))}</summary>"
+            f"<code>{_h(item['source_id'])}</code></details>"
+            for item in page["evidence"]
+        )
+        page_meta = (
+            '<details class="page-meta"><summary>查看页面元数据</summary>'
+            '<div class="wiki-meta">'
+            f"<code>{_h(page['path'])}</code>"
+            f'<span class="muted">内容哈希 {_h(str(page["content_sha256"])[:12])}</span>'
+            f"{updated_html}</div>{source_identities}</details>"
+        )
+        outline = _markdown_outline(body, target)
+        readers.append(
+            f'<article class="wiki-page" id="{target}"{hidden}>'
+            f"<h3>{_h(display_title)}</h3>{summary_html}{page_meta}{outline}"
+            f'<div class="wiki-evidence"><span class="muted">依据来源</span>{sources}</div>'
+            f'<div class="wiki-markdown">'
+            f"{_markdown_html(body, heading_prefix=target)}</div></article>"
+        )
+    result_by_target = {f"wiki-page-{index}": result for index, result in enumerate(results)}
+    grouped_results = [
+        f'<details class="wiki-group" data-wiki-group{(" open" if group == "AI 对话" else "")}>'
+        f"<summary>{_h(group)} "
+        f'<span class="muted">· {len(targets)}</span></summary>'
+        + "".join(result_by_target[target] for target in targets)
+        + "</details>"
+        for group, targets in sorted(groups.items())
+    ]
+    return (
+        '<div class="wiki-layout"><aside class="card wiki-list">'
+        '<label for="wiki-search"><strong>Wiki 页面</strong></label>'
+        '<input id="wiki-search" class="wiki-search" type="search" '
+        'placeholder="搜索标题、路径或正文">'
+        '<div id="wiki-results">' + "".join(grouped_results) + "</div>"
+        '<p id="wiki-no-results" class="muted" hidden>没有匹配的 Wiki 页面。</p>'
+        '</aside><div class="card wiki-reader">' + "".join(readers) + "</div></div>"
     )
+
+
+def _page_group(title: str, repositories: list[dict[str, Any]] | None = None) -> str:
+    if title.startswith("Code:") or title.startswith("Code module:"):
+        path = title.split(":", 1)[1].strip()
+        root = path.split("/", 1)[0] or "root"
+        repository_names = sorted(
+            str(repository["name"]) for repository in repositories or [] if repository.get("name")
+        )
+        if repository_names:
+            project = repository_names[0]
+            if len(repository_names) > 1:
+                project += f" +{len(repository_names) - 1}"
+            return f"代码 · {project} · {root}"
+        return f"代码 · {root}"
+    if title.startswith(
+        (
+            "Codex session:",
+            "AI session:",
+            "Chat session:",
+            "Codex 会话：",
+            "Codex 会话:",
+            "会话：",
+            "对话：",
+        )
+    ):
+        return "AI 对话"
+    if ":" in title:
+        return title.split(":", 1)[0].strip() or "其他"
+    return "其他"
+
+
+def _page_project(repositories: list[dict[str, Any]] | None) -> str:
+    names = sorted(
+        str(repository["name"]) for repository in repositories or [] if repository.get("name")
+    )
+    if len(names) == 1:
+        return names[0]
+    return "跨项目" if names else ""
+
+
+def _page_sort_key(page: dict[str, Any]) -> tuple[str, str, str]:
+    metadata, _ = _markdown_document(str(page["content"]))
+    return (metadata.get("updated", ""), str(page["title"]), str(page["path"]))
+
+
+def _short_identifier(value: str, *, head: int = 8, tail: int = 4) -> str:
+    if len(value) <= head + tail + 1:
+        return value
+    suffix = value[-tail:] if tail else ""
+    return f"{value[:head]}…{suffix}"
+
+
+def _display_title(value: str) -> str:
+    for prefix, label in (
+        ("Code module:", "代码模块："),
+        ("Code:", "代码："),
+        ("Codex session:", "Codex 会话："),
+        ("AI session:", "AI 会话："),
+        ("Chat session:", "聊天会话："),
+    ):
+        if value.startswith(prefix):
+            return label + value[len(prefix) :].strip()
+    return value
+
+
+def _display_wiki_text(value: str) -> str:
+    translated_title = _display_title(value)
+    if translated_title != value:
+        return translated_title
+    if value == "Code outline":
+        return "代码结构"
+    if value == "Verified facts":
+        return "已验证事实"
+    for prefix, label in (
+        ("Python code:", "Python 代码："),
+        ("Go code:", "Go 代码："),
+        ("Markdown document:", "Markdown 文档："),
+        ("Shell script:", "Shell 脚本："),
+    ):
+        if value.startswith(prefix):
+            return label + value[len(prefix) :].strip()
+    return value
+
+
+def _without_duplicate_title(markdown: str, title: str) -> str:
+    lines = markdown.splitlines()
+    for index, line in enumerate(lines):
+        if not line.strip():
+            continue
+        if line.strip() == f"# {title}":
+            del lines[index]
+            while index < len(lines) and not lines[index].strip():
+                del lines[index]
+        break
+    return "\n".join(lines)
+
+
+def _markdown_document(markdown: str) -> tuple[dict[str, str], str]:
+    """Drop the small YAML front matter block from the reader body."""
+    if not markdown.startswith("---\n"):
+        return {}, markdown
+    end = markdown.find("\n---\n", 4)
+    if end < 0:
+        return {}, markdown
+    metadata: dict[str, str] = {}
+    for line in markdown[4:end].splitlines():
+        match = re.match(r"^([A-Za-z_][A-Za-z0-9_]*):\s*(.*?)\s*$", line)
+        if match is None:
+            continue
+        value = match.group(2)
+        if len(value) >= 2 and value[0] == value[-1] == '"':
+            value = value[1:-1]
+        metadata[match.group(1)] = value
+    return metadata, markdown[end + len("\n---\n") :]
+
+
+def _markdown_outline(markdown: str, prefix: str) -> str:
+    headings = _markdown_headings(markdown)
+    if not headings:
+        return ""
+    links = "".join(
+        f'<a href="#{prefix}-heading-{index}">{_markdown_inline(_display_wiki_text(text))}</a>'
+        for index, (_, text) in enumerate(headings)
+    )
+    return f'<nav class="page-outline" aria-label="页面结构"><strong>页面结构</strong>{links}</nav>'
+
+
+def _markdown_headings(markdown: str) -> list[tuple[int, str]]:
+    headings: list[tuple[int, str]] = []
+    in_fence = False
+    for raw_line in markdown.splitlines():
+        line = raw_line.rstrip()
+        if re.match(r"^\s*```\s*[\w.+-]*\s*$", line):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        match = re.match(r"^(#{1,6})\s+(.+?)\s*$", line)
+        if match:
+            headings.append((len(match.group(1)), match.group(2)))
+    return headings
+
+
+def _markdown_html(markdown: str, *, heading_prefix: str = "") -> str:
+    output: list[str] = []
+    paragraph: list[str] = []
+    list_kind: str | None = None
+    code_lines: list[str] = []
+    code_language = ""
+    in_fence = False
+    heading_index = 0
+    footnotes = [
+        (match.group(1), match.group(2))
+        for line in markdown.splitlines()
+        if (match := re.match(r"^\[\^([^]]+)\]:\s+(.+)$", line.rstrip())) is not None
+    ]
+    footnote_numbers = {label: index for index, (label, _) in enumerate(footnotes, start=1)}
+
+    def flush_paragraph() -> None:
+        if paragraph:
+            output.append(f"<p>{_markdown_inline(' '.join(paragraph), footnote_numbers)}</p>")
+            paragraph.clear()
+
+    def close_list() -> None:
+        nonlocal list_kind
+        if list_kind is not None:
+            output.append(f"</{list_kind}>")
+            list_kind = None
+
+    def close_fence() -> None:
+        nonlocal in_fence, code_language
+        code = _h("\n".join(code_lines))
+        output.append(
+            f'<pre class="wiki-code"><code class="language-{_h(code_language)}">{code}</code></pre>'
+        )
+        code_lines.clear()
+        code_language = ""
+        in_fence = False
+
+    for raw_line in markdown.splitlines():
+        line = raw_line.rstrip()
+        if in_fence:
+            if line.strip() == "```":
+                close_fence()
+            else:
+                code_lines.append(line)
+            continue
+        fence = re.match(r"^\s*```\s*([\w.+-]*)\s*$", line)
+        if fence:
+            flush_paragraph()
+            close_list()
+            in_fence = True
+            code_language = fence.group(1)
+            continue
+        if not line.strip():
+            flush_paragraph()
+            close_list()
+            continue
+        if re.match(r"^\[\^([^]]+)\]:\s+(.+)$", line):
+            continue
+        heading = re.match(r"^(#{1,6})\s+(.+?)\s*$", line)
+        if heading:
+            flush_paragraph()
+            close_list()
+            level = len(heading.group(1))
+            heading_id = f' id="{heading_prefix}-heading-{heading_index}"' if heading_prefix else ""
+            heading_text = _display_wiki_text(heading.group(2))
+            output.append(
+                f"<h{level}{heading_id}>"
+                f"{_markdown_inline(heading_text, footnote_numbers)}</h{level}>"
+            )
+            heading_index += 1
+            continue
+        bullet = re.match(r"^\s*[-*+]\s+(.+)$", line)
+        numbered = re.match(r"^\s*\d+[.)]\s+(.+)$", line)
+        if bullet or numbered:
+            flush_paragraph()
+            kind = "ul" if bullet else "ol"
+            if list_kind != kind:
+                close_list()
+                output.append(f"<{kind}>")
+                list_kind = kind
+            match = bullet if bullet is not None else numbered
+            assert match is not None
+            item = match.group(1)
+            output.append(f"<li>{_markdown_inline(item, footnote_numbers)}</li>")
+            continue
+        close_list()
+        paragraph.append(line.strip())
+    if in_fence:
+        close_fence()
+    flush_paragraph()
+    close_list()
+    if footnotes:
+        citation_text = "\n".join(
+            f"{number}. {text.replace('`', '')}"
+            for number, (_, text) in enumerate(footnotes, start=1)
+        )
+        output.append(
+            f'<details class="citation-details"><summary>引用详情 · {len(footnotes)} 条</summary>'
+            f"<pre>{_h(citation_text)}</pre></details>"
+        )
+    return "".join(output) or '<p class="muted">Wiki 页面为空。</p>'
+
+
+def _markdown_inline(
+    text: str,
+    footnotes: dict[str, int] | None = None,
+) -> str:
+    text = re.sub(r"https?://[^\s<]+", "[external link]", text)
+    escaped = _h(text)
+    escaped = re.sub(r"\[([^\]]+)\]\(#[^)]+\)", r'<span class="md-link">\1</span>', escaped)
+    escaped = re.sub(r"\[([^\]]+)\]\((?:[^)]+)\)", r'<span class="md-link">\1</span>', escaped)
+    escaped = re.sub(r"`([^`]+)`", r"<code>\1</code>", escaped)
+    escaped = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", escaped)
+    escaped = re.sub(r"(?<!\*)\*([^*]+)\*(?!\*)", r"<em>\1</em>", escaped)
+    if footnotes:
+        for label, number in footnotes.items():
+            reference = _h(f"[^{label}]")
+            escaped = escaped.replace(
+                reference,
+                f'<sup class="citation-ref">[{number}]</sup>',
+            )
+    return escaped
+
+
+def _portal_script() -> str:
+    return """<script>
+const wikiButtons = [...document.querySelectorAll('[data-wiki-target]')];
+const wikiGroups = [...document.querySelectorAll('.wiki-group[data-wiki-group]')];
+const wikiPages = new Map(wikiButtons.map(button => [
+  button.dataset.wikiTarget, document.getElementById(button.dataset.wikiTarget)
+]));
+const wikiSearch = document.getElementById('wiki-search');
+const globalSearch = document.getElementById('global-search');
+const recentOpened = document.getElementById('recent-opened-list');
+const recentKey = 'memoryforge-recent-wiki-v1';
+function selectWiki(button) {
+  wikiButtons.forEach(item => item.setAttribute('aria-selected', String(item === button)));
+  wikiPages.forEach((page, id) => { page.hidden = id !== button.dataset.wikiTarget; });
+  recordRecent(button.dataset.wikiKey);
+}
+wikiButtons.forEach(button => button.addEventListener('click', () => selectWiki(button)));
+function applyWikiSearch(value, mode = 'text') {
+  const query = value.trim().toLocaleLowerCase();
+  wikiButtons.forEach(button => {
+    const page = wikiPages.get(button.dataset.wikiTarget);
+    const searchable = `${button.textContent}\n${page.textContent}`.toLocaleLowerCase();
+    let matches = searchable.includes(query);
+    if (mode === 'project') matches = button.dataset.wikiProject === value;
+    if (mode === 'group') matches = button.dataset.wikiGroup === value;
+    button.hidden = !matches;
+  });
+  wikiGroups.forEach(group => {
+    const groupButtons = [...group.querySelectorAll('[data-wiki-target]')];
+    group.hidden = !groupButtons.some(button => !button.hidden);
+  });
+  const visible = wikiButtons.filter(button => !button.hidden);
+  document.getElementById('wiki-no-results').hidden = visible.length !== 0;
+  if (visible.length) {
+    const selected = visible.find(button => button.getAttribute('aria-selected') === 'true');
+    const next = selected || visible[0];
+    selectWiki(next);
+    const group = next.closest('.wiki-group');
+    if (group) group.open = true;
+  }
+  if (!visible.length) wikiPages.forEach(page => { page.hidden = true; });
+}
+wikiSearch?.addEventListener('input', event => {
+  if (globalSearch) globalSearch.value = event.target.value;
+  applyWikiSearch(event.target.value);
+});
+function jumpToSearch() {
+  if (!wikiSearch || !globalSearch) return;
+  wikiSearch.value = globalSearch.value;
+  applyWikiSearch(globalSearch.value);
+  document.getElementById('wiki')?.scrollIntoView({ behavior: 'smooth' });
+  wikiSearch.focus({ preventScroll: true });
+}
+globalSearch?.addEventListener('input', event => applyWikiSearch(event.target.value));
+globalSearch?.addEventListener('keydown', event => {
+  if (event.key === 'Enter') { event.preventDefault(); jumpToSearch(); }
+});
+document.getElementById('global-search-button')?.addEventListener('click', jumpToSearch);
+document.querySelectorAll('[data-wiki-filter]').forEach(item => {
+  item.addEventListener('click', () => {
+    const value = item.dataset.wikiFilter || '';
+    const mode = item.dataset.wikiFilterMode || 'text';
+    if (wikiSearch) wikiSearch.value = value;
+    if (globalSearch) globalSearch.value = value;
+    applyWikiSearch(value, mode);
+    document.getElementById('wiki')?.scrollIntoView({ behavior: 'smooth' });
+  });
+});
+document.addEventListener('keydown', event => {
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+    event.preventDefault(); globalSearch?.focus();
+  }
+});
+function readRecent() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(recentKey) || '[]');
+    return Array.isArray(parsed)
+      ? parsed.filter(key => wikiButtons.some(button => button.dataset.wikiKey === key))
+      : [];
+  } catch (_) { return []; }
+}
+function recordRecent(id) {
+  try {
+    const ids = [id, ...readRecent().filter(item => item !== id)].slice(0, 8);
+    localStorage.setItem(recentKey, JSON.stringify(ids));
+    renderRecent(ids);
+  } catch (_) {}
+}
+function renderRecent(ids = readRecent()) {
+  if (!recentOpened) return;
+  recentOpened.replaceChildren();
+  if (!ids.length) {
+    const empty = document.createElement('p');
+    empty.className = 'muted'; empty.textContent = '还没有打开过页面。';
+    recentOpened.appendChild(empty); return;
+  }
+  ids.forEach(id => {
+    const source = wikiButtons.find(button => button.dataset.wikiKey === id);
+    if (!source) return;
+    const recent = document.createElement('button');
+    recent.className = 'recent-opened'; recent.type = 'button';
+    const title = document.createElement('strong');
+    title.textContent = source.querySelector('strong')?.textContent || 'Wiki 页面';
+    const path = document.createElement('small');
+    path.textContent = source.querySelector('small')?.textContent || '';
+    recent.append(title, path);
+    recent.addEventListener('click', () => {
+      selectWiki(source);
+      document.getElementById('wiki')?.scrollIntoView({ behavior: 'smooth' });
+    });
+    recentOpened.appendChild(recent);
+  });
+}
+renderRecent();
+</script>"""
 
 
 def _diff_html(changeset: dict[str, Any] | None) -> str:
@@ -637,15 +1311,16 @@ def _lifecycle_html(changeset: dict[str, Any] | None) -> str:
     states = []
     for name, state in lifecycle.items():
         state_class = "good" if state else "bad"
-        state_label = "recorded" if state else "missing"
+        state_label = "已记录" if state else "缺失"
         states.append(
-            f'<div class="card"><strong>{_h(name)}</strong><br>'
+            f'<div class="card"><strong>{_lifecycle_label(name)}</strong><br>'
             f'<span class="{state_class}">{state_label}</span></div>'
         )
     return (
-        f'<p><code>{_h(changeset["changeset_id"])}</code></p><div class="grid">'
-        + "".join(states)
-        + "</div>"
+        '<details class="source-identity"><summary>变更集标识 '
+        f"{_h(_short_identifier(str(changeset['changeset_id'])))}</summary>"
+        f"<code>{_h(changeset['changeset_id'])}</code></details>"
+        '<div class="grid">' + "".join(states) + "</div>"
     )
 
 
@@ -664,13 +1339,13 @@ def _query_html(query: dict[str, Any] | None, rejection: dict[str, Any]) -> str:
         )
         answered = (
             f"<h3>{_h(query['question'])}</h3><p>{_h(query['answer'])}</p>"
-            f"<ol>{trace}</ol><h3>Citations</h3><ul>{citations}</ul>"
+            f"<h3>路由链路</h3><ol>{trace}</ol><h3>引用来源</h3><ul>{citations}</ul>"
         )
     return (
         answered
-        + "<h3>Deterministic refusal</h3>"
+        + "<h3>确定性拒答</h3>"
         + f"<p><code>{_h(rejection['question'])}</code>: "
-        + f"<strong>{_h(rejection['status'])}</strong></p>"
+        + f"<strong>{_status_label(rejection['status'])}</strong></p>"
     )
 
 
@@ -679,10 +1354,11 @@ def _metrics_html(benchmark: dict[str, Any]) -> str:
     if not metrics:
         return _empty()
     rows = "".join(
-        f"<tr><td>{_h(key)}</td><td>{_h(value)}</td></tr>" for key, value in metrics.items()
+        f"<tr><td>{_metric_label(key)}</td><td>{_h(value)}</td></tr>"
+        for key, value in metrics.items()
     )
     return (
-        f"<p>{_h(benchmark['suite'])}; cases: {benchmark['case_count']}</p>"
+        f"<p>{_h(benchmark['suite'])}；案例数：{benchmark['case_count']}</p>"
         f"<table><tbody>{rows}</tbody></table>"
     )
 
@@ -701,9 +1377,9 @@ def _failures_html(benchmark: dict[str, Any]) -> str:
     if not failures and not abstentions:
         return _empty()
     return (
-        '<h3>Failures</h3><div class="grid">'
+        '<h3>失败案例</h3><div class="grid">'
         + (failures or _empty())
-        + '</div><h3>Correct abstentions</h3><div class="grid">'
+        + '</div><h3>正确拒答</h3><div class="grid">'
         + (abstentions or _empty())
         + "</div>"
     )
@@ -747,7 +1423,7 @@ def _architecture_svg(nodes: list[dict[str, str]], edges: list[dict[str, str]]) 
         for node in nodes
     )
     return (
-        f'<svg viewBox="0 0 900 {height}" role="img" aria-label="Code architecture">'
+        f'<svg viewBox="0 0 900 {height}" role="img" aria-label="代码架构">'
         '<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="7" refY="3" '
         'orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#71d1b3"/></marker></defs>'
         + "".join(edge_svg)
@@ -1012,9 +1688,56 @@ def _allowlist(source: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
     return {key: source[key] for key in keys if key in source}
 
 
+def _category_label(value: object) -> str:
+    return _ui_label(
+        value,
+        {
+            "refs": "引用",
+            "code": "代码",
+            "conversation": "对话",
+            "chat": "对话",
+            "folder": "文件夹",
+            "document": "文档",
+            "concept": "概念",
+            "source": "来源",
+        },
+    )
+
+
+def _sensitivity_label(value: object) -> str:
+    return _ui_label(value, {"public": "公开", "private": "私有", "local_only": "仅本地"})
+
+
+def _lifecycle_label(value: object) -> str:
+    return _ui_label(
+        value,
+        {"proposed": "已提议", "reviewed": "已评审", "approved": "已审批", "applied": "已应用"},
+    )
+
+
+def _metric_label(value: object) -> str:
+    return _ui_label(
+        value,
+        {
+            "answer_accuracy": "回答正确率",
+            "citation_grounding_accuracy": "引用依据正确率",
+            "abstention_accuracy": "拒答正确率",
+            "citation_coverage": "引用覆盖率",
+        },
+    )
+
+
+def _status_label(value: object) -> str:
+    return _ui_label(value, {"unknown": "未知", "answered": "已回答", "rejected": "已拒答"})
+
+
+def _ui_label(value: object, mapping: dict[str, str]) -> str:
+    return mapping.get(str(value), str(value))
+
+
 def _h(value: object) -> str:
     return html.escape("" if value is None else str(value), quote=True)
 
 
 def _empty() -> str:
-    return '<p class="muted">No public evidence available.</p>'
+    return '<p class="muted">暂无公开证据。</p>'

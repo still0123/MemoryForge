@@ -304,6 +304,79 @@ def test_feishu_resume_command_adds_saved_context_to_followup(tmp_path: Path, mo
     assert SessionStore(workspace, "oc_chat").context_session_id() == "oc_source"
 
 
+def test_feishu_does_not_reuse_an_unknown_answer_as_context(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workspace = _applied_workspace(tmp_path, monkeypatch)
+    question = "TransformPageToOffsetLimit的作用是什么"
+    SessionStore(workspace, "oc_chat").append(
+        question,
+        "不知道",
+        [],
+        model_safe=False,
+    )
+    captured: list[tuple[str, str]] = []
+
+    def fake_answer(_workspace: Path, query: str, **kwargs: object) -> dict[str, object]:
+        captured.append((query, str(kwargs.get("conversation_context", ""))))
+        return {
+            "status": "unknown",
+            "answer": "不知道",
+            "citations": [],
+            "wiki_pages": [],
+            "source_id": None,
+            "source_version": None,
+            "locator": None,
+            "quote": None,
+        }
+
+    monkeypatch.setattr("memoryforge.feishu_bot.answer_question", fake_answer)
+
+    reply = reply_to_feishu_text(workspace, question, session_id="oc_chat")
+
+    assert captured == [(question, "")]
+    assert reply["content"]["text"] == (
+        "当前信息不足，无法可靠回答。请补充项目名、文件路径或完整函数/模块名；"
+        "也可发送 /project 查看并选择项目。"
+    )
+
+
+def test_feishu_asks_for_project_when_a_module_name_is_ambiguous(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workspace = _applied_workspace(tmp_path, monkeypatch)
+    repositories = (
+        GitRepositoryRecord(
+            repository_id="a" * 64,
+            name="efs-mgr",
+            checkout_path="/code/efs-mgr",
+            registered_at=datetime.now(),
+        ),
+        GitRepositoryRecord(
+            repository_id="b" * 64,
+            name="filenas-mgr",
+            checkout_path="/code/filenas-mgr",
+            registered_at=datetime.now(),
+        ),
+    )
+    monkeypatch.setattr(
+        "memoryforge.feishu_bot.find_code_module_repositories",
+        lambda _workspace, module_path: repositories if module_path == "sm" else (),
+    )
+    monkeypatch.setattr(
+        "memoryforge.feishu_bot.answer_question",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("must ask first")),
+    )
+
+    reply = reply_to_feishu_text(workspace, "sm文件夹什么作用", session_id="oc_chat")
+
+    assert reply["content"]["text"] == (
+        "多个项目都包含 `sm` 模块。请先选择：/project efs-mgr、/project filenas-mgr"
+    )
+
+
 def test_feishu_service_replies_as_bot_with_message_idempotency(monkeypatch) -> None:
     captured: list[list[str]] = []
 

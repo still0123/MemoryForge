@@ -31,7 +31,7 @@ release_candidate = _module(
 
 
 def test_release_builder_reads_version_from_current_source() -> None:
-    assert release_builder._source_module_version() == "0.3.0"
+    assert release_builder._source_module_version() == "0.4.0"
 
 
 def test_release_builder_reserves_output_before_building(
@@ -181,9 +181,9 @@ def test_sdist_clean_room_passes_constraints_to_isolated_pip(
     ) -> str:
         commands.append((command, environment))
         if "importlib.metadata,json,memoryforge" in " ".join(command):
-            return json.dumps({"version": "0.3.0", "import_path": str(import_path)})
+            return json.dumps({"version": "0.4.0", "import_path": str(import_path)})
         if command[-2:] == ["memoryforge", "--version"]:
-            return "0.3.0\n"
+            return "0.4.0\n"
         return ""
 
     constraints = tmp_path / "constraints.txt"
@@ -191,7 +191,7 @@ def test_sdist_clean_room_passes_constraints_to_isolated_pip(
     monkeypatch.setattr(release_builder, "_run", fake_run)
 
     release_builder._check_sdist_clean_room(
-        tmp_path / "memoryforge-0.3.0.tar.gz",
+        tmp_path / "memoryforge-0.4.0.tar.gz",
         tmp_path / "clean",
         constraints=constraints,
         cwd=tmp_path,
@@ -206,9 +206,9 @@ def test_sdist_clean_room_passes_constraints_to_isolated_pip(
 @pytest.mark.parametrize(
     "source",
     (
-        '__version__ = "0.3.0"\n__version__ = "9.9.9"\n',
-        '__version__: str = "0.3.0"\n',
-        '__version__ = "0.3.0"\ndel __version__\n',
+        '__version__ = "0.4.0"\n__version__ = "9.9.9"\n',
+        '__version__: str = "0.4.0"\n',
+        '__version__ = "0.4.0"\ndel __version__\n',
     ),
 )
 def test_release_builder_rejects_ambiguous_source_versions(
@@ -283,7 +283,7 @@ def test_benchmark_summary_binds_registry_to_declared_commit() -> None:
         summary_builder.validator.build_benchmark_summary(
             registry,
             registry_summary,
-            package_version="0.3.0",
+            package_version="0.4.0",
             memoryforge_commit=summary_builder._git("rev-parse", "HEAD"),
         )
 
@@ -350,14 +350,14 @@ def test_workspace_release_drill_binds_cli_to_current_source(
 
     def run(command, **kwargs):
         captured.update(kwargs)
-        return workspace_drill.subprocess.CompletedProcess(command, 0, "0.3.0\n", "")
+        return workspace_drill.subprocess.CompletedProcess(command, 0, "0.4.0\n", "")
 
     monkeypatch.setattr(workspace_drill.subprocess, "run", run)
     monkeypatch.setenv("PYTHONHOME", "/private/tmp/untrusted")
     monkeypatch.setenv("COV_CORE_SOURCE", "memoryforge")
     monkeypatch.setenv("COVERAGE_FILE", "/private/tmp/untrusted-coverage")
 
-    assert workspace_drill._cli("--version") == "0.3.0\n"
+    assert workspace_drill._cli("--version") == "0.4.0\n"
     assert captured["env"]["PYTHONPATH"] == str(workspace_drill.SOURCE_ROOT)
     assert captured["env"]["PYTHONNOUSERSITE"] == "1"
     assert "PYTHONHOME" not in captured["env"]
@@ -444,10 +444,10 @@ def test_workspace_release_drill_measures_showcase_privacy(tmp_path: Path) -> No
 def test_release_builder_rejects_nested_artifacts(tmp_path: Path) -> None:
     clean = tmp_path / "clean.tar.gz"
     dirty = tmp_path / "dirty.tar.gz"
-    _tar(clean, "memoryforge-0.3.0/pyproject.toml")
+    _tar(clean, "memoryforge-0.4.0/pyproject.toml")
     _tar(
         dirty,
-        "memoryforge-0.3.0/demo/results/artifacts/candidate/memoryforge.whl",
+        "memoryforge-0.4.0/demo/results/artifacts/candidate/memoryforge.whl",
     )
 
     release_builder._validate_sdist(clean)

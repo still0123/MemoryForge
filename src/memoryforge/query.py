@@ -20,6 +20,7 @@ from memoryforge.wiki_facts import parse_page_citations as _page_citations
 from memoryforge.workspace import (
     find_applied_code_symbol_facts,
     find_applied_page_paths,
+    find_applied_wiki_fact_page_paths,
     is_applied_source_version,
     is_public_source_version,
     read_source_excerpt,
@@ -73,6 +74,7 @@ _CAPABILITY_MARKERS = ("支持", "提供", "包括", "用于", "负责")
 _CLEANUP_RESULT_MARKERS = ("一旦", "不会", "不是", "自动", "skip")
 _CLEANUP_OBJECT_MARKERS = ("清理", "删除", "delete", "skip")
 _CODE_QUERY_EXPANSIONS = {
+    "连接": {"登录", "链路"},
     "模块": {"module", "modules"},
     "子模": {"child", "children"},
     "入口": {"entry", "entries", "point", "points", "handler", "handlers"},
@@ -176,7 +178,7 @@ def answer_question(
     use_section_routes = (
         prefer_environment_assignments
         or prefer_failure_facts
-        or any(marker in question for marker in ("子模块", "字段", "属性", "方法"))
+        or any(marker in question for marker in ("子模块", "字段", "属性", "方法", "作用"))
     )
     prefer_code_modules = (
         "文件夹" in question
@@ -584,8 +586,10 @@ def _answer_messages(
                 "and exported code symbol names as answerable evidence: translate and summarize "
                 "those names into a concise capability list instead of returning unknown. Do not "
                 "invent implementation details. A section named Identity only describes the "
-                "module path and aliases; it never means authentication. Prefer facts that answer "
-                "the question's condition "
+                "module path and aliases; it never means authentication. "
+                "When asked what a code symbol does, summarize direct conditions, assignments, "
+                "return expressions, and calls listed under that symbol's section; a prose "
+                "description is not required. Prefer facts that answer the question's condition "
                 "or conclusion "
                 "over broad background facts that only share the same topic. For a yes-or-no "
                 "question, answer directly and do not return a Markdown table when a concise "
@@ -853,6 +857,7 @@ def _support_score(
         matching = _local_english_matching_terms(
             core_terms,
             citation,
+            include_section=_page_path in code_page_paths,
             enabled=True,
         )
         covered_terms.update(matching)
@@ -1063,8 +1068,19 @@ def _candidate_pages(
                 )
     strict_fts_paths: tuple[str, ...] = ()
     relaxed_fts_paths: tuple[str, ...] = ()
+    fact_paths: tuple[str, ...] = ()
     index_path = workspace_root / ".memoryforge" / "index.sqlite"
     if safe_index is None or (index_path.is_file() and not index_path.is_symlink()):
+        cjk_terms = sorted(
+            term for term in question_terms if _CJK.fullmatch(term) and len(term) > 1
+        )
+        if (workspace_root / "raw").is_dir():
+            fact_paths = find_applied_wiki_fact_page_paths(
+                workspace_root,
+                cjk_terms,
+                limit=max_pages,
+                repository_id=repository_id,
+            )
         strict_fts_paths = find_applied_page_paths(
             workspace_root,
             question,
@@ -1079,11 +1095,18 @@ def _candidate_pages(
                 repository_id=repository_id,
                 require_all_terms=False,
             )
+    if fact_paths:
+        trace.append({"level": "L0", "artifact": "Applied Wiki fact index"})
     if strict_fts_paths or relaxed_fts_paths:
         trace.append({"level": "L0", "artifact": "SQLite FTS5 applied-source index"})
     strict_pages = [
         page
         for path in strict_fts_paths
+        if (page := _safe_wiki_page(workspace_root, workspace_root / path)) is not None
+    ]
+    fact_pages = [
+        page
+        for path in fact_paths
         if (page := _safe_wiki_page(workspace_root, workspace_root / path)) is not None
     ]
     ranked_index = sorted(
@@ -1109,7 +1132,7 @@ def _candidate_pages(
         for path in exact_symbol_page_paths
         if (page := _safe_wiki_page(workspace_root, workspace_root / path)) is not None
     ]
-    ordered_pages = (*module_pages, *strict_pages)
+    ordered_pages = (*module_pages, *fact_pages, *strict_pages)
     exact_code_pages = _exact_code_pages(
         workspace_root,
         question,
@@ -1117,8 +1140,9 @@ def _candidate_pages(
         repository_id=repository_id,
     )
     ordered_pages = (*exact_symbol_pages, *exact_code_pages, *ordered_pages)
-    if (exact_symbol_pages or exact_code_pages) and any(
-        marker in question for marker in ("方法", "字段", "属性", "函数")
+    if (exact_symbol_pages or exact_code_pages) and (
+        not _is_code_relation_question(question)
+        or any(marker in question for marker in ("方法", "字段", "属性", "函数"))
     ):
         return list(dict.fromkeys((*exact_symbol_pages, *exact_code_pages)))[:max_pages]
     if prefer_index_routes and not any(_CJK.fullmatch(term) for term in question_terms):
@@ -1178,8 +1202,6 @@ def _exact_code_pages(
     repository_id: str | None,
 ) -> tuple[Path, ...]:
     """Route explicit CamelCase symbols and code paths to code pages first."""
-    if not any(marker in question for marker in ("方法", "字段", "属性", "函数")):
-        return ()
     if not (workspace_root / ".memoryforge" / "index.sqlite").is_file():
         return ()
     identifiers = tuple(
@@ -1194,26 +1216,38 @@ def _exact_code_pages(
         )
     )
     pages: list[Path] = []
+    use_index = any(marker in question for marker in ("方法", "字段", "属性", "函数"))
+    allowed_paths = (
+        set(repository_page_paths(workspace_root, repository_id))
+        if repository_id is not None
+        else None
+    )
     for identifier in identifiers[:3]:
         symbol_pattern = re.compile(rf"(?<![A-Za-z0-9_]){re.escape(identifier)}(?![A-Za-z0-9_])")
-        for path in find_applied_page_paths(
-            workspace_root,
-            identifier,
-            limit=max_pages,
-            repository_id=repository_id,
-            require_all_terms=False,
-        ):
-            page = _safe_wiki_page(workspace_root, workspace_root / path)
-            if page is None or not _is_code_file_page(page):
-                continue
-            if (
-                symbol_pattern.search(_code_fact_text(page.read_text(encoding="utf-8")))
-                and page not in pages
+        if use_index:
+            for path in find_applied_page_paths(
+                workspace_root,
+                identifier,
+                limit=max_pages,
+                repository_id=repository_id,
+                require_all_terms=False,
             ):
-                pages.append(page)
+                page = _safe_wiki_page(workspace_root, workspace_root / path)
+                if page is None or not _is_code_file_page(page):
+                    continue
+                if (
+                    symbol_pattern.search(_code_fact_text(page.read_text(encoding="utf-8")))
+                    and page not in pages
+                ):
+                    pages.append(page)
         for file_path in sorted((workspace_root / "wiki" / "pages").rglob("*.md")):
             page = _safe_wiki_page(workspace_root, file_path)
             if page is None or not _is_code_file_page(page) or page in pages:
+                continue
+            if (
+                allowed_paths is not None
+                and str(page.relative_to(workspace_root)) not in allowed_paths
+            ):
                 continue
             if symbol_pattern.search(_code_fact_text(page.read_text(encoding="utf-8"))):
                 pages.append(page)

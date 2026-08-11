@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from contextlib import suppress
 from pathlib import Path
 from typing import Any
@@ -20,7 +21,11 @@ from memoryforge.sessions import (
     rewrite_query,
     save_turn,
 )
-from memoryforge.workspace import list_git_checkouts
+from memoryforge.workspace import find_code_module_repositories, list_git_checkouts
+
+_MODULE_SCOPE_QUESTION = re.compile(
+    r"(?<![A-Za-z0-9_./-])(?P<path>[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*)\s*(?:文件夹|模块)"
+)
 
 
 class FeishuBotError(MemoryForgeError):
@@ -71,16 +76,19 @@ def _session_answer(
             repository_id = repository_id or context_store.project_id()
             turns.extend(context_store.load(allow_local=allow_local))
         turns.extend(current_store.load(allow_local=allow_local))
+        turns = [turn for turn in turns if turn["model_safe"] or turn["citations"]]
         turns = turns[-3:]
-    result = answer_question(
-        workspace,
-        rewrite_query(text, turns),
-        max_pages=max_pages,
-        provider=provider,
-        allow_local=allow_local,
-        repository_id=repository_id,
-        conversation_context=render_context(turns),
-    )
+    result = _module_scope_answer(workspace, text, repository_id)
+    if result is None:
+        result = answer_question(
+            workspace,
+            rewrite_query(text, turns),
+            max_pages=max_pages,
+            provider=provider,
+            allow_local=allow_local,
+            repository_id=repository_id,
+            conversation_context=render_context(turns),
+        )
     save_turn(
         workspace,
         session_id,
@@ -93,6 +101,30 @@ def _session_answer(
         with suppress(MemoryForgeError, SourceValidationError, OSError):
             remember_session(workspace, current_store.session_id)
     return result
+
+
+def _module_scope_answer(
+    workspace: Path,
+    text: str,
+    repository_id: str | None,
+) -> AskPayload | None:
+    if repository_id is not None or (match := _MODULE_SCOPE_QUESTION.search(text)) is None:
+        return None
+    module_path = match.group("path")
+    repositories = find_code_module_repositories(workspace, module_path)
+    if len(repositories) < 2:
+        return None
+    choices = "、".join(f"/project {repository.name}" for repository in repositories)
+    return {
+        "status": "unknown",
+        "answer": f"多个项目都包含 `{module_path}` 模块。请先选择：{choices}",
+        "citations": [],
+        "wiki_pages": [],
+        "source_id": None,
+        "source_version": None,
+        "locator": None,
+        "quote": None,
+    }
 
 
 def _control_reply(
@@ -254,6 +286,11 @@ def handle_lark_cli_event(
 
 def _text_reply(workspace: Path, result: AskPayload) -> dict[str, Any]:
     text = result["answer"]
+    if result["status"] == "unknown" and text == "不知道":
+        text = (
+            "当前信息不足，无法可靠回答。请补充项目名、文件路径或完整函数/模块名；"
+            "也可发送 /project 查看并选择项目。"
+        )
     titles = [_page_title(workspace / path) for path in result["wiki_pages"]]
     if titles := [title for title in titles if title]:
         text += "\n\n来源：" + "、".join(dict.fromkeys(titles))

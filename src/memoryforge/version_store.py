@@ -6,9 +6,12 @@ import os
 import re
 import stat
 import subprocess
+import tarfile
 import tempfile
 from contextlib import suppress
+from io import BytesIO
 from pathlib import Path, PurePosixPath
+from typing import Any, cast
 
 from memoryforge.errors import WorkspaceError
 
@@ -131,7 +134,7 @@ class GitVersionStore:
         completed = self._run(["rev-parse", "--verify", "HEAD"], check=False)
         if completed.returncode != 0:
             return None
-        return completed.stdout.strip()
+        return cast(str, completed.stdout).strip()
 
     def tracks(self, paths: tuple[str, ...]) -> bool:
         completed = self._run(["ls-tree", "-r", "--name-only", "HEAD"], check=False)
@@ -155,7 +158,23 @@ class GitVersionStore:
         if self._run(["cat-file", "-e", f"{commit}:{path}"], check=False).returncode != 0:
             return None
         completed = self._run(["show", f"{commit}:{path}"], check=True)
-        return completed.stdout
+        return cast(str, completed.stdout)
+
+    def read_wiki_texts_at(self, commit: str) -> dict[str, str]:
+        """Read all stable Wiki pages from one fixed Commit in one Git operation."""
+        self._require_commit(commit)
+        completed = self._run(
+            ["archive", "--format=tar", commit, "--", "wiki/pages"],
+            check=True,
+            text=False,
+        )
+        archive_bytes = bytes(completed.stdout)
+        with tarfile.open(fileobj=BytesIO(archive_bytes), mode="r:") as archive:
+            return {
+                member.name: extracted.read().decode("utf-8")
+                for member in archive.getmembers()
+                if member.isfile() and (extracted := archive.extractfile(member)) is not None
+            }
 
     def is_ancestor(self, ancestor: str, descendant: str) -> bool:
         """Return whether two validated Commits form the expected history chain."""
@@ -266,7 +285,8 @@ class GitVersionStore:
         extra_config: tuple[str, ...] = (),
         allow_missing_repository: bool = False,
         index_file: Path | None = None,
-    ) -> subprocess.CompletedProcess[str]:
+        text: bool = True,
+    ) -> subprocess.CompletedProcess[Any]:
         self.validate_metadata(allow_missing=allow_missing_repository)
         command = ["git"]
         for value in extra_config:
@@ -301,11 +321,21 @@ class GitVersionStore:
             command,
             check=False,
             capture_output=True,
-            text=True,
+            text=text,
             env=environment,
         )
         if check and completed.returncode != 0:
-            detail = completed.stderr.strip() or completed.stdout.strip()
+            stderr = (
+                completed.stderr.decode()
+                if isinstance(completed.stderr, bytes)
+                else completed.stderr
+            )
+            stdout = (
+                completed.stdout.decode()
+                if isinstance(completed.stdout, bytes)
+                else completed.stdout
+            )
+            detail = stderr.strip() or stdout.strip()
             raise WorkspaceError(f"Git command failed: {detail}")
         self.validate_metadata()
         return completed

@@ -1528,8 +1528,8 @@ def validate_registry(path: Path = DEFAULT_REGISTRY) -> dict[str, object]:
 def validate_registry_payload(registry: dict[str, Any]) -> dict[str, object]:
     if type(registry.get("schema_version")) is not int or registry.get("schema_version") != 1:
         raise ValueError("unsupported benchmark registry schema")
-    if registry.get("package_release_target") != "0.3.0":
-        raise ValueError("benchmark registry must target package 0.3.0")
+    if registry.get("package_release_target") != "0.4.0":
+        raise ValueError("benchmark registry must target package 0.4.0")
     suites = registry.get("suites")
     if not isinstance(suites, list) or not suites:
         raise ValueError("benchmark registry requires suites")

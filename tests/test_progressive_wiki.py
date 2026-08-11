@@ -78,17 +78,22 @@ def test_ingest_creates_typed_pages_with_frontmatter_and_an_index(
     assert "Checkout Postmortem" in index
 
 
-def test_conversation_page_prefers_recent_unverified_notes(
+def test_conversation_page_keeps_older_search_anchors_and_prefers_recent_summary(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
     runner, workspace = _initialized_workspace(tmp_path, monkeypatch)
     messages = []
     for index in range(6):
+        answer = (
+            "Historical status 0. 跳板机登录链路是本机 Kerberos、jump.byted.org、物理机。"
+            if index == 0
+            else f"Historical status {index}."
+        )
         messages.extend(
             (
                 f"## User\n\nWhat is status {index}?",
-                f"## Assistant (unverified)\n\nHistorical status {index}.",
+                f"## Assistant (unverified)\n\n{answer}",
             )
         )
     messages.extend(
@@ -133,7 +138,7 @@ def test_conversation_page_prefers_recent_unverified_notes(
     assert "User prompts are search clues only" in page
     assert page.index("Candidate 19 is accepted") < page.index("What is current status?")
     assert page.index("Candidate 19 is accepted") < page.index("func currentStatus")
-    assert "Historical status 0" not in page
+    assert "Historical status 0" in page
     assert "Candidate 19 is accepted" in index
 
     applied = runner.invoke(
@@ -156,6 +161,15 @@ def test_conversation_page_prefers_recent_unverified_notes(
     assert memory["recent_memories"][0]["role"] == "Assistant conclusions"
     assert "Historical status 0" not in memory["startup_context"]
     assert memory["recent_memories"][0]["citation"]["wiki_page"].startswith("wiki/pages/")
+
+    remembered = runner.invoke(
+        app,
+        ["ask", "跳板机是怎么连接的", "--workspace", str(workspace)],
+    )
+    assert remembered.exit_code == 0, remembered.output
+    remembered_payload = json.loads(remembered.stdout)
+    assert remembered_payload["status"] == "answered"
+    assert "jump.byted.org" in remembered_payload["answer"]
 
     rebuilt = runner.invoke(
         app,

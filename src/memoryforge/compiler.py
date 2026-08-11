@@ -92,8 +92,10 @@ _CONVERSATION_ROLE_HEADING = re.compile(
 # Markdown lists are compiled as separate facts. Keep enough facts to retain
 # later sections of a normal README instead of truncating after the quick-start.
 _LOCAL_FACT_LIMIT = 48
-_CONVERSATION_TURN_LIMIT = 8
+_CONVERSATION_TURN_LIMIT = 128
+_CONVERSATION_RECENT_TURN_LIMIT = 8
 _CONVERSATION_FACTS_PER_TURN = 3
+_CONVERSATION_EARLIER_FACTS_PER_TURN = 1
 _CONVERSATION_FACT_CHAR_LIMIT = 600
 
 
@@ -1937,17 +1939,22 @@ def _conversation_facts(content: str) -> list[SourceFact]:
                 ],
             )
         )
-    recent = turns[-_CONVERSATION_TURN_LIMIT:]
+    retained = turns[-_CONVERSATION_TURN_LIMIT:]
     facts: list[SourceFact] = []
-    for recency, (role, turn_facts) in enumerate(reversed(recent)):
+    for recency, (role, turn_facts) in enumerate(reversed(retained)):
         label = f"{'Latest' if recency == 0 else 'Earlier'} {role.lower()} message"
+        fact_limit = (
+            _CONVERSATION_FACTS_PER_TURN
+            if recency < _CONVERSATION_RECENT_TURN_LIMIT
+            else _CONVERSATION_EARLIER_FACTS_PER_TURN
+        )
         facts.extend(
             SourceFact(
                 quote=fact.quote,
                 start=fact.start,
                 section_path=(label,),
             )
-            for fact in turn_facts
+            for fact in turn_facts[:fact_limit]
         )
     return facts
 

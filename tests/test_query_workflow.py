@@ -136,6 +136,67 @@ def test_code_page_answers_cjk_paraphrase_from_two_english_facts(tmp_path: Path)
     assert "limit = int(pageSize)" in result["answer"]
 
 
+def test_exact_symbol_routes_without_code_kind_keyword(tmp_path: Path, monkeypatch) -> None:
+    pages = tmp_path / "wiki" / "pages"
+    pages.mkdir(parents=True)
+    (tmp_path / ".memoryforge").mkdir()
+    (tmp_path / ".memoryforge/index.sqlite").touch()
+    source_id = "a" * 64
+    target_page = (
+        "---\n"
+        'title: "Code: common/standard_page.go"\n'
+        "type: concept\n"
+        'summary: "Pagination offset and limit conversion."\n'
+        f'sources: ["{source_id}"]\n'
+        "---\n"
+        "# Pagination\n\n"
+        "## Verified symbols\n\n"
+        "### TransformPageToOffsetLimit\n\n"
+        "- `func TransformPageToOffsetLimit(pageNumber, pageSize int32)` [^source-1]\n"
+        "- `pageSize = 10` when the supplied size is invalid. [^source-2]\n"
+        "- `offset = int((pageNumber - 1) * pageSize)` and `limit = int(pageSize)`. "
+        "[^source-3]\n\n"
+        f"[^source-1]: source `{source_id}` · revision `1` · `chars:0-58`\n"
+        f"[^source-2]: source `{source_id}` · revision `1` · `chars:59-126`\n"
+        f"[^source-3]: source `{source_id}` · revision `1` · `chars:127-194`\n"
+    )
+    (tmp_path / "wiki/INDEX.md").write_text(
+        "# Knowledge Index\n\n- [Tests](pages/unrelated.md) — TestTransformPageToOffsetLimit.\n",
+        encoding="utf-8",
+    )
+    (pages / "target.md").write_text(target_page, encoding="utf-8")
+    (pages / "unrelated.md").write_text(
+        _wiki_page("func TestTransformPageToOffsetLimit"),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(query_module, "find_applied_page_paths", lambda *_args, **_kwargs: ())
+
+    class StubProvider:
+        def answer_with_evidence(self, messages: object) -> tuple[str, tuple[int, ...]]:
+            assert isinstance(messages, list)
+            assert "what a code symbol does" in messages[0]["content"]
+            facts = json.loads(messages[1]["content"])["facts"]
+            assert all("TestTransformPageToOffsetLimit" not in fact["quote"] for fact in facts)
+            indexes = tuple(
+                fact["index"]
+                for fact in facts
+                if "offset =" in fact["quote"] or "pageSize =" in fact["quote"]
+            )
+            assert indexes
+            return "它把分页参数转换为数据库查询使用的 offset 和 limit。", indexes
+
+    result = query_module.answer_question(
+        tmp_path,
+        "TransformPageToOffsetLimit 的作用是什么？",
+        provider=StubProvider(),  # type: ignore[arg-type]
+        allow_local=True,
+    )
+
+    assert result["status"] == "answered"
+    assert result["answer"] == "它把分页参数转换为数据库查询使用的 offset 和 limit。"
+    assert result["wiki_pages"] == ["wiki/pages/target.md"]
+
+
 def test_ask_does_not_relax_top_summary_without_matching_negation(tmp_path: Path) -> None:
     pages = tmp_path / "wiki" / "pages"
     pages.mkdir(parents=True)

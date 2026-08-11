@@ -1,5 +1,19 @@
 # Changelog
 
+<!-- memoryforge-release-claim: version=0.4.0; status=released; supported_platforms=macos; macos_passed=656; linux_status=not_rerun; windows_status=not_verified; release_verification=passed -->
+
+## v0.4.0 — 2026-08-11
+
+- 将静态 Showcase 收敛为本地只读 Wiki Portal：增加概览、项目目录、全文筛选、最近页面、
+  Markdown 阅读器、来源版本和引用依据；仍为自包含 HTML，不引入前端框架或服务端。
+- 会话记忆保留更长历史搜索锚点，同时继续优先最近八轮；未知回答不再污染后续飞书会话上下文。
+- 中文事实索引和精确符号路由覆盖“作用是什么”等代码行为问法；多仓同名模块先要求选择项目。
+- README 更新公开夹具截图；新增 `docs/LOCAL_WIKI_PORTAL_SPEC.md` 固定本地只读与隐私边界。
+- 完整 macOS 本地门禁 `656 passed`；公开 30 题 Answer 96.7%、Source recall@3 96.2%，
+  Citation grounding 与 Abstention accuracy 100%。Linux 未在本版本重跑，Windows 未验证。
+- 功能冻结：后续仅接收 Bug、错误回答和文档修复；不加入向量库、知识图谱、公网部署、
+  多用户、群聊或多 Agent。
+
 <!-- memoryforge-release-claim: version=0.3.0; status=released; supported_platforms=macos+linux; active_candidate=19; platform_gate_candidate=19; platform_gate_status=accepted; review_status=accepted; macos_passed=642; linux_passed=639; linux_skipped=3; windows_status=not_verified; release_verification=passed -->
 
 ## v0.3.0 — 2026-08-10

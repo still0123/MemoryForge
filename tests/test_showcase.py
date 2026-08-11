@@ -9,7 +9,7 @@ import pytest
 from typer.testing import CliRunner
 
 from memoryforge.cli import app
-from memoryforge.showcase import ShowcaseBuildError, build_showcase
+from memoryforge.showcase import ShowcaseBuildError, _markdown_html, build_showcase
 
 
 def test_showcase_builds_complete_public_snapshot_without_mutating_workspace(
@@ -43,6 +43,13 @@ def test_showcase_builds_complete_public_snapshot_without_mutating_workspace(
     )
     assert "Private launch plan" not in json.dumps(payload)
     assert payload["wiki"]["pages"]
+    assert all(page["content"] for page in payload["wiki"]["pages"])
+    assert all(page["evidence"] for page in payload["wiki"]["pages"])
+    assert any(
+        repository["name"] == "repo"
+        for page in payload["wiki"]["pages"]
+        for repository in page["repositories"]
+    )
     assert payload["changeset"]["lifecycle"] == {
         "proposed": True,
         "reviewed": True,
@@ -61,6 +68,7 @@ def test_showcase_builds_complete_public_snapshot_without_mutating_workspace(
     assert payload["architecture"]["edges"]
     for section in (
         "sources",
+        "overview",
         "wiki",
         "changeset-diff",
         "lifecycle",
@@ -70,10 +78,56 @@ def test_showcase_builds_complete_public_snapshot_without_mutating_workspace(
         "architecture",
     ):
         assert f'id="{section}"' in html
+    assert '<html lang="zh-CN">' in html
+    assert "我的技术 Wiki" in html
     assert "Private launch plan" not in html
     assert "http://" not in html
     assert "https://" not in html
+    assert 'id="wiki-search"' in html
+    assert 'data-wiki-target="wiki-page-0"' in html
+    assert 'data-wiki-key="wiki/pages/' in html
+    assert "搜索标题、路径或正文" in html
+    assert 'class="wiki-markdown"' in html
+    assert 'class="wiki-group"' in html
+    assert "依据来源" in html
+    assert "Code: src/service.py" in html
+    assert "代码：src/service.py" in html
+    assert "最近更新" in html
+    assert "你的 Wiki 目录" in html
+    assert "项目 · repo" in html
+    assert 'data-wiki-filter="repo"' in html
+    assert 'data-wiki-filter-mode="project"' in html
+    assert 'data-wiki-project="repo"' in html
+    assert "querySelectorAll('.wiki-group[data-wiki-group]')" in html
+    assert "const group = next.closest('.wiki-group');" in html
+    assert "页面结构" in html
+    assert 'class="page-meta"' in html
+    assert 'class="citation-details"' in html
+    assert "src.service" in html
     assert _tree_sha256(workspace) == before
+
+
+def test_showcase_collapses_full_citation_identifiers() -> None:
+    source_id = "177b02138e4d3a723f4ec02aa1768378a45e9708c999160646da571b241c753d"
+    markdown = (
+        f"Verified fact [^source-1-177b0213]\n\n"
+        f"[^source-1-177b0213]: source `{source_id}` · revision `7` · `chars:10-20`\n"
+    )
+
+    rendered = _markdown_html(markdown, heading_prefix="wiki-page-0")
+
+    assert '<sup class="citation-ref">[1]</sup>' in rendered
+    assert '<details class="citation-details">' in rendered
+    assert source_id in rendered
+    assert rendered.index("citation-details") < rendered.index(source_id)
+
+
+def test_showcase_localizes_generated_code_headings() -> None:
+    rendered = _markdown_html("# Code: src/service.py\n\n## Code outline\n\n## Verified facts\n")
+
+    assert "代码：src/service.py" in rendered
+    assert "代码结构" in rendered
+    assert "已验证事实" in rendered
 
 
 def test_showcase_rebuild_is_deterministic_and_replaces_only_owned_output(
