@@ -89,7 +89,20 @@ def test_release_candidate_reproducibility_requires_two_matching_builds(
     }
 
 
-def test_release_candidate_versions_read_both_artifact_metadata(tmp_path: Path) -> None:
+def test_release_candidate_versions_read_both_artifact_metadata(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "pyproject.toml").write_text(
+        '[project]\nversion = "0.3.0"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(benchmark, "REPO_ROOT", project)
+    monkeypatch.setattr(benchmark, "_source_module_version", lambda: "0.3.0")
+    monkeypatch.setattr(benchmark, "_cli_version", lambda: "0.3.0")
+    monkeypatch.setattr(benchmark, "_git", lambda *_args: "1" * 40)
     provenance = _release_artifacts(tmp_path)
     path = tmp_path / "release-provenance.json"
     _write_release_artifacts(tmp_path, provenance)
