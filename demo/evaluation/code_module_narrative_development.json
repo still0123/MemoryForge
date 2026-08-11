@@ -1,0 +1,172 @@
+{
+  "schema_version": 1,
+  "name": "Code module narrative development",
+  "fixture": "demo/fixtures/code_wiki_project",
+  "label_scope": "manually_verified_module_responsibility_and_call_flow_expectations",
+  "acceptance": {
+    "citation_grounding": 1.0,
+    "minimum_fact_coverage": 0.8
+  },
+  "cases": [
+    {
+      "id": "py-purpose",
+      "category": "module_responsibility",
+      "module_path": "py",
+      "question": "py 模块的主要用途是什么？",
+      "expected_source_paths": ["py/app.py", "py/helpers.py"],
+      "required_terms": ["value", "normalize"]
+    },
+    {
+      "id": "py-child-roles",
+      "category": "module_responsibility",
+      "module_path": "py",
+      "question": "py/app 与 py/helpers 如何分工？",
+      "expected_source_paths": ["py/app.py", "py/helpers.py"],
+      "required_terms": ["app", "helpers"]
+    },
+    {
+      "id": "py-local-entry",
+      "category": "module_responsibility",
+      "module_path": "py",
+      "question": "py 模块处理本地值的主要入口是什么？",
+      "expected_source_paths": ["py/app.py"],
+      "required_terms": ["run_local"]
+    },
+    {
+      "id": "py-imported-entry",
+      "category": "module_responsibility",
+      "module_path": "py",
+      "question": "py 模块调用规范化能力的入口是什么？",
+      "expected_source_paths": ["py/app.py"],
+      "required_terms": ["run_imported"]
+    },
+    {
+      "id": "py-dependency",
+      "category": "module_responsibility",
+      "module_path": "py",
+      "question": "py/app 的核心模块依赖是什么？",
+      "expected_source_paths": ["py/app.py"],
+      "required_terms": ["helpers", "normalize"]
+    },
+    {
+      "id": "go-purpose",
+      "category": "module_responsibility",
+      "module_path": "go",
+      "question": "go 模块负责什么？",
+      "expected_source_paths": ["go/meter/model.go", "go/meter/service.go"],
+      "required_terms": ["Meter"]
+    },
+    {
+      "id": "go-constructor-entry",
+      "category": "module_responsibility",
+      "module_path": "go",
+      "question": "go 模块创建 Meter 的入口是什么？",
+      "expected_source_paths": ["go/meter/model.go"],
+      "required_terms": ["NewMeter"]
+    },
+    {
+      "id": "go-meter-operations",
+      "category": "module_responsibility",
+      "module_path": "go",
+      "question": "Meter 的核心操作有哪些？",
+      "expected_source_paths": ["go/meter/model.go", "go/meter/service.go"],
+      "required_terms": ["Record", "Reset"]
+    },
+    {
+      "id": "ts-purpose",
+      "category": "module_responsibility",
+      "module_path": "ts",
+      "question": "ts 模块的主要职责是什么？",
+      "expected_source_paths": ["ts/helper.ts", "ts/service.ts"],
+      "required_terms": ["Service", "helper"]
+    },
+    {
+      "id": "ts-child-roles",
+      "category": "module_responsibility",
+      "module_path": "ts",
+      "question": "ts/service 与 ts/helper 如何分工？",
+      "expected_source_paths": ["ts/helper.ts", "ts/service.ts"],
+      "required_terms": ["service", "helper"]
+    },
+    {
+      "id": "py-local-flow",
+      "category": "call_flow",
+      "module_path": "py",
+      "question": "run_local 的调用流程是什么？",
+      "expected_source_paths": ["py/app.py"],
+      "required_terms": ["run_local", "local"]
+    },
+    {
+      "id": "py-imported-flow",
+      "category": "call_flow",
+      "module_path": "py",
+      "question": "run_imported 如何完成规范化？",
+      "expected_source_paths": ["py/app.py", "py/helpers.py"],
+      "required_terms": ["run_imported", "normalize"]
+    },
+    {
+      "id": "py-normalize-flow",
+      "category": "call_flow",
+      "module_path": "py",
+      "question": "normalize 如何处理输入值？",
+      "expected_source_paths": ["py/helpers.py"],
+      "required_terms": ["strip"]
+    },
+    {
+      "id": "go-record-flow",
+      "category": "call_flow",
+      "module_path": "go",
+      "question": "Meter.Record 的关键调用流程是什么？",
+      "expected_source_paths": ["go/meter/service.go"],
+      "required_terms": ["helper", "Reset"]
+    },
+    {
+      "id": "go-use-flow",
+      "category": "call_flow",
+      "module_path": "go",
+      "question": "Use 如何操作 Meter？",
+      "expected_source_paths": ["go/meter/service.go"],
+      "required_terms": ["Use", "Reset"]
+    },
+    {
+      "id": "go-construction-flow",
+      "category": "call_flow",
+      "module_path": "go",
+      "question": "NewMeter 的构造流程是什么？",
+      "expected_source_paths": ["go/meter/model.go"],
+      "required_terms": ["NewMeter", "Meter"]
+    },
+    {
+      "id": "ts-greet-flow",
+      "category": "call_flow",
+      "module_path": "ts",
+      "question": "Service.greet 如何处理输入？",
+      "expected_source_paths": ["ts/service.ts", "ts/helper.ts"],
+      "required_terms": ["greet", "helper"]
+    },
+    {
+      "id": "ts-run-construction",
+      "category": "call_flow",
+      "module_path": "ts",
+      "question": "run 如何创建服务对象？",
+      "expected_source_paths": ["ts/service.ts"],
+      "required_terms": ["run", "Service"]
+    },
+    {
+      "id": "ts-run-greet-flow",
+      "category": "call_flow",
+      "module_path": "ts",
+      "question": "run 到 greet 的调用链是什么？",
+      "expected_source_paths": ["ts/service.ts"],
+      "required_terms": ["run", "greet"]
+    },
+    {
+      "id": "ts-helper-flow",
+      "category": "call_flow",
+      "module_path": "ts",
+      "question": "helper 如何规范化字符串？",
+      "expected_source_paths": ["ts/helper.ts"],
+      "required_terms": ["trim"]
+    }
+  ]
+}

@@ -1000,16 +1000,23 @@ def ingest(
 ) -> None:
     if not pending:
         _exit_with_safe_error(ValueError("ingest currently requires --pending"))
-    if code_wiki is not None and (source or llm or allow_local_llm):
-        _exit_with_safe_error(
-            ValueError("--code-wiki cannot be combined with --source or LLM options")
-        )
+    if code_wiki is not None and source:
+        _exit_with_safe_error(ValueError("--code-wiki cannot be combined with --source"))
+    if code_wiki is not None and llm and not allow_local_llm:
+        _exit_with_safe_error(ValueError("--code-wiki --llm requires --allow-local-llm"))
     try:
         opened = Workspace.open(workspace)
         if code_wiki is not None:
             snapshot = build_code_index(opened, code_wiki)
             plan = build_module_plan(snapshot)
-            compilation = compile_code_wiki(opened, snapshot, plan)
+            provider = OpenAICompatibleProvider(ProviderConfig.from_environment()) if llm else None
+            compilation = compile_code_wiki(
+                opened,
+                snapshot,
+                plan,
+                provider=provider,
+                allow_local=allow_local_llm,
+            )
         else:
             provider = OpenAICompatibleProvider(ProviderConfig.from_environment()) if llm else None
             compilation = compile_pending_sources(

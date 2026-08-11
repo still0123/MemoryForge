@@ -6,15 +6,20 @@ import hashlib
 import json
 import posixpath
 import re
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
+from typing import Literal
 
 from memoryforge.code_models import (
     ArchitectureEdge,
     ArchitectureGraph,
+    CitedStatement,
     CodeIndexSnapshot,
     CodeLocation,
     CodeRelation,
     CodeSymbol,
+    CodeSymbolKind,
+    ModuleNarrative,
     ModuleNode,
     ModulePlan,
 )
@@ -27,6 +32,7 @@ from memoryforge.models import (
     ChangeSetValidation,
 )
 from memoryforge.module_planner import build_architecture_graph, build_module_plan
+from memoryforge.provider import OpenAICompatibleProvider
 from memoryforge.workspace import (
     Workspace,
     candidate_page_sources,
@@ -36,6 +42,22 @@ from memoryforge.workspace import (
 )
 
 _LOCATOR = re.compile(r"^chars:(?P<start>\d+)-(?P<end>\d+)$")
+_NARRATIVE_SCHEMA_VERSION = 1
+_MAX_NARRATIVE_CITATIONS = 64
+_MAX_NARRATIVE_SYMBOLS = 24
+_MAX_NARRATIVE_EDGES = 24
+_MAX_SOURCE_EXCERPT_CHARS = 600
+
+
+@dataclass(frozen=True)
+class _NarrativeCitation:
+    index: int
+    owner_module_id: str
+    location: CodeLocation
+    fact: str
+    excerpt: str
+    symbol_id: str | None = None
+    relation_id: str | None = None
 
 
 class CodeWikiCompilationError(ValueError):
@@ -47,11 +69,17 @@ def compile_code_wiki(
     snapshot: CodeIndexSnapshot,
     plan: ModulePlan,
     architecture: ArchitectureGraph | None = None,
+    provider: OpenAICompatibleProvider | None = None,
+    allow_local: bool = False,
 ) -> Compilation | None:
     """Compile one canonical code snapshot without writing the stable Wiki."""
 
     root = workspace.root if isinstance(workspace, Workspace) else Path(workspace)
     opened = Workspace.open_readonly(root)
+    if provider is not None and not allow_local:
+        raise CodeWikiCompilationError(
+            "code module synthesis requires explicit local LLM authorization"
+        )
     _validate_inputs(opened, snapshot, plan, architecture)
     graph = architecture or build_architecture_graph(snapshot, plan)
     source_texts = _validate_code_evidence(opened, snapshot)
@@ -78,6 +106,21 @@ def compile_code_wiki(
                 module,
                 snapshot,
             )
+    if provider is not None:
+        _synthesize_module_narratives(
+            opened,
+            all_candidates,
+            snapshot,
+            plan,
+            graph,
+            modules,
+            modules_by_id,
+            symbols_by_id,
+            relations_by_id,
+            outgoing,
+            source_texts,
+            provider,
+        )
 
     planned_paths = set(all_candidates)
     archived_paths = _stale_code_wiki_paths(opened, snapshot.repository_id) - planned_paths
@@ -187,6 +230,565 @@ def compile_code_wiki(
             ),
         ),
         candidate_files=candidate_files,
+    )
+
+
+def _synthesize_module_narratives(
+    workspace: Workspace,
+    all_candidates: dict[str, str],
+    snapshot: CodeIndexSnapshot,
+    plan: ModulePlan,
+    graph: ArchitectureGraph,
+    modules: tuple[ModuleNode, ...],
+    modules_by_id: dict[str, ModuleNode],
+    symbols_by_id: dict[str, CodeSymbol],
+    relations_by_id: dict[str, CodeRelation],
+    outgoing: dict[str, tuple[ArchitectureEdge, ...]],
+    source_texts: dict[str, str],
+    provider: OpenAICompatibleProvider,
+) -> None:
+    symbol_module_ids = {
+        symbol_id: module.module_id for module in modules for symbol_id in module.symbol_ids
+    }
+    fact_hashes: dict[str, str] = {}
+    root_module_ids = {module.module_id for module in plan.modules}
+    for module in _postorder_modules(plan.modules):
+        input_hash = _module_narrative_input_hash(
+            module,
+            symbols_by_id,
+            outgoing.get(module.module_id, ()),
+            fact_hashes,
+        )
+        fact_hashes[module.module_id] = input_hash
+        if not module.children:
+            continue
+
+        stable = _stable_text(workspace.root / module.wiki_path)
+        if stable is not None and _can_reuse_module_narrative(
+            stable,
+            snapshot,
+            module,
+            input_hash,
+        ):
+            all_candidates[module.wiki_path] = stable
+            continue
+
+        subtree_ids = _subtree_module_ids(module)
+        edges = tuple(
+            sorted(
+                (edge for edge in graph.edges if edge.source_module_id in subtree_ids),
+                key=lambda edge: (
+                    edge.type.value,
+                    modules_by_id[edge.source_module_id].path,
+                    modules_by_id[edge.target_module_id].path,
+                ),
+            )
+        )
+        citations = _module_narrative_citations(
+            module,
+            subtree_ids,
+            edges,
+            symbols_by_id,
+            relations_by_id,
+            symbol_module_ids,
+            source_texts,
+        )
+        base = all_candidates[module.wiki_path]
+        if not citations:
+            all_candidates[module.wiki_path] = _with_synthesis_metadata(
+                base,
+                status="fallback",
+                input_hash=input_hash,
+                snapshot=snapshot,
+            )
+            continue
+
+        messages = _module_narrative_messages(
+            module,
+            module.module_id in root_module_ids,
+            edges,
+            citations,
+            modules_by_id,
+            symbols_by_id,
+        )
+        try:
+            narrative = provider.summarize_code_module(messages)
+        except ValueError:
+            all_candidates[module.wiki_path] = _with_synthesis_metadata(
+                base,
+                status="fallback",
+                input_hash=input_hash,
+                snapshot=snapshot,
+            )
+            continue
+        if not _narrative_citations_are_owned(narrative, citations, subtree_ids):
+            all_candidates[module.wiki_path] = _with_synthesis_metadata(
+                base,
+                status="fallback",
+                input_hash=input_hash,
+                snapshot=snapshot,
+            )
+            continue
+
+        content, used_citations = _render_module_narrative(
+            base,
+            module,
+            module.module_id in root_module_ids,
+            narrative,
+            edges,
+            citations,
+            modules_by_id,
+            symbols_by_id,
+        )
+        all_candidates[module.wiki_path] = _with_synthesis_metadata(
+            content,
+            status="synthesized",
+            input_hash=input_hash,
+            snapshot=snapshot,
+            citations=used_citations,
+        )
+
+
+def _module_narrative_input_hash(
+    module: ModuleNode,
+    symbols_by_id: dict[str, CodeSymbol],
+    outgoing: tuple[ArchitectureEdge, ...],
+    child_hashes: dict[str, str],
+) -> str:
+    payload = {
+        "schema_version": _NARRATIVE_SCHEMA_VERSION,
+        "module": {
+            "module_id": module.module_id,
+            "path": module.path,
+            "title": module.title,
+            "summary": module.summary,
+        },
+        "symbols": [
+            {
+                "symbol_id": symbol.symbol_id,
+                "signature_sha256": symbol.signature_sha256,
+                "body_sha256": symbol.body_sha256,
+                "source_version": symbol.location.source_version,
+            }
+            for symbol in (symbols_by_id[symbol_id] for symbol_id in module.symbol_ids)
+        ],
+        "edges": [edge.model_dump(mode="json") for edge in outgoing],
+        "children": [
+            {
+                "module_id": child.module_id,
+                "fact_hash": child_hashes[child.module_id],
+            }
+            for child in module.children
+        ],
+    }
+    encoded = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _can_reuse_module_narrative(
+    content: str,
+    snapshot: CodeIndexSnapshot,
+    module: ModuleNode,
+    input_hash: str,
+) -> bool:
+    fields = _frontmatter_fields(content)
+    return (
+        fields.get("repository_id") == snapshot.repository_id
+        and fields.get("module_id") == module.module_id
+        and fields.get("synthesis_input_sha256") == input_hash
+        and fields.get("synthesis_status") in {"synthesized", "fallback"}
+    )
+
+
+def _module_narrative_citations(
+    module: ModuleNode,
+    subtree_ids: set[str],
+    edges: tuple[ArchitectureEdge, ...],
+    symbols_by_id: dict[str, CodeSymbol],
+    relations_by_id: dict[str, CodeRelation],
+    symbol_module_ids: dict[str, str],
+    source_texts: dict[str, str],
+) -> tuple[_NarrativeCitation, ...]:
+    citations: list[_NarrativeCitation] = []
+    seen_facts: set[tuple[str, str]] = set()
+
+    def add_symbol(symbol: CodeSymbol) -> None:
+        key = ("symbol", symbol.symbol_id)
+        owner_module_id = symbol_module_ids[symbol.symbol_id]
+        if (
+            key in seen_facts
+            or owner_module_id not in subtree_ids
+            or len(citations) >= _MAX_NARRATIVE_CITATIONS
+        ):
+            return
+        seen_facts.add(key)
+        citations.append(
+            _NarrativeCitation(
+                index=len(citations),
+                owner_module_id=owner_module_id,
+                location=symbol.location,
+                fact=(
+                    f"symbol {symbol.qualified_name} ({symbol.kind.value}): "
+                    f"{' '.join(symbol.signature.split())}"
+                ),
+                excerpt=_bounded_excerpt(source_texts, symbol.location),
+                symbol_id=symbol.symbol_id,
+            )
+        )
+
+    def add_relation(relation: CodeRelation) -> None:
+        key = ("relation", relation.relation_id)
+        owner_module_id = symbol_module_ids[relation.source_symbol_id]
+        if (
+            key in seen_facts
+            or owner_module_id not in subtree_ids
+            or len(citations) >= _MAX_NARRATIVE_CITATIONS
+        ):
+            return
+        seen_facts.add(key)
+        source_symbol = symbols_by_id[relation.source_symbol_id]
+        target_symbol = symbols_by_id[relation.target_symbol_id]
+        location = relation.evidence[0]
+        citations.append(
+            _NarrativeCitation(
+                index=len(citations),
+                owner_module_id=owner_module_id,
+                location=location,
+                fact=(
+                    f"relation {source_symbol.qualified_name} -> "
+                    f"{target_symbol.qualified_name} ({relation.type.value})"
+                ),
+                excerpt=_bounded_excerpt(source_texts, location),
+                relation_id=relation.relation_id,
+            )
+        )
+
+    subtree_symbols = tuple(
+        sorted(
+            (
+                symbol
+                for symbol in symbols_by_id.values()
+                if symbol_module_ids[symbol.symbol_id] in subtree_ids
+            ),
+            key=lambda symbol: (
+                symbol.location.relative_path,
+                symbol.location.start_line,
+                symbol.qualified_name,
+            ),
+        )
+    )
+    for child in module.children:
+        child_ids = _subtree_module_ids(child)
+        representative = next(
+            (
+                symbol
+                for symbol in subtree_symbols
+                if symbol_module_ids[symbol.symbol_id] in child_ids
+            ),
+            None,
+        )
+        if representative is not None:
+            add_symbol(representative)
+    for symbol_id in module.symbol_ids:
+        add_symbol(symbols_by_id[symbol_id])
+    for edge in edges:
+        for relation_id in edge.relation_ids:
+            add_relation(relations_by_id[relation_id])
+    for symbol in subtree_symbols:
+        add_symbol(symbol)
+    return tuple(citations)
+
+
+def _module_narrative_messages(
+    module: ModuleNode,
+    is_repository_root: bool,
+    edges: tuple[ArchitectureEdge, ...],
+    citations: tuple[_NarrativeCitation, ...],
+    modules_by_id: dict[str, ModuleNode],
+    symbols_by_id: dict[str, CodeSymbol],
+) -> list[dict[str, str]]:
+    selected_symbols = [
+        symbols_by_id[citation.symbol_id]
+        for citation in citations
+        if citation.symbol_id is not None
+    ][:_MAX_NARRATIVE_SYMBOLS]
+    payload = {
+        "module": {
+            "title": module.title,
+            "path": module.path,
+            "summary": module.summary,
+            "is_repository_root": is_repository_root,
+        },
+        "children": [
+            {
+                "title": child.title,
+                "path": child.path,
+                "summary": child.summary,
+            }
+            for child in module.children
+        ],
+        "symbols": [
+            {
+                "qualified_name": symbol.qualified_name,
+                "kind": symbol.kind.value,
+                "signature": " ".join(symbol.signature.split()),
+            }
+            for symbol in selected_symbols
+        ],
+        "architecture_edges": [
+            {
+                "source_module": modules_by_id[edge.source_module_id].path,
+                "target_module": modules_by_id[edge.target_module_id].path,
+                "type": edge.type.value,
+                "relation_count": len(edge.relation_ids),
+            }
+            for edge in edges[:_MAX_NARRATIVE_EDGES]
+        ],
+        "citations": [
+            {
+                "index": citation.index,
+                "source_path": citation.location.relative_path,
+                "fact": citation.fact,
+                "source_excerpt": citation.excerpt,
+            }
+            for citation in citations
+        ],
+    }
+    return [
+        {
+            "role": "system",
+            "content": (
+                "Summarize only the supplied deterministic code facts. Return one JSON object "
+                "with exactly purpose, responsibilities, and key_flows. purpose is a cited "
+                "statement object; responsibilities and key_flows are non-empty arrays of cited "
+                "statement objects. Every cited statement has exactly text and citation_indexes, "
+                "and citation_indexes contains one or more valid zero-based indexes from the "
+                "provided citations. Do not invent symbols, relations, module paths, or behavior. "
+                "Do not emit Markdown. Reply in concise Chinese. For a repository root, purpose "
+                "describes repository use, responsibilities cover architecture and core modules, "
+                "and key_flows cover major data flow."
+            ),
+        },
+        {
+            "role": "user",
+            "content": json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+        },
+    ]
+
+
+def _narrative_citations_are_owned(
+    narrative: ModuleNarrative,
+    citations: tuple[_NarrativeCitation, ...],
+    subtree_ids: set[str],
+) -> bool:
+    statements = (
+        narrative.purpose,
+        *narrative.responsibilities,
+        *narrative.key_flows,
+    )
+    return all(
+        index < len(citations) and citations[index].owner_module_id in subtree_ids
+        for statement in statements
+        for index in statement.citation_indexes
+    )
+
+
+def _render_module_narrative(
+    base: str,
+    module: ModuleNode,
+    is_repository_root: bool,
+    narrative: ModuleNarrative,
+    edges: tuple[ArchitectureEdge, ...],
+    citations: tuple[_NarrativeCitation, ...],
+    modules_by_id: dict[str, ModuleNode],
+    symbols_by_id: dict[str, CodeSymbol],
+) -> tuple[str, tuple[_NarrativeCitation, ...]]:
+    lines = ["## 模块职责", ""]
+    used_indexes: set[int] = set()
+    if is_repository_root:
+        lines.extend(["### 仓库用途", ""])
+    _append_narrative_statement(lines, narrative.purpose, citations, used_indexes)
+    if is_repository_root:
+        lines.extend(["", "### 整体架构与核心模块", ""])
+    for statement in narrative.responsibilities:
+        _append_narrative_statement(lines, statement, citations, used_indexes)
+
+    entry_citations = [
+        citation
+        for citation in citations
+        if citation.symbol_id is not None
+        and symbols_by_id[citation.symbol_id].kind
+        in {
+            CodeSymbolKind.CLASS,
+            CodeSymbolKind.FUNCTION,
+            CodeSymbolKind.INTERFACE,
+            CodeSymbolKind.METHOD,
+            CodeSymbolKind.STRUCT,
+        }
+    ][:8]
+    if entry_citations:
+        lines.extend(["", "### 主要入口", ""])
+        for citation in entry_citations:
+            symbol = symbols_by_id[citation.symbol_id or ""]
+            used_indexes.add(citation.index)
+            lines.append(
+                f"- `{symbol.qualified_name}`: "
+                f"`{_escape_inline_code(' '.join(symbol.signature.split()))}` "
+                f"{_narrative_reference(citation)}"
+            )
+
+    lines.extend(["", "## 子模块分工", ""])
+    for child in module.children:
+        child_ids = _subtree_module_ids(child)
+        child_citation = next(
+            (item for item in citations if item.owner_module_id in child_ids),
+            None,
+        )
+        if child_citation is None:
+            continue
+        used_indexes.add(child_citation.index)
+        lines.append(
+            f"- [{child.title}]({_relative_link(module.wiki_path, child.wiki_path)}): "
+            f"{child.summary} {_narrative_reference(child_citation)}"
+        )
+
+    lines.extend(["", "## 核心流程", ""])
+    if is_repository_root:
+        lines.extend(["### 主要数据流", ""])
+    for statement in narrative.key_flows:
+        _append_narrative_statement(lines, statement, citations, used_indexes)
+
+    relation_citations = {
+        citation.relation_id: citation for citation in citations if citation.relation_id is not None
+    }
+    dependency_lines: list[str] = []
+    for edge in edges[:_MAX_NARRATIVE_EDGES]:
+        edge_citation = next(
+            (
+                relation_citations.get(relation_id)
+                for relation_id in edge.relation_ids
+                if relation_citations.get(relation_id) is not None
+            ),
+            None,
+        )
+        if edge_citation is None:
+            continue
+        used_indexes.add(edge_citation.index)
+        source = modules_by_id[edge.source_module_id].path
+        target = modules_by_id[edge.target_module_id].path
+        dependency_lines.append(
+            f"- `{source}` → `{target}` ({edge.type.value}, "
+            f"{len(edge.relation_ids)} relations) {_narrative_reference(edge_citation)}"
+        )
+    lines.extend(["", "## 依赖关系", "", *dependency_lines])
+
+    used_citations = tuple(citations[index] for index in sorted(used_indexes))
+    lines.extend(["", "## 依据来源", ""])
+    for citation in used_citations:
+        lines.append(
+            f"[^{_narrative_label(citation)}]: source `{citation.location.source_id}` · "
+            f"revision `{citation.location.source_version}` · "
+            f"`{citation.location.locator}`"
+        )
+    return base.rstrip() + "\n\n" + "\n".join(lines) + "\n", used_citations
+
+
+def _append_narrative_statement(
+    lines: list[str],
+    statement: CitedStatement,
+    citations: tuple[_NarrativeCitation, ...],
+    used_indexes: set[int],
+) -> None:
+    indexes = statement.citation_indexes
+    used_indexes.update(indexes)
+    references = " ".join(_narrative_reference(citations[index]) for index in indexes)
+    lines.append(f"- {_escape_narrative_text(statement.text)} {references}")
+
+
+def _with_synthesis_metadata(
+    content: str,
+    *,
+    status: Literal["synthesized", "fallback"],
+    input_hash: str,
+    snapshot: CodeIndexSnapshot,
+    citations: tuple[_NarrativeCitation, ...] = (),
+) -> str:
+    updates = {
+        "synthesis_status": status,
+        "synthesis_input_sha256": input_hash,
+    }
+    if status == "synthesized":
+        source_ids = tuple(sorted({citation.location.source_id for citation in citations}))
+        updates["citation_sources"] = json.dumps(source_ids, ensure_ascii=False)
+        updates["citation_source_versions"] = json.dumps(
+            {source_id: snapshot.source_versions[source_id] for source_id in source_ids},
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    return _update_frontmatter(content, updates)
+
+
+def _update_frontmatter(content: str, updates: dict[str, str]) -> str:
+    if not content.startswith("---\n"):
+        raise CodeWikiCompilationError("code module page is missing frontmatter")
+    closing = content.find("\n---\n", 4)
+    if closing < 0:
+        raise CodeWikiCompilationError("code module page frontmatter is not closed")
+    remaining = dict(updates)
+    lines = []
+    for line in content[4:closing].splitlines():
+        key, separator, _value = line.partition(":")
+        if separator and key.strip() in remaining:
+            name = key.strip()
+            lines.append(f"{name}: {remaining.pop(name)}")
+        else:
+            lines.append(line)
+    lines.extend(f"{key}: {value}" for key, value in remaining.items())
+    return "---\n" + "\n".join(lines) + content[closing:]
+
+
+def _postorder_modules(modules: tuple[ModuleNode, ...]) -> tuple[ModuleNode, ...]:
+    ordered: list[ModuleNode] = []
+
+    def collect(module: ModuleNode) -> None:
+        for child in module.children:
+            collect(child)
+        ordered.append(module)
+
+    for module in modules:
+        collect(module)
+    return tuple(ordered)
+
+
+def _subtree_module_ids(module: ModuleNode) -> set[str]:
+    return {item.module_id for item in (module, *_flatten_modules(module.children))}
+
+
+def _bounded_excerpt(texts: dict[str, str], location: CodeLocation) -> str:
+    return " ".join(_excerpt(texts, location).split())[:_MAX_SOURCE_EXCERPT_CHARS]
+
+
+def _narrative_label(citation: _NarrativeCitation) -> str:
+    return f"narrative-{citation.index + 1}"
+
+
+def _narrative_reference(citation: _NarrativeCitation) -> str:
+    return f"[^{_narrative_label(citation)}]"
+
+
+def _escape_narrative_text(value: str) -> str:
+    return (
+        " ".join(value.split())
+        .replace("\\", "\\\\")
+        .replace("[", "\\[")
+        .replace("]", "\\]")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
     )
 
 

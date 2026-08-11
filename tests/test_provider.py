@@ -7,6 +7,7 @@ from urllib.request import Request
 import pytest
 from pydantic import ValidationError
 
+from memoryforge.code_models import ModuleNarrative
 from memoryforge.models import CompilationPlan, PageChange, TopicGroup
 from memoryforge.provider import (
     OpenAICompatibleProvider,
@@ -26,6 +27,14 @@ def _page_change() -> dict[str, object]:
         "body": "# Cache design\n\nThe service uses a local cache.",
         "source_ids": [SOURCE_ID],
         "citations": [{"source_id": SOURCE_ID, "locator": "chars:0-33"}],
+    }
+
+
+def _module_narrative() -> dict[str, object]:
+    return {
+        "purpose": {"text": "Owns request routing.", "citation_indexes": [0]},
+        "responsibilities": [{"text": "Delegates normalization.", "citation_indexes": [1]}],
+        "key_flows": [{"text": "The entry point calls the helper.", "citation_indexes": [0, 1]}],
     }
 
 
@@ -194,6 +203,50 @@ def test_provider_parses_topic_groups() -> None:
     assert topics == (TopicGroup.model_validate(topic),)
     assert json.loads(captured[0].data or b"")["thinking"] == {"type": "disabled"}
     assert json.loads(captured[0].data or b"")["max_tokens"] == 4096
+
+
+def test_provider_parses_strict_code_module_narrative() -> None:
+    payload = _module_narrative()
+    captured: list[Request] = []
+
+    def transport(request: Request) -> bytes:
+        captured.append(request)
+        return _chat_response(payload)
+
+    provider = OpenAICompatibleProvider(
+        ProviderConfig("https://example.test", "test-key", "test-model"),
+        transport=transport,
+    )
+
+    result = provider.summarize_code_module([{"role": "user", "content": "summarize"}])
+
+    assert result == ModuleNarrative.model_validate(payload)
+    request = json.loads(captured[0].data or b"")
+    assert request["response_format"] == {"type": "json_object"}
+    assert request["thinking"] == {"type": "disabled"}
+    assert request["max_tokens"] == 2048
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {**_module_narrative(), "unknown": "field"},
+        {
+            **_module_narrative(),
+            "purpose": {"text": "Owns request routing.", "citation_indexes": []},
+        },
+    ],
+)
+def test_provider_rejects_invalid_code_module_narrative(
+    payload: dict[str, object],
+) -> None:
+    provider = OpenAICompatibleProvider(
+        ProviderConfig("https://example.test", "test-key", "test-model"),
+        transport=lambda _request: _chat_response(payload),
+    )
+
+    with pytest.raises(ValueError, match="ModuleNarrative contract"):
+        provider.summarize_code_module([])
 
 
 def test_provider_parses_evidence_answer() -> None:

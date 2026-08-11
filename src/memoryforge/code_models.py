@@ -15,6 +15,7 @@ from memoryforge.models import SourceId
 Sha256 = Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")]
 CommitId = Annotated[str, Field(pattern=r"^[a-f0-9]{40,64}$")]
 SourceVersionId = Annotated[int, Field(ge=1)]
+CitationIndex = Annotated[int, Field(strict=True, ge=0)]
 
 _CHAR_LOCATOR = re.compile(r"^chars:(?P<start>\d+)-(?P<end>\d+)$")
 _MODULE_PATH = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*(?:/[a-z0-9]+(?:-[a-z0-9]+)*)*$")
@@ -55,6 +56,33 @@ class CodeRelationType(StrEnum):
     EXTENDS = "extends"
     IMPLEMENTS = "implements"
     TESTS = "tests"
+
+
+class CitedStatement(BaseModel):
+    """One model-written statement grounded by compiler-owned citations."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    text: str = Field(min_length=1)
+    citation_indexes: tuple[CitationIndex, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_statement(self) -> CitedStatement:
+        if not self.text.strip():
+            raise ValueError("cited statement text must not be blank")
+        if len(self.citation_indexes) != len(set(self.citation_indexes)):
+            raise ValueError("cited statement indexes must not contain duplicates")
+        return self
+
+
+class ModuleNarrative(BaseModel):
+    """Strict optional prose contract for one deterministic code module."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    purpose: CitedStatement
+    responsibilities: tuple[CitedStatement, ...] = Field(min_length=1)
+    key_flows: tuple[CitedStatement, ...] = Field(min_length=1)
 
 
 def make_code_symbol_id(

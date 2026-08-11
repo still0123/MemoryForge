@@ -13,6 +13,7 @@ from urllib.request import Request, urlopen
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from memoryforge.code_models import ModuleNarrative
 from memoryforge.models import CompilationPlan, PageChange, TopicGroup
 
 Transport = Callable[[Request], bytes]
@@ -154,6 +155,17 @@ class OpenAICompatibleProvider:
             return _TopicResponse.model_validate(decoded).topics
         except ValidationError as exc:
             raise ValueError("provider response does not match TopicGroup contract") from exc
+
+    def summarize_code_module(
+        self,
+        messages: Sequence[Mapping[str, str]],
+    ) -> ModuleNarrative:
+        """Describe one deterministic module without changing its code facts."""
+        decoded = self._request_json(messages, disable_thinking=True, max_tokens=2048)
+        try:
+            return ModuleNarrative.model_validate(decoded)
+        except ValidationError as exc:
+            raise ValueError("provider response does not match ModuleNarrative contract") from exc
 
     def answer_with_evidence(
         self,

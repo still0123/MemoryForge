@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,31 @@ _spec = importlib.util.spec_from_file_location("run_code_wiki_benchmark", _SCRIP
 assert _spec and _spec.loader
 run_code_wiki_benchmark = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(run_code_wiki_benchmark)
+
+
+def test_code_module_narrative_development_suite_is_frozen() -> None:
+    root = Path(__file__).resolve().parent.parent
+    suite = json.loads(
+        (root / "demo/evaluation/code_module_narrative_development.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    cases = suite["cases"]
+
+    assert len(cases) == 20
+    assert len({case["id"] for case in cases}) == 20
+    assert [case["category"] for case in cases].count("module_responsibility") == 10
+    assert [case["category"] for case in cases].count("call_flow") == 10
+    assert suite["acceptance"] == {
+        "citation_grounding": 1.0,
+        "minimum_fact_coverage": 0.8,
+    }
+    fixture = root / suite["fixture"]
+    assert all(
+        (fixture / source_path).is_file()
+        for case in cases
+        for source_path in case["expected_source_paths"]
+    )
 
 
 def test_code_wiki_benchmark_closes_known_gaps_without_regression(

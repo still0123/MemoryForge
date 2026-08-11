@@ -113,7 +113,7 @@ def parse_page_citations(content: str) -> list[CitationPayload]:
         return []
     section_matches = re.finditer(
         r"^## (?P<name>Verified facts|Verified symbols|Verified dependencies|"
-        r"Conversation notes \(unverified\))\s*$"
+        r"Conversation notes \(unverified\)|模块职责|子模块分工|核心流程|依赖关系)\s*$"
         r"\n(?P<section>.*?)(?=^## |\Z)",
         content,
         re.MULTILINE | re.DOTALL,
@@ -161,6 +161,8 @@ def parse_page_citations(content: str) -> list[CitationPayload]:
             )
             if section:
                 citation["section_path"] = section
+            elif section_name in {"模块职责", "子模块分工", "核心流程", "依赖关系"}:
+                citation["section_path"] = section_name
             citations.append(citation)
     return citations
 

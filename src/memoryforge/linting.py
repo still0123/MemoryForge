@@ -120,7 +120,31 @@ def lint_workspace(workspace_root: Path) -> LintPayload:
                 )
                 continue
             _lint_page_facts(index, relative_path, content, issues)
+            citation_source_ids = _page_citation_source_ids(content)
+            if citation_source_ids is None:
+                issues.append(
+                    _issue(
+                        "invalid_frontmatter",
+                        relative_path,
+                        "citation_sources must contain unique source IDs",
+                    )
+                )
             if is_generated_navigation_page(content):
+                if citation_source_ids:
+                    _lint_source_freshness(
+                        index,
+                        relative_path,
+                        citation_source_ids,
+                        issues,
+                    )
+                    _lint_citations(
+                        workspace_root,
+                        index,
+                        relative_path,
+                        content,
+                        set(citation_source_ids),
+                        issues,
+                    )
                 _lint_related_page_links(relative_path, content, page_paths, issues)
                 if relative_path not in indexed_paths:
                     issues.append(
@@ -157,7 +181,7 @@ def lint_workspace(workspace_root: Path) -> LintPayload:
                     index,
                     relative_path,
                     content,
-                    set(source_ids),
+                    set(source_ids) | set(citation_source_ids or ()),
                     issues,
                 )
             _lint_related_page_links(relative_path, content, page_paths, issues)
@@ -248,26 +272,47 @@ def _indexed_page_paths(workspace_root: Path, issues: list[LintIssue]) -> set[st
 
 
 def _page_source_ids(content: str) -> tuple[str, ...] | None:
-    if not content.startswith("---\n"):
+    fields = _page_frontmatter_fields(content)
+    if fields is None:
         return None
-    closing = content.find("\n---\n", len("---\n"))
-    if closing < 0:
-        return None
-    fields = {
-        key.strip(): value.strip()
-        for line in content[len("---\n") : closing].splitlines()
-        for key, separator, value in (line.partition(":"),)
-        if separator
-    }
     if (
         not fields.get("title")
         or fields.get("type") not in _PAGE_TYPES
         or not fields.get("summary")
     ):
         return None
+    return _decode_source_ids(fields.get("sources"))
+
+
+def _page_citation_source_ids(content: str) -> tuple[str, ...] | None:
+    fields = _page_frontmatter_fields(content)
+    if fields is None:
+        return None
+    if "citation_sources" not in fields:
+        return ()
+    return _decode_source_ids(fields["citation_sources"])
+
+
+def _page_frontmatter_fields(content: str) -> dict[str, str] | None:
+    if not content.startswith("---\n"):
+        return None
+    closing = content.find("\n---\n", len("---\n"))
+    if closing < 0:
+        return None
+    return {
+        key.strip(): value.strip()
+        for line in content[len("---\n") : closing].splitlines()
+        for key, separator, value in (line.partition(":"),)
+        if separator
+    }
+
+
+def _decode_source_ids(raw_source_ids: str | None) -> tuple[str, ...] | None:
+    if raw_source_ids is None:
+        return None
     try:
-        source_ids = json.loads(fields["sources"])
-    except (KeyError, json.JSONDecodeError):
+        source_ids = json.loads(raw_source_ids)
+    except json.JSONDecodeError:
         return None
     if (
         not isinstance(source_ids, list)
