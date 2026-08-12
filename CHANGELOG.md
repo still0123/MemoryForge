@@ -7,8 +7,9 @@
   ModulePlan 与 ArchitectureGraph 保持确定性。
 - 严格拒绝未知 JSON 字段和越界 Citation；Provider 超时或无效输出保留确定性页面并标记
   `synthesis_status: fallback`。单文件变化只刷新对应叶子及其祖先说明，删除模块同步清理父级引用。
-- 冻结 20 题模块职责/调用流程开发题集。结构、Citation ownership 和原 Code Wiki Benchmark
-  已由本地测试覆盖；真实本地模型的人工事实覆盖率尚未执行，不声明结果。
+- 父模块后序读取直接子模块的已验证叙事；临时 `fallback` 会在下次带 Provider 的编译中重试。
+- 冻结并接通 20 题模块职责/调用流程评测。受控 Provider 门禁为 20/20、Citation grounding
+  100%；真实本地模型因当前环境未配置 Provider，人工事实覆盖率尚未执行，不声明结果。
 - 完成本项后恢复功能冻结；不增加向量库、知识图谱、公网部署、多用户、群聊或多 Agent。
 
 <!-- memoryforge-release-claim: version=0.4.0; status=released; supported_platforms=macos; macos_passed=656; linux_status=not_rerun; windows_status=not_verified; release_verification=passed -->

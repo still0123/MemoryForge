@@ -9,7 +9,11 @@ from dataclasses import dataclass
 from pathlib import PurePosixPath
 from typing import Literal, NotRequired, TypedDict
 
-_FACT = re.compile(r"^- (?P<quote>.+?) \[\^(?P<footnote>[^\]]+)\]$", re.MULTILINE)
+_FACT = re.compile(
+    r"^- (?P<quote>.+?)(?P<references>(?: \[\^[^\]]+\])+)$",
+    re.MULTILINE,
+)
+_FOOTNOTE_REFERENCE = re.compile(r"\[\^(?P<footnote>[^\]]+)\]")
 _RELATION_FACT = re.compile(
     r"^(?P<route>`[^`]+` \([a-z_]+\)): "
     r'(?P<evidence>"(?:\\.|[^"\\])*")$'
@@ -126,9 +130,6 @@ def parse_page_citations(content: str) -> list[CitationPayload]:
         section_name = section_match.group("name")
         section_text = section_match.group("section")
         for fact_index, fact in enumerate(_FACT.finditer(section_text)):
-            footnote = footnotes.get(fact.group("footnote"))
-            if footnote is None:
-                continue
             quote = fact.group("quote")
             relation_fact = _RELATION_FACT.fullmatch(quote)
             if section_name == "Verified dependencies":
@@ -141,16 +142,6 @@ def parse_page_citations(content: str) -> list[CitationPayload]:
                 if not isinstance(evidence, str):
                     continue
                 quote = evidence
-            citation: CitationPayload = {
-                "source_id": footnote["source_id"],
-                "source_version": int(footnote["source_version"]),
-                "locator": footnote["locator"],
-                "quote": quote,
-            }
-            if relation_fact is not None:
-                citation["routing_text"] = relation_fact.group("route")
-            if section_name != "Verified dependencies" and fact_index == 0:
-                citation["is_summary"] = True
             section = next(
                 (
                     match.group("section")
@@ -159,11 +150,25 @@ def parse_page_citations(content: str) -> list[CitationPayload]:
                 ),
                 "",
             )
-            if section:
-                citation["section_path"] = section
-            elif section_name in {"模块职责", "子模块分工", "核心流程", "依赖关系"}:
-                citation["section_path"] = section_name
-            citations.append(citation)
+            for reference in _FOOTNOTE_REFERENCE.finditer(fact.group("references")):
+                footnote = footnotes.get(reference.group("footnote"))
+                if footnote is None:
+                    continue
+                citation: CitationPayload = {
+                    "source_id": footnote["source_id"],
+                    "source_version": int(footnote["source_version"]),
+                    "locator": footnote["locator"],
+                    "quote": quote,
+                }
+                if relation_fact is not None:
+                    citation["routing_text"] = relation_fact.group("route")
+                if section_name != "Verified dependencies" and fact_index == 0:
+                    citation["is_summary"] = True
+                if section:
+                    citation["section_path"] = section
+                elif section_name in {"模块职责", "子模块分工", "核心流程", "依赖关系"}:
+                    citation["section_path"] = section_name
+                citations.append(citation)
     return citations
 
 

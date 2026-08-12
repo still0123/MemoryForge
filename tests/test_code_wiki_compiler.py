@@ -25,6 +25,7 @@ from memoryforge.query import _page_citations
 from memoryforge.workspace import (
     Workspace,
     init_workspace,
+    rebuild_applied_projection,
     register_git_checkout,
     register_git_code_module,
     sync_git_checkout,
@@ -235,6 +236,7 @@ def test_code_module_synthesis_renders_grounded_parent_pages_only(
 
     _apply_compilation(workspace, compilation)
 
+    rebuild_applied_projection(Workspace.open(workspace))
     assert lint_workspace(workspace)["status"] == "clean"
 
 
@@ -275,6 +277,38 @@ def test_code_module_synthesis_falls_back_without_model_claims(
     assert len(provider.calls) == 1
 
 
+def test_code_module_synthesis_retries_an_applied_fallback(tmp_path: Path) -> None:
+    _checkout, workspace, repository_id = _synced_repository(
+        tmp_path,
+        {"src/service.py": SERVICE_SOURCE},
+    )
+    snapshot = build_code_index(workspace, repository_id)
+    plan = build_module_plan(snapshot)
+    failed = compile_code_wiki(
+        workspace,
+        snapshot,
+        plan,
+        provider=_NarrativeProvider(error=ProviderUnavailableError("timed out")),
+        allow_local=True,
+    )
+    assert failed is not None
+    _apply_compilation(workspace, failed)
+    recovered_provider = _NarrativeProvider()
+
+    recovered = compile_code_wiki(
+        workspace,
+        snapshot,
+        plan,
+        provider=recovered_provider,
+        allow_local=True,
+    )
+
+    assert recovered is not None
+    parent = recovered.candidate_files[make_code_wiki_path(repository_id, "src")]
+    assert "synthesis_status: synthesized" in parent
+    assert len(recovered_provider.calls) == 1
+
+
 def test_code_module_synthesis_updates_only_changed_leaf_ancestors(
     tmp_path: Path,
 ) -> None:
@@ -295,6 +329,10 @@ def test_code_module_synthesis_updates_only_changed_leaf_ancestors(
         "src/a",
         "src/b",
         "src",
+    ]
+    assert [child["narrative"]["purpose"] for child in initial_provider.calls[-1]["children"]] == [
+        "`src/a` 负责协调子模块。",
+        "`src/b` 负责协调子模块。",
     ]
 
     (checkout / "src/a/service.py").write_text(

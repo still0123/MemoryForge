@@ -42,7 +42,7 @@ from memoryforge.workspace import (
 )
 
 _LOCATOR = re.compile(r"^chars:(?P<start>\d+)-(?P<end>\d+)$")
-_NARRATIVE_SCHEMA_VERSION = 1
+_NARRATIVE_SCHEMA_VERSION = 2
 _MAX_NARRATIVE_CITATIONS = 64
 _MAX_NARRATIVE_SYMBOLS = 24
 _MAX_NARRATIVE_EDGES = 24
@@ -251,6 +251,7 @@ def _synthesize_module_narratives(
         symbol_id: module.module_id for module in modules for symbol_id in module.symbol_ids
     }
     fact_hashes: dict[str, str] = {}
+    narratives: dict[str, ModuleNarrative] = {}
     root_module_ids = {module.module_id for module in plan.modules}
     for module in _postorder_modules(plan.modules):
         input_hash = _module_narrative_input_hash(
@@ -258,18 +259,21 @@ def _synthesize_module_narratives(
             symbols_by_id,
             outgoing.get(module.module_id, ()),
             fact_hashes,
+            narratives,
         )
         fact_hashes[module.module_id] = input_hash
         if not module.children:
             continue
 
         stable = _stable_text(workspace.root / module.wiki_path)
-        if stable is not None and _can_reuse_module_narrative(
-            stable,
-            snapshot,
-            module,
-            input_hash,
-        ):
+        stored_narrative = (
+            _stored_module_narrative(stable)
+            if stable is not None
+            and _can_reuse_module_narrative(stable, snapshot, module, input_hash)
+            else None
+        )
+        if stable is not None and stored_narrative is not None:
+            narratives[module.module_id] = stored_narrative
             all_candidates[module.wiki_path] = stable
             continue
 
@@ -310,6 +314,7 @@ def _synthesize_module_narratives(
             citations,
             modules_by_id,
             symbols_by_id,
+            narratives,
         )
         try:
             narrative = provider.summarize_code_module(messages)
@@ -340,12 +345,14 @@ def _synthesize_module_narratives(
             modules_by_id,
             symbols_by_id,
         )
+        narratives[module.module_id] = narrative
         all_candidates[module.wiki_path] = _with_synthesis_metadata(
             content,
             status="synthesized",
             input_hash=input_hash,
             snapshot=snapshot,
             citations=used_citations,
+            narrative=narrative,
         )
 
 
@@ -354,6 +361,7 @@ def _module_narrative_input_hash(
     symbols_by_id: dict[str, CodeSymbol],
     outgoing: tuple[ArchitectureEdge, ...],
     child_hashes: dict[str, str],
+    child_narratives: dict[str, ModuleNarrative],
 ) -> str:
     payload = {
         "schema_version": _NARRATIVE_SCHEMA_VERSION,
@@ -377,6 +385,11 @@ def _module_narrative_input_hash(
             {
                 "module_id": child.module_id,
                 "fact_hash": child_hashes[child.module_id],
+                "narrative": (
+                    child_narratives[child.module_id].model_dump(mode="json")
+                    if child.module_id in child_narratives
+                    else None
+                ),
             }
             for child in module.children
         ],
@@ -401,8 +414,18 @@ def _can_reuse_module_narrative(
         fields.get("repository_id") == snapshot.repository_id
         and fields.get("module_id") == module.module_id
         and fields.get("synthesis_input_sha256") == input_hash
-        and fields.get("synthesis_status") in {"synthesized", "fallback"}
+        and fields.get("synthesis_status") == "synthesized"
     )
+
+
+def _stored_module_narrative(content: str) -> ModuleNarrative | None:
+    raw_narrative = _frontmatter_fields(content).get("synthesis_narrative")
+    if raw_narrative is None:
+        return None
+    try:
+        return ModuleNarrative.model_validate_json(raw_narrative)
+    except ValueError:
+        return None
 
 
 def _module_narrative_citations(
@@ -511,6 +534,7 @@ def _module_narrative_messages(
     citations: tuple[_NarrativeCitation, ...],
     modules_by_id: dict[str, ModuleNode],
     symbols_by_id: dict[str, CodeSymbol],
+    child_narratives: dict[str, ModuleNarrative],
 ) -> list[dict[str, str]]:
     selected_symbols = [
         symbols_by_id[citation.symbol_id]
@@ -529,6 +553,21 @@ def _module_narrative_messages(
                 "title": child.title,
                 "path": child.path,
                 "summary": child.summary,
+                "narrative": (
+                    {
+                        "purpose": child_narratives[child.module_id].purpose.text,
+                        "responsibilities": [
+                            statement.text
+                            for statement in child_narratives[child.module_id].responsibilities
+                        ],
+                        "key_flows": [
+                            statement.text
+                            for statement in child_narratives[child.module_id].key_flows
+                        ],
+                    }
+                    if child.module_id in child_narratives
+                    else None
+                ),
             }
             for child in module.children
         ],
@@ -569,9 +608,11 @@ def _module_narrative_messages(
                 "statement objects. Every cited statement has exactly text and citation_indexes, "
                 "and citation_indexes contains one or more valid zero-based indexes from the "
                 "provided citations. Do not invent symbols, relations, module paths, or behavior. "
-                "Do not emit Markdown. Reply in concise Chinese. For a repository root, purpose "
-                "describes repository use, responsibilities cover architecture and core modules, "
-                "and key_flows cover major data flow."
+                "Use direct child narratives when present to synthesize the parent level, while "
+                "grounding every new statement in the current citation table. Do not emit "
+                "Markdown. Reply in concise Chinese. For a repository root, purpose describes "
+                "repository use, responsibilities cover architecture and core modules, and "
+                "key_flows cover major data flow."
             ),
         },
         {
@@ -717,12 +758,15 @@ def _with_synthesis_metadata(
     input_hash: str,
     snapshot: CodeIndexSnapshot,
     citations: tuple[_NarrativeCitation, ...] = (),
+    narrative: ModuleNarrative | None = None,
 ) -> str:
     updates = {
         "synthesis_status": status,
         "synthesis_input_sha256": input_hash,
     }
     if status == "synthesized":
+        if narrative is None:
+            raise CodeWikiCompilationError("synthesized module page is missing its narrative")
         source_ids = tuple(sorted({citation.location.source_id for citation in citations}))
         updates["citation_sources"] = json.dumps(source_ids, ensure_ascii=False)
         updates["citation_source_versions"] = json.dumps(
@@ -730,6 +774,7 @@ def _with_synthesis_metadata(
             ensure_ascii=False,
             sort_keys=True,
         )
+        updates["synthesis_narrative"] = narrative.model_dump_json()
     return _update_frontmatter(content, updates)
 
 

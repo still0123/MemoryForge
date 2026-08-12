@@ -65,6 +65,25 @@ def test_page_fact_identity_is_deterministic() -> None:
     assert first == second
 
 
+def test_page_facts_expand_multiple_citations_for_one_statement() -> None:
+    second_source_id = "b" * 64
+    content = (
+        "# Module\n\n"
+        "## 模块职责\n\n"
+        "- 汇总两个子模块。 [^source-1] [^source-2]\n\n"
+        f"[^source-1]: source `{SOURCE_ID}` · revision `1` · `chars:0-10`\n"
+        f"[^source-2]: source `{second_source_id}` · revision `2` · `chars:20-30`\n"
+    )
+
+    citations = parse_page_citations(content)
+
+    assert [citation["source_id"] for citation in citations] == [
+        SOURCE_ID,
+        second_source_id,
+    ]
+    assert {citation["quote"] for citation in citations} == {"汇总两个子模块。"}
+
+
 def test_unverified_conversation_notes_remain_searchable() -> None:
     content = (
         "---\n"

@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import sys
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 import pytest
+
+from memoryforge.code_models import CitedStatement, ModuleNarrative
 
 _SCRIPT = Path(__file__).resolve().parent.parent / "demo" / "run_code_wiki_benchmark.py"
 _spec = importlib.util.spec_from_file_location("run_code_wiki_benchmark", _SCRIPT)
@@ -12,30 +16,68 @@ assert _spec and _spec.loader
 run_code_wiki_benchmark = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(run_code_wiki_benchmark)
 
+_NARRATIVE_SCRIPT = (
+    Path(__file__).resolve().parent.parent / "demo" / "run_code_module_narrative_benchmark.py"
+)
+_narrative_spec = importlib.util.spec_from_file_location(
+    "run_code_module_narrative_benchmark",
+    _NARRATIVE_SCRIPT,
+)
+assert _narrative_spec and _narrative_spec.loader
+run_code_module_narrative_benchmark = importlib.util.module_from_spec(_narrative_spec)
+sys.modules[_narrative_spec.name] = run_code_module_narrative_benchmark
+_narrative_spec.loader.exec_module(run_code_module_narrative_benchmark)
 
-def test_code_module_narrative_development_suite_is_frozen() -> None:
-    root = Path(__file__).resolve().parent.parent
-    suite = json.loads(
-        (root / "demo/evaluation/code_module_narrative_development.json").read_text(
-            encoding="utf-8"
-        )
-    )
-    cases = suite["cases"]
 
-    assert len(cases) == 20
-    assert len({case["id"] for case in cases}) == 20
-    assert [case["category"] for case in cases].count("module_responsibility") == 10
-    assert [case["category"] for case in cases].count("call_flow") == 10
-    assert suite["acceptance"] == {
-        "citation_grounding": 1.0,
-        "minimum_fact_coverage": 0.8,
+class _BenchmarkNarrativeProvider:
+    _TEXT = {
+        "py": (
+            "py app helpers 通过 run_local 调用 local，"
+            "并由 run_imported 使用 normalize strip value。"
+        ),
+        "go": "go Meter 由 NewMeter 创建，Record 调用 helper 与 Reset，Use 也调用 Reset。",
+        "ts": "ts service 的 run 创建 Service，greet 调用 helper 对字符串执行 trim。",
     }
-    fixture = root / suite["fixture"]
-    assert all(
-        (fixture / source_path).is_file()
-        for case in cases
-        for source_path in case["expected_source_paths"]
+
+    def summarize_code_module(
+        self,
+        messages: Sequence[Mapping[str, str]],
+    ) -> ModuleNarrative:
+        payload = json.loads(messages[-1]["content"])
+        path = payload["module"]["path"]
+        source_indexes: dict[str, int] = {}
+        for citation in payload["citations"]:
+            source_indexes.setdefault(citation["source_path"], citation["index"])
+        indexes = tuple(source_indexes.values())
+        text = self._TEXT[path]
+        return ModuleNarrative(
+            purpose=CitedStatement(text=text, citation_indexes=indexes),
+            responsibilities=(CitedStatement(text=text, citation_indexes=indexes),),
+            key_flows=(CitedStatement(text=text, citation_indexes=indexes),),
+        )
+
+
+def test_code_module_narrative_development_suite_executes(
+    tmp_path: Path,
+) -> None:
+    evidence = run_code_module_narrative_benchmark.build_evidence(
+        tmp_path / "narrative-benchmark",
+        provider=_BenchmarkNarrativeProvider(),
     )
+
+    evaluation = evidence["evaluation"]
+    assert evaluation["case_count"] == 20
+    assert evaluation["metrics"] == {
+        "fact_coverage": 1.0,
+        "citation_grounding": 1.0,
+    }
+    assert evaluation["gates"] == {
+        "fact_coverage": True,
+        "citation_grounding": True,
+    }
+    assert all(case["covered"] for case in evaluation["cases"])
+    assert evidence["workflow"]["projection_rebuild"] == "passed"
+    assert evidence["workflow"]["lint"]["status"] == "clean"
 
 
 def test_code_wiki_benchmark_closes_known_gaps_without_regression(

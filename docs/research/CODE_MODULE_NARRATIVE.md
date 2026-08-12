@@ -77,8 +77,20 @@ existing review, approve, and apply workflow.
 - one changed leaf refreshes only its narrative ancestors;
 - no `--llm` run remains byte-identical to the current deterministic output.
 
-The repository tests verify the structural and incremental contracts with a
-deterministic fake provider. The 20 manually labelled questions are frozen in
-`demo/evaluation/code_module_narrative_development.json`. No real local model
-or human fact-coverage run has been executed yet, so the `80%` target is not
-reported as achieved.
+The 20 manually labelled questions are frozen in
+`demo/evaluation/code_module_narrative_development.json` and executed by
+`demo/run_code_module_narrative_benchmark.py`. The controlled-provider gate
+covers the full compile, review/apply, projection rebuild, and evaluation path
+at 20/20 with 100% Citation grounding.
+
+Run a real configured provider with:
+
+```bash
+python demo/run_code_module_narrative_benchmark.py \
+  --workdir /private/tmp/memoryforge-narrative-benchmark \
+  --output local-evidence/code-module-narrative.json
+```
+
+No real local model or human fact-coverage run has been executed because the
+current environment has no provider configuration. The `80%` target is
+therefore not reported as achieved.
