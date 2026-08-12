@@ -252,5 +252,145 @@ def test_cli_watch_once_refreshes_and_stages_wiki_update(tmp_path: Path) -> None
     assert payload["changeset"]["files"]
 
 
+def test_cli_watch_stages_docs_and_multiple_code_wiki_changesets(
+    tmp_path: Path,
+) -> None:
+    workspace = tmp_path / "workspace"
+    runner = CliRunner()
+    assert runner.invoke(app, ["init", str(workspace)]).exit_code == 0
+
+    repositories = []
+    for name, source in (
+        (
+            "repository-a",
+            "def alpha(value: str) -> str:\n    return value.upper()\n",
+        ),
+        (
+            "repository-b",
+            "def beta(value: str) -> str:\n    return value.lower()\n",
+        ),
+    ):
+        checkout = tmp_path / name
+        checkout.mkdir()
+        _git(checkout, "init")
+        _git(checkout, "config", "user.email", "test@example.com")
+        _git(checkout, "config", "user.name", "Test User")
+        (checkout / "README.md").write_text("# Service\n", encoding="utf-8")
+        code_path = checkout / "src" / "service.py"
+        code_path.parent.mkdir()
+        code_path.write_text(source, encoding="utf-8")
+        _commit_all(checkout, "Add service")
+
+        registered = runner.invoke(
+            app,
+            ["git-add", str(checkout), "--workspace", str(workspace)],
+        )
+        assert registered.exit_code == 0, registered.output
+        repository_id = json.loads(registered.stdout)["repository_id"]
+        synced = runner.invoke(
+            app,
+            ["git-sync", repository_id, "--workspace", str(workspace)],
+        )
+        assert synced.exit_code == 0, synced.output
+        repositories.append((checkout, repository_id))
+
+    staged_docs = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
+    assert staged_docs.exit_code == 0, staged_docs.output
+    applied_docs = runner.invoke(
+        app,
+        [
+            "apply",
+            json.loads(staged_docs.stdout)["changeset_id"],
+            "--approve",
+            "--workspace",
+            str(workspace),
+        ],
+    )
+    assert applied_docs.exit_code == 0, applied_docs.output
+
+    for _checkout, repository_id in repositories:
+        selected = runner.invoke(
+            app,
+            ["code-add", repository_id, "src", "--workspace", str(workspace)],
+        )
+        assert selected.exit_code == 0, selected.output
+        synced = runner.invoke(
+            app,
+            ["git-sync", repository_id, "--workspace", str(workspace)],
+        )
+        assert synced.exit_code == 0, synced.output
+
+    for _, repository_id in repositories:
+        code_wiki = runner.invoke(
+            app,
+            ["ingest", "--code-wiki", repository_id, "--workspace", str(workspace)],
+        )
+        assert code_wiki.exit_code == 0, code_wiki.output
+        applied_code = runner.invoke(
+            app,
+            [
+                "apply",
+                json.loads(code_wiki.stdout)["changeset_id"],
+                "--approve",
+                "--workspace",
+                str(workspace),
+            ],
+        )
+        assert applied_code.exit_code == 0, applied_code.output
+
+    checkout_a, _ = repositories[0]
+    checkout_b, _ = repositories[1]
+    (checkout_a / "README.md").write_text(
+        "# Service\n\nUpdated documentation.\n",
+        encoding="utf-8",
+    )
+    (checkout_a / "src" / "service.py").write_text(
+        "def alpha(value: str) -> str:\n    return value.lower()\n",
+        encoding="utf-8",
+    )
+    (checkout_b / "src" / "service.py").write_text(
+        "def beta(value: str) -> str:\n    return value.upper()\n",
+        encoding="utf-8",
+    )
+    _commit_all(checkout_a, "Update alpha and docs")
+    _commit_all(checkout_b, "Update beta")
+
+    watched = runner.invoke(app, ["watch", "--once", "--workspace", str(workspace)])
+
+    assert watched.exit_code == 0, watched.output
+    payload = json.loads(watched.stdout)
+    assert payload["status"] == "proposed"
+    changesets = payload["changesets"]
+    assert len(changesets) == 3
+    assert len({changeset["changeset_id"] for changeset in changesets}) == 3
+    assert (
+        sum(
+            any(path.startswith("wiki/pages/code/") for path in changeset["files"])
+            for changeset in changesets
+        )
+        == 2
+    )
+    assert (
+        sum(
+            not any(path.startswith("wiki/pages/code/") for path in changeset["files"])
+            for changeset in changesets
+        )
+        == 1
+    )
+    assert payload["changeset"] == changesets[0]
+
+    replayed = runner.invoke(app, ["watch", "--once", "--workspace", str(workspace)])
+    assert replayed.exit_code == 0, replayed.output
+    unchanged = json.loads(replayed.stdout)
+    assert unchanged["status"] == "unchanged", unchanged
+    assert "changeset" not in unchanged
+    assert "changesets" not in unchanged
+
+
 def _git(checkout: Path, *arguments: str) -> None:
     subprocess.run(["git", *arguments], cwd=checkout, check=True, capture_output=True, text=True)
+
+
+def _commit_all(checkout: Path, message: str) -> None:
+    _git(checkout, "add", ".")
+    _git(checkout, "commit", "-m", message)

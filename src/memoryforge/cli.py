@@ -21,11 +21,17 @@ from memoryforge.code_index import build_code_index
 from memoryforge.code_wiki_compiler import compile_code_wiki
 from memoryforge.codex_adapter import CodexImportError, import_codex_rollout
 from memoryforge.compiler import (
+    Compilation,
     compilation_payload,
     compile_pending_sources,
     compile_repository_topics,
 )
-from memoryforge.errors import FeatureUnavailableError, MemoryForgeError, WorkspaceError
+from memoryforge.errors import (
+    ChangeSetStoreError,
+    FeatureUnavailableError,
+    MemoryForgeError,
+    WorkspaceError,
+)
 from memoryforge.evaluation import run_evaluation
 from memoryforge.feishu_adapter import FeishuDocumentError, import_feishu_document
 from memoryforge.feishu_bot import FeishuBotError, reply_to_feishu_text
@@ -40,7 +46,8 @@ from memoryforge.github_thread_adapter import (
 from memoryforge.importer import MAX_SOURCE_BYTES, SourceValidationError, import_local_file
 from memoryforge.linting import lint_workspace
 from memoryforge.models import ChangeOperationType, Sensitivity
-from memoryforge.module_planner import build_module_plan
+from memoryforge.module_planner import build_architecture_graph, build_module_plan
+from memoryforge.obsidian import build_obsidian
 from memoryforge.provider import OpenAICompatibleProvider, ProviderConfig
 from memoryforge.query import answer_question
 from memoryforge.refresh import refresh_workspace
@@ -59,6 +66,7 @@ from memoryforge.workspace import (
     WorkspaceSecurityError,
     candidate_page_sources,
     list_git_checkouts,
+    list_git_code_modules,
     rebuild_applied_projection,
     register_git_checkout,
     register_git_code_module,
@@ -155,6 +163,24 @@ def showcase_build(
             evidence=evidence,
             include_local=include_local,
         )
+    except (
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+@app.command("obsidian-build")
+def obsidian_build(workspace: WorkspaceOption = Path(".")) -> None:
+    """Build local Obsidian-readable Markdown navigation views."""
+    try:
+        result = build_obsidian(workspace)
     except (
         MemoryForgeError,
         WorkspaceIntegrityError,
@@ -690,7 +716,25 @@ def watch(
         )
         while True:
             refreshed = refresh_workspace(opened.root)
-            stored = None
+            changesets: list[dict[str, object]] = []
+
+            def append_compilation(
+                compilation: Compilation,
+                changesets: list[dict[str, object]],
+            ) -> None:
+                store = ChangeSetStore(opened)
+                try:
+                    store.get(compilation.changeset.changeset_id)
+                except ChangeSetStoreError:
+                    changesets.append(
+                        compilation_payload(
+                            store.create(
+                                compilation.changeset,
+                                compilation.candidate_files,
+                            )
+                        )
+                    )
+
             if first_pass or refreshed.changed:
                 compilation = compile_pending_sources(
                     opened,
@@ -698,12 +742,43 @@ def watch(
                     allow_local=allow_local_llm,
                 )
                 if compilation is not None:
-                    stored = ChangeSetStore(opened).create(
-                        compilation.changeset,
-                        compilation.candidate_files,
+                    append_compilation(compilation, changesets)
+                code_repository_ids = (
+                    {
+                        result.repository_id
+                        for result in refreshed.git
+                        if any(
+                            document.status in {"created", "updated"}
+                            and document.relative_path.endswith((".go", ".py", ".ts", ".tsx"))
+                            for document in result.documents
+                        )
+                    }
+                    if not first_pass
+                    else {
+                        repository.repository_id
+                        for repository in list_git_checkouts(opened.root)
+                        if list_git_code_modules(opened, repository.repository_id)
+                    }
+                )
+                for repository in list_git_checkouts(opened.root):
+                    if repository.repository_id not in code_repository_ids:
+                        continue
+                    snapshot = build_code_index(opened, repository.repository_id)
+                    plan = build_module_plan(snapshot)
+                    graph = build_architecture_graph(snapshot, plan)
+                    code_compilation = compile_code_wiki(
+                        opened,
+                        snapshot,
+                        plan,
+                        graph,
+                        provider=provider,
+                        allow_local=allow_local_llm,
                     )
+                    if code_compilation is None:
+                        continue
+                    append_compilation(code_compilation, changesets)
 
-            if first_pass or refreshed.changed or stored is not None:
+            if first_pass or refreshed.changed or changesets:
                 payload: dict[str, object] = {
                     "status": "changed" if refreshed.changed else "unchanged",
                     "git": [
@@ -726,9 +801,11 @@ def watch(
                         for item in refreshed.feishu
                     ],
                 }
-                if stored is not None:
+                if changesets:
                     payload["status"] = "proposed"
-                    payload["changeset"] = compilation_payload(stored)
+                    payload["changeset"] = changesets[0]
+                    if len(changesets) > 1:
+                        payload["changesets"] = changesets
                 typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
             if once:
                 return

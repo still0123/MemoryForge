@@ -388,9 +388,24 @@ memoryforge lint --workspace <workspace>
 memoryforge ask '<question>' --workspace <workspace>
 memoryforge recall --workspace <workspace>
 memoryforge agent '<question>' --workspace <workspace>
+memoryforge obsidian-build --workspace <workspace>
 memoryforge showcase build --workspace <workspace> --output <directory>
 memoryforge feishu-serve --workspace <workspace>
 ```
+
+## Obsidian 本地视图
+
+`memoryforge obsidian-build --workspace <workspace>` 只在 `obsidian/` 生成
+Obsidian 可读的导航 Markdown：总入口、私有过程、稳定知识和共享业务状态。输出使用普通
+Markdown、frontmatter 和相对链接，不依赖 Dataview 或其他插件，也不复制 `wiki/pages/`
+正文。在 Obsidian 中把整个 `<workspace>` 作为 Vault 打开，再进入 `obsidian/Home.md`；
+不要只把 `obsidian/` 子目录作为 Vault，否则页面链接会落到 Vault 外。
+
+分类规则固定且可解释：任一来源为 `local_only` 的页面进入私有过程；全部来源为
+`public` 且任一来源显式带 `shared-state` 标签的页面进入共享业务状态；其余公开页面进入
+稳定知识。共享视图绝不包含 `local_only` 页面。该目录自动忽略 Git 跟踪，不参与
+`query`、`search` 或页面来源投影，重复执行只覆盖自己的导航文件，不修改 `raw/`、
+`wiki/` 或 SQLite 投影，也不会自动打开 GUI 或 publish。
 
 ## AI 会话如何变成长效记忆
 
