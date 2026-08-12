@@ -104,6 +104,11 @@ font-size:16px;letter-spacing:-.015em}.card p{margin:5px 0;color:var(--muted)}.m
 overflow:hidden;padding:20px 20px 18px}.metric-card::before{content:"";position:absolute;inset:0 auto 0 0;
 width:3px;background:var(--accent)}.metric-label{display:block;color:var(--muted);font-size:11px;font-weight:650}
 .metric{display:block;margin-top:5px;font-size:28px;font-weight:760;letter-spacing:-.04em}
+.page-card{display:flex!important;min-height:150px;flex-direction:column}.page-card p{flex:1;margin:8px 0 16px}
+.card-top,.card-footer{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.card-top h3{margin:0}.kind-chip{flex:none;padding:3px 8px;color:var(--accent);background:var(--accent-soft);
+border-radius:999px;font-size:10px;font-weight:750}.open-page{flex:none;color:var(--accent);font-size:12px;
+font-weight:750}.page-card:hover .open-page{color:var(--accent-strong);transform:translateX(2px)}
 .meta{color:var(--muted);font-size:12px}.section{margin-top:38px}
 .section-title{display:flex;align-items:end;justify-content:space-between;gap:18px;margin-bottom:12px}
 .section-title h2{margin:0;font-size:20px;letter-spacing:-.025em}.section-title p{margin:0;color:var(--muted);font-size:12px}
@@ -568,9 +573,15 @@ function metric(label,value,route){
 function pageCard(page){
   const meta=[page.kind,page.updated,page.status].filter(Boolean).join(" · ");
   return element("a",{class:"card page-card",href:"#page="+encodeURIComponent(page.path)},[
-    element("h3",{text:page.title}),
+    element("div",{class:"card-top"},[
+      element("h3",{text:page.title}),
+      element("span",{class:"kind-chip",text:"Wiki"})
+    ]),
     element("p",{text:page.summary||"暂无摘要"}),
-    element("small",{class:"meta",text:meta})
+    element("div",{class:"card-footer"},[
+      element("small",{class:"meta",text:meta}),
+      element("span",{class:"open-page",text:"打开完整正文 →"})
+    ])
   ])
 }
 function section(title,description,content){
@@ -745,9 +756,11 @@ async function renderSources(kind,offset=0){
     element("div",{class:"card"},sources.items.map(sourceRow)):
     empty(`还没有${sourceNames[kind]||"此类"}来源。`);
   show([
-    heading("我的知识",sourceNames[kind]||"知识来源","当前版本和已应用页面。"),
+    heading("我的知识",sourceNames[kind]||"知识来源",
+      "上方查看来源状态，下方点击 Wiki 卡片阅读完整正文。"),
     section("当前来源",`${sources.total} 个`,sourceList),
-    section("已应用页面",`${pages.total} 页`,pageGrid(pages.items,"还没有已应用页面。")),
+    section("已应用 Wiki 页面",`${pages.total} 页 · 点击卡片阅读全文`,
+      pageGrid(pages.items,"还没有已应用页面。")),
     pagination(offset,limit,Math.max(sources.total,pages.total),next=>renderSources(kind,next))
   ])
 }
