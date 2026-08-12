@@ -187,9 +187,13 @@ def _evaluate_narratives(
             content = (workspace / page_path).read_text(encoding="utf-8")
             narrative = _page_narrative(content)
             statements = (
-                narrative.purpose,
-                *narrative.responsibilities,
-                *narrative.key_flows,
+                (
+                    narrative.purpose,
+                    *narrative.responsibilities,
+                    *narrative.key_flows,
+                )
+                if narrative is not None
+                else ()
             )
             statement_texts = {statement.text for statement in statements}
             citations = [
@@ -221,6 +225,7 @@ def _evaluate_narratives(
                 statement_grounding.append(grounded)
                 grounding_checks.append(grounded)
             module_result = {
+                "synthesis_status": "synthesized" if narrative is not None else "fallback",
                 "text": " ".join(statement_texts),
                 "cited_paths": cited_paths,
                 "statement_grounding": statement_grounding,
@@ -238,6 +243,7 @@ def _evaluate_narratives(
                 "category": case.category,
                 "question": case.question,
                 "module_path": case.module_path,
+                "synthesis_status": module_result["synthesis_status"],
                 "terms_covered": terms_covered,
                 "sources_covered": sources_covered,
                 "covered": covered,
@@ -252,6 +258,9 @@ def _evaluate_narratives(
         "metrics": {
             "fact_coverage": fact_coverage,
             "citation_grounding": citation_grounding,
+            "synthesis_success_rate": _ratio(
+                result["synthesis_status"] == "synthesized" for result in module_results.values()
+            ),
         },
         "gates": {
             "fact_coverage": fact_coverage >= suite.acceptance.minimum_fact_coverage,
@@ -261,7 +270,7 @@ def _evaluate_narratives(
     }
 
 
-def _page_narrative(content: str) -> ModuleNarrative:
+def _page_narrative(content: str) -> ModuleNarrative | None:
     if not content.startswith("---\n"):
         raise RuntimeError("narrative page is missing frontmatter")
     closing = content.find("\n---\n", 4)
@@ -275,6 +284,8 @@ def _page_narrative(content: str) -> ModuleNarrative:
     }
     raw_narrative = fields.get("synthesis_narrative")
     if raw_narrative is None:
+        if fields.get("synthesis_status") == "fallback":
+            return None
         raise RuntimeError("module narrative was not synthesized")
     return ModuleNarrative.model_validate_json(raw_narrative)
 

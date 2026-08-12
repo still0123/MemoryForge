@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from memoryforge.code_models import CitedStatement, ModuleNarrative
+from memoryforge.provider import ProviderUnavailableError
 
 _SCRIPT = Path(__file__).resolve().parent.parent / "demo" / "run_code_wiki_benchmark.py"
 _spec = importlib.util.spec_from_file_location("run_code_wiki_benchmark", _SCRIPT)
@@ -57,6 +58,17 @@ class _BenchmarkNarrativeProvider:
         )
 
 
+class _FallbackBenchmarkNarrativeProvider(_BenchmarkNarrativeProvider):
+    def summarize_code_module(
+        self,
+        messages: Sequence[Mapping[str, str]],
+    ) -> ModuleNarrative:
+        payload = json.loads(messages[-1]["content"])
+        if payload["module"]["path"] == "go":
+            raise ProviderUnavailableError("temporary failure")
+        return super().summarize_code_module(messages)
+
+
 def test_code_module_narrative_development_suite_executes(
     tmp_path: Path,
 ) -> None:
@@ -70,6 +82,7 @@ def test_code_module_narrative_development_suite_executes(
     assert evaluation["metrics"] == {
         "fact_coverage": 1.0,
         "citation_grounding": 1.0,
+        "synthesis_success_rate": 1.0,
     }
     assert evaluation["gates"] == {
         "fact_coverage": True,
@@ -78,6 +91,29 @@ def test_code_module_narrative_development_suite_executes(
     assert all(case["covered"] for case in evaluation["cases"])
     assert evidence["workflow"]["projection_rebuild"] == "passed"
     assert evidence["workflow"]["lint"]["status"] == "clean"
+
+
+def test_code_module_narrative_benchmark_records_provider_fallback(
+    tmp_path: Path,
+) -> None:
+    evidence = run_code_module_narrative_benchmark.build_evidence(
+        tmp_path / "narrative-fallback-benchmark",
+        provider=_FallbackBenchmarkNarrativeProvider(),
+    )
+
+    evaluation = evidence["evaluation"]
+    assert evaluation["metrics"] == {
+        "fact_coverage": 0.7,
+        "citation_grounding": 1.0,
+        "synthesis_success_rate": 0.667,
+    }
+    assert evaluation["gates"] == {
+        "fact_coverage": False,
+        "citation_grounding": True,
+    }
+    assert {
+        case["synthesis_status"] for case in evaluation["cases"] if case["module_path"] == "go"
+    } == {"fallback"}
 
 
 def test_code_wiki_benchmark_closes_known_gaps_without_regression(
