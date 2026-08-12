@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import difflib
 import json
 import os
 import platform
@@ -11,7 +10,6 @@ import sqlite3
 import subprocess
 import sys
 import time
-from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
@@ -49,12 +47,19 @@ from memoryforge.github_thread_adapter import (
     import_github_thread_json,
 )
 from memoryforge.importer import MAX_SOURCE_BYTES, SourceValidationError, import_local_file
+from memoryforge.lifecycle import (
+    apply_changeset,
+    approve_changeset,
+    reject_changeset,
+    review_changeset,
+)
 from memoryforge.linting import lint_workspace
 from memoryforge.local_portal import serve_local_portal
-from memoryforge.models import ChangeOperationType, Sensitivity
+from memoryforge.models import Sensitivity
 from memoryforge.module_planner import build_architecture_graph, build_module_plan
 from memoryforge.obsidian import OUTPUT_RELATIVE, build_obsidian
 from memoryforge.platform_lock import inspect_posix_namespace_lock_root
+from memoryforge.portal_jobs import run_automation
 from memoryforge.provider import OpenAICompatibleProvider, ProviderConfig
 from memoryforge.query import answer_question
 from memoryforge.refresh import refresh_workspace
@@ -62,17 +67,14 @@ from memoryforge.sessions import SessionStore
 from memoryforge.showcase import build_showcase
 from memoryforge.web_adapter import WebPageError, import_html_file, import_web_page
 from memoryforge.wiki_facts import (
-    IndexedWikiFact,
     is_conversation_process_note,
     parse_page_citations,
-    parse_page_facts,
 )
 from memoryforge.workspace import (
     Workspace,
     WorkspaceIntegrityError,
     WorkspaceSecurityError,
     _connect_readonly,
-    candidate_page_sources,
     list_git_checkouts,
     list_git_code_modules,
     rebuild_applied_projection,
@@ -80,7 +82,6 @@ from memoryforge.workspace import (
     register_git_code_module,
     search_sources,
     sync_git_checkout,
-    validate_changeset_page_sources,
 )
 
 app = typer.Typer(
@@ -194,6 +195,36 @@ def showcase_serve(
 ) -> None:
     try:
         serve_local_portal(workspace, port=port)
+    except (
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+
+
+@app.command()
+def start(
+    workspace: Annotated[
+        Path,
+        typer.Option("--workspace", "-w", help="Initialized MemoryForge workspace."),
+    ],
+    port: Annotated[
+        int,
+        typer.Option("--port", min=1, max=65535, help="Loopback-only local port."),
+    ] = 8765,
+    no_open: Annotated[
+        bool,
+        typer.Option("--no-open", help="Do not open the browser automatically."),
+    ] = False,
+) -> None:
+    """Start the local knowledge portal."""
+    try:
+        serve_local_portal(workspace, port=port, open_browser=not no_open)
     except (
         MemoryForgeError,
         WorkspaceIntegrityError,
@@ -777,6 +808,24 @@ def refresh(workspace: WorkspaceOption = Path(".")) -> None:
     )
 
 
+@app.command("automation-run", hidden=True)
+def automation_run(workspace: WorkspaceOption = Path(".")) -> None:
+    """Run one configured automatic update pass."""
+    try:
+        result = run_automation(workspace)
+    except (
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+
+
 @app.command()
 def watch(
     interval: Annotated[
@@ -1252,23 +1301,7 @@ def review(
     workspace: WorkspaceOption = Path("."),
 ) -> None:
     try:
-        opened = Workspace.open(workspace)
-        with opened.exclusive_lock():
-            store = ChangeSetStore(opened)
-            stored = store.get(changeset_id)
-            diffs: dict[str, str] = {}
-            for path, candidate in sorted(stored.candidate_files.items()):
-                stable_path = opened.root / path
-                stable = stable_path.read_text(encoding="utf-8") if stable_path.is_file() else ""
-                diffs[path] = "".join(
-                    difflib.unified_diff(
-                        stable.splitlines(keepends=True),
-                        candidate.splitlines(keepends=True),
-                        fromfile=path,
-                        tofile=f"{path} (proposed)",
-                    )
-                )
-            reviewed = store.record_review(stored)
+        result = review_changeset(workspace, changeset_id)
     except (
         MemoryForgeError,
         WorkspaceIntegrityError,
@@ -1278,19 +1311,7 @@ def review(
         sqlite3.Error,
     ) as exc:
         _exit_with_safe_error(exc)
-    typer.echo(
-        json.dumps(
-            {
-                "changeset_id": stored.changeset.changeset_id,
-                "status": stored.changeset.status.value,
-                "reviewed_at": reviewed.reviewed_at.isoformat(),
-                "candidate_files": stored.candidate_files,
-                "unified_diff": diffs,
-            },
-            ensure_ascii=False,
-            indent=2,
-        )
-    )
+    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 @app.command()
@@ -1299,11 +1320,7 @@ def approve(
     workspace: WorkspaceOption = Path("."),
 ) -> None:
     try:
-        opened = Workspace.open(workspace)
-        with opened.exclusive_lock():
-            store = ChangeSetStore(opened)
-            stored = store.get(changeset_id)
-            approval = store.approve(stored)
+        result = approve_changeset(workspace, changeset_id)
     except (
         MemoryForgeError,
         WorkspaceIntegrityError,
@@ -1314,17 +1331,7 @@ def approve(
         sqlite3.Error,
     ) as exc:
         _exit_with_safe_error(exc)
-    typer.echo(
-        json.dumps(
-            {
-                "changeset_id": changeset_id,
-                "status": approval.status,
-                "approved_at": approval.approved_at.isoformat(),
-            },
-            ensure_ascii=False,
-            indent=2,
-        )
-    )
+    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 @app.command()
@@ -1340,95 +1347,12 @@ def apply(
     workspace: WorkspaceOption = Path("."),
 ) -> None:
     try:
-        opened = Workspace.open(workspace)
-        with opened.exclusive_lock():
-            store = ChangeSetStore(opened)
-            stored = store.get(changeset_id)
-            if approve:
-                store.record_review(stored, mode="inline_legacy")
-                store.approve(stored)
-            else:
-                store.require_approved(stored)
-            archive_paths = tuple(
-                sorted(
-                    operation.path
-                    for operation in stored.changeset.operations
-                    if operation.type is ChangeOperationType.ARCHIVE_PAGE
-                )
-            )
-            if any(not path.startswith("wiki/pages/") for path in archive_paths):
-                raise ValueError("ARCHIVE_PAGE operations must target wiki/pages/")
-            existing_archive_paths = tuple(
-                path for path in archive_paths if (opened.root / path).is_file()
-            )
-            paths = tuple(sorted(set(stored.candidate_files) | set(existing_archive_paths)))
-            opened.version_store.require_clean_paths(paths)
-            opened.require_current_source_versions(stored.changeset.source_versions)
-            page_sources = candidate_page_sources(stored.candidate_files)
-            validate_changeset_page_sources(page_sources, stored.changeset.source_ids)
-            page_facts = {
-                path: parse_page_facts(path, content)
-                for path, content in stored.candidate_files.items()
-                if path.startswith("wiki/pages/") and path.endswith(".md")
-            }
-            page_facts.update({path: () for path in archive_paths})
-            previous_source_versions = opened.record_applied_source_versions(
-                stored.changeset.source_versions
-            )
-            previous_page_sources: dict[str, tuple[str, ...]] = {}
-            previous_page_facts: dict[str, tuple[IndexedWikiFact, ...]] = {}
-            try:
-                previous_page_sources = opened.replace_applied_page_sources(page_sources)
-                previous_page_sources.update(opened.remove_applied_page_sources(archive_paths))
-                previous_page_facts = opened.replace_applied_page_facts(page_facts)
-            except Exception:
-                opened.restore_applied_source_versions(previous_source_versions)
-                opened.restore_applied_page_sources(previous_page_sources)
-                opened.restore_applied_page_facts(previous_page_facts)
-                raise
-            previous_files: dict[Path, str | None] = {}
-            try:
-                for path in existing_archive_paths:
-                    destination = opened.root / path
-                    previous_files[destination] = destination.read_text(encoding="utf-8")
-                    destination.unlink()
-                for path, content in stored.candidate_files.items():
-                    destination = opened.root / path
-                    previous_files[destination] = (
-                        destination.read_text(encoding="utf-8") if destination.is_file() else None
-                    )
-                    destination.parent.mkdir(parents=True, exist_ok=True)
-                    destination.write_text(content, encoding="utf-8")
-                commit = opened.version_store.commit_paths(
-                    paths,
-                    f"knowledge: apply {changeset_id}",
-                )
-            except Exception:
-                for destination, previous in previous_files.items():
-                    if previous is None:
-                        destination.unlink(missing_ok=True)
-                    else:
-                        destination.write_text(previous, encoding="utf-8")
-                opened.restore_applied_source_versions(previous_source_versions)
-                opened.restore_applied_page_sources(previous_page_sources)
-                opened.restore_applied_page_facts(previous_page_facts)
-                with suppress(MemoryForgeError):
-                    opened.version_store.reset_paths(paths)
-                raise
-            archive_warning = None
-            obsidian_status = "built"
-            obsidian_warning = None
-            try:
-                store.archive_applied(stored, commit=commit)
-            except MemoryForgeError as exc:
-                archive_warning = str(exc)
-            try:
-                build_obsidian(opened.root)
-            except Exception as exc:
-                obsidian_status = "failed"
-                obsidian_warning = (
-                    f"Wiki applied successfully, but Obsidian rebuild failed: {exc}"
-                )
+        result = apply_changeset(
+            workspace,
+            changeset_id,
+            review_mode="inline_legacy" if approve else None,
+            obsidian_builder=build_obsidian,
+        )
     except (
         MemoryForgeError,
         WorkspaceIntegrityError,
@@ -1439,23 +1363,7 @@ def apply(
         sqlite3.Error,
     ) as exc:
         _exit_with_safe_error(exc)
-    typer.echo(
-        json.dumps(
-            {
-                "changeset_id": changeset_id,
-                "status": "APPLIED",
-                "commit": commit,
-                "files": list(paths),
-                "warning": archive_warning,
-                "obsidian": {
-                    "status": obsidian_status,
-                    "warning": obsidian_warning,
-                },
-            },
-            ensure_ascii=False,
-            indent=2,
-        )
-    )
+    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 @app.command()
@@ -1464,10 +1372,7 @@ def reject(
     workspace: WorkspaceOption = Path("."),
 ) -> None:
     try:
-        opened = Workspace.open(workspace)
-        with opened.exclusive_lock():
-            stored = ChangeSetStore(opened).get(changeset_id)
-            ChangeSetStore(opened).archive_rejected(stored)
+        result = reject_changeset(workspace, changeset_id)
     except (
         MemoryForgeError,
         WorkspaceIntegrityError,
@@ -1478,7 +1383,7 @@ def reject(
         sqlite3.Error,
     ) as exc:
         _exit_with_safe_error(exc)
-    typer.echo(json.dumps({"changeset_id": changeset_id, "status": "REJECTED"}))
+    typer.echo(json.dumps(result))
 
 
 @app.command()

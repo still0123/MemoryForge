@@ -97,8 +97,10 @@ def test_local_portal_index_shell_is_small_and_self_contained(tmp_path: Path) ->
     assert "http://" not in html
     assert "https://" not in html
     assert 'id="primary-nav"' in html
-    assert 'href="#projects"' in html
-    assert 'href="#sources=conversation"' in html
+    assert 'href="#knowledge"' in html
+    assert 'href="#add-source"' in html
+    assert 'href="#updates"' in html
+    assert 'href="#jobs"' in html
 
     status, content_type, body = portal.dispatch("/app.js")
     assert status == 200
@@ -134,6 +136,9 @@ def test_local_portal_classifies_projects_sources_templates_and_relations(
         "page_count": 8,
         "source_count": 6,
         "applied_source_count": 5,
+        "pending_updates": 0,
+        "active_jobs": 0,
+        "failed_jobs": 0,
     }
 
     projects = json.loads(portal.dispatch("/api/projects")[2])
@@ -284,9 +289,14 @@ def test_local_portal_http_host_methods_head_and_security_headers(tmp_path: Path
         forbidden.read()
 
         connection.request("POST", "/", headers={"Host": f"localhost:{port}"})
+        cross_site = connection.getresponse()
+        assert cross_site.status == 403
+        cross_site.read()
+
+        connection.request("PUT", "/", headers={"Host": f"localhost:{port}"})
         method = connection.getresponse()
         assert method.status == 405
-        assert method.getheader("Allow") == "GET, HEAD"
+        assert method.getheader("Allow") == "GET, HEAD, POST"
         method.read()
 
         connection.request("HEAD", "/app.js", headers={"Host": f"127.0.0.1:{port}"})

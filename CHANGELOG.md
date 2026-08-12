@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- 新增 `memoryforge start --workspace <workspace>` 本地操作入口：浏览器可预览并添加代码仓库、
+  Codex 会话、飞书、文件/文件夹、网页和 GitHub 讨论；小文件走受控临时上传。
+- 增加可恢复串行任务、可读 ChangeSet Diff、拒绝、真实 review/approval/apply/lint 流程；
+  写 API 强制 localhost Host、同源 Origin、页面内存 CSRF token 和 Workspace 锁。
+- 增加可选 macOS `launchd` 自动更新；代码、Codex 和显式启用的飞书刷新只生成待审核更新，
+  永不自动批准。CPython 3.11 全量测试为 `702 passed`。
 - Code Wiki 可通过现有 `ingest --code-wiki --llm --allow-local-llm` 组合，为父模块后序生成
   带 Citation 的职责、子模块分工、主要入口、依赖和调用流程；叶子 Symbol/Relation 页面、
   ModulePlan 与 ArchitectureGraph 保持确定性。
@@ -12,7 +18,7 @@
   `seed-2.1-turbo` 开发集事实覆盖率为 90%、Citation grounding 为 100%。
 - Provider 超时从 30 秒调至 60 秒，覆盖本地模型实测 30 秒以上的正常响应；benchmark 会保留
   `fallback` 为失败证据，不再因单个模块降级而中断。
-- 完成本项后恢复功能冻结；不增加向量库、知识图谱、公网部署、多用户、群聊或多 Agent。
+- 完成本地操作层后恢复功能冻结；不增加向量库、知识图谱、公网部署、多用户、群聊或多 Agent。
 
 <!-- memoryforge-release-claim: version=0.4.0; status=released; supported_platforms=macos; macos_passed=656; linux_status=not_rerun; windows_status=not_verified; release_verification=passed -->
 

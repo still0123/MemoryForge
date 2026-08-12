@@ -47,6 +47,7 @@ class SourceEntry:
 
     def public(self) -> dict[str, Any]:
         return {
+            "ref": self.source_id[:16],
             "name": self.title,
             "kind": self.kind,
             "updated": self.updated,
@@ -215,6 +216,25 @@ class PortalCatalog:
             "offset": offset,
             "limit": limit,
             "items": [source.public() for source in matches[offset : offset + limit]],
+        }
+
+    def source_details(self, source_ref: str) -> dict[str, Any]:
+        if re.fullmatch(r"[a-f0-9]{16}", source_ref) is None:
+            raise ValueError("invalid source")
+        matches = [
+            source for source in self.sources.values() if source.source_id.startswith(source_ref)
+        ]
+        if len(matches) != 1:
+            raise ValueError("unknown source")
+        source = matches[0]
+        project = self.repositories.get(source.repository_id or "")
+        return {
+            "workspace_commit": self.commit,
+            **source.public(),
+            "source_id": source.source_id,
+            "tags": list(source.tags),
+            "project": project.public() if project is not None else None,
+            "refreshable": source.repository_id is not None or "feishu" in source.tags,
         }
 
     def list_pages(

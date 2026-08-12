@@ -35,6 +35,14 @@ class FeishuDocumentSyncResult:
     unchanged: int
 
 
+def preview_feishu_document(document_reference: str) -> str:
+    """Fetch only the user-readable title for Portal confirmation."""
+    document = _fetch_document(document_reference)
+    document_id = _required_string(document, "document_id")
+    content = _required_string(document, "content")
+    return _document_title(document, content, document_id)
+
+
 def import_feishu_document(
     workspace: Path,
     document_reference: str,

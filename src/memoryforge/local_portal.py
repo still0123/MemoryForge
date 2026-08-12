@@ -1,11 +1,16 @@
-"""Read-only local HTTP portal for a large MemoryForge Workspace."""
+"""Local HTTP knowledge portal for one MemoryForge Workspace."""
 
 from __future__ import annotations
 
+import hmac
 import json
 import re
+import secrets
 import sqlite3
+import webbrowser
 from contextlib import suppress
+from email import policy
+from email.parser import BytesParser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path, PurePosixPath
 from threading import Lock
@@ -13,8 +18,15 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from memoryforge.errors import MemoryForgeError
-from memoryforge.portal_assets import APP_CSS, APP_JS, INDEX_HTML
+from memoryforge.lifecycle import get_update, list_updates, reject_changeset
+from memoryforge.portal_assets import APP_CSS, CONTROL_JS, INDEX_HTML
 from memoryforge.portal_catalog import PortalCatalog
+from memoryforge.portal_jobs import (
+    PortalJobManager,
+    automation_status,
+    configure_automation,
+)
+from memoryforge.query import answer_question
 from memoryforge.showcase import _display_wiki_text, _markdown_document, _markdown_html
 from memoryforge.workspace import (
     Workspace,
@@ -29,6 +41,8 @@ _JSON = "application/json"
 _HTML = "text/html; charset=utf-8"
 _CSS = "text/css; charset=utf-8"
 _JAVASCRIPT = "text/javascript; charset=utf-8"
+_MAX_REQUEST_BYTES = 1024 * 1024
+_MAX_UPLOAD_BYTES = 5 * 1024 * 1024 + 64 * 1024
 _PAGE_TITLE = re.compile(r"^#\s+(.+?)\s*$", re.MULTILINE)
 _HEADING_LINE = re.compile(r"^(#{1,6})\s+(.+?)\s*$", re.MULTILINE)
 _HOST_HEADER = re.compile(r"^(?:127\.0\.0\.1|localhost)(?::\d{1,5})?$", re.IGNORECASE)
@@ -308,9 +322,22 @@ class LocalPortalApp:
         self.root = self.workspace.root
         self._catalog_cache: PortalCatalog | None = None
         self._catalog_lock = Lock()
+        self.jobs = PortalJobManager(self.root)
+        self.csrf_token = secrets.token_urlsafe(32)
 
     def summary(self) -> dict[str, Any]:
-        return self._catalog().summary()
+        payload = self._catalog().summary()
+        jobs = self.jobs.list_jobs()["items"]
+        updates = list_updates(self.root)
+        payload.update(
+            pending_updates=len(updates),
+            active_jobs=sum(item["status"] in {"queued", "running"} for item in jobs),
+            failed_jobs=sum(item["status"] == "failed" for item in jobs),
+        )
+        return payload
+
+    def close(self) -> None:
+        self.jobs.close()
 
     def projects(self) -> dict[str, Any]:
         return self._catalog().list_projects()
@@ -374,9 +401,16 @@ class LocalPortalApp:
             if parsed.path == "/app.css":
                 return 200, _CSS, APP_CSS.encode("utf-8")
             if parsed.path == "/app.js":
-                return 200, _JAVASCRIPT, APP_JS.encode("utf-8")
+                return 200, _JAVASCRIPT, CONTROL_JS.encode("utf-8")
             if parsed.path == "/api/summary":
                 return _json_response(self.summary())
+            if parsed.path == "/api/session":
+                return _json_response(
+                    {
+                        "workspace_commit": self.workspace.current_commit(),
+                        "csrf_token": self.csrf_token,
+                    }
+                )
             if parsed.path == "/api/projects":
                 return _json_response(self.projects())
             if parsed.path == "/api/project":
@@ -392,6 +426,12 @@ class LocalPortalApp:
                     raise ValueError("source kind is required")
                 offset, limit = _pagination(params)
                 return _json_response(self.sources(kinds[0], offset=offset, limit=limit))
+            if parsed.path == "/api/source":
+                params = parse_qs(parsed.query)
+                refs = params.get("ref")
+                if not refs:
+                    raise ValueError("source ref is required")
+                return _json_response(self._catalog().source_details(refs[0]))
             if parsed.path == "/api/pages":
                 params = parse_qs(parsed.query)
                 offset, limit = _pagination(params)
@@ -411,6 +451,20 @@ class LocalPortalApp:
                 if not paths:
                     raise ValueError("page path is required")
                 return _json_response(self.page(paths[0]))
+            if parsed.path == "/api/jobs":
+                return _json_response(self._with_commit(self.jobs.list_jobs()))
+            if parsed.path.startswith("/api/jobs/"):
+                job_id = parsed.path.removeprefix("/api/jobs/")
+                return _json_response(self._with_commit(self.jobs.get(job_id)))
+            if parsed.path == "/api/updates":
+                return _json_response(
+                    self._with_commit({"items": list_updates(self.root)})
+                )
+            if parsed.path.startswith("/api/updates/"):
+                changeset_id = parsed.path.removeprefix("/api/updates/")
+                return _json_response(get_update(self.root, changeset_id))
+            if parsed.path == "/api/automation":
+                return _json_response(self._with_commit(automation_status(self.root)))
             return self._error_response("not found", status=404)
         except ValueError:
             return self._error_response("invalid request", status=400)
@@ -432,15 +486,158 @@ class LocalPortalApp:
                 self._catalog_cache = PortalCatalog(self.workspace, commit)
             return self._catalog_cache
 
-    def _error_response(self, message: str, *, status: int) -> tuple[int, str, bytes]:
-        payload: dict[str, Any] = {"error": message}
+    def _error_response(
+        self,
+        message: str,
+        *,
+        status: int,
+        error_code: str | None = None,
+        retryable: bool = False,
+    ) -> tuple[int, str, bytes]:
+        payload: dict[str, Any] = {
+            "error": message,
+            "error_code": error_code or message.replace(" ", "_"),
+            "user_message": message,
+            "retryable": retryable,
+        }
         with suppress(MemoryForgeError, OSError):
             payload["workspace_commit"] = self.workspace.current_commit()
         return _json_response(payload, status=status)
 
+    def dispatch_post(
+        self,
+        request_path: str,
+        payload: dict[str, Any],
+    ) -> tuple[int, str, bytes]:
+        parsed = urlparse(request_path)
+        try:
+            if parsed.path == "/api/sources/preview":
+                return _json_response(
+                    self._with_commit(self.jobs.preview(payload))
+                )
+            if parsed.path == "/api/sources":
+                return _json_response(
+                    self._with_commit(self.jobs.submit_source(payload)),
+                    status=202,
+                )
+            if parsed.path.startswith("/api/sources/") and parsed.path.endswith("/refresh"):
+                source_id = parsed.path.removeprefix("/api/sources/").removesuffix("/refresh")
+                return _json_response(
+                    self._with_commit(self.jobs.submit_refresh(source_id)),
+                    status=202,
+                )
+            if parsed.path.startswith("/api/jobs/") and parsed.path.endswith("/cancel"):
+                job_id = parsed.path.removeprefix("/api/jobs/").removesuffix("/cancel")
+                return _json_response(self._with_commit(self.jobs.cancel(job_id)))
+            if parsed.path.startswith("/api/updates/") and parsed.path.endswith("/reject"):
+                changeset_id = parsed.path.removeprefix("/api/updates/").removesuffix("/reject")
+                return _json_response(
+                    self._with_commit(reject_changeset(self.root, changeset_id))
+                )
+            if (
+                parsed.path.startswith("/api/updates/")
+                and parsed.path.endswith("/approve-and-apply")
+            ):
+                changeset_id = (
+                    parsed.path.removeprefix("/api/updates/")
+                    .removesuffix("/approve-and-apply")
+                )
+                update = get_update(self.root, changeset_id)
+                return _json_response(
+                    self._with_commit(
+                        self.jobs.submit_apply(changeset_id, str(update["name"]))
+                    ),
+                    status=202,
+                )
+            if parsed.path == "/api/automation":
+                return _json_response(
+                    self._with_commit(configure_automation(self.root, payload))
+                )
+            if parsed.path == "/api/ask":
+                question = payload.get("question")
+                if not isinstance(question, str) or not question.strip():
+                    raise ValueError("question is required")
+                answer = answer_question(self.root, question.strip(), max_citations=3)
+                return _json_response(
+                    self._with_commit(
+                        {
+                            "status": answer["status"],
+                            "answer": answer["answer"],
+                            "citations": [
+                                {
+                                    "quote": citation["quote"],
+                                    "section": citation["section_path"],
+                                }
+                                for citation in answer["citations"]
+                            ],
+                        }
+                    )
+                )
+            return self._error_response("not found", status=404)
+        except ValueError:
+            return self._error_response(
+                "invalid request",
+                status=400,
+                error_code="invalid_request",
+                retryable=False,
+            )
+        except FileNotFoundError:
+            return self._error_response(
+                "not found",
+                status=404,
+                error_code="not_found",
+                retryable=False,
+            )
+        except (
+            MemoryForgeError,
+            WorkspaceIntegrityError,
+            WorkspaceSecurityError,
+            sqlite3.Error,
+            OSError,
+        ):
+            return self._error_response(
+                "operation failed safely",
+                status=500,
+                error_code="workflow_error",
+                retryable=True,
+            )
+
+    def submit_upload(
+        self,
+        filename: str,
+        content: bytes,
+        kind: str,
+        *,
+        public: bool,
+        confirm_public: bool,
+    ) -> tuple[int, str, bytes]:
+        try:
+            return _json_response(
+                self._with_commit(
+                    self.jobs.submit_upload(
+                        filename,
+                        content,
+                        kind,
+                        public=public,
+                        confirm_public=confirm_public,
+                    )
+                ),
+                status=202,
+            )
+        except ValueError:
+            return self._error_response(
+                "invalid upload",
+                status=400,
+                error_code="invalid_upload",
+                retryable=False,
+            )
+
+    def _with_commit(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return {"workspace_commit": self.workspace.current_commit(), **payload}
+
 
 def make_handler(portal: LocalPortalApp) -> type[BaseHTTPRequestHandler]:
-    """Return a loopback-only GET/HEAD handler for one LocalPortalApp."""
+    """Return a loopback-only handler for one LocalPortalApp."""
 
     class LocalPortalHandler(BaseHTTPRequestHandler):
         portal: LocalPortalApp
@@ -452,7 +649,76 @@ def make_handler(portal: LocalPortalApp) -> type[BaseHTTPRequestHandler]:
             self._dispatch(send_body=False)
 
         def do_POST(self) -> None:
-            self._method_not_allowed()
+            host = self.headers.get("Host", "")
+            origin = self.headers.get("Origin", "")
+            if not _allowed_host(host) or not _allowed_origin(origin, host):
+                self._send_json_error(403, "cross_site_request", "拒绝跨站写入请求。")
+                return
+            if not hmac.compare_digest(
+                self.headers.get("X-MemoryForge-CSRF", ""),
+                self.portal.csrf_token,
+            ):
+                self._send_json_error(403, "invalid_csrf", "页面会话已失效，请刷新页面。")
+                return
+            try:
+                content_length = int(self.headers.get("Content-Length", ""))
+            except ValueError:
+                self._send_json_error(400, "invalid_request", "请求长度无效。")
+                return
+            raw_content_type = self.headers.get("Content-Type", "")
+            content_type = raw_content_type.split(";", 1)[0].strip()
+            maximum = (
+                _MAX_UPLOAD_BYTES if content_type == "multipart/form-data" else _MAX_REQUEST_BYTES
+            )
+            if not 0 < content_length <= maximum:
+                self._send_json_error(413, "request_too_large", "请求内容过大。")
+                return
+            raw = self.rfile.read(content_length)
+            if content_type == "multipart/form-data":
+                if self.path != "/api/sources":
+                    self._send_json_error(404, "not_found", "接口不存在。")
+                    return
+                try:
+                    filename, content, kind, public, confirm_public = _parse_upload(
+                        raw_content_type,
+                        raw,
+                    )
+                    status, response_type, body = self.portal.submit_upload(
+                        filename,
+                        content,
+                        kind,
+                        public=public,
+                        confirm_public=confirm_public,
+                    )
+                except ValueError:
+                    self._send_json_error(400, "invalid_upload", "上传文件无效。")
+                    return
+                self._send(status, response_type, body, send_body=True)
+                return
+            if content_type != "application/json":
+                self._send_json_error(415, "invalid_content_type", "只接受 JSON 或文件上传。")
+                return
+            try:
+                payload = json.loads(raw)
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                self._send_json_error(400, "invalid_json", "JSON 内容无效。")
+                return
+            if not isinstance(payload, dict):
+                self._send_json_error(400, "invalid_json", "JSON 必须是对象。")
+                return
+            try:
+                status, response_type, body = self.portal.dispatch_post(self.path, payload)
+            except Exception:
+                status, response_type, body = _json_response(
+                    {
+                        "error": "internal server error",
+                        "error_code": "internal_error",
+                        "user_message": "本地操作失败。",
+                        "retryable": True,
+                    },
+                    status=500,
+                )
+            self._send(status, response_type, body, send_body=True)
 
         def do_PUT(self) -> None:
             self._method_not_allowed()
@@ -475,7 +741,12 @@ def make_handler(portal: LocalPortalApp) -> type[BaseHTTPRequestHandler]:
         def _dispatch(self, *, send_body: bool) -> None:
             if not _allowed_host(self.headers.get("Host", "")):
                 status, content_type, body = _json_response(
-                    {"error": "forbidden host"},
+                    {
+                        "error": "forbidden host",
+                        "error_code": "forbidden_host",
+                        "user_message": "拒绝非本机请求。",
+                        "retryable": False,
+                    },
                     status=403,
                 )
                 self._send(status, content_type, body, send_body=send_body)
@@ -495,6 +766,18 @@ def make_handler(portal: LocalPortalApp) -> type[BaseHTTPRequestHandler]:
                 status=405,
             )
             self._send(status, content_type, body, send_body=True)
+
+        def _send_json_error(self, status: int, code: str, message: str) -> None:
+            response_status, content_type, body = _json_response(
+                {
+                    "error": message,
+                    "error_code": code,
+                    "user_message": message,
+                    "retryable": False,
+                },
+                status=status,
+            )
+            self._send(response_status, content_type, body, send_body=True)
 
         def _send(
             self,
@@ -518,7 +801,7 @@ def make_handler(portal: LocalPortalApp) -> type[BaseHTTPRequestHandler]:
                 "frame-ancestors 'none'",
             )
             if status == 405:
-                self.send_header("Allow", "GET, HEAD")
+                self.send_header("Allow", "GET, HEAD, POST")
             self.end_headers()
             if send_body:
                 self.wfile.write(body)
@@ -531,7 +814,7 @@ def make_handler(portal: LocalPortalApp) -> type[BaseHTTPRequestHandler]:
 
 
 class LocalPortalServer(ThreadingHTTPServer):
-    """Loopback-only server for one read-only Workspace."""
+    """Loopback-only server for one Workspace."""
 
     allow_reuse_address = True
     daemon_threads = True
@@ -540,10 +823,23 @@ class LocalPortalServer(ThreadingHTTPServer):
         self.app = LocalPortalApp(workspace)
         super().__init__((_HOST, port), make_handler(self.app))
 
+    def server_close(self) -> None:
+        self.app.close()
+        super().server_close()
 
-def serve_local_portal(workspace: Path, port: int = 8765) -> None:
+
+def serve_local_portal(
+    workspace: Path,
+    port: int = 8765,
+    *,
+    open_browser: bool = False,
+) -> None:
     server = LocalPortalServer(workspace, port=port)
-    print(f"MemoryForge local Wiki: http://{_HOST}:{port} (Ctrl+C to stop)", flush=True)
+    actual_port = int(server.server_address[1])
+    url = f"http://{_HOST}:{actual_port}"
+    print(f"MemoryForge local Wiki: {url} (Ctrl+C to stop)", flush=True)
+    if open_browser:
+        webbrowser.open(url)
     try:
         server.serve_forever(poll_interval=0.5)
     except KeyboardInterrupt:
@@ -576,6 +872,60 @@ def _validate_pagination(offset: int, limit: int) -> None:
 
 def _allowed_host(host: str) -> bool:
     return _HOST_HEADER.fullmatch(host.strip()) is not None
+
+
+def _allowed_origin(origin: str, host: str) -> bool:
+    parsed = urlparse(origin)
+    return (
+        parsed.scheme == "http"
+        and parsed.netloc.casefold() == host.strip().casefold()
+        and _allowed_host(parsed.netloc)
+        and not parsed.path
+        and not parsed.params
+        and not parsed.query
+        and not parsed.fragment
+    )
+
+
+def _parse_upload(
+    content_type: str,
+    body: bytes,
+) -> tuple[str, bytes, str, bool, bool]:
+    message = BytesParser(policy=policy.default).parsebytes(
+        (
+            f"Content-Type: {content_type}\r\n"
+            "MIME-Version: 1.0\r\n\r\n"
+        ).encode("ascii")
+        + body
+    )
+    filename = ""
+    content = b""
+    kind = ""
+    public = False
+    confirm_public = False
+    for part in message.iter_parts():
+        name = part.get_param("name", header="content-disposition")
+        if name == "file":
+            filename = part.get_filename() or ""
+            payload = part.get_payload(decode=True)
+            content = payload if isinstance(payload, bytes) else b""
+        elif name == "kind":
+            payload = part.get_payload(decode=True)
+            kind = payload.decode("utf-8").strip() if isinstance(payload, bytes) else ""
+        elif name in {"public", "confirm_public"}:
+            payload = part.get_payload(decode=True)
+            enabled = (
+                payload.decode("utf-8").strip().lower() == "true"
+                if isinstance(payload, bytes)
+                else False
+            )
+            if name == "public":
+                public = enabled
+            else:
+                confirm_public = enabled
+    if not filename or not content or kind not in {"file", "codex"}:
+        raise ValueError("invalid upload")
+    return filename, content, kind, public, confirm_public
 
 
 def _portal_markdown(markdown: str) -> str:

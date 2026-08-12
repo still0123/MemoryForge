@@ -110,6 +110,7 @@ Wiki 树、Diff、Citation Trace、Benchmark、保留的失败案例、正确拒
 - **飞书展示入口**：`feishu-serve` 直接接收飞书私聊消息，查询本地 Wiki 后回复；可显式启用模型，将命中的证据组织成更自然的回答。
 - **模型不可用时可降级**：模型服务超时或临时繁忙时，`ask` 和飞书入口回退到已验证的 Wiki 原文，不让用户一直等待或得到无引用的错误答案。
 - **可验证性**：提供 `lint` 检查页面/来源关系，提供 `eval` 用公开题集检查回答、引用与读取成本。
+- **本地知识门户**：`memoryforge start` 在浏览器中完成来源预览、后台导入、差异审核、明确批准和可选自动更新；所有写操作复用 CLI 的真实生命周期。
 - **只读展示**：`memoryforge showcase build` 生成自包含静态 Evidence 页面；默认隐藏
   `local_only` 来源、页面、ChangeSet 和 Citation 细节。
 
@@ -397,6 +398,7 @@ memoryforge rollback <historical-commit> --workspace <workspace>
 memoryforge lint --workspace <workspace>
 
 # 问答与展示
+memoryforge start --workspace <workspace>
 memoryforge ask '<question>' --workspace <workspace>
 memoryforge recall --workspace <workspace>
 memoryforge agent '<question>' --workspace <workspace>
@@ -408,14 +410,16 @@ memoryforge feishu-serve --workspace <workspace>
 
 ## 本地 Wiki 动态服务
 
-大 Wiki 不想生成巨型静态 Showcase 时，可只读启动本机浏览器：
+日常使用只需一个入口：
 
 ```bash
-memoryforge showcase serve --workspace <workspace> --port 8765
+memoryforge start --workspace <workspace>
 ```
 
-只绑定 `127.0.0.1`，首页是小型中文壳；页面列表分页/搜索，单页正文按 `page_path`
-懒加载，API 不缓存私有正文到磁盘，也不修改 Workspace。
+Portal 只绑定 `127.0.0.1`，支持按需阅读、搜索、添加本地仓库/Codex 会话/文件/飞书/网页，
+后台任务完成后停在“等待审核”。只有用户点击“批准并应用”才记录 review、approval receipt
+并写入新的 Wiki Commit。写操作校验同源 `Origin`、页面内存 CSRF token 和 Workspace 锁。
+脚本仍可使用 `memoryforge showcase serve --workspace <workspace> --port 8765`，它不会自动打开浏览器。
 
 ## Obsidian 本地视图
 
