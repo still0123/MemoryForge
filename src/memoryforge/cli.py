@@ -1793,6 +1793,13 @@ def agent_eval(
         int,
         typer.Option("--max-pages", min=1, max=3, help="Maximum Wiki pages for search."),
     ] = 3,
+    allow_local_llm: Annotated[
+        bool,
+        typer.Option(
+            "--allow-local-llm",
+            help="Allow the configured model to read local_only evidence in this evaluation.",
+        ),
+    ] = False,
 ) -> None:
     """Run one frozen suite through the real Wiki-backed Agent."""
     try:
@@ -1803,6 +1810,7 @@ def agent_eval(
             OpenAICompatibleProvider(ProviderConfig.from_environment()),
             max_steps=max_steps,
             max_pages=max_pages,
+            allow_local=allow_local_llm,
         )
     except (
         MemoryForgeError,

@@ -10,7 +10,11 @@ from typing import Literal, TypedDict
 
 from memoryforge.changesets import ChangeSetStore
 from memoryforge.compiler import propose_agent_update
-from memoryforge.provider import OpenAICompatibleProvider
+from memoryforge.provider import (
+    AgentStep,
+    OpenAICompatibleProvider,
+    ProviderResponseFormatError,
+)
 from memoryforge.query import (
     AskPayload,
     EvidencePayload,
@@ -61,6 +65,13 @@ _MAX_AGENT_PAGES = 3
 _MAX_AGENT_CITATIONS = 6
 _MAX_EVIDENCE_CHARS = 2_000
 _MAX_TOOL_RESULT_CHARS = 8_000
+_FORMAT_REPAIR_MESSAGE = {
+    "role": "user",
+    "content": (
+        "Your previous response did not match the JSON action contract. Return exactly one "
+        "valid action object. Do not include prose, Markdown, XML, or code fences."
+    ),
+}
 _FINAL_RETRY_REASONS = (
     "empty_answer",
     "missing_citations",
@@ -111,12 +122,9 @@ def run_agent(
 
     for step_number in range(1, max_steps + 1):
         call_id = f"call-{step_number}"
-        started = perf_counter()
         try:
-            decision = provider.agent_step(messages)
+            decision = _request_agent_step(provider, messages, metrics)
         except ValueError as exc:
-            metrics["provider_calls"] += 1
-            metrics["provider_latency_ms"] += (perf_counter() - started) * 1000
             events.append(
                 {
                     "step": step_number,
@@ -138,8 +146,6 @@ def run_agent(
                 "tool_result_characters": tool_result_characters,
                 "metrics": metrics,
             }
-        metrics["provider_calls"] += 1
-        metrics["provider_latency_ms"] += (perf_counter() - started) * 1000
         call_id = decision.call_id or call_id
         tool_result: object
         if decision.action == "final":
@@ -321,6 +327,23 @@ def run_agent(
         "tool_result_characters": tool_result_characters,
         "metrics": metrics,
     }
+
+
+def _request_agent_step(
+    provider: OpenAICompatibleProvider,
+    messages: list[dict[str, str]],
+    metrics: AgentMetrics,
+) -> AgentStep:
+    started = perf_counter()
+    try:
+        try:
+            return provider.agent_step(messages)
+        except ProviderResponseFormatError:
+            metrics["provider_calls"] += 1
+            return provider.agent_step([*messages, _FORMAT_REPAIR_MESSAGE])
+    finally:
+        metrics["provider_calls"] += 1
+        metrics["provider_latency_ms"] += (perf_counter() - started) * 1000
 
 
 def _new_metrics() -> AgentMetrics:

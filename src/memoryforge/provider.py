@@ -30,6 +30,10 @@ class ProviderUnavailableError(ValueError):
     """The configured model service did not respond normally."""
 
 
+class ProviderResponseFormatError(ValueError):
+    """The model response content is not valid JSON."""
+
+
 @dataclass(frozen=True)
 class ProviderConfig:
     api_base: str
@@ -185,7 +189,9 @@ class OpenAICompatibleProvider:
         try:
             return AgentStep.model_validate(decoded)
         except ValidationError as exc:
-            raise ValueError("provider response does not match Agent step contract") from exc
+            raise ProviderResponseFormatError(
+                "provider response does not match Agent step contract"
+            ) from exc
 
     def propose_update(self, messages: Sequence[Mapping[str, str]]) -> PageChange | None:
         """Propose one reviewable page update from already-read evidence."""
@@ -236,11 +242,29 @@ class OpenAICompatibleProvider:
         except URLError as exc:
             raise ProviderUnavailableError(f"provider connection failed: {exc.reason}") from exc
 
-        content = _response_content(response)
+        return _decode_json_content(_response_content(response))
+
+
+def _decode_json_content(content: str) -> Any:
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError as original_error:
+        object_start = content.find("{")
+        if object_start < 0:
+            raise ProviderResponseFormatError(
+                "provider response content is not valid JSON"
+            ) from original_error
         try:
-            return json.loads(content)
+            decoded, object_end = json.JSONDecoder().raw_decode(content, object_start)
         except json.JSONDecodeError as exc:
-            raise ValueError("provider response content is not valid JSON") from exc
+            raise ProviderResponseFormatError(
+                "provider response content is not valid JSON"
+            ) from exc
+        if content[object_end:].strip():
+            raise ProviderResponseFormatError(
+                "provider response content is not valid JSON"
+            ) from original_error
+        return decoded
 
 
 def _response_content(response: bytes) -> str:

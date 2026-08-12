@@ -12,7 +12,11 @@ from memoryforge.agent import run_agent
 from memoryforge.changesets import ChangeSetStore
 from memoryforge.cli import app
 from memoryforge.models import PageChange
-from memoryforge.provider import AgentStep, OpenAICompatibleProvider
+from memoryforge.provider import (
+    AgentStep,
+    OpenAICompatibleProvider,
+    ProviderResponseFormatError,
+)
 from memoryforge.sessions import SessionStore, rewrite_query, save_turn
 from memoryforge.workspace import Workspace
 from tests.cli_helpers import review_approve_apply
@@ -462,6 +466,50 @@ def test_agent_reports_provider_error_as_terminal_status(tmp_path: Path, monkeyp
     assert result["answer"] == "模型请求失败"
     assert result["events"][0]["action"] == "provider_error"
     assert "provider request failed" in result["events"][0]["result"]
+
+
+def test_agent_repairs_one_invalid_json_response(tmp_path: Path, monkeypatch) -> None:
+    workspace = _applied_public_workspace(tmp_path, monkeypatch)
+
+    class RepairingProvider(StubAgentProvider):
+        def __init__(self) -> None:
+            super().__init__([AgentStep(action="final", answer="不知道")])
+            self.messages: list[object] = []
+
+        def agent_step(self, messages: object) -> AgentStep:
+            self.messages.append(messages)
+            if len(self.messages) == 1:
+                raise ProviderResponseFormatError("provider response content is not valid JSON")
+            return super().agent_step(messages)
+
+    provider = RepairingProvider()
+    result = run_agent(workspace, "What is the database schema?", provider=provider)
+
+    assert result["status"] == "unknown"
+    assert result["metrics"]["provider_calls"] == 2
+    repair_messages = provider.messages[1]
+    assert isinstance(repair_messages, list)
+    assert "exactly one valid action object" in repair_messages[-1]["content"]
+
+
+def test_agent_attempts_json_format_repair_only_once(tmp_path: Path, monkeypatch) -> None:
+    workspace = _applied_public_workspace(tmp_path, monkeypatch)
+
+    class InvalidProvider(StubAgentProvider):
+        def __init__(self) -> None:
+            super().__init__([])
+            self.calls = 0
+
+        def agent_step(self, _messages: object) -> AgentStep:
+            self.calls += 1
+            raise ProviderResponseFormatError("provider response content is not valid JSON")
+
+    provider = InvalidProvider()
+    result = run_agent(workspace, "What is the database schema?", provider=provider)
+
+    assert result["status"] == "provider_error"
+    assert result["metrics"]["provider_calls"] == 2
+    assert provider.calls == 2
 
 
 def test_agent_returns_unknown_tool_observation(tmp_path: Path, monkeypatch) -> None:
