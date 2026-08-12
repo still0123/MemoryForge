@@ -20,6 +20,7 @@ import typer
 
 from memoryforge import __version__
 from memoryforge.agent import run_agent
+from memoryforge.agent_evaluation import run_agent_evaluation
 from memoryforge.botmux_adapter import BotmuxHookError, handle_botmux_hook
 from memoryforge.changesets import ChangeSetStore, StoredChangeSet
 from memoryforge.code_index import build_code_index
@@ -1877,6 +1878,42 @@ def agent_clear(
     ) as exc:
         _exit_with_safe_error(exc)
     typer.echo(json.dumps({"session_id": session, "status": "CLEARED"}, ensure_ascii=False))
+
+
+@app.command("agent-eval")
+def agent_eval(
+    eval_config: Annotated[Path, typer.Argument(help="Agent EvaluationSuite JSON.")],
+    workspace: WorkspaceOption = Path("."),
+    max_steps: Annotated[
+        int,
+        typer.Option("--max-steps", min=1, max=8, help="Maximum model/tool turns."),
+    ] = 4,
+    max_pages: Annotated[
+        int,
+        typer.Option("--max-pages", min=1, max=3, help="Maximum Wiki pages for search."),
+    ] = 3,
+) -> None:
+    """Run one frozen suite through the real Wiki-backed Agent."""
+    try:
+        opened = Workspace.open_readonly(workspace)
+        result = run_agent_evaluation(
+            opened.root,
+            eval_config,
+            OpenAICompatibleProvider(ProviderConfig.from_environment()),
+            max_steps=max_steps,
+            max_pages=max_pages,
+        )
+    except (
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 @app.command()

@@ -257,6 +257,8 @@ memoryforge agent-clear interview --workspace ./my-wiki
 
 Agent 没有 Shell、通用写文件、Subagent 或 MCP 工具；它只负责在有限步数内检索、核验和回答。session 由系统写入专用本地目录，不是模型可调用的工具。因此项目的重点始终是 Wiki 编译、来源路由与渐进式查询，而不是堆叠通用 Agent 能力。
 
+真实 Agent 评测使用 `memoryforge agent-eval <suite.json> --workspace ./my-wiki --max-steps 4 --max-pages 3`，复用 `EvaluationSuite`，并通过 `run_agent` 读取只读 Workspace；stdout 只输出聚合 JSON，不写 session/ChangeSet/Wiki，也不包含原始 Evidence 或提示词。
+
 ## 用公开资料复现
 
 仓库提供了仅基于公开 `AgentSkill-Eval` 文档的 Demo，不需要模型 Key，也不上传资料：
