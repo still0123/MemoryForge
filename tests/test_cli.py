@@ -8,6 +8,7 @@ from pathlib import Path
 from typer.main import get_command
 from typer.testing import CliRunner
 
+import memoryforge.cli as cli_module
 from memoryforge.cli import app
 from memoryforge.sessions import SessionStore
 from tests.cli_helpers import review_approve_apply
@@ -144,7 +145,7 @@ def test_query_commands_expose_repository_scope() -> None:
         )
 
 
-def test_cli_agent_eval_exposes_max_steps_and_max_pages() -> None:
+def test_cli_agent_eval_exposes_bounds_and_local_authorization() -> None:
     command = get_command(app).commands["agent-eval"]
 
     assert any(
@@ -155,6 +156,49 @@ def test_cli_agent_eval_exposes_max_steps_and_max_pages() -> None:
         "--max-pages" in getattr(parameter, "opts", ()) and not getattr(parameter, "hidden", False)
         for parameter in command.params
     )
+    assert any(
+        "--allow-local-llm" in getattr(parameter, "opts", ())
+        and not getattr(parameter, "hidden", False)
+        for parameter in command.params
+    )
+
+
+def test_cli_agent_eval_forwards_local_authorization(tmp_path: Path, monkeypatch) -> None:
+    workspace = tmp_path / "workspace"
+    suite = tmp_path / "suite.json"
+    suite.write_text("{}", encoding="utf-8")
+    runner = CliRunner()
+    assert runner.invoke(app, ["init", str(workspace)]).exit_code == 0
+    captured: dict[str, bool] = {}
+
+    monkeypatch.setenv("MEMORYFORGE_API_BASE", "https://example.invalid")
+    monkeypatch.setenv("MEMORYFORGE_API_KEY", "test")
+    monkeypatch.setenv("MEMORYFORGE_MODEL", "test")
+
+    def fake_evaluation(
+        _workspace: Path,
+        _suite: Path,
+        _provider: object,
+        **kwargs: object,
+    ) -> dict[str, object]:
+        captured["allow_local"] = bool(kwargs["allow_local"])
+        return {"case_count": 0}
+
+    monkeypatch.setattr(cli_module, "run_agent_evaluation", fake_evaluation)
+
+    result = runner.invoke(
+        app,
+        [
+            "agent-eval",
+            str(suite),
+            "--allow-local-llm",
+            "--workspace",
+            str(workspace),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured == {"allow_local": True}
 
 
 def test_agent_clear_removes_one_local_session(tmp_path: Path) -> None:

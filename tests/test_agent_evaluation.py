@@ -163,7 +163,7 @@ def test_agent_eval_aggregates_returned_agent_metrics(
     }
 
 
-def test_agent_eval_passes_single_repository_id_and_global_multi_repository(
+def test_agent_eval_passes_repository_scope_and_local_authorization(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -193,21 +193,26 @@ def test_agent_eval_passes_single_repository_id_and_global_multi_repository(
             },
         ],
     )
-    captured: list[str | None] = []
+    captured: list[tuple[str | None, bool]] = []
 
     def fake_run(
         _root: Path,
         _question: str,
         **_kwargs: object,
     ) -> dict[str, object]:
-        captured.append(_kwargs["repository_id"])  # type: ignore[arg-type]
+        captured.append(
+            (
+                _kwargs["repository_id"],  # type: ignore[arg-type]
+                _kwargs["allow_local"],  # type: ignore[arg-type]
+            )
+        )
         return _result("unknown", 1, {})
 
     monkeypatch.setattr(agent_evaluation, "run_agent", fake_run)
 
-    run_agent_evaluation(workspace, config, StubAgentProvider([]))
+    run_agent_evaluation(workspace, config, StubAgentProvider([]), allow_local=True)
 
-    assert captured == [first, None]
+    assert captured == [(first, True), (None, True)]
 
 
 class _FakeAgentProvider:

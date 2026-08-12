@@ -12,6 +12,7 @@ from memoryforge.models import CompilationPlan, PageChange, TopicGroup
 from memoryforge.provider import (
     OpenAICompatibleProvider,
     ProviderConfig,
+    ProviderResponseFormatError,
     ProviderUnavailableError,
 )
 
@@ -306,14 +307,52 @@ def test_provider_keeps_unknown_agent_action_for_loop_observation() -> None:
     assert result.call_id == "model-call-7"
 
 
+def test_provider_classifies_invalid_agent_step_shape_as_format_error() -> None:
+    provider = OpenAICompatibleProvider(
+        ProviderConfig("https://example.test", "test-key", "test-model"),
+        transport=lambda _request: _chat_response(
+            {"action": "read_evidence", "citation_index": [0]}
+        ),
+    )
+
+    with pytest.raises(ProviderResponseFormatError, match="Agent step contract"):
+        provider.agent_step([])
+
+
 def test_provider_rejects_invalid_model_json() -> None:
     provider = OpenAICompatibleProvider(
         ProviderConfig("https://example.test", "test-key", "test-model"),
         transport=lambda _request: _chat_response_content("not json"),
     )
 
-    with pytest.raises(ValueError, match="content is not valid JSON"):
+    with pytest.raises(ProviderResponseFormatError, match="content is not valid JSON"):
         provider.compile_pages([])
+
+
+def test_provider_accepts_one_json_object_after_model_preamble() -> None:
+    provider = OpenAICompatibleProvider(
+        ProviderConfig("https://example.test", "test-key", "test-model"),
+        transport=lambda _request: _chat_response_content(
+            'I need to search first.\n{"action":"search_wiki","query":"cache expiry"}'
+        ),
+    )
+
+    result = provider.agent_step([])
+
+    assert result.action == "search_wiki"
+    assert result.query == "cache expiry"
+
+
+def test_provider_rejects_trailing_text_after_recovered_json() -> None:
+    provider = OpenAICompatibleProvider(
+        ProviderConfig("https://example.test", "test-key", "test-model"),
+        transport=lambda _request: _chat_response_content(
+            '{"action":"search_wiki","query":"cache expiry"}\nDone.'
+        ),
+    )
+
+    with pytest.raises(ValueError, match="content is not valid JSON"):
+        provider.agent_step([])
 
 
 def test_provider_rejects_missing_choices() -> None:

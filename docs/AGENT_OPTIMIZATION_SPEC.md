@@ -24,7 +24,8 @@ Agent 准确率、步数耗尽率或 Provider 稳定性证据。飞书目前也�
 
 - 不增加向量库、Embedding、Router、持久化缓存、实体卡、多 Agent、MCP、Shell、
   通用文件写入或新 Agent 工具。
-- 不自动重试 Provider，不修改默认 `max_steps=4`，不先猜测更优步数。
+- 不无条件重试 Provider；仅在 Agent step JSON 解码或 Schema 校验失败时允许一次格式修复。
+  不修改默认 `max_steps=4`，不先猜测更优步数。
 - 不把 Agent 接入飞书默认路径；也不增加飞书开关。先得到冻结题集数据。
 - 不增加 `clarify` 状态。本轮先从真实结果中统计错误拒答和 `max_steps`，再决定是否需要
   新状态及其跨轮会话语义。
@@ -37,12 +38,14 @@ Agent 准确率、步数耗尽率或 Provider 稳定性证据。飞书目前也�
 memoryforge agent-eval <suite.json> \
   --workspace <workspace> \
   --max-steps 4 \
-  --max-pages 3
+  --max-pages 3 \
+  [--allow-local-llm]
 ```
 
 - 配置继续复用 `memoryforge.evaluation.EvaluationSuite`，不创建第二套题集 schema。
 - Provider 继续来自 `ProviderConfig.from_environment()`。
 - 命令明确执行真实模型调用；只在用户主动运行时发生。
+- 默认不发送 `local_only` Evidence；只有显式传入 `--allow-local-llm` 才授权。
 - Workspace 只读；不得创建 session、ChangeSet、Wiki 页面或评测文件。
 - stdout 只输出 JSON；不包含完整 Evidence、提示词、API Key 或私有原文。
 
@@ -142,4 +145,4 @@ Agent system prompt 必须明确：
 - 模糊题的主要失败是错误拒答：再设计 `clarify` 状态和跨轮保存语义。
 - Agent 准确率、来源召回和拒答质量不低于确定性路径，且延迟可接受：再增加飞书显式
   Agent 模式；默认路径仍不自动切换。
-- Provider schema 错误可重复出现：再考虑一次有界格式修复；不得无条件重试。
+- 一次格式修复后仍有 Provider schema 错误：保留失败并记录，不增加无界重试。

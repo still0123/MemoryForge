@@ -25,6 +25,7 @@ def run_agent_evaluation(
     *,
     max_steps: int = 4,
     max_pages: int = 3,
+    allow_local: bool = False,
 ) -> dict[str, object]:
     """Run one frozen suite through the real Agent and aggregate its returned metrics."""
     suite = EvaluationSuite.model_validate_json(config_path.read_text(encoding="utf-8"))
@@ -38,6 +39,7 @@ def run_agent_evaluation(
             source_repositories,
             max_steps=max_steps,
             max_pages=max_pages,
+            allow_local=allow_local,
         )
         for case in suite.cases
     ]
@@ -87,6 +89,7 @@ def _evaluate_agent_case(
     *,
     max_steps: int,
     max_pages: int,
+    allow_local: bool,
 ) -> dict[str, Any]:
     repository_ids = case.repository_ids or (
         (case.repository_id,) if case.repository_id is not None else ()
@@ -97,6 +100,7 @@ def _evaluate_agent_case(
         provider=provider,
         max_steps=max_steps,
         max_pages=max_pages,
+        allow_local=allow_local,
         repository_id=repository_ids[0] if len(repository_ids) == 1 else None,
     )
     actual_sources = _cited_sources(result["citations"], source_paths, source_repositories)
