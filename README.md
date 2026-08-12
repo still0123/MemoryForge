@@ -8,17 +8,23 @@
 
 > **v0.4.0 发布范围：macOS。** 完整本地门禁 `656 passed`。Linux 未在本版本重跑；
 > Windows 尚未验证。最终状态与 SHA256 以 GitHub Release 为准。
+>
+> 当前 `main` 已包含尚未发布的本地 Portal 控制面；下方新截图和 `716 passed` 门禁描述
+> 对应当前 `main`，不改写 v0.4.0 的冻结发布证据。
 
-[60 秒演示](#60-秒公开演示) · [工作原理](#工作原理) · [5 分钟跑通](#5-分钟跑通) ·
+[5 分钟跑通](#5-分钟跑通) · [Portal 日常流程](#portal-日常流程) · [工作原理](#工作原理) ·
+[60 秒公开演示](#60-秒公开演示) ·
 [公开证据](#公开-evidence-与已知失败) · [设计边界](#当前边界)
 
 ![MemoryForge 工作流](assets/memoryforge-flow.svg)
 
-<p align="center">
-  <img src="assets/memoryforge-portal-overview.png" width="49%" alt="本地技术 Wiki 的概览、搜索和项目目录" />
-  <img src="assets/memoryforge-portal-wiki.png" width="49%" alt="本地技术 Wiki 的页面树、Markdown 阅读器和引用依据" />
-</p>
-<p align="center"><sub>v0.4.0 本地只读 Wiki：概览、检索、最近页面、Markdown 阅读器和引用依据。</sub></p>
+![MemoryForge 本地知识门户首页：知识数量、待审核更新和项目入口](assets/memoryforge-portal-overview.png)
+
+<p align="center"><sub>当前本地 Portal 首页：按需阅读、搜索、添加来源、查看待审核更新和项目知识。</sub></p>
+
+![MemoryForge 知识更新审核页：来源、页面 Diff、拒绝与批准应用](assets/memoryforge-portal-wiki.png)
+
+<p align="center"><sub>知识更新审核页：显示来源版本、页面级 Diff 和引用数量；明确批准后才写入正式 Wiki。</sub></p>
 
 ## 为什么做 MemoryForge？
 
@@ -31,7 +37,7 @@
 - Git 版本化的 Markdown Wiki；
 - 可定位到 SourceVersion、原文位置和 Commit 的 Citation；
 - 显式、留痕的变更审核链；
-- CLI、本地只读 Portal、Obsidian 和飞书入口；
+- 本地知识 Portal、CLI、Obsidian、静态 Showcase 和飞书入口；
 - 可由新 AI 会话按需加载的审核后长期记忆。
 
 适合个人开发者、技术负责人和需要长期维护多个仓库的人。若你要的是公网 SaaS、企业权限平台或不经审核的全自动 RAG，本项目暂不适合。
@@ -80,7 +86,8 @@ MemoryForge 把回答、引用和召回分开评测，也保留失败结果。�
 
 | Evidence | 结果 | 边界 |
 | --- | ---: | --- |
-| v0.4.0 本地门禁 | macOS **656 passed** | Linux 未重跑；Windows 未验证 |
+| 当前 `main` 本地门禁 | macOS **716 passed** | CPython 3.11；Linux/Windows 未重跑 |
+| v0.4.0 发布门禁 | macOS **656 passed** | 冻结发布证据；Linux 未重跑，Windows 未验证 |
 | AgentSkill-Eval 文档 Wiki | Answer **96.7%**；Citation **100%**；拒答 **100%** | 单一公开仓库，30 题 |
 | 三语言 Code Wiki | Symbol / core Relation / Mermaid / Citation **100%** | 固定公开夹具，不等于全仓 precision / recall |
 | Code Module Narrative | 事实覆盖 **90%**；Citation **100%** | 未发布开发集；真实 `seed-2.1-turbo`，20 题 |
@@ -113,7 +120,8 @@ MemoryForge 把回答、引用和召回分开评测，也保留失败结果。�
 - **飞书展示入口**：`feishu-serve` 直接接收飞书私聊消息，查询本地 Wiki 后回复；可显式启用模型，将命中的证据组织成更自然的回答。
 - **模型不可用时可降级**：模型服务超时或临时繁忙时，`ask` 和飞书入口回退到已验证的 Wiki 原文，不让用户一直等待或得到无引用的错误答案。
 - **可验证性**：提供 `lint` 检查页面/来源关系，提供 `eval` 用公开题集检查回答、引用与读取成本。
-- **本地知识门户**：`memoryforge start` 在浏览器中完成来源预览、后台导入、差异审核、明确批准和可选自动更新；所有写操作复用 CLI 的真实生命周期。
+- **本地知识门户**：`memoryforge start` 在浏览器中完成来源预览、后台导入、差异审核、明确批准、阅读、搜索、提问和可选自动更新。
+- **可恢复任务与安全控制面**：耗时操作持久化为串行任务；服务重启不会留下永久“运行中”。写请求强制 loopback Host、同源 Origin、页面内存 CSRF token 和 Workspace 锁。
 - **只读展示**：`memoryforge showcase build` 生成自包含静态 Evidence 页面；默认隐藏
   `local_only` 来源、页面、ChangeSet 和 Citation 细节。
 
@@ -182,9 +190,35 @@ my-wiki/
 ├── wiki/
 │   ├── INDEX.md         # Wiki 总目录
 │   └── pages/           # 稳定的 Markdown Wiki 页面
-├── .memoryforge/        # SQLite 索引、来源版本和编译路由
+├── .memoryforge/        # SQLite 索引、来源版本、任务和编译路由
 └── .git/                # Wiki 自己的修改历史
 ```
+
+## Portal 日常流程
+
+`memoryforge start` 是 Workspace 所有者的默认入口；`showcase serve` 保留给脚本，静态
+`showcase build` 继续承担公开 Evidence 展示。
+
+```text
+选择并预览来源
+  -> 后台导入 SourceVersion
+  -> WikiCompiler 生成待审核 ChangeSet
+  -> 查看来源、页面 Diff、引用和警告
+  -> 拒绝，或批准并应用
+  -> 新 Wiki Commit 生效，目录按 Commit 重建
+```
+
+| Portal 区域 | 能做什么 |
+| --- | --- |
+| 首页 | 看知识数量、最近页面、项目、待审核更新；直接添加来源或提问 |
+| 我的知识 | 按代码仓库、AI 会话、飞书、文件/网页浏览当前来源和已应用页面 |
+| 添加来源 | 预览本地 Git、Codex rollout、飞书、文件/文件夹、网页或 GitHub Issue/PR |
+| 知识更新 | 查看新增/修改/删除页、统一 Diff、引用和隐私状态；拒绝或批准并应用 |
+| 后台任务 | 跟踪导入、刷新、编译、应用；刷新页面不丢进度，重启后状态可解释 |
+| 系统状态 | 查看 Workspace Commit、来源历史和可选 macOS `launchd` 自动更新 |
+
+代码、会话、飞书和普通文件默认 `local_only`。浏览器列表不返回 Raw 正文、绝对路径、凭证或
+完整内部 ID；CSRF token 只留在当前页面内存。自动更新只生成待审核内容，永不自动批准。
 
 ## 用飞书展示项目
 
@@ -310,7 +344,8 @@ backup/restore 和 SHA256 回放，不使用 hosted runner。完整命令、产�
 | `review → approve → apply` 而非直接生成 | 审阅、授权和落盘分别留痕；避免自动覆盖已有知识 |
 | `INDEX + FTS5 + 页面展开` 而非全量拼接 | 控制检索范围和上下文成本，便于解释“这次读了什么” |
 | 证据优先的最小 Agent | 让模型负责组织答案，不让它执行代码或扩展为难控的通用助手 |
-| 静态 Showcase 为默认展示 | 零 Key、零服务器、可直接审查；飞书只保留为可选聊天入口 |
+| Portal 负责日常操作，静态 Showcase 负责公开展示 | 私有 Workspace 不必打包进巨型 HTML；公开 Evidence 仍可零服务器审查 |
+| 单 Workspace、单写任务 | 第一版优先保证可恢复、可解释和无并发写冲突，不提前引入队列服务 |
 
 ## 资料与模型边界
 
@@ -367,7 +402,7 @@ memoryforge showcase serve --workspace <workspace> --port 8765
 memoryforge feishu-serve --workspace <workspace>
 ```
 
-## 本地 Wiki 动态服务
+## 本地知识门户
 
 日常使用只需一个入口：
 
@@ -375,9 +410,11 @@ memoryforge feishu-serve --workspace <workspace>
 memoryforge start --workspace <workspace>
 ```
 
-Portal 只绑定 `127.0.0.1`，支持按需阅读、搜索、添加本地仓库/Codex 会话/文件/飞书/网页，
+Portal 只绑定 `127.0.0.1`，支持按需阅读、搜索、添加本地仓库/Codex 会话/文件/飞书/网页/
+GitHub 讨论，
 后台任务完成后停在“等待审核”。只有用户点击“批准并应用”才记录 review、approval receipt
-并写入新的 Wiki Commit。写操作校验同源 `Origin`、页面内存 CSRF token 和 Workspace 锁。
+并写入新的 Wiki Commit。apply 前会重新校验固定 SourceVersion、Candidate Evidence 和
+Workspace HEAD；写操作校验同源 `Origin`、页面内存 CSRF token 和 Workspace 锁。
 脚本仍可使用 `memoryforge showcase serve --workspace <workspace> --port 8765`，它不会自动打开浏览器。
 
 ## Obsidian 本地视图
@@ -428,7 +465,8 @@ Wiki。`memoryforge recall` 只返回已应用的近期结论、决策、未完�
 - [SPEC：架构、数据模型与安全边界](SPEC.md)
 - [公开 Benchmark：方法、结果与失败案例](docs/BENCHMARK.md)
 - [Code Module Narrative：后序编译与 Citation 契约](docs/research/CODE_MODULE_NARRATIVE.md)
-- [本地 Wiki Portal：只读与隐私约束](docs/LOCAL_WIKI_PORTAL_SPEC.md)
+- [本地知识门户：阅读、控制面、任务、审核与安全边界](docs/LOCAL_DYNAMIC_PORTAL_SPEC.md)
+- [静态/只读 Wiki Portal：历史展示边界](docs/LOCAL_WIKI_PORTAL_SPEC.md)
 - [用户评测指南：为私有 Workspace 建立 50 题题集](docs/USER_EVALUATION.md)
 - [秋招演示：3 分钟讲解与常见追问](docs/PORTFOLIO_DEMO.md)
 - [CHANGELOG：版本范围与验证结果](CHANGELOG.md)
@@ -437,6 +475,6 @@ Wiki。`memoryforge recall` 只返回已应用的近期结论、决策、未完�
 
 ## 当前边界
 
-当前版本功能冻结，后续只修 Bug、错误回答和文档。项目刻意不做公网部署、群聊、多用户权限、
+当前功能范围冻结，后续只修 Bug、错误回答和文档。项目刻意不做公网部署、群聊、多用户权限、
 向量数据库、知识图谱、通用编码 Agent 或多 Agent 编排；主线只服务“个人技术 Wiki 如何持续
 更新、可靠查询并回到证据”。
