@@ -113,6 +113,8 @@ def test_local_portal_index_shell_is_small_and_self_contained(tmp_path: Path) ->
     assert "setTimeout(()=>renderSearch(value),200)" in script
     assert "memoryforge-recent-pages" in script
     assert "body.innerHTML=data.html" in script
+    assert 'setAttribute("aria-current","page")' in script
+    assert 'class:"hero"' in script
 
 
 def test_local_portal_classifies_projects_sources_templates_and_relations(
