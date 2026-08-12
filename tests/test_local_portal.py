@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import hashlib
+import http.client
 import json
 import sqlite3
+import threading
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import quote
@@ -57,6 +59,8 @@ def test_local_portal_summary_pagination_search_and_page_read(tmp_path: Path) ->
     page = json.loads(body)
     assert page["path"] == page_path
     assert "Alpha project 0 cache policy" in page["content"]
+    assert page["summary"] == "模块 fixture/page-00 包含 3 个已验证代码符号。"
+    assert "summary:" not in page["html"]
     assert "<p>Alpha project 0 cache policy</p>" in page["html"]
 
     assert _tree_sha256(workspace) == before
@@ -86,10 +90,144 @@ def test_local_portal_index_shell_is_small_and_self_contained(tmp_path: Path) ->
     html = body.decode("utf-8")
     assert len(html) < 24_000
     assert '<html lang="zh-CN">' in html
-    assert "/api/pages" in html
-    assert "/api/page?path=" in html
+    assert '<link rel="stylesheet" href="/app.css">' in html
+    assert '<script src="/app.js" defer></script>' in html
+    assert "<script>" not in html
+    assert "<style>" not in html
     assert "http://" not in html
     assert "https://" not in html
+    assert 'id="primary-nav"' in html
+    assert 'href="#projects"' in html
+    assert 'href="#sources=conversation"' in html
+
+    status, content_type, body = portal.dispatch("/app.js")
+    assert status == 200
+    assert content_type.startswith("text/javascript")
+    script = body.decode()
+    assert "/api/pages" in script
+    assert "/api/page?path=" in script
+    assert "location.hash" in script
+    assert "AbortController" in script
+    assert "setTimeout(()=>renderSearch(value),200)" in script
+    assert "memoryforge-recent-pages" in script
+    assert "body.innerHTML=data.html" in script
+
+
+def test_local_portal_classifies_projects_sources_templates_and_relations(
+    tmp_path: Path,
+) -> None:
+    workspace, paths, repositories = _workspace_with_typed_pages(tmp_path)
+    portal = LocalPortalApp(workspace)
+
+    summary = json.loads(portal.dispatch("/api/summary")[2])
+    assert summary == {
+        "workspace_commit": Workspace.open(workspace).current_commit(),
+        "current_source_count": 6,
+        "applied_page_count": 8,
+        "source_identity_count": 6,
+        "projects": 2,
+        "code_pages": 3,
+        "conversation_pages": 1,
+        "feishu_pages": 1,
+        "note_pages": 1,
+        "pending_sources": 1,
+        "page_count": 8,
+        "source_count": 6,
+        "applied_source_count": 5,
+    }
+
+    projects = json.loads(portal.dispatch("/api/projects")[2])
+    assert {item["name"] for item in projects["items"]} == {"alpha", "beta"}
+    assert all(
+        "checkout_path" not in item and "remote_url" not in item
+        for item in projects["items"]
+    )
+    assert "token@" not in json.dumps(projects)
+    alpha = next(item for item in projects["items"] if item["name"] == "alpha")
+    assert alpha["commit"] == "a" * 12
+    assert alpha["languages"] == ["Python"]
+    assert alpha["top_modules"] == ["src"]
+
+    conversations = json.loads(
+        portal.dispatch("/api/sources?kind=conversation&offset=0&limit=50")[2]
+    )
+    assert conversations["total"] == 2
+    assert {item["status"] for item in conversations["items"]} == {"已应用", "待应用"}
+    assert all("source_id" not in item for item in conversations["items"])
+
+    filtered = json.loads(
+        portal.dispatch(
+            f"/api/pages?kind=code&project={repositories['alpha']}&offset=0&limit=50"
+        )[2]
+    )
+    assert filtered["total"] == 2
+    assert {item["kind"] for item in filtered["items"]} == {"code"}
+
+    expected_templates = {
+        paths["project"]: "project",
+        paths["module"]: "code_module",
+        paths["code"]: "code_file",
+        paths["conversation"]: "conversation",
+        paths["feishu"]: "feishu",
+        paths["note"]: "note",
+    }
+    for path, template in expected_templates.items():
+        status, _, body = portal.dispatch("/api/page?path=" + quote(path, safe=""))
+        assert status == 200
+        page = json.loads(body)
+        assert page["template"] == template
+        assert page["workspace_commit"] == summary["workspace_commit"]
+        assert "content" in page and "html" in page
+
+    code_page = json.loads(
+        portal.dispatch("/api/page?path=" + quote(paths["code"], safe=""))[2]
+    )
+    assert "职责" in code_page["html"]
+    assert "主要类型与方法" in code_page["html"]
+    assert "代码依据" in code_page["html"]
+    assert "checkout" not in json.dumps(code_page["sources"])
+
+    conversation = json.loads(
+        portal.dispatch("/api/page?path=" + quote(paths["conversation"], safe=""))[2]
+    )
+    assert conversation["status"] == "未验证会话记忆"
+    mentioned_paths = {item["path"] for item in conversation["related"]["exact_mentions"]}
+    assert paths["code"] in mentioned_paths
+    assert all(
+        "pkg.Store" not in item["detail"]
+        for item in conversation["related"]["exact_mentions"]
+    )
+
+    reverse = {
+        item["path"]
+        for item in code_page["related"]["exact_mentions"]
+        if item["relationship"] == "精确提及"
+    }
+    assert paths["conversation"] in reverse
+
+    feishu = json.loads(
+        portal.dispatch("/api/page?path=" + quote(paths["feishu"], safe=""))[2]
+    )
+    assert paths["conversation"] in {item["path"] for item in feishu["related"]["direct"]}
+
+
+def test_local_portal_search_rebuilds_catalog_after_workspace_commit(tmp_path: Path) -> None:
+    workspace, paths, repositories = _workspace_with_typed_pages(tmp_path)
+    portal = LocalPortalApp(workspace)
+
+    searched = json.loads(
+        portal.dispatch(
+            f"/api/pages?q={quote('cache policy')}&kind=code&project={repositories['alpha']}"
+        )[2]
+    )
+    assert paths["code"] in {item["path"] for item in searched["items"]}
+
+    added = "wiki/pages/later.md"
+    (workspace / added).write_text("# Later\n\nNew page\n", encoding="utf-8")
+    Workspace.open(workspace).version_store.commit_paths((added,), "test: add later page")
+
+    summary = json.loads(portal.dispatch("/api/summary")[2])
+    assert summary["applied_page_count"] == 9
 
 
 def test_local_portal_rejects_unsafe_page_paths(tmp_path: Path) -> None:
@@ -131,6 +269,47 @@ def test_local_portal_handler_and_loopback_server_bindings(
         server.server_close()
 
 
+def test_local_portal_http_host_methods_head_and_security_headers(tmp_path: Path) -> None:
+    workspace = _workspace_with_pages(tmp_path, count=1)
+    server = LocalPortalServer(workspace, port=0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        port = server.server_address[1]
+        connection = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+
+        connection.request("GET", "/", headers={"Host": "portal.example"})
+        forbidden = connection.getresponse()
+        assert forbidden.status == 403
+        forbidden.read()
+
+        connection.request("POST", "/", headers={"Host": f"localhost:{port}"})
+        method = connection.getresponse()
+        assert method.status == 405
+        assert method.getheader("Allow") == "GET, HEAD"
+        method.read()
+
+        connection.request("HEAD", "/app.js", headers={"Host": f"127.0.0.1:{port}"})
+        head = connection.getresponse()
+        assert head.status == 200
+        assert int(head.getheader("Content-Length") or "0") > 0
+        assert head.read() == b""
+        assert head.getheader("Cache-Control") == "no-store"
+        assert head.getheader("X-Content-Type-Options") == "nosniff"
+        assert head.getheader("Referrer-Policy") == "no-referrer"
+        assert head.getheader("X-Frame-Options") == "DENY"
+        assert head.getheader("Content-Security-Policy") == (
+            "default-src 'none'; script-src 'self'; style-src 'self'; "
+            "connect-src 'self'; img-src 'self' data:; base-uri 'none'; "
+            "frame-ancestors 'none'"
+        )
+        connection.close()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
 def test_local_portal_serve_cli_help_does_not_start_server() -> None:
     from typer.testing import CliRunner
 
@@ -154,6 +333,9 @@ def _workspace_with_pages(tmp_path: Path, count: int) -> Path:
     pages.mkdir(exist_ok=True)
     for index in range(count):
         (pages / f"page-{index:02}.md").write_text(
+            "---\n"
+            f'summary: "3 verified code symbols in module fixture/page-{index:02}."\n'
+            "---\n\n"
             f"# Page {index:02}\n\nAlpha project {index} cache policy\n",
             encoding="utf-8",
         )
@@ -183,12 +365,279 @@ def _workspace_with_pages(tmp_path: Path, count: int) -> Path:
             INSERT INTO page_sources(page_path, source_id)
             VALUES (?, ?)
             """,
-            (
-                (f"wiki/pages/page-{index:02}.md", imported.source_id)
-                for index in range(count)
-            ),
+            ((f"wiki/pages/page-{index:02}.md", imported.source_id) for index in range(count)),
         )
     return workspace_root
+
+
+def _workspace_with_typed_pages(
+    tmp_path: Path,
+) -> tuple[Path, dict[str, str], dict[str, str]]:
+    workspace = tmp_path / "typed-workspace"
+    Workspace.initialize(workspace)
+    source_root = tmp_path / "typed-sources"
+    source_root.mkdir()
+    specifications = {
+        "alpha_code": (
+            "alpha.md",
+            "# Store\n\nThe cache policy lives in src/store.py.\n",
+            ("code", "python"),
+        ),
+        "beta_code": (
+            "beta.md",
+            "# Service\n\nThe beta service starts here.\n",
+            ("code", "python"),
+        ),
+        "conversation": (
+            "conversation.md",
+            "# Fix cache\n\nUse src/store.py. Store is only an unqualified name.\n",
+            ("conversation", "platform:codex", "unverified"),
+        ),
+        "feishu": (
+            "feishu.md",
+            "# Storage handbook\n\nThe storage handbook references the cache decision.\n",
+            ("feishu",),
+        ),
+        "note": ("note.md", "# Personal note\n\nRemember the release checklist.\n", ("personal",)),
+        "pending": (
+            "pending.md",
+            "# Pending AI chat\n\nThis conversation has not been applied.\n",
+            ("conversation", "platform:codex", "unverified"),
+        ),
+    }
+    imported = {}
+    for key, (name, content, tags) in specifications.items():
+        source = source_root / name
+        source.write_text(content, encoding="utf-8")
+        imported[key] = import_local_file(
+            workspace,
+            source,
+            source_root=source_root,
+            tags=tags,
+        )
+
+    repositories = {"alpha": "1" * 64, "beta": "2" * 64}
+    paths = {
+        "project": f"wiki/pages/repository-{repositories['alpha'][:12]}.md",
+        "module": f"wiki/pages/code/{repositories['alpha'][:12]}/src.md",
+        "code": f"wiki/pages/code/{repositories['alpha'][:12]}/src/store.md",
+        "beta_project": f"wiki/pages/repository-{repositories['beta'][:12]}.md",
+        "beta_code": f"wiki/pages/code/{repositories['beta'][:12]}/service.md",
+        "conversation": "wiki/pages/conversation.md",
+        "feishu": "wiki/pages/feishu.md",
+        "note": "wiki/pages/note.md",
+    }
+    pages = {
+        paths["project"]: (
+            "---\n"
+            'title: "alpha 项目总览"\n'
+            'summary: "alpha 项目的确定性入口。"\n'
+            'tags: ["repository", "generated"]\n'
+            "generated: repository_overview\n"
+            f"repository_id: {repositories['alpha']}\n"
+            "---\n\n"
+            "# alpha 项目总览\n\n"
+            "## 模块\n\n"
+            "[src](code/111111111111/src.md)\n"
+        ),
+        paths["module"]: (
+            "---\n"
+            'title: "src"\n'
+            'summary: "src 模块导航。"\n'
+            "generated: code_module_overview\n"
+            f"repository_id: {repositories['alpha']}\n"
+            'tags: ["code", "module"]\n'
+            "---\n\n"
+            "# src\n\n"
+            "## Responsibilities\n\n"
+            "存储模块导航。\n\n"
+            "## Representative files\n\n"
+            "- `src/store.py`\n"
+        ),
+        paths["code"]: (
+            "---\n"
+            'title: "Store"\n'
+            'summary: "Python code: Store owns the cache policy."\n'
+            "generated: code_wiki\n"
+            f"repository_id: {repositories['alpha']}\n"
+            'tags: ["code", "module", "python"]\n'
+            "---\n\n"
+            "# Store\n\n"
+            "## Responsibilities\n\n"
+            "Own the cache policy.\n\n"
+            "## Entry points and handlers\n\n"
+            "- `src.store.Store.get`\n\n"
+            "## Module dependencies\n\n"
+            "- `src.cache`\n\n"
+            "## Representative files\n\n"
+            "- `src/store.py`\n\n"
+            "## Verified symbols\n\n"
+            "- `pkg.Store`\n\n"
+            "## Sources\n\n"
+            "Fixed Commit evidence.\n"
+        ),
+        paths["beta_project"]: (
+            "---\n"
+            'title: "beta 项目总览"\n'
+            'summary: "beta 项目的确定性入口。"\n'
+            'tags: ["repository", "generated"]\n'
+            "generated: repository_overview\n"
+            f"repository_id: {repositories['beta']}\n"
+            "---\n\n"
+            "# beta 项目总览\n"
+        ),
+        paths["beta_code"]: (
+            "---\n"
+            'title: "Beta service"\n'
+            'summary: "Python code: beta service."\n'
+            "generated: code_wiki\n"
+            f"repository_id: {repositories['beta']}\n"
+            'tags: ["code", "python"]\n'
+            "---\n\n"
+            "# Beta service\n\n"
+            "## Verified symbols\n\n"
+            "- `beta.Service`\n"
+        ),
+        paths["conversation"]: (
+            "---\n"
+            'title: "修复缓存会话"\n'
+            'summary: "会话建议检查 src/store.py。"\n'
+            'tags: ["conversation", "platform:codex", "unverified"]\n'
+            "---\n\n"
+            "# 修复缓存会话\n\n"
+            "## Conversation notes (unverified)\n\n"
+            "结论：检查 `src/store.py`。Store 只是模糊同名，不是完整的 `pkg Store`。\n\n"
+            "## User prompts (search only)\n\n"
+            "为什么缓存失效？\n"
+        ),
+        paths["feishu"]: (
+            "---\n"
+            'title: "存储手册"\n'
+            'summary: "飞书同步的存储手册。"\n'
+            'tags: ["feishu"]\n'
+            "---\n\n"
+            "# 存储手册\n\n"
+            "## 文档目录\n\n"
+            "- [缓存会话](conversation.md)\n"
+        ),
+        paths["note"]: (
+            "---\n"
+            'title: "发布清单"\n'
+            'summary: "普通本地笔记。"\n'
+            'tags: ["personal"]\n'
+            "updated: 2026-08-12\n"
+            "---\n\n"
+            "# 发布清单\n\n"
+            "## 正文\n\n"
+            "发布前执行测试。\n"
+        ),
+    }
+    for path, content in pages.items():
+        destination = workspace / path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(content, encoding="utf-8")
+    Workspace.open(workspace).version_store.commit_paths(("wiki/pages",), "test: typed pages")
+
+    database = workspace / ".memoryforge/index.sqlite"
+    with sqlite3.connect(database) as connection:
+        connection.executemany(
+            """
+            INSERT INTO git_repositories(
+                repository_id, name, checkout_path, remote_name, remote_url,
+                sensitivity, registered_at, last_synced_commit
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                (
+                    repositories["alpha"],
+                    "alpha",
+                    "/private/checkouts/alpha",
+                    "origin",
+                    "https://token@example.invalid/alpha.git",
+                    "local_only",
+                    "2026-08-12T00:00:00+00:00",
+                    "a" * 40,
+                ),
+                (
+                    repositories["beta"],
+                    "beta",
+                    "/private/checkouts/beta",
+                    "origin",
+                    "https://token@example.invalid/beta.git",
+                    "local_only",
+                    "2026-08-12T00:00:00+00:00",
+                    "b" * 40,
+                ),
+            ),
+        )
+        versions = {
+            key: int(
+                connection.execute(
+                    """
+                    SELECT versions.id
+                    FROM source_versions AS versions
+                    JOIN sources ON sources.id = versions.source_id
+                    WHERE sources.source_id = ? AND versions.is_current = 1
+                    """,
+                    (result.source_id,),
+                ).fetchone()[0]
+            )
+            for key, result in imported.items()
+        }
+        connection.executemany(
+            "INSERT INTO applied_source_versions(source_id, source_version_id) VALUES (?, ?)",
+            (
+                (imported[key].source_id, versions[key])
+                for key in ("alpha_code", "beta_code", "conversation", "feishu", "note")
+            ),
+        )
+        connection.executemany(
+            """
+            INSERT INTO git_source_revisions(
+                source_version_id, repository_id, relative_path, commit_sha
+            ) VALUES (?, ?, ?, ?)
+            """,
+            (
+                (versions["alpha_code"], repositories["alpha"], "src/store.py", "a" * 40),
+                (versions["beta_code"], repositories["beta"], "service.py", "b" * 40),
+            ),
+        )
+        connection.executemany(
+            "INSERT INTO git_code_modules(repository_id, relative_path) VALUES (?, ?)",
+            ((repositories["alpha"], "src"), (repositories["beta"], ".")),
+        )
+        connection.executemany(
+            "INSERT INTO page_sources(page_path, source_id) VALUES (?, ?)",
+            (
+                (paths["code"], imported["alpha_code"].source_id),
+                (paths["beta_code"], imported["beta_code"].source_id),
+                (paths["conversation"], imported["conversation"].source_id),
+                (paths["feishu"], imported["feishu"].source_id),
+                (paths["note"], imported["note"].source_id),
+            ),
+        )
+        connection.execute(
+            """
+            INSERT INTO wiki_facts(
+                fact_id, page_path, repository_id, source_id, source_version,
+                locator, section_path, quote, routing_text, symbol, relation_type
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "fact-store",
+                paths["code"],
+                repositories["alpha"],
+                imported["alpha_code"].source_id,
+                versions["alpha_code"],
+                "chars:0-5",
+                "Store",
+                "Store",
+                "cache store",
+                "pkg.Store",
+                "contains",
+            ),
+        )
+    return workspace, paths, repositories
 
 
 def _tree_sha256(root: Path) -> str:
