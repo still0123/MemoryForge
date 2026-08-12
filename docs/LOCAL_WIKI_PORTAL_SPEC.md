@@ -36,6 +36,33 @@ The existing `showcase build` command remains the only build command. The
 portal is an improved rendering of the same fixed-Commit snapshot, not a new
 application or deployment mode.
 
+## Dynamic read-only service
+
+For large Workspaces where one static `index.html` plus `showcase.json` is too
+slow, keep the static Showcase unchanged and run a loopback-only dynamic view:
+
+```bash
+memoryforge showcase serve --workspace <workspace> --port 8765
+```
+
+Open `http://127.0.0.1:8765/`. The service binds only to `127.0.0.1`, uses the
+Python standard library HTTP server, reads the Workspace read-only, and never
+caches private page bodies to disk.
+
+HTTP contract:
+
+- `GET /` returns a small Chinese HTML shell with no external assets.
+- `GET /api/summary` returns current Commit, page count, and source counts.
+- `GET /api/pages?q=&offset=&limit=` returns page paths/titles. `limit` defaults
+  to 50 and has a hard cap of 100.
+- `GET /api/page?path=<page_path>` returns one Wiki page's content and server
+  rendered Markdown HTML.
+
+Page paths must stay below `wiki/pages/`. Traversal, absolute paths, backslashes,
+and symlink components are rejected before any Git read. Existing Showcase
+Markdown rendering is reused; no page snapshot, frontend framework, template
+engine, or new dependency is introduced.
+
 ## Required experience
 
 The generated page must provide:
@@ -104,3 +131,6 @@ runs entirely in the browser and requires no model.
 5. The generated HTML contains no `http://` or `https://` reference.
 6. Rebuilding the same input produces byte-identical output.
 7. Existing Showcase tests and one focused portal interaction contract pass.
+8. The dynamic service exposes summary, paginated/search page list, and lazy
+   page content without mutating the Workspace or writing private page bodies
+   to disk.

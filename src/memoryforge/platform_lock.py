@@ -115,6 +115,13 @@ def exclusive_posix_directory_lock(path: Path) -> Iterator[int]:
 
 
 def _posix_namespace_lock_path(path: Path) -> Path:
+    lock_root = inspect_posix_namespace_lock_root(create=True)
+    digest = hashlib.sha256(os.fsencode(str(path))).hexdigest()
+    return lock_root / f"path-{digest}.lock"
+
+
+def inspect_posix_namespace_lock_root(*, create: bool = False) -> Path:
+    """Return the validated per-user POSIX lock root without normally creating it."""
     get_effective_user = getattr(os, "geteuid", None)
     if get_effective_user is None or _pwd is None:
         raise UnsafeLockFileError("effective user identity is unavailable")
@@ -129,8 +136,14 @@ def _posix_namespace_lock_path(path: Path) -> Path:
         ):
             raise UnsafeLockFileError("user home must be owner-controlled")
         lock_root = home / ".memoryforge-locks"
-        lock_root.mkdir(mode=0o700, exist_ok=True)
-        metadata = lock_root.stat(follow_symlinks=False)
+        if create:
+            lock_root.mkdir(mode=0o700, exist_ok=True)
+        try:
+            metadata = lock_root.stat(follow_symlinks=False)
+        except FileNotFoundError:
+            if not create and os.access(home, os.W_OK | os.X_OK):
+                return lock_root
+            raise
     except (OSError, KeyError) as exc:
         raise UnsafeLockFileError("namespace lock directory is unsafe") from exc
     if (
@@ -139,8 +152,7 @@ def _posix_namespace_lock_path(path: Path) -> Path:
         or stat.S_IMODE(metadata.st_mode) & 0o077
     ):
         raise UnsafeLockFileError("namespace lock directory must be private and owner-controlled")
-    digest = hashlib.sha256(os.fsencode(str(path))).hexdigest()
-    return lock_root / f"path-{digest}.lock"
+    return lock_root
 
 
 @contextmanager

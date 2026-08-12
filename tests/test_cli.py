@@ -220,6 +220,168 @@ def test_cli_refreshes_all_registered_git_checkouts(tmp_path: Path) -> None:
     assert json.loads(unchanged.stdout)["status"] == "unchanged"
 
 
+def test_cli_status_changeset_list_and_auto_obsidian_rebuild(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    runner = CliRunner()
+    monkeypatch.chdir(tmp_path)
+    workspace = tmp_path / "workspace"
+    source = tmp_path / "cache.md"
+    source.write_text(
+        "# Cache policy\n\nCache entries expire after sixty seconds.\n",
+        encoding="utf-8",
+    )
+    assert runner.invoke(app, ["init", str(workspace)]).exit_code == 0
+    assert runner.invoke(
+        app,
+        ["import", str(source), "--workspace", str(workspace)],
+    ).exit_code == 0
+    ingested = runner.invoke(
+        app,
+        ["ingest", "--pending", "--workspace", str(workspace)],
+    )
+    assert ingested.exit_code == 0, ingested.output
+    changeset_id = json.loads(ingested.stdout)["changeset_id"]
+
+    listed = runner.invoke(app, ["changeset-list", "--workspace", str(workspace)])
+    assert listed.exit_code == 0, listed.output
+    assert [item["changeset_id"] for item in json.loads(listed.stdout)] == [changeset_id]
+
+    before = json.loads(
+        runner.invoke(app, ["status", "--workspace", str(workspace)]).stdout
+    )
+    assert before["current_commit"]
+    assert before["sources"] == {"current": 1, "applied": 0}
+    assert before["versions"] == {"current": 1}
+    assert before["applied_pages"] == 0
+    assert before["changesets"]["pending"] == 1
+    assert before["changesets"]["items"][0]["changeset_id"] == changeset_id
+    assert before["obsidian"] == {"generated": False, "lagging": True}
+
+    applied = runner.invoke(
+        app,
+        ["apply", changeset_id, "--approve", "--workspace", str(workspace)],
+    )
+    assert applied.exit_code == 0, applied.output
+    assert json.loads(applied.stdout)["obsidian"]["status"] == "built"
+    assert (workspace / "obsidian" / "Home.md").is_file()
+
+    after = json.loads(
+        runner.invoke(app, ["status", "--workspace", str(workspace)]).stdout
+    )
+    assert after["sources"] == {"current": 1, "applied": 1}
+    assert after["versions"] == {"current": 1}
+    assert after["applied_pages"] == 1
+    assert after["changesets"]["pending"] == 0
+    assert after["obsidian"] == {"generated": True, "lagging": False}
+    applied_sources = json.loads(
+        runner.invoke(app, ["source-list", "--workspace", str(workspace)]).stdout
+    )
+    assert applied_sources[0]["is_applied"] is True
+    assert applied_sources[0]["git_repository"] is None
+    assert json.loads(
+        runner.invoke(app, ["changeset-list", "--workspace", str(workspace)]).stdout
+    ) == []
+
+
+def test_cli_source_list_reports_git_repository_ownership(tmp_path: Path) -> None:
+    checkout = tmp_path / "repository"
+    checkout.mkdir()
+    _git(checkout, "init")
+    _git(checkout, "config", "user.email", "test@example.com")
+    _git(checkout, "config", "user.name", "Test User")
+    (checkout / "README.md").write_text("# Service\n\nSource list fixture", encoding="utf-8")
+    _git(checkout, "add", ".")
+    _git(checkout, "commit", "-m", "Add documentation")
+    workspace = tmp_path / "workspace"
+    runner = CliRunner()
+
+    assert runner.invoke(app, ["init", str(workspace)]).exit_code == 0
+    registered = runner.invoke(
+        app,
+        ["git-add", str(checkout), "--workspace", str(workspace)],
+    )
+    repository_id = json.loads(registered.stdout)["repository_id"]
+    synced = runner.invoke(
+        app,
+        ["git-sync", repository_id, "--workspace", str(workspace)],
+    )
+    assert synced.exit_code == 0, synced.output
+
+    result = runner.invoke(app, ["source-list", "--workspace", str(workspace)])
+
+    assert result.exit_code == 0, result.output
+    sources = json.loads(result.stdout)
+    assert sources[0]["title"] == "README"
+    assert sources[0]["is_current"] is True
+    assert sources[0]["is_applied"] is False
+    assert sources[0]["category"] == "refs"
+    assert sources[0]["sensitivity"] == "local_only"
+    assert sources[0]["git_repository"] == {
+        "repository_id": repository_id,
+        "name": "repository",
+    }
+
+
+def test_cli_doctor_reports_readonly_checks_and_remediation(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    runner = CliRunner()
+    monkeypatch.chdir(tmp_path)
+    workspace = tmp_path / "workspace"
+    assert runner.invoke(app, ["init", str(workspace)]).exit_code == 0
+    lock_root = tmp_path / "locks"
+    lock_root.mkdir(mode=0o700)
+    monkeypatch.setattr(
+        "memoryforge.cli.inspect_posix_namespace_lock_root",
+        lambda: lock_root,
+    )
+
+    healthy = json.loads(
+        runner.invoke(app, ["doctor", "--workspace", str(workspace)]).stdout
+    )
+    names = {check["name"] for check in healthy["checks"]}
+
+    assert healthy["status"] == "ok"
+    assert names == {
+        "python",
+        "platform",
+        "git",
+        "workspace",
+        "index",
+        "lock_directory",
+        "model",
+        "feishu",
+    }
+    assert healthy["checks"][-1]["status"] in {"configured", "not_configured"}
+
+    def unsafe_lock_root() -> Path:
+        raise OSError("lock root unavailable")
+
+    monkeypatch.setattr(
+        "memoryforge.cli.inspect_posix_namespace_lock_root",
+        unsafe_lock_root,
+    )
+    lock_broken = json.loads(
+        runner.invoke(app, ["doctor", "--workspace", str(workspace)]).stdout
+    )
+    lock_check = next(
+        check for check in lock_broken["checks"] if check["name"] == "lock_directory"
+    )
+    assert lock_check["status"] == "error"
+    assert "0700" in lock_check["remediation"]
+
+    broken = json.loads(
+        runner.invoke(app, ["doctor", "--workspace", str(tmp_path / "missing")]).stdout
+    )
+    workspace_check = next(check for check in broken["checks"] if check["name"] == "workspace")
+    assert workspace_check["status"] == "error"
+    assert workspace_check["remediation"]
+    assert any("memoryforge init" in remediation for remediation in broken["remediation"])
+
+
 def test_cli_watch_once_refreshes_and_stages_wiki_update(tmp_path: Path) -> None:
     checkout = tmp_path / "repository"
     checkout.mkdir()

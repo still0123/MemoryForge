@@ -6,6 +6,7 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -280,6 +281,26 @@ def test_namespace_lock_root_is_owner_controlled_home(tmp_path: Path) -> None:
     metadata = lock_path.parent.stat(follow_symlinks=False)
     assert metadata.st_uid == os.geteuid()
     assert metadata.st_mode & 0o077 == 0
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX namespace lock")
+def test_namespace_lock_inspection_does_not_create_missing_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert platform_lock._pwd is not None
+    home = tmp_path / "home"
+    home.mkdir(mode=0o700)
+    monkeypatch.setattr(
+        platform_lock._pwd,
+        "getpwuid",
+        lambda _user_id: SimpleNamespace(pw_dir=str(home)),
+    )
+
+    lock_root = platform_lock.inspect_posix_namespace_lock_root()
+
+    assert lock_root == home / ".memoryforge-locks"
+    assert not lock_root.exists()
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX namespace lock")

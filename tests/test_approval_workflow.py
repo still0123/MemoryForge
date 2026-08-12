@@ -108,6 +108,31 @@ def test_legacy_inline_approval_is_labeled_in_receipt(
     assert review_receipt["review_mode"] == "inline_legacy"
 
 
+def test_apply_warns_without_rollback_when_obsidian_rebuild_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner, workspace, changeset_id = _staged_changeset(tmp_path, monkeypatch)
+
+    def fail_obsidian(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("Obsidian rebuild failed")
+
+    monkeypatch.setattr("memoryforge.cli.build_obsidian", fail_obsidian)
+
+    result = runner.invoke(
+        app,
+        ["apply", changeset_id, "--approve", "--workspace", str(workspace)],
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "APPLIED"
+    assert payload["obsidian"]["status"] == "failed"
+    assert "Wiki applied successfully" in payload["obsidian"]["warning"]
+    assert "Obsidian rebuild failed" in payload["obsidian"]["warning"]
+    assert list((workspace / "wiki/pages").glob("*.md"))
+
+
 def _staged_changeset(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

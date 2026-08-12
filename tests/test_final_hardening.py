@@ -359,6 +359,7 @@ def test_changeset_rechecks_head_immediately_before_publish(tmp_path: Path) -> N
     ("failure", "message"),
     [
         (WorkspaceIntegrityError("tampered evidence"), "workspace integrity check failed"),
+        (WorkspaceError("/private/path"), "workspace security or configuration check failed"),
         (sqlite3.OperationalError("broken database"), "workspace operation failed safely"),
     ],
 )
@@ -375,7 +376,9 @@ def test_future_cli_commands_have_a_stable_workspace_error_boundary(
 
     assert result.exit_code == 1
     assert message in result.output
+    assert "memoryforge doctor --workspace <workspace>" in result.output
     assert "Traceback" not in result.output
+    assert "/private/path" not in result.output
 
 
 def test_changeset_rejects_conflicting_operations_for_one_path() -> None:

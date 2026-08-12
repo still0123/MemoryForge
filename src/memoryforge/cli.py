@@ -2,12 +2,17 @@ from __future__ import annotations
 
 import difflib
 import json
+import os
+import platform
 import re
 import shlex
+import shutil
 import sqlite3
+import subprocess
 import sys
 import time
 from contextlib import suppress
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -16,7 +21,7 @@ import typer
 from memoryforge import __version__
 from memoryforge.agent import run_agent
 from memoryforge.botmux_adapter import BotmuxHookError, handle_botmux_hook
-from memoryforge.changesets import ChangeSetStore
+from memoryforge.changesets import ChangeSetStore, StoredChangeSet
 from memoryforge.code_index import build_code_index
 from memoryforge.code_wiki_compiler import compile_code_wiki
 from memoryforge.codex_adapter import CodexImportError, import_codex_rollout
@@ -45,9 +50,11 @@ from memoryforge.github_thread_adapter import (
 )
 from memoryforge.importer import MAX_SOURCE_BYTES, SourceValidationError, import_local_file
 from memoryforge.linting import lint_workspace
+from memoryforge.local_portal import serve_local_portal
 from memoryforge.models import ChangeOperationType, Sensitivity
 from memoryforge.module_planner import build_architecture_graph, build_module_plan
-from memoryforge.obsidian import build_obsidian
+from memoryforge.obsidian import OUTPUT_RELATIVE, build_obsidian
+from memoryforge.platform_lock import inspect_posix_namespace_lock_root
 from memoryforge.provider import OpenAICompatibleProvider, ProviderConfig
 from memoryforge.query import answer_question
 from memoryforge.refresh import refresh_workspace
@@ -64,6 +71,7 @@ from memoryforge.workspace import (
     Workspace,
     WorkspaceIntegrityError,
     WorkspaceSecurityError,
+    _connect_readonly,
     candidate_page_sources,
     list_git_checkouts,
     list_git_code_modules,
@@ -176,11 +184,98 @@ def showcase_build(
     typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
 
 
+@showcase_app.command("serve")
+def showcase_serve(
+    workspace: WorkspaceOption = Path("."),
+    port: Annotated[
+        int,
+        typer.Option("--port", min=1, max=65535, help="Loopback-only local port."),
+    ] = 8765,
+) -> None:
+    try:
+        serve_local_portal(workspace, port=port)
+    except (
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+
+
 @app.command("obsidian-build")
 def obsidian_build(workspace: WorkspaceOption = Path(".")) -> None:
     """Build local Obsidian-readable Markdown navigation views."""
     try:
         result = build_obsidian(workspace)
+    except (
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+@app.command("status")
+def status(workspace: WorkspaceOption = Path(".")) -> None:
+    """Show one compact Workspace status JSON."""
+    try:
+        result = _workspace_status(workspace)
+    except (
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+@app.command("source-list")
+def source_list(workspace: WorkspaceOption = Path(".")) -> None:
+    """List all stored SourceVersions with current and applied state."""
+    try:
+        opened = Workspace.open_readonly(workspace)
+        with _connect_readonly(opened.index_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    sources.source_id,
+                    sources.source_uri,
+                    sources.source_path,
+                    versions.id AS version_id,
+                    versions.title,
+                    versions.category,
+                    versions.sensitivity,
+                    versions.observed_at,
+                    versions.is_current,
+                    CASE WHEN applied.source_version_id IS NULL THEN 0 ELSE 1 END AS is_applied,
+                    repositories.repository_id,
+                    repositories.name AS repository_name
+                FROM source_versions AS versions
+                JOIN sources ON sources.id = versions.source_id
+                LEFT JOIN applied_source_versions AS applied
+                  ON applied.source_id = sources.source_id
+                 AND applied.source_version_id = versions.id
+                LEFT JOIN git_source_revisions AS revisions
+                  ON revisions.source_version_id = versions.id
+                LEFT JOIN git_repositories AS repositories
+                  ON repositories.repository_id = revisions.repository_id
+                ORDER BY sources.source_uri, versions.observed_at DESC
+                """
+            ).fetchall()
+        result = [_source_summary(row) for row in rows]
     except (
         MemoryForgeError,
         WorkspaceIntegrityError,
@@ -1132,6 +1227,25 @@ def ingest(
     typer.echo(json.dumps(compilation_payload(stored), ensure_ascii=False, indent=2))
 
 
+@app.command("changeset-list")
+def changeset_list(workspace: WorkspaceOption = Path(".")) -> None:
+    """List pending ChangeSets that can be reviewed and applied."""
+    try:
+        opened = Workspace.open_readonly(workspace)
+        result = [_changeset_summary(stored) for stored in ChangeSetStore(opened).list_all()]
+    except (
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+
+
 @app.command()
 def review(
     changeset_id: Annotated[str, typer.Argument()],
@@ -1302,10 +1416,19 @@ def apply(
                     opened.version_store.reset_paths(paths)
                 raise
             archive_warning = None
+            obsidian_status = "built"
+            obsidian_warning = None
             try:
                 store.archive_applied(stored, commit=commit)
             except MemoryForgeError as exc:
                 archive_warning = str(exc)
+            try:
+                build_obsidian(opened.root)
+            except Exception as exc:
+                obsidian_status = "failed"
+                obsidian_warning = (
+                    f"Wiki applied successfully, but Obsidian rebuild failed: {exc}"
+                )
     except (
         MemoryForgeError,
         WorkspaceIntegrityError,
@@ -1324,6 +1447,10 @@ def apply(
                 "commit": commit,
                 "files": list(paths),
                 "warning": archive_warning,
+                "obsidian": {
+                    "status": obsidian_status,
+                    "warning": obsidian_warning,
+                },
             },
             ensure_ascii=False,
             indent=2,
@@ -1873,21 +2000,301 @@ def eval(
     typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
 
 
+@app.command()
+def doctor(workspace: WorkspaceOption = Path(".")) -> None:
+    """Run a read-only local environment and Workspace diagnostic."""
+    result = _doctor_report(workspace)
+    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+def _workspace_status(workspace: Path) -> dict[str, object]:
+    opened = Workspace.open_readonly(workspace)
+    commit = opened.current_commit()
+    with _connect_readonly(opened.index_path) as connection:
+        current_sources = int(
+            connection.execute(
+                "SELECT COUNT(DISTINCT source_id) FROM source_versions WHERE is_current = 1"
+            ).fetchone()[0]
+        )
+        current_versions = int(
+            connection.execute(
+                "SELECT COUNT(*) FROM source_versions WHERE is_current = 1"
+            ).fetchone()[0]
+        )
+        applied_sources = int(
+            connection.execute("SELECT COUNT(*) FROM applied_source_versions").fetchone()[0]
+        )
+        applied_pages = int(
+            connection.execute("SELECT COUNT(DISTINCT page_path) FROM page_sources").fetchone()[0]
+        )
+        repositories = [
+            {
+                "repository_id": str(row["repository_id"]),
+                "name": str(row["name"]),
+                "checkout_path": str(row["checkout_path"]),
+                "remote_url": (
+                    str(row["remote_url"]) if row["remote_url"] is not None else None
+                ),
+                "last_synced_commit": (
+                    str(row["last_synced_commit"])
+                    if row["last_synced_commit"] is not None
+                    else None
+                ),
+            }
+            for row in connection.execute(
+                """
+                SELECT repository_id, name, checkout_path, remote_url, last_synced_commit
+                FROM git_repositories
+                ORDER BY registered_at, repository_id
+                """
+            ).fetchall()
+        ]
+    pending = ChangeSetStore(opened).list_all()
+    home = opened.root / OUTPUT_RELATIVE / "Home.md"
+    generated = home.is_file()
+    history = opened.version_store.history(limit=1)
+    commit_time = (
+        datetime.fromisoformat(str(history[0]["committed_at"])) if history else None
+    )
+    lagging = not generated or (
+        commit_time is not None
+        and datetime.fromtimestamp(home.stat().st_mtime, tz=UTC) < commit_time
+    )
+    return {
+        "current_commit": commit,
+        "sources": {
+            "current": current_sources,
+            "applied": applied_sources,
+        },
+        "versions": {"current": current_versions},
+        "applied_pages": applied_pages,
+        "git_repositories": repositories,
+        "changesets": {
+            "pending": len(pending),
+            "items": [
+                {
+                    "changeset_id": stored.changeset.changeset_id,
+                    "status": stored.changeset.status.value,
+                }
+                for stored in pending
+            ],
+        },
+        "obsidian": {"generated": generated, "lagging": lagging},
+    }
+
+
+def _source_summary(row: sqlite3.Row) -> dict[str, object]:
+    repository = None
+    if row["repository_id"] is not None:
+        repository = {
+            "repository_id": str(row["repository_id"]),
+            "name": str(row["repository_name"]),
+        }
+    return {
+        "source_id": str(row["source_id"]),
+        "source_uri": str(row["source_uri"]),
+        "source_path": str(row["source_path"]),
+        "version_id": int(row["version_id"]),
+        "title": str(row["title"]),
+        "category": str(row["category"]),
+        "sensitivity": str(row["sensitivity"]),
+        "is_current": bool(row["is_current"]),
+        "is_applied": bool(row["is_applied"]),
+        "observed_at": str(row["observed_at"]),
+        "git_repository": repository,
+    }
+
+
+def _changeset_summary(stored: StoredChangeSet) -> dict[str, object]:
+    payload = compilation_payload(stored)
+    payload["base_commit"] = stored.changeset.base_commit
+    payload["source_ids"] = list(stored.changeset.source_ids)
+    return payload
+
+
+def _doctor_report(workspace: Path) -> dict[str, object]:
+    checks = [
+        _doctor_item(
+            "python",
+            status="ok",
+            message=f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+        ),
+        _doctor_item("platform", status="ok", message=platform.system()),
+        _doctor_git(),
+    ]
+    workspace_item, opened = _doctor_workspace(workspace)
+    checks.append(workspace_item)
+    root = Path(workspace).expanduser()
+    index_path = opened.index_path if opened is not None else root / ".memoryforge/index.sqlite"
+    checks.append(_doctor_index(index_path))
+    checks.append(_doctor_lock_directory(opened))
+    checks.append(_doctor_model())
+    checks.append(_doctor_feishu())
+    remediation = [
+        str(check["remediation"]) for check in checks if check.get("remediation") is not None
+    ]
+    return {
+        "status": "error" if any(check["status"] == "error" for check in checks) else "ok",
+        "checks": checks,
+        "remediation": remediation,
+    }
+
+
+def _doctor_item(
+    name: str,
+    *,
+    status: str,
+    message: str | None = None,
+    remediation: str | None = None,
+) -> dict[str, object]:
+    item: dict[str, object] = {"name": name, "status": status}
+    if message is not None:
+        item["message"] = message
+    if remediation is not None:
+        item["remediation"] = remediation
+    return item
+
+
+def _doctor_git() -> dict[str, object]:
+    executable = shutil.which("git")
+    if executable is None:
+        return _doctor_item(
+            "git",
+            status="error",
+            remediation="Install Git and add it to PATH.",
+        )
+    try:
+        completed = subprocess.run(
+            [executable, "--version"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return _doctor_item(
+            "git",
+            status="error",
+            message=str(exc),
+            remediation="Make the installed Git executable runnable.",
+        )
+    if completed.returncode != 0:
+        return _doctor_item(
+            "git",
+            status="error",
+            message=completed.stderr.strip(),
+            remediation="Reinstall Git or fix its executable permissions.",
+        )
+    return _doctor_item("git", status="ok", message=completed.stdout.strip())
+
+
+def _doctor_workspace(workspace: Path) -> tuple[dict[str, object], Workspace | None]:
+    try:
+        opened = Workspace.open_readonly(workspace)
+    except Exception as exc:
+        return (
+            _doctor_item(
+                "workspace",
+                status="error",
+                message=str(exc),
+                remediation="Run 'memoryforge init <workspace>' or fix the workspace path.",
+            ),
+            None,
+        )
+    return _doctor_item("workspace", status="ok", message=str(opened.root)), opened
+
+
+def _doctor_index(index_path: Path) -> dict[str, object]:
+    try:
+        with _connect_readonly(index_path) as connection:
+            connection.execute("SELECT 1 FROM sqlite_master LIMIT 1").fetchone()
+    except Exception as exc:
+        return _doctor_item(
+            "index",
+            status="error",
+            message=str(exc),
+            remediation="Run 'memoryforge init <workspace>' or restore .memoryforge/index.sqlite.",
+        )
+    return _doctor_item("index", status="ok")
+
+
+def _doctor_lock_directory(workspace: Workspace | None) -> dict[str, object]:
+    try:
+        if sys.platform == "win32":
+            if workspace is None:
+                raise FileNotFoundError("Workspace lock directory is unavailable")
+            path = workspace.internal_dir
+        else:
+            path = inspect_posix_namespace_lock_root()
+        if not path.exists():
+            return _doctor_item(
+                "lock_directory",
+                status="ok",
+                message="The private lock directory will be created on first write.",
+            )
+        if not path.is_dir():
+            raise FileNotFoundError("lock directory is missing")
+        if not os.access(path, os.W_OK | os.X_OK):
+            raise PermissionError("lock directory is not writable")
+    except Exception as exc:
+        return _doctor_item(
+            "lock_directory",
+            status="error",
+            message=str(exc),
+            remediation=(
+                "Create a private ~/.memoryforge-locks directory owned by the current user "
+                "with mode 0700."
+                if sys.platform != "win32"
+                else "Make the Workspace .memoryforge directory writable by the current user."
+            ),
+        )
+    return _doctor_item("lock_directory", status="ok")
+
+
+def _doctor_model() -> dict[str, object]:
+    try:
+        ProviderConfig.from_environment()
+    except Exception:
+        status = "not_configured"
+    else:
+        status = "configured"
+    return _doctor_item("model", status=status)
+
+
+def _doctor_feishu() -> dict[str, object]:
+    return _doctor_item(
+        "feishu",
+        status="configured" if shutil.which("lark-cli") is not None else "not_configured",
+    )
+
+
 def _exit_with_safe_error(exc: Exception) -> None:
     if isinstance(exc, FeatureUnavailableError):
         message = str(exc)
         code = 2
     elif isinstance(exc, WorkspaceIntegrityError):
-        message = "workspace integrity check failed"
+        message = (
+            "workspace integrity check failed. "
+            "Run 'memoryforge doctor --workspace <workspace>' to diagnose."
+        )
         code = 1
     elif isinstance(exc, (WorkspaceSecurityError, WorkspaceError)):
-        message = "workspace security or configuration check failed"
+        message = (
+            "workspace security or configuration check failed. "
+            "Run 'memoryforge doctor --workspace <workspace>' to diagnose."
+        )
         code = 1
     elif isinstance(exc, FileNotFoundError):
-        message = "workspace is not initialized"
+        message = (
+            "workspace is not initialized. "
+            "Run 'memoryforge doctor --workspace <workspace>' to diagnose."
+        )
         code = 1
     elif isinstance(exc, (OSError, sqlite3.Error)):
-        message = "workspace operation failed safely"
+        message = (
+            "workspace operation failed safely. "
+            "Run 'memoryforge doctor --workspace <workspace>' to diagnose."
+        )
         code = 1
     else:
         message = str(exc)

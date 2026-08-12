@@ -168,10 +168,16 @@ memoryforge review <changeset-id> --workspace ./my-wiki
 memoryforge approve <changeset-id> --workspace ./my-wiki
 memoryforge apply <changeset-id> --workspace ./my-wiki
 
-# 4. 提问
+# 4. 查看状态、待审核变更和来源
+memoryforge status --workspace ./my-wiki
+memoryforge changeset-list --workspace ./my-wiki
+memoryforge source-list --workspace ./my-wiki
+memoryforge doctor --workspace ./my-wiki
+
+# 5. 提问
 memoryforge ask '缓存多久过期？' --workspace ./my-wiki
 
-# 5. 新 AI 会话加载已审核的近期记忆
+# 6. 新 AI 会话加载已审核的近期记忆
 memoryforge recall --workspace ./my-wiki
 ```
 
@@ -269,6 +275,8 @@ init -> git-add --public -> git-sync -> ingest -> review -> approve -> apply -> 
 ```
 
 已提交的公开结果在 [demo/results/agent_skill_eval_public.json](demo/results/agent_skill_eval_public.json)。`eval` 会检查回答是否命中关键事实、引用是否可回溯，以及每题实际展开了多少 Wiki 页面/原文字符。
+
+私有 Workspace 手工 50 题评测流程见 [用户评测指南](docs/USER_EVALUATION.md)。
 
 脚本也支持重复传入 `--source-repo`，将多个已克隆的公开仓库编译进同一个 Workspace；你的公开个人题集示例和命令见 [多仓库 Demo](demo/README.md#多仓库个人资料演示)。
 
@@ -377,9 +385,13 @@ memoryforge ingest --pending --workspace <workspace>
 memoryforge ingest --code-wiki <repository-id> --workspace <workspace>
 memoryforge ingest --code-wiki <repository-id> --llm --allow-local-llm --workspace <workspace>
 memoryforge watch --interval 60 --workspace <workspace>
+memoryforge changeset-list --workspace <workspace>
 memoryforge review <changeset-id> --workspace <workspace>
 memoryforge approve <changeset-id> --workspace <workspace>
 memoryforge apply <changeset-id> --workspace <workspace>
+memoryforge status --workspace <workspace>
+memoryforge source-list --workspace <workspace>
+memoryforge doctor --workspace <workspace>
 memoryforge history --workspace <workspace>
 memoryforge rollback <historical-commit> --workspace <workspace>
 memoryforge lint --workspace <workspace>
@@ -390,8 +402,20 @@ memoryforge recall --workspace <workspace>
 memoryforge agent '<question>' --workspace <workspace>
 memoryforge obsidian-build --workspace <workspace>
 memoryforge showcase build --workspace <workspace> --output <directory>
+memoryforge showcase serve --workspace <workspace> --port 8765
 memoryforge feishu-serve --workspace <workspace>
 ```
+
+## 本地 Wiki 动态服务
+
+大 Wiki 不想生成巨型静态 Showcase 时，可只读启动本机浏览器：
+
+```bash
+memoryforge showcase serve --workspace <workspace> --port 8765
+```
+
+只绑定 `127.0.0.1`，首页是小型中文壳；页面列表分页/搜索，单页正文按 `page_path`
+懒加载，API 不缓存私有正文到磁盘，也不修改 Workspace。
 
 ## Obsidian 本地视图
 

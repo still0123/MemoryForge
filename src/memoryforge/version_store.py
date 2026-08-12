@@ -160,11 +160,31 @@ class GitVersionStore:
         completed = self._run(["show", f"{commit}:{path}"], check=True)
         return cast(str, completed.stdout)
 
-    def read_wiki_texts_at(self, commit: str) -> dict[str, str]:
-        """Read all stable Wiki pages from one fixed Commit in one Git operation."""
+    def read_wiki_texts_at(
+        self,
+        commit: str,
+        *,
+        paths: tuple[str, ...] | None = None,
+    ) -> dict[str, str]:
+        """Read stable Wiki pages from one fixed Commit in one Git operation."""
         self._require_commit(commit)
+        selected = paths or ("wiki/pages",)
+        if paths is not None:
+            for path in paths:
+                parts = PurePosixPath(path).parts
+                if (
+                    len(parts) < 3
+                    or parts[:2] != ("wiki", "pages")
+                    or not path.endswith(".md")
+                    or any(part in {"", ".", ".."} for part in parts)
+                    or "\\" in path
+                    or str(PurePosixPath(path)) != path
+                ):
+                    raise WorkspaceError("invalid historical Wiki file identity")
+            if not paths:
+                return {}
         completed = self._run(
-            ["archive", "--format=tar", commit, "--", "wiki/pages"],
+            ["archive", "--format=tar", commit, "--", *selected],
             check=True,
             text=False,
         )
@@ -175,6 +195,19 @@ class GitVersionStore:
                 for member in archive.getmembers()
                 if member.isfile() and (extracted := archive.extractfile(member)) is not None
             }
+
+    def list_wiki_paths_at(self, commit: str) -> tuple[str, ...]:
+        """List stable Wiki pages from one fixed Commit without reading their bodies."""
+        self._require_commit(commit)
+        completed = self._run(
+            ["ls-tree", "-r", "--name-only", commit, "--", "wiki/pages"],
+            check=True,
+        )
+        return tuple(
+            path
+            for path in completed.stdout.splitlines()
+            if path.startswith("wiki/pages/") and path.endswith(".md")
+        )
 
     def is_ancestor(self, ancestor: str, descendant: str) -> bool:
         """Return whether two validated Commits form the expected history chain."""
