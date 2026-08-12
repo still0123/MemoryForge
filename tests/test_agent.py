@@ -15,6 +15,7 @@ from memoryforge.models import PageChange
 from memoryforge.provider import AgentStep, OpenAICompatibleProvider
 from memoryforge.sessions import SessionStore, rewrite_query, save_turn
 from memoryforge.workspace import Workspace
+from tests.cli_helpers import review_approve_apply
 
 
 class StubAgentProvider(OpenAICompatibleProvider):
@@ -59,14 +60,13 @@ def test_agent_searches_reads_evidence_and_returns_citations(tmp_path: Path, mon
     runner = CliRunner()
 
     assert runner.invoke(app, ["init", str(workspace)]).exit_code == 0
-    imported = runner.invoke(app, ["import", str(source), "--workspace", str(workspace)])
+    imported = runner.invoke(
+        app, ["import", str(source), "--public", "--workspace", str(workspace)]
+    )
     assert imported.exit_code == 0
     ingested = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
     changeset_id = json.loads(ingested.stdout)["changeset_id"]
-    applied = runner.invoke(
-        app,
-        ["apply", changeset_id, "--approve", "--workspace", str(workspace)],
-    )
+    applied = review_approve_apply(runner, changeset_id, workspace)
     assert applied.exit_code == 0
 
     result = run_agent(
@@ -956,16 +956,10 @@ def _applied_public_workspace(tmp_path: Path, monkeypatch, *, local_only: bool =
     runner = CliRunner()
     assert runner.invoke(app, ["init", str(workspace)]).exit_code == 0
     import_args = ["import", str(source), "--workspace", str(workspace)]
-    if local_only:
-        import_args.append("--local-only")
+    if not local_only:
+        import_args.append("--public")
     assert runner.invoke(app, import_args).exit_code == 0
     ingested = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
     changeset_id = json.loads(ingested.stdout)["changeset_id"]
-    assert (
-        runner.invoke(
-            app,
-            ["apply", changeset_id, "--approve", "--workspace", str(workspace)],
-        ).exit_code
-        == 0
-    )
+    assert review_approve_apply(runner, changeset_id, workspace).exit_code == 0
     return workspace

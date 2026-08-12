@@ -23,7 +23,8 @@ from memoryforge.models import (
     ClaimStatus,
 )
 from memoryforge.version_store import GitVersionStore
-from memoryforge.workspace import Workspace
+from memoryforge.workspace import Workspace, read_source_version_text
+from tests.cli_helpers import review_approve_apply
 
 SOURCE_TEXT = "# Cache policy\n\nCache entries expire after sixty seconds.\n"
 MULTILINE_SOURCE_TEXT = (
@@ -184,16 +185,7 @@ def test_ingest_is_idempotent_until_apply_then_has_no_pending_sources(
     repeated_payload = json.loads(repeated.stdout)
     assert repeated_payload["changeset_id"] == first_payload["changeset_id"]
 
-    applied = runner.invoke(
-        app,
-        [
-            "apply",
-            first_payload["changeset_id"],
-            "--approve",
-            "--workspace",
-            str(workspace),
-        ],
-    )
+    applied = review_approve_apply(runner, first_payload["changeset_id"], workspace)
     assert applied.exit_code == 0
 
     pending = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
@@ -441,16 +433,7 @@ def test_apply_rejects_manual_target_edit_and_preserves_content(
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text("# Manual edit\n", encoding="utf-8")
 
-    applied = runner.invoke(
-        app,
-        [
-            "apply",
-            proposal["changeset_id"],
-            "--approve",
-            "--workspace",
-            str(workspace),
-        ],
-    )
+    applied = review_approve_apply(runner, proposal["changeset_id"], workspace)
 
     assert ingested.exit_code == 0
     assert reviewed.exit_code == 0
@@ -492,16 +475,7 @@ def test_apply_restores_old_file_and_keeps_proposal_when_git_commit_fails(
         raise WorkspaceError("simulated commit failure")
 
     monkeypatch.setattr(GitVersionStore, "commit_paths", fail_commit)
-    applied = runner.invoke(
-        app,
-        [
-            "apply",
-            changeset_id,
-            "--approve",
-            "--workspace",
-            str(workspace_path),
-        ],
-    )
+    applied = review_approve_apply(runner, changeset_id, workspace_path)
 
     assert ingested.exit_code == 0
     assert applied.exit_code != 0
@@ -548,10 +522,7 @@ def test_apply_does_not_write_wiki_or_git_when_version_index_write_fails(
         raise sqlite3.OperationalError("simulated version index failure")
 
     monkeypatch.setattr(Workspace, "record_applied_source_versions", fail_version_index)
-    applied = runner.invoke(
-        app,
-        ["apply", changeset_id, "--approve", "--workspace", str(workspace_path)],
-    )
+    applied = review_approve_apply(runner, changeset_id, workspace_path)
 
     assert applied.exit_code != 0
     assert _git_head(workspace_path) == base_commit
@@ -580,10 +551,7 @@ def test_apply_indexes_and_replaces_page_source_associations(
         source_ids=(first["source_id"], second["source_id"]),
         operation=ChangeOperationType.CREATE_PAGE,
     )
-    first_apply = runner.invoke(
-        app,
-        ["apply", first_changeset, "--approve", "--workspace", str(workspace_path)],
-    )
+    first_apply = review_approve_apply(runner, first_changeset, workspace_path)
 
     assert first_apply.exit_code == 0, first_apply.output
     opened = Workspace.open(workspace_path)
@@ -596,10 +564,7 @@ def test_apply_indexes_and_replaces_page_source_associations(
         source_ids=(second["source_id"], third["source_id"]),
         operation=ChangeOperationType.UPDATE_PAGE,
     )
-    replacement_apply = runner.invoke(
-        app,
-        ["apply", replacement_changeset, "--approve", "--workspace", str(workspace_path)],
-    )
+    replacement_apply = review_approve_apply(runner, replacement_changeset, workspace_path)
 
     assert replacement_apply.exit_code == 0, replacement_apply.output
     reopened = Workspace.open(workspace_path)
@@ -634,10 +599,7 @@ def test_pending_or_failed_apply_does_not_index_page_sources(
         raise WorkspaceError("simulated commit failure")
 
     monkeypatch.setattr(GitVersionStore, "commit_paths", fail_commit)
-    failed = runner.invoke(
-        app,
-        ["apply", changeset_id, "--approve", "--workspace", str(workspace_path)],
-    )
+    failed = review_approve_apply(runner, changeset_id, workspace_path)
 
     assert failed.exit_code != 0
     assert Workspace.open(workspace_path).page_paths_for_source(first["source_id"]) == ()
@@ -656,10 +618,7 @@ def test_apply_rejects_routed_page_without_sources_before_replacing_mappings(
         source_ids=(first["source_id"], second["source_id"]),
         operation=ChangeOperationType.CREATE_PAGE,
     )
-    applied = runner.invoke(
-        app,
-        ["apply", first_changeset, "--approve", "--workspace", str(workspace_path)],
-    )
+    applied = review_approve_apply(runner, first_changeset, workspace_path)
 
     assert applied.exit_code == 0, applied.output
     stable_page = workspace_path / ROUTED_CANDIDATE_PATH
@@ -673,10 +632,7 @@ def test_apply_rejects_routed_page_without_sources_before_replacing_mappings(
         operation=ChangeOperationType.UPDATE_PAGE,
         include_sources=False,
     )
-    failed = runner.invoke(
-        app,
-        ["apply", replacement_changeset, "--approve", "--workspace", str(workspace_path)],
-    )
+    failed = review_approve_apply(runner, replacement_changeset, workspace_path)
 
     assert failed.exit_code != 0
     assert _git_head(workspace_path) == base_commit
@@ -700,10 +656,7 @@ def test_apply_rejects_mismatched_page_sources_before_writes(
         operation=ChangeOperationType.CREATE_PAGE,
         source_versions=_current_source_versions(workspace_path, source_ids),
     )
-    initial_apply = runner.invoke(
-        app,
-        ["apply", initial_changeset, "--approve", "--workspace", str(workspace_path)],
-    )
+    initial_apply = review_approve_apply(runner, initial_changeset, workspace_path)
     assert initial_apply.exit_code == 0, initial_apply.output
 
     storage_path = workspace_path.parent / "storage.md"
@@ -732,10 +685,7 @@ def test_apply_rejects_mismatched_page_sources_before_writes(
         for source_id in source_ids
     }
 
-    failed = runner.invoke(
-        app,
-        ["apply", mismatched_changeset, "--approve", "--workspace", str(workspace_path)],
-    )
+    failed = review_approve_apply(runner, mismatched_changeset, workspace_path)
 
     assert failed.exit_code != 0
     assert _git_head(workspace_path) == base_commit
@@ -760,10 +710,7 @@ def test_apply_rejects_stale_source_versions_before_writes(
         operation=ChangeOperationType.CREATE_PAGE,
         source_versions=_current_source_versions(workspace_path, source_ids),
     )
-    applied = runner.invoke(
-        app,
-        ["apply", initial_changeset, "--approve", "--workspace", str(workspace_path)],
-    )
+    applied = review_approve_apply(runner, initial_changeset, workspace_path)
     assert applied.exit_code == 0, applied.output
 
     stale_changeset = _stage_routed_page_changeset(
@@ -790,10 +737,7 @@ def test_apply_rejects_stale_source_versions_before_writes(
         imported["source_id"]
     )
 
-    failed = runner.invoke(
-        app,
-        ["apply", stale_changeset, "--approve", "--workspace", str(workspace_path)],
-    )
+    failed = review_approve_apply(runner, stale_changeset, workspace_path)
 
     assert failed.exit_code != 0
     assert "ChangeSet source versions are no longer current" in (failed.stdout + failed.stderr)
@@ -834,10 +778,7 @@ def test_apply_rejects_duplicate_candidate_source_ownership_before_writes(
     )
     base_commit = _git_head(workspace_path)
 
-    failed = runner.invoke(
-        app,
-        ["apply", changeset.changeset_id, "--approve", "--workspace", str(workspace_path)],
-    )
+    failed = review_approve_apply(runner, changeset.changeset_id, workspace_path)
 
     assert failed.exit_code != 0
     assert "workspace integrity check failed" in (failed.stdout + failed.stderr)
@@ -939,15 +880,16 @@ def _stage_routed_page_changeset(
     source_versions: dict[str, int] | None = None,
 ) -> str:
     workspace = Workspace.open(workspace_path)
+    current_versions = source_versions or _current_source_versions(workspace_path, source_ids)
     changeset = ChangeSet(
         changeset_id=changeset_id,
         base_commit=workspace.current_commit(),
         source_ids=source_ids,
-        source_versions=source_versions or {},
+        source_versions=current_versions,
         status=ChangeSetStatus.PROPOSED,
         operations=(ChangeOperation(type=operation, path=ROUTED_CANDIDATE_PATH),),
     )
-    page = (
+    page_lines = [
         "---\n"
         'title: "Cache storage"\n'
         "type: concept\n"
@@ -955,7 +897,28 @@ def _stage_routed_page_changeset(
         + (f"sources: {json.dumps(declared_source_ids or source_ids)}\n" if include_sources else "")
         + "---\n\n"
         + "# Cache storage\n"
-    )
+        + "\n## Verified facts\n"
+    ]
+    footnotes = []
+    for index, source_id in enumerate(source_ids, start=1):
+        text = read_source_version_text(
+            workspace_path,
+            source_id=source_id,
+            source_version=current_versions[source_id],
+        )
+        quote = next(
+            line.strip()
+            for line in text.splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        )
+        start = text.index(quote)
+        label = f"source-{index}"
+        page_lines.append(f"\n- {quote} [^{label}]")
+        footnotes.append(
+            f"[^{label}]: source `{source_id}` · revision `{current_versions[source_id]}` · "
+            f"`chars:{start}-{start + len(quote)}`"
+        )
+    page = "".join(page_lines) + "\n\n" + "\n".join(footnotes) + "\n"
     ChangeSetStore(workspace).create(changeset, {ROUTED_CANDIDATE_PATH: page})
     return changeset.changeset_id
 

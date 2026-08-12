@@ -105,6 +105,7 @@ def test_unverified_conversation_notes_remain_searchable() -> None:
             "source_version": 2,
             "locator": "chars:10-35",
             "quote": "Candidate 19 is accepted.",
+            "grounding": "exact",
             "section_path": "Latest assistant message",
             "is_summary": True,
         }

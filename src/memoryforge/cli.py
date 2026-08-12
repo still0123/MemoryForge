@@ -20,6 +20,7 @@ import typer
 
 from memoryforge import __version__
 from memoryforge.agent import run_agent
+from memoryforge.apply_journal import ApplyJournalStore
 from memoryforge.botmux_adapter import BotmuxHookError, handle_botmux_hook
 from memoryforge.changesets import ChangeSetStore, StoredChangeSet
 from memoryforge.code_index import build_code_index
@@ -80,6 +81,7 @@ from memoryforge.workspace import (
     register_git_code_module,
     search_sources,
     sync_git_checkout,
+    validate_candidate_page_evidence,
     validate_changeset_page_sources,
 )
 
@@ -312,9 +314,9 @@ def import_command(
         list[str] | None,
         typer.Option("--tag", "-t", help="Repeatable tag stored in the immutable manifest."),
     ] = None,
-    local_only: Annotated[
+    public: Annotated[
         bool,
-        typer.Option(help="Keep this source out of future remote model requests."),
+        typer.Option("--public", help="Allow this source in future remote model requests."),
     ] = False,
 ) -> None:
     try:
@@ -324,7 +326,7 @@ def import_command(
             category=category,
             source_root=Path.cwd(),
             tags=tuple(tag or ()),
-            sensitivity=Sensitivity.LOCAL_ONLY if local_only else Sensitivity.PUBLIC,
+            sensitivity=Sensitivity.PUBLIC if public else Sensitivity.LOCAL_ONLY,
         )
     except (
         MemoryForgeError,
@@ -767,6 +769,7 @@ def refresh(workspace: WorkspaceOption = Path(".")) -> None:
                         "created": item.created,
                         "updated": item.updated,
                         "unchanged": item.unchanged,
+                        "deleted": item.deleted,
                     }
                     for item in result.feishu
                 ],
@@ -892,6 +895,7 @@ def watch(
                             "created": item.created,
                             "updated": item.updated,
                             "unchanged": item.unchanged,
+                            "deleted": item.deleted,
                         }
                         for item in refreshed.feishu
                     ],
@@ -1330,13 +1334,6 @@ def approve(
 @app.command()
 def apply(
     changeset_id: Annotated[str, typer.Argument()],
-    approve: Annotated[
-        bool,
-        typer.Option(
-            "--approve",
-            help="Legacy shortcut that records review and approval before applying.",
-        ),
-    ] = False,
     workspace: WorkspaceOption = Path("."),
 ) -> None:
     try:
@@ -1344,11 +1341,7 @@ def apply(
         with opened.exclusive_lock():
             store = ChangeSetStore(opened)
             stored = store.get(changeset_id)
-            if approve:
-                store.record_review(stored, mode="inline_legacy")
-                store.approve(stored)
-            else:
-                store.require_approved(stored)
+            store.require_approved(stored)
             archive_paths = tuple(
                 sorted(
                     operation.path
@@ -1364,6 +1357,7 @@ def apply(
             paths = tuple(sorted(set(stored.candidate_files) | set(existing_archive_paths)))
             opened.version_store.require_clean_paths(paths)
             opened.require_current_source_versions(stored.changeset.source_versions)
+            validate_candidate_page_evidence(opened, stored.candidate_files)
             page_sources = candidate_page_sources(stored.candidate_files)
             validate_changeset_page_sources(page_sources, stored.changeset.source_ids)
             page_facts = {
@@ -1372,6 +1366,12 @@ def apply(
                 if path.startswith("wiki/pages/") and path.endswith(".md")
             }
             page_facts.update({path: () for path in archive_paths})
+            journal_store = ApplyJournalStore(opened)
+            journal = journal_store.prepare(
+                changeset_id,
+                stored.changeset.base_commit,
+                paths,
+            )
             previous_source_versions = opened.record_applied_source_versions(
                 stored.changeset.source_versions
             )
@@ -1385,6 +1385,7 @@ def apply(
                 opened.restore_applied_source_versions(previous_source_versions)
                 opened.restore_applied_page_sources(previous_page_sources)
                 opened.restore_applied_page_facts(previous_page_facts)
+                journal_store.clear()
                 raise
             previous_files: dict[Path, str | None] = {}
             try:
@@ -1414,21 +1415,22 @@ def apply(
                 opened.restore_applied_page_facts(previous_page_facts)
                 with suppress(MemoryForgeError):
                     opened.version_store.reset_paths(paths)
+                journal_store.clear()
                 raise
+            journal_store.mark_committed(journal, commit)
             archive_warning = None
             obsidian_status = "built"
             obsidian_warning = None
             try:
                 store.archive_applied(stored, commit=commit)
+                journal_store.clear()
             except MemoryForgeError as exc:
                 archive_warning = str(exc)
             try:
                 build_obsidian(opened.root)
             except Exception as exc:
                 obsidian_status = "failed"
-                obsidian_warning = (
-                    f"Wiki applied successfully, but Obsidian rebuild failed: {exc}"
-                )
+                obsidian_warning = f"Wiki applied successfully, but Obsidian rebuild failed: {exc}"
     except (
         MemoryForgeError,
         WorkspaceIntegrityError,
@@ -2032,9 +2034,7 @@ def _workspace_status(workspace: Path) -> dict[str, object]:
                 "repository_id": str(row["repository_id"]),
                 "name": str(row["name"]),
                 "checkout_path": str(row["checkout_path"]),
-                "remote_url": (
-                    str(row["remote_url"]) if row["remote_url"] is not None else None
-                ),
+                "remote_url": (str(row["remote_url"]) if row["remote_url"] is not None else None),
                 "last_synced_commit": (
                     str(row["last_synced_commit"])
                     if row["last_synced_commit"] is not None
@@ -2053,9 +2053,7 @@ def _workspace_status(workspace: Path) -> dict[str, object]:
     home = opened.root / OUTPUT_RELATIVE / "Home.md"
     generated = home.is_file()
     history = opened.version_store.history(limit=1)
-    commit_time = (
-        datetime.fromisoformat(str(history[0]["committed_at"])) if history else None
-    )
+    commit_time = datetime.fromisoformat(str(history[0]["committed_at"])) if history else None
     lagging = not generated or (
         commit_time is not None
         and datetime.fromtimestamp(home.stat().st_mtime, tz=UTC) < commit_time
@@ -2127,6 +2125,7 @@ def _doctor_report(workspace: Path) -> dict[str, object]:
     root = Path(workspace).expanduser()
     index_path = opened.index_path if opened is not None else root / ".memoryforge/index.sqlite"
     checks.append(_doctor_index(index_path))
+    checks.append(_doctor_projection(opened))
     checks.append(_doctor_lock_directory(opened))
     checks.append(_doctor_model())
     checks.append(_doctor_feishu())
@@ -2207,7 +2206,23 @@ def _doctor_workspace(workspace: Path) -> tuple[dict[str, object], Workspace | N
 def _doctor_index(index_path: Path) -> dict[str, object]:
     try:
         with _connect_readonly(index_path) as connection:
-            connection.execute("SELECT 1 FROM sqlite_master LIMIT 1").fetchone()
+            quick_check = [str(row[0]) for row in connection.execute("PRAGMA quick_check")]
+            if quick_check != ["ok"]:
+                raise sqlite3.DatabaseError("SQLite quick_check failed")
+            if connection.execute("PRAGMA foreign_key_check").fetchone() is not None:
+                raise sqlite3.IntegrityError("SQLite foreign_key_check failed")
+            copied = sqlite3.connect(":memory:")
+            try:
+                connection.backup(copied)
+                copied.execute("INSERT INTO source_fts(source_fts) VALUES ('integrity-check')")
+                copied.execute(
+                    """
+                    INSERT INTO wiki_fact_fts(wiki_fact_fts, rank)
+                    VALUES ('integrity-check', 1)
+                    """
+                )
+            finally:
+                copied.close()
     except Exception as exc:
         return _doctor_item(
             "index",
@@ -2216,6 +2231,56 @@ def _doctor_index(index_path: Path) -> dict[str, object]:
             remediation="Run 'memoryforge init <workspace>' or restore .memoryforge/index.sqlite.",
         )
     return _doctor_item("index", status="ok")
+
+
+def _doctor_projection(workspace: Workspace | None) -> dict[str, object]:
+    if workspace is None:
+        return _doctor_item(
+            "projection",
+            status="error",
+            remediation="Restore a valid Workspace before checking its Wiki projection.",
+        )
+    try:
+        commit = workspace.current_commit()
+        paths = workspace.version_store.list_wiki_paths_at(commit)
+        contents = workspace.version_store.read_wiki_texts_at(commit, paths=paths) if paths else {}
+        expected_sources = {
+            (page_path, source_id)
+            for page_path, source_ids in candidate_page_sources(contents).items()
+            for source_id in source_ids
+        }
+        expected_facts = {
+            (page_path, fact.fact_id)
+            for page_path, content in contents.items()
+            for fact in parse_page_facts(page_path, content)
+        }
+        with _connect_readonly(workspace.index_path) as connection:
+            actual_sources = {
+                (str(row[0]), str(row[1]))
+                for row in connection.execute(
+                    "SELECT page_path, source_id FROM page_sources"
+                ).fetchall()
+            }
+            actual_facts = {
+                (str(row[0]), str(row[1]))
+                for row in connection.execute(
+                    "SELECT page_path, fact_id FROM wiki_facts"
+                ).fetchall()
+            }
+        workspace.version_store.require_clean_paths(("wiki",))
+        if expected_sources != actual_sources or expected_facts != actual_facts:
+            raise WorkspaceIntegrityError("Git Wiki and SQLite projection differ")
+    except Exception as exc:
+        return _doctor_item(
+            "projection",
+            status="error",
+            message=str(exc),
+            remediation=(
+                "Recover any interrupted apply, then run rollback or restore the Workspace "
+                "from a verified backup."
+            ),
+        )
+    return _doctor_item("projection", status="ok", message=commit)
 
 
 def _doctor_lock_directory(workspace: Workspace | None) -> dict[str, object]:

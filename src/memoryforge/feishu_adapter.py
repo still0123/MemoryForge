@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 import subprocess
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -14,7 +15,12 @@ from urllib.parse import urlparse
 from memoryforge.errors import MemoryForgeError
 from memoryforge.importer import import_local_document
 from memoryforge.models import ImportResult, LocalDocument, Sensitivity, SourceCategory
-from memoryforge.workspace import list_feishu_documents, register_feishu_document
+from memoryforge.workspace import (
+    Workspace,
+    list_feishu_documents,
+    reconcile_feishu_sources,
+    register_feishu_document,
+)
 
 _DOCUMENT_TOKEN = re.compile(r"^[A-Za-z0-9_-]{8,}$")
 _DOCUMENT_TITLE = re.compile(r"<title>(?P<title>[^<]+)</title>")
@@ -33,6 +39,7 @@ class FeishuDocumentSyncResult:
     created: int
     updated: int
     unchanged: int
+    deleted: int
 
 
 def import_feishu_document(
@@ -43,6 +50,22 @@ def import_feishu_document(
     tags: tuple[str, ...] = (),
 ) -> tuple[ImportResult, ...]:
     """Fetch one document in Markdown and store it through the normal source pipeline."""
+    results, _deleted = _import_feishu_document(
+        workspace,
+        document_reference,
+        category=category,
+        tags=tags,
+    )
+    return results
+
+
+def _import_feishu_document(
+    workspace: Path,
+    document_reference: str,
+    *,
+    category: str,
+    tags: tuple[str, ...],
+) -> tuple[tuple[ImportResult, ...], int]:
     try:
         normalized_category = SourceCategory(category)
     except ValueError as exc:
@@ -55,42 +78,51 @@ def import_feishu_document(
     title = _document_title(document, raw_content, document_id)
     content = _document_content(raw_content)
     normalized_tags = tuple(sorted({"feishu", *(tag.strip() for tag in tags if tag.strip())}))
-    results: list[ImportResult] = []
-    for part_id, part_title, part_content in _document_parts(title, content):
-        source_key = (
-            f"feishu:{document_id}" if part_id == "document" else f"feishu:{document_id}:{part_id}"
-        )
-        source_id = hashlib.sha256(source_key.encode()).hexdigest()
-        local_document = LocalDocument(
-            source_uri=f"mf://source/{source_id}",
-            source_path=(
-                f"feishu/{document_id}.md"
+    opened = Workspace.open(workspace)
+    with opened.exclusive_lock():
+        results: list[ImportResult] = []
+        for part_id, part_title, part_content in _document_parts(title, content):
+            source_key = (
+                f"feishu:{document_id}"
                 if part_id == "document"
-                else f"feishu/{document_id}/{part_id}.md"
-            ),
-            media_type="text/markdown",
+                else f"feishu:{document_id}:{part_id}"
+            )
+            source_id = hashlib.sha256(source_key.encode()).hexdigest()
+            local_document = LocalDocument(
+                source_uri=f"mf://source/{source_id}",
+                source_path=(
+                    f"feishu/{document_id}.md"
+                    if part_id == "document"
+                    else f"feishu/{document_id}/{part_id}.md"
+                ),
+                media_type="text/markdown",
+                category=normalized_category,
+                suffix=".md",
+                title=part_title,
+                content=part_content,
+                sensitivity=Sensitivity.LOCAL_ONLY,
+                tags=normalized_tags,
+            )
+            results.append(import_local_document(workspace, local_document, source_id=source_id))
+        register_feishu_document(
+            workspace,
+            document_id,
             category=normalized_category,
-            suffix=".md",
-            title=part_title,
-            content=part_content,
-            sensitivity=Sensitivity.LOCAL_ONLY,
-            tags=normalized_tags,
+            tags=tags,
         )
-        results.append(import_local_document(workspace, local_document, source_id=source_id))
-    register_feishu_document(
-        workspace,
-        document_id,
-        category=normalized_category,
-        tags=tags,
-    )
-    return tuple(results)
+        deleted = reconcile_feishu_sources(
+            opened,
+            document_id=document_id,
+            current_source_ids={result.source_id for result in results},
+        )
+    return tuple(results), deleted
 
 
 def refresh_feishu_documents(workspace: Path) -> tuple[FeishuDocumentSyncResult, ...]:
     """Re-import every previously selected Feishu document once, without background sync."""
     refreshed: list[FeishuDocumentSyncResult] = []
     for document in list_feishu_documents(workspace):
-        results = import_feishu_document(
+        results, deleted = _import_feishu_document(
             workspace,
             document.document_id,
             category=document.category.value,
@@ -102,6 +134,7 @@ def refresh_feishu_documents(workspace: Path) -> tuple[FeishuDocumentSyncResult,
                 created=sum(result.status == "created" for result in results),
                 updated=sum(result.status == "updated" for result in results),
                 unchanged=sum(result.status == "unchanged" for result in results),
+                deleted=deleted,
             )
         )
     return tuple(refreshed)
@@ -191,10 +224,15 @@ def _document_parts(title: str, content: str) -> tuple[tuple[str, str, str], ...
     parts: list[tuple[str, str, str]] = []
     if introduction:
         parts.append(("document", title, introduction))
+    occurrences: dict[str, int] = {}
     for index, heading in enumerate(headings):
         end = headings[index + 1].start() if index + 1 < len(headings) else len(content)
-        part_id = "document" if not parts and index == 0 else f"section-{index + 1}"
         heading_title = heading["title"].strip()
+        normalized = " ".join(unicodedata.normalize("NFKC", heading_title).casefold().split())
+        occurrence = occurrences.get(normalized, 0) + 1
+        occurrences[normalized] = occurrence
+        digest = hashlib.sha256(f"{normalized}\0{occurrence}".encode()).hexdigest()[:16]
+        part_id = f"section-{digest}"
         parts.append(
             (part_id, f"{title} / {heading_title}", content[heading.start() : end].strip())
         )

@@ -3275,10 +3275,20 @@ def _release_drill_answered_query(payload: object) -> bool:
         **citation,
         "text": "def cache_ttl() -> int:\n    return CACHE_TTL",
     }
+    citation_keys = set(citation)
+    citation_schema_valid = citation_keys == {
+        "source_id",
+        "source_version",
+        "locator",
+        "quote",
+    } or (
+        citation_keys == {"source_id", "source_version", "locator", "quote", "grounding"}
+        and citation.get("grounding") == "exact"
+    )
     return (
         payload.get("status") == "answered"
         and payload.get("answer") == expected_answer
-        and set(citation) == {"source_id", "source_version", "locator", "quote"}
+        and citation_schema_valid
         and SHA256.fullmatch(str(source_id)) is not None
         and citation.get("source_version") == 2
         and citation.get("locator") == "chars:17-61"
@@ -3409,21 +3419,33 @@ def _validate_pytest_component_experiment_payload(
         "path": development.get("test_file"),
         "sha256": development.get("test_sha256"),
     }
-    _validate_artifact(test_artifact, str(experiment["suite_id"]))
+    repositories = experiment.get("repositories")
+    frozen_commit = (
+        repositories[0].get("commit")
+        if isinstance(repositories, list) and repositories and isinstance(repositories[0], dict)
+        else None
+    )
+    if not isinstance(frozen_commit, str) or test_artifact["sha256"] != _git_file_sha256(
+        frozen_commit, str(test_artifact["path"])
+    ):
+        raise ValueError("registered frozen test artifact SHA256 mismatch")
     development_payload = payload.get("development", {})
+    historical_test_sha = _git_file_sha256(
+        str(artifact["memoryforge_commit"]),
+        str(development["test_file"]),
+    )
     if cross_platform:
+        recorded_test = development_payload.get("test_file")
         test_binding_valid = (
-            development_payload.get("test_file")
-            == {
-                "path": development["test_file"],
-                "sha256": development["test_sha256"],
-            }
+            isinstance(recorded_test, dict)
+            and recorded_test.get("path") == development["test_file"]
+            and recorded_test.get("sha256") == historical_test_sha
             and "test_sha256" not in development_payload
         )
     else:
         test_binding_valid = (
             development_payload.get("test_file") == development["test_file"]
-            and development_payload.get("test_sha256") == development["test_sha256"]
+            and development_payload.get("test_sha256") == historical_test_sha
         )
     expected_payload_keys = (
         CROSS_PLATFORM_DEVELOPMENT_EVIDENCE_KEYS
@@ -3593,6 +3615,23 @@ def _git_commit_descends_from(commit: str, ancestor: str) -> bool:
         ).returncode
         == 0
     )
+
+
+def _git_file_sha256(commit: str, path: str) -> str:
+    if COMMIT.fullmatch(commit) is None:
+        raise ValueError("registered artifact Commit is invalid")
+    relative = PurePosixPath(path)
+    if relative.is_absolute() or any(part in {"", ".", ".."} for part in relative.parts):
+        raise ValueError("registered artifact path is unsafe")
+    completed = subprocess.run(
+        ["git", "show", f"{commit}:{relative.as_posix()}"],
+        cwd=SOURCE_GIT_ROOT,
+        check=False,
+        capture_output=True,
+    )
+    if completed.returncode != 0:
+        raise ValueError("registered historical artifact is unavailable")
+    return hashlib.sha256(completed.stdout).hexdigest()
 
 
 def _payload_private_detail_leaks(payload: object) -> int:
@@ -4098,6 +4137,16 @@ def _validate_static_showcase_experiment_payload(
     ]
     actual_cases = evaluation.get("cases") if isinstance(evaluation, dict) else None
     metrics = evaluation.get("metrics") if isinstance(evaluation, dict) else None
+    recorded_test = payload.get("development", {}).get("test_file")
+    historical_test_sha = _git_file_sha256(
+        str(artifact["memoryforge_commit"]),
+        str(development["test_file"]),
+    )
+    test_binding_valid = (
+        isinstance(recorded_test, dict)
+        and recorded_test.get("path") == development["test_file"]
+        and recorded_test.get("sha256") == historical_test_sha
+    )
     evaluation_sha256 = hashlib.sha256(
         json.dumps(evaluation, sort_keys=True, ensure_ascii=False).encode("utf-8")
     ).hexdigest()
@@ -4107,8 +4156,7 @@ def _validate_static_showcase_experiment_payload(
         or payload.get("suite_revision") != experiment["suite_revision"]
         or payload.get("development", {}).get("path") != development["path"]
         or payload.get("development", {}).get("sha256") != development["sha256"]
-        or payload.get("development", {}).get("test_file")
-        != {"path": development["test_file"], "sha256": development["test_sha256"]}
+        or not test_binding_valid
         or type(payload.get("development", {}).get("case_count")) is not int
         or payload.get("development", {}).get("case_count") != development["case_count"]
         or not isinstance(evaluation, dict)

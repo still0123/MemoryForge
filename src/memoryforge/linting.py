@@ -11,7 +11,11 @@ import stat
 from pathlib import Path, PurePosixPath
 from typing import Literal, TypedDict
 
-from memoryforge.wiki_facts import parse_page_facts
+from memoryforge.wiki_facts import (
+    citation_quote_matches_excerpt,
+    parse_page_citations,
+    parse_page_facts,
+)
 from memoryforge.workspace import (
     WorkspaceIntegrityError,
     WorkspaceSecurityError,
@@ -20,11 +24,6 @@ from memoryforge.workspace import (
 )
 
 _INDEX_ENTRY = re.compile(r"^- \[[^\]]+\]\((?P<path>[^)]+)\) — .+$", re.MULTILINE)
-_FOOTNOTE = re.compile(
-    r"^\[\^[^\]]+\]: source `(?P<source_id>[a-f0-9]{64})` · "
-    r"revision `(?P<source_version>\d+)` · `(?P<locator>chars:\d+-\d+)`$",
-    re.MULTILINE,
-)
 _RELATED_PAGE_LINK = re.compile(r"^- \[[^\]]+\]\((?P<path>[^)]+\.md)\)$", re.MULTILINE)
 _PAGE_TYPES = {"entity", "concept", "synthesis"}
 
@@ -336,12 +335,12 @@ def _lint_citations(
     source_ids: set[str],
     issues: list[LintIssue],
 ) -> None:
-    citations = tuple(_FOOTNOTE.finditer(content))
+    citations = parse_page_citations(content)
     if not citations:
         issues.append(_issue("missing_citation", page_path, "page has no verifiable citation"))
     represented_source_ids: set[str] = set()
     for citation in citations:
-        source_id = citation.group("source_id")
+        source_id = citation["source_id"]
         if source_id not in source_ids:
             issues.append(
                 _issue(
@@ -357,8 +356,10 @@ def _lint_citations(
                 workspace_root,
                 index,
                 source_id=source_id,
-                source_version=int(citation.group("source_version")),
-                locator=citation.group("locator"),
+                source_version=citation["source_version"],
+                locator=citation["locator"],
+                quote=citation["quote"],
+                grounding=citation.get("grounding", "exact"),
             )
         except (
             OSError,
@@ -570,6 +571,8 @@ def _validate_citation_excerpt(
     source_id: str,
     source_version: int,
     locator: str,
+    quote: str,
+    grounding: Literal["exact", "semantic"],
 ) -> None:
     locator_match = re.fullmatch(r"chars:(?P<start>\d+)-(?P<end>\d+)", locator)
     if locator_match is None:
@@ -599,6 +602,8 @@ def _validate_citation_excerpt(
     end = int(locator_match.group("end"))
     if start >= end or end > len(text):
         raise WorkspaceIntegrityError("Citation locator is outside immutable evidence")
+    if grounding == "exact" and not citation_quote_matches_excerpt(quote, text[start:end]):
+        raise WorkspaceIntegrityError("Citation quote does not match immutable evidence")
 
 
 def _read_blob_bytes_readonly(root: Path, content_sha256: str, relative: Path) -> bytes:

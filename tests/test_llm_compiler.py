@@ -14,6 +14,7 @@ from memoryforge.cli import app
 from memoryforge.compiler import compile_pending_sources
 from memoryforge.models import CompilationPlan, PageChange, PlannedPage
 from memoryforge.workspace import Workspace
+from tests.cli_helpers import review_approve_apply
 
 
 class FakeProvider:
@@ -53,8 +54,12 @@ def test_llm_compiler_merges_two_pending_sources_and_keeps_review_gate(
     runner = CliRunner()
     workspace_path = repository / "workspace"
     assert runner.invoke(app, ["init", str(workspace_path)]).exit_code == 0
-    first_result = runner.invoke(app, ["import", str(first), "--workspace", str(workspace_path)])
-    second_result = runner.invoke(app, ["import", str(second), "--workspace", str(workspace_path)])
+    first_result = runner.invoke(
+        app, ["import", str(first), "--public", "--workspace", str(workspace_path)]
+    )
+    second_result = runner.invoke(
+        app, ["import", str(second), "--public", "--workspace", str(workspace_path)]
+    )
     first_import = json.loads(first_result.stdout)
     second_import = json.loads(second_result.stdout)
     first_end = first_text.index("Cache entries") + len("Cache entries expire after sixty seconds.")
@@ -420,7 +425,9 @@ def test_llm_compiler_rejects_omitted_pending_source_before_staging(
     second = repository / "second.md"
     second.write_text("# Second\n\nA second fact.\n", encoding="utf-8")
     runner = CliRunner()
-    imported = runner.invoke(app, ["import", str(second), "--workspace", str(workspace_path)])
+    imported = runner.invoke(
+        app, ["import", str(second), "--public", "--workspace", str(workspace_path)]
+    )
     assert imported.exit_code == 0
     second_id = json.loads(imported.stdout)["source_id"]
     first_text = (repository / "note.md").read_text(encoding="utf-8")
@@ -458,7 +465,9 @@ def test_llm_compiler_keeps_distinct_pages_when_model_paths_collide(
     second_text = "# Second\n\nA second useful fact.\n"
     second.write_text(second_text, encoding="utf-8")
     runner = CliRunner()
-    imported = runner.invoke(app, ["import", str(second), "--workspace", str(workspace_path)])
+    imported = runner.invoke(
+        app, ["import", str(second), "--public", "--workspace", str(workspace_path)]
+    )
     assert imported.exit_code == 0
     second_id = json.loads(imported.stdout)["source_id"]
     first_text = (repository / "note.md").read_text(encoding="utf-8")
@@ -497,10 +506,7 @@ def test_llm_compiler_keeps_distinct_pages_when_model_paths_collide(
     stored = ChangeSetStore(Workspace.open(workspace_path)).create(
         compilation.changeset, compilation.candidate_files
     )
-    applied = runner.invoke(
-        app,
-        ["apply", stored.changeset.changeset_id, "--approve", "--workspace", str(workspace_path)],
-    )
+    applied = review_approve_apply(runner, stored.changeset.changeset_id, workspace_path)
     assert applied.exit_code == 0, applied.output
     assert (workspace_path / first_path).is_file()
     assert (workspace_path / second_path).is_file()
@@ -549,10 +555,7 @@ def test_llm_page_uses_local_citation_excerpt_after_review_and_apply(
         compilation.changeset, compilation.candidate_files
     )
     runner = CliRunner()
-    applied = runner.invoke(
-        app,
-        ["apply", stored.changeset.changeset_id, "--approve", "--workspace", str(workspace_path)],
-    )
+    applied = review_approve_apply(runner, stored.changeset.changeset_id, workspace_path)
     assert applied.exit_code == 0, applied.output
     result = runner.invoke(
         app,
@@ -606,17 +609,16 @@ def test_llm_compiler_rejects_update_owned_by_another_source(
     stored = ChangeSetStore(Workspace.open(workspace_path)).create(
         first_compilation.changeset, first_compilation.candidate_files
     )
-    applied = runner.invoke(
-        app,
-        ["apply", stored.changeset.changeset_id, "--approve", "--workspace", str(workspace_path)],
-    )
+    applied = review_approve_apply(runner, stored.changeset.changeset_id, workspace_path)
     assert applied.exit_code == 0
     page_path = workspace_path / f"wiki/pages/{first_id}.md"
     original_page = page_path.read_text(encoding="utf-8")
 
     second = repository / "second.md"
     second.write_text("# Second\n\nA different architecture fact.\n", encoding="utf-8")
-    imported = runner.invoke(app, ["import", str(second), "--workspace", str(workspace_path)])
+    imported = runner.invoke(
+        app, ["import", str(second), "--public", "--workspace", str(workspace_path)]
+    )
     assert imported.exit_code == 0
     second_id = json.loads(imported.stdout)["source_id"]
     conflicting_path = workspace_path / f"wiki/pages/{second_id}.md"
@@ -672,22 +674,14 @@ def test_llm_compiler_allows_update_with_same_page_ownership(
         first_compilation.changeset, first_compilation.candidate_files
     )
     assert (
-        runner.invoke(
-            app,
-            [
-                "apply",
-                stored.changeset.changeset_id,
-                "--approve",
-                "--workspace",
-                str(workspace_path),
-            ],
-        ).exit_code
-        == 0
+        review_approve_apply(runner, stored.changeset.changeset_id, workspace_path).exit_code == 0
     )
 
     source = repository / "note.md"
     source.write_text("# Note\n\nAn updated local fact.\n", encoding="utf-8")
-    imported = runner.invoke(app, ["import", str(source), "--workspace", str(workspace_path)])
+    imported = runner.invoke(
+        app, ["import", str(source), "--public", "--workspace", str(workspace_path)]
+    )
     assert imported.exit_code == 0
     updated_text = source.read_text(encoding="utf-8")
     update = PageChange(
@@ -715,18 +709,14 @@ def test_llm_compiler_uses_canonical_single_source_path(
     deterministic = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace_path)])
     assert deterministic.exit_code == 0
     deterministic_id = json.loads(deterministic.stdout)["changeset_id"]
-    assert (
-        runner.invoke(
-            app,
-            ["apply", deterministic_id, "--approve", "--workspace", str(workspace_path)],
-        ).exit_code
-        == 0
-    )
+    assert review_approve_apply(runner, deterministic_id, workspace_path).exit_code == 0
 
     source = repository / "note.md"
     source.write_text("# Note\n\nA newer local fact.\n", encoding="utf-8")
     assert (
-        runner.invoke(app, ["import", str(source), "--workspace", str(workspace_path)]).exit_code
+        runner.invoke(
+            app, ["import", str(source), "--public", "--workspace", str(workspace_path)]
+        ).exit_code
         == 0
     )
     text = source.read_text(encoding="utf-8")
@@ -765,8 +755,12 @@ def test_llm_compiler_uses_stable_canonical_merged_path(
     runner = CliRunner()
     workspace_path = repository / "workspace"
     assert runner.invoke(app, ["init", str(workspace_path)]).exit_code == 0
-    first_result = runner.invoke(app, ["import", str(first), "--workspace", str(workspace_path)])
-    second_result = runner.invoke(app, ["import", str(second), "--workspace", str(workspace_path)])
+    first_result = runner.invoke(
+        app, ["import", str(first), "--public", "--workspace", str(workspace_path)]
+    )
+    second_result = runner.invoke(
+        app, ["import", str(second), "--public", "--workspace", str(workspace_path)]
+    )
     first_id = json.loads(first_result.stdout)["source_id"]
     second_id = json.loads(second_result.stdout)["source_id"]
     source_ids = tuple(sorted((first_id, second_id)))
@@ -800,27 +794,22 @@ def test_llm_compiler_uses_stable_canonical_merged_path(
         first_compilation.changeset, first_compilation.candidate_files
     )
     assert (
-        runner.invoke(
-            app,
-            [
-                "apply",
-                first_stored.changeset.changeset_id,
-                "--approve",
-                "--workspace",
-                str(workspace_path),
-            ],
-        ).exit_code
+        review_approve_apply(runner, first_stored.changeset.changeset_id, workspace_path).exit_code
         == 0
     )
 
     first.write_text("# First\n\nUpdated first fact.\n", encoding="utf-8")
     second.write_text("# Second\n\nUpdated second fact.\n", encoding="utf-8")
     assert (
-        runner.invoke(app, ["import", str(first), "--workspace", str(workspace_path)]).exit_code
+        runner.invoke(
+            app, ["import", str(first), "--public", "--workspace", str(workspace_path)]
+        ).exit_code
         == 0
     )
     assert (
-        runner.invoke(app, ["import", str(second), "--workspace", str(workspace_path)]).exit_code
+        runner.invoke(
+            app, ["import", str(second), "--public", "--workspace", str(workspace_path)]
+        ).exit_code
         == 0
     )
     texts = {
@@ -851,8 +840,12 @@ def test_llm_compiler_routes_one_pending_source_without_source_filter(
     runner = CliRunner()
     workspace_path = repository / "workspace"
     assert runner.invoke(app, ["init", str(workspace_path)]).exit_code == 0
-    first_import = runner.invoke(app, ["import", str(first), "--workspace", str(workspace_path)])
-    second_import = runner.invoke(app, ["import", str(second), "--workspace", str(workspace_path)])
+    first_import = runner.invoke(
+        app, ["import", str(first), "--public", "--workspace", str(workspace_path)]
+    )
+    second_import = runner.invoke(
+        app, ["import", str(second), "--public", "--workspace", str(workspace_path)]
+    )
     first_id = json.loads(first_import.stdout)["source_id"]
     second_id = json.loads(second_import.stdout)["source_id"]
     source_ids = tuple(sorted((first_id, second_id)))
@@ -885,21 +878,13 @@ def test_llm_compiler_routes_one_pending_source_without_source_filter(
         initial.changeset, initial.candidate_files
     )
     assert (
-        runner.invoke(
-            app,
-            [
-                "apply",
-                stored.changeset.changeset_id,
-                "--approve",
-                "--workspace",
-                str(workspace_path),
-            ],
-        ).exit_code
-        == 0
+        review_approve_apply(runner, stored.changeset.changeset_id, workspace_path).exit_code == 0
     )
 
     first.write_text("# First\n\nUpdated first fact.\n", encoding="utf-8")
-    updated = runner.invoke(app, ["import", str(first), "--workspace", str(workspace_path)])
+    updated = runner.invoke(
+        app, ["import", str(first), "--public", "--workspace", str(workspace_path)]
+    )
     assert updated.exit_code == 0
     updated_texts = {
         first_id: first.read_text(encoding="utf-8"),
@@ -935,10 +920,14 @@ def test_llm_compiler_routes_mixed_pending_sources_to_existing_and_new_pages(
     workspace_path = repository / "workspace"
     assert runner.invoke(app, ["init", str(workspace_path)]).exit_code == 0
     first_id = json.loads(
-        runner.invoke(app, ["import", str(first), "--workspace", str(workspace_path)]).stdout
+        runner.invoke(
+            app, ["import", str(first), "--public", "--workspace", str(workspace_path)]
+        ).stdout
     )["source_id"]
     second_id = json.loads(
-        runner.invoke(app, ["import", str(second), "--workspace", str(workspace_path)]).stdout
+        runner.invoke(
+            app, ["import", str(second), "--public", "--workspace", str(workspace_path)]
+        ).stdout
     )["source_id"]
     merged_ids = tuple(sorted((first_id, second_id)))
     merged_path = f"wiki/pages/merged-{merged_ids[0][:8]}-{merged_ids[1][:8]}.md"
@@ -977,28 +966,22 @@ def test_llm_compiler_routes_mixed_pending_sources_to_existing_and_new_pages(
         initial.changeset, initial.candidate_files
     )
     assert (
-        runner.invoke(
-            app,
-            [
-                "apply",
-                stored.changeset.changeset_id,
-                "--approve",
-                "--workspace",
-                str(workspace_path),
-            ],
-        ).exit_code
-        == 0
+        review_approve_apply(runner, stored.changeset.changeset_id, workspace_path).exit_code == 0
     )
 
     first.write_text("# First\n\nUpdated first fact.\n", encoding="utf-8")
     assert (
-        runner.invoke(app, ["import", str(first), "--workspace", str(workspace_path)]).exit_code
+        runner.invoke(
+            app, ["import", str(first), "--public", "--workspace", str(workspace_path)]
+        ).exit_code
         == 0
     )
     third = repository / "third.md"
     third.write_text("# Third\n\nThird fact.\n", encoding="utf-8")
     third_id = json.loads(
-        runner.invoke(app, ["import", str(third), "--workspace", str(workspace_path)]).stdout
+        runner.invoke(
+            app, ["import", str(third), "--public", "--workspace", str(workspace_path)]
+        ).stdout
     )["source_id"]
     current_texts = {
         first_id: first.read_text(encoding="utf-8"),
@@ -1045,10 +1028,14 @@ def test_deterministic_compiler_routes_mixed_pending_sources_to_existing_and_new
     workspace_path = repository / "workspace"
     assert runner.invoke(app, ["init", str(workspace_path)]).exit_code == 0
     first_id = json.loads(
-        runner.invoke(app, ["import", str(first), "--workspace", str(workspace_path)]).stdout
+        runner.invoke(
+            app, ["import", str(first), "--public", "--workspace", str(workspace_path)]
+        ).stdout
     )["source_id"]
     second_id = json.loads(
-        runner.invoke(app, ["import", str(second), "--workspace", str(workspace_path)]).stdout
+        runner.invoke(
+            app, ["import", str(second), "--public", "--workspace", str(workspace_path)]
+        ).stdout
     )["source_id"]
     merged_ids = tuple(sorted((first_id, second_id)))
     merged_path = f"wiki/pages/merged-{merged_ids[0][:8]}-{merged_ids[1][:8]}.md"
@@ -1077,28 +1064,22 @@ def test_deterministic_compiler_routes_mixed_pending_sources_to_existing_and_new
         initial.changeset, initial.candidate_files
     )
     assert (
-        runner.invoke(
-            app,
-            [
-                "apply",
-                stored.changeset.changeset_id,
-                "--approve",
-                "--workspace",
-                str(workspace_path),
-            ],
-        ).exit_code
-        == 0
+        review_approve_apply(runner, stored.changeset.changeset_id, workspace_path).exit_code == 0
     )
 
     first.write_text("# First\n\nUpdated first fact.\n", encoding="utf-8")
     assert (
-        runner.invoke(app, ["import", str(first), "--workspace", str(workspace_path)]).exit_code
+        runner.invoke(
+            app, ["import", str(first), "--public", "--workspace", str(workspace_path)]
+        ).exit_code
         == 0
     )
     third = repository / "third.md"
     third.write_text("# Third\n\nThird fact.\n", encoding="utf-8")
     third_id = json.loads(
-        runner.invoke(app, ["import", str(third), "--workspace", str(workspace_path)]).stdout
+        runner.invoke(
+            app, ["import", str(third), "--public", "--workspace", str(workspace_path)]
+        ).stdout
     )["source_id"]
 
     staged = runner.invoke(
@@ -1119,10 +1100,7 @@ def test_deterministic_compiler_routes_mixed_pending_sources_to_existing_and_new
     assert "Second fact." in merged_page
     assert "Third fact." in staged_changeset.candidate_files[f"wiki/pages/{third_id}.md"]
 
-    applied = runner.invoke(
-        app,
-        ["apply", changeset_id, "--approve", "--workspace", str(workspace_path)],
-    )
+    applied = review_approve_apply(runner, changeset_id, workspace_path)
     assert applied.exit_code == 0, applied.output
     opened = Workspace.open(workspace_path)
     assert opened.page_paths_for_source(first_id) == (merged_path,)
@@ -1147,7 +1125,9 @@ def test_llm_compiler_can_extend_a_related_existing_page(
     workspace_path = repository / "workspace"
     assert runner.invoke(app, ["init", str(workspace_path)]).exit_code == 0
     first_id = json.loads(
-        runner.invoke(app, ["import", str(first), "--workspace", str(workspace_path)]).stdout
+        runner.invoke(
+            app, ["import", str(first), "--public", "--workspace", str(workspace_path)]
+        ).stdout
     )["source_id"]
 
     initial_change = PageChange(
@@ -1167,22 +1147,14 @@ def test_llm_compiler_can_extend_a_related_existing_page(
         initial.changeset, initial.candidate_files
     )
     assert (
-        runner.invoke(
-            app,
-            [
-                "apply",
-                stored.changeset.changeset_id,
-                "--approve",
-                "--workspace",
-                str(workspace_path),
-            ],
-        ).exit_code
-        == 0
+        review_approve_apply(runner, stored.changeset.changeset_id, workspace_path).exit_code == 0
     )
 
     second.write_text(second_text, encoding="utf-8")
     second_id = json.loads(
-        runner.invoke(app, ["import", str(second), "--workspace", str(workspace_path)]).stdout
+        runner.invoke(
+            app, ["import", str(second), "--public", "--workspace", str(workspace_path)]
+        ).stdout
     )["source_id"]
     expanded_change = PageChange(
         path="wiki/pages/model-name.md",
@@ -1219,7 +1191,9 @@ def test_llm_compiler_rejects_duplicate_source_ownership_before_staging(
     second = repository / "second.md"
     second.write_text("# Second\n\nSecond fact.\n", encoding="utf-8")
     second_id = json.loads(
-        CliRunner().invoke(app, ["import", str(second), "--workspace", str(workspace_path)]).stdout
+        CliRunner()
+        .invoke(app, ["import", str(second), "--public", "--workspace", str(workspace_path)])
+        .stdout
     )["source_id"]
     texts = {
         first_id: (repository / "note.md").read_text(encoding="utf-8"),
@@ -1281,21 +1255,13 @@ def test_llm_compiler_rejects_routed_page_ownership_changes(
         initial.changeset, initial.candidate_files
     )
     assert (
-        runner.invoke(
-            app,
-            [
-                "apply",
-                stored.changeset.changeset_id,
-                "--approve",
-                "--workspace",
-                str(workspace_path),
-            ],
-        ).exit_code
-        == 0
+        review_approve_apply(runner, stored.changeset.changeset_id, workspace_path).exit_code == 0
     )
     source = repository / "note.md"
     source.write_text("# Note\n\nUpdated fact.\n", encoding="utf-8")
-    updated = runner.invoke(app, ["import", str(source), "--workspace", str(workspace_path)])
+    updated = runner.invoke(
+        app, ["import", str(source), "--public", "--workspace", str(workspace_path)]
+    )
     assert updated.exit_code == 0
 
     with pytest.raises(ValueError, match="exactly its existing sources"):
@@ -1322,10 +1288,11 @@ def test_llm_prompt_does_not_include_applied_local_only_index_entry(
     assert runner.invoke(app, ["init", str(workspace_path)]).exit_code == 0
     local_result = runner.invoke(
         app,
-        ["import", str(local_note), "--local-only", "--workspace", str(workspace_path)],
+        ["import", str(local_note), "--workspace", str(workspace_path)],
     )
     public_result = runner.invoke(
-        app, ["import", str(public_note), "--workspace", str(workspace_path)]
+        app,
+        ["import", str(public_note), "--public", "--workspace", str(workspace_path)],
     )
     assert local_result.exit_code == 0
     assert public_result.exit_code == 0
@@ -1344,10 +1311,7 @@ def test_llm_prompt_does_not_include_applied_local_only_index_entry(
     )
     assert deterministic.exit_code == 0
     changeset_id = json.loads(deterministic.stdout)["changeset_id"]
-    applied = runner.invoke(
-        app,
-        ["apply", changeset_id, "--approve", "--workspace", str(workspace_path)],
-    )
+    applied = review_approve_apply(runner, changeset_id, workspace_path)
     assert applied.exit_code == 0
 
     public_id = json.loads(public_result.stdout)["source_id"]
@@ -1421,8 +1385,8 @@ def _workspace_with_one_source(
     workspace = repository / "workspace"
     assert runner.invoke(app, ["init", str(workspace)]).exit_code == 0
     import_args = ["import", str(source), "--workspace", str(workspace)]
-    if local_only:
-        import_args.append("--local-only")
+    if not local_only:
+        import_args.append("--public")
     imported = runner.invoke(app, import_args)
     assert imported.exit_code == 0
     return repository, workspace, json.loads(imported.stdout)["source_id"]

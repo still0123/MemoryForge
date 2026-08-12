@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import subprocess
 from pathlib import Path
 
@@ -9,6 +10,7 @@ from typer.testing import CliRunner
 
 from memoryforge.cli import app
 from memoryforge.sessions import SessionStore
+from tests.cli_helpers import review_approve_apply
 
 
 def test_cli_version_exits_without_a_subcommand() -> None:
@@ -55,6 +57,45 @@ def test_cli_init_import_and_search_local_file(
     assert searched["source_path"] == "public-note.md"
     assert searched["snapshot_uri"] == imported["snapshot_uri"]
     assert str(tmp_path) not in search_result.stdout
+    with sqlite3.connect(workspace / ".memoryforge/index.sqlite") as connection:
+        sensitivity = connection.execute(
+            """
+            SELECT versions.sensitivity
+            FROM source_versions AS versions
+            JOIN sources ON sources.id = versions.source_id
+            WHERE sources.source_id = ? AND versions.is_current = 1
+            """,
+            (imported["source_id"],),
+        ).fetchone()[0]
+    assert sensitivity == "local_only"
+
+
+def test_cli_import_requires_explicit_public_opt_in(tmp_path: Path, monkeypatch) -> None:
+    source = tmp_path / "public.md"
+    source.write_text("# Public\n\nPublic fixture.\n", encoding="utf-8")
+    workspace = tmp_path / "workspace"
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+    assert runner.invoke(app, ["init", str(workspace)]).exit_code == 0
+
+    imported = runner.invoke(
+        app,
+        ["import", str(source), "--public", "--workspace", str(workspace)],
+    )
+
+    assert imported.exit_code == 0, imported.output
+    source_id = json.loads(imported.stdout)["source_id"]
+    with sqlite3.connect(workspace / ".memoryforge/index.sqlite") as connection:
+        sensitivity = connection.execute(
+            """
+            SELECT versions.sensitivity
+            FROM source_versions AS versions
+            JOIN sources ON sources.id = versions.source_id
+            WHERE sources.source_id = ? AND versions.is_current = 1
+            """,
+            (source_id,),
+        ).fetchone()[0]
+    assert sensitivity == "public"
 
 
 def test_cli_reports_integrity_failure_without_traceback_or_private_path(
@@ -233,10 +274,13 @@ def test_cli_status_changeset_list_and_auto_obsidian_rebuild(
         encoding="utf-8",
     )
     assert runner.invoke(app, ["init", str(workspace)]).exit_code == 0
-    assert runner.invoke(
-        app,
-        ["import", str(source), "--workspace", str(workspace)],
-    ).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            ["import", str(source), "--workspace", str(workspace)],
+        ).exit_code
+        == 0
+    )
     ingested = runner.invoke(
         app,
         ["ingest", "--pending", "--workspace", str(workspace)],
@@ -248,9 +292,7 @@ def test_cli_status_changeset_list_and_auto_obsidian_rebuild(
     assert listed.exit_code == 0, listed.output
     assert [item["changeset_id"] for item in json.loads(listed.stdout)] == [changeset_id]
 
-    before = json.loads(
-        runner.invoke(app, ["status", "--workspace", str(workspace)]).stdout
-    )
+    before = json.loads(runner.invoke(app, ["status", "--workspace", str(workspace)]).stdout)
     assert before["current_commit"]
     assert before["sources"] == {"current": 1, "applied": 0}
     assert before["versions"] == {"current": 1}
@@ -259,17 +301,12 @@ def test_cli_status_changeset_list_and_auto_obsidian_rebuild(
     assert before["changesets"]["items"][0]["changeset_id"] == changeset_id
     assert before["obsidian"] == {"generated": False, "lagging": True}
 
-    applied = runner.invoke(
-        app,
-        ["apply", changeset_id, "--approve", "--workspace", str(workspace)],
-    )
+    applied = review_approve_apply(runner, changeset_id, workspace)
     assert applied.exit_code == 0, applied.output
     assert json.loads(applied.stdout)["obsidian"]["status"] == "built"
     assert (workspace / "obsidian" / "Home.md").is_file()
 
-    after = json.loads(
-        runner.invoke(app, ["status", "--workspace", str(workspace)]).stdout
-    )
+    after = json.loads(runner.invoke(app, ["status", "--workspace", str(workspace)]).stdout)
     assert after["sources"] == {"current": 1, "applied": 1}
     assert after["versions"] == {"current": 1}
     assert after["applied_pages"] == 1
@@ -280,9 +317,10 @@ def test_cli_status_changeset_list_and_auto_obsidian_rebuild(
     )
     assert applied_sources[0]["is_applied"] is True
     assert applied_sources[0]["git_repository"] is None
-    assert json.loads(
-        runner.invoke(app, ["changeset-list", "--workspace", str(workspace)]).stdout
-    ) == []
+    assert (
+        json.loads(runner.invoke(app, ["changeset-list", "--workspace", str(workspace)]).stdout)
+        == []
+    )
 
 
 def test_cli_source_list_reports_git_repository_ownership(tmp_path: Path) -> None:
@@ -339,9 +377,7 @@ def test_cli_doctor_reports_readonly_checks_and_remediation(
         lambda: lock_root,
     )
 
-    healthy = json.loads(
-        runner.invoke(app, ["doctor", "--workspace", str(workspace)]).stdout
-    )
+    healthy = json.loads(runner.invoke(app, ["doctor", "--workspace", str(workspace)]).stdout)
     names = {check["name"] for check in healthy["checks"]}
 
     assert healthy["status"] == "ok"
@@ -351,6 +387,7 @@ def test_cli_doctor_reports_readonly_checks_and_remediation(
         "git",
         "workspace",
         "index",
+        "projection",
         "lock_directory",
         "model",
         "feishu",
@@ -364,12 +401,8 @@ def test_cli_doctor_reports_readonly_checks_and_remediation(
         "memoryforge.cli.inspect_posix_namespace_lock_root",
         unsafe_lock_root,
     )
-    lock_broken = json.loads(
-        runner.invoke(app, ["doctor", "--workspace", str(workspace)]).stdout
-    )
-    lock_check = next(
-        check for check in lock_broken["checks"] if check["name"] == "lock_directory"
-    )
+    lock_broken = json.loads(runner.invoke(app, ["doctor", "--workspace", str(workspace)]).stdout)
+    lock_check = next(check for check in lock_broken["checks"] if check["name"] == "lock_directory")
     assert lock_check["status"] == "error"
     assert "0700" in lock_check["remediation"]
 
@@ -380,6 +413,50 @@ def test_cli_doctor_reports_readonly_checks_and_remediation(
     assert workspace_check["status"] == "error"
     assert workspace_check["remediation"]
     assert any("memoryforge init" in remediation for remediation in broken["remediation"])
+
+
+def test_cli_doctor_detects_sqlite_and_projection_corruption(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    runner = CliRunner()
+    monkeypatch.chdir(tmp_path)
+    workspace = tmp_path / "workspace"
+    assert runner.invoke(app, ["init", str(workspace)]).exit_code == 0
+    source = tmp_path / "note.md"
+    source.write_text("# Note\n\nGrounded fact.\n", encoding="utf-8")
+    imported = runner.invoke(app, ["import", str(source), "--workspace", str(workspace)])
+    assert imported.exit_code == 0
+    staged = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
+    assert staged.exit_code == 0
+    assert (
+        review_approve_apply(
+            runner,
+            json.loads(staged.stdout)["changeset_id"],
+            workspace,
+        ).exit_code
+        == 0
+    )
+
+    with sqlite3.connect(workspace / ".memoryforge/index.sqlite") as connection:
+        connection.execute("DELETE FROM page_sources")
+    projection = json.loads(runner.invoke(app, ["doctor", "--workspace", str(workspace)]).stdout)
+    projection_check = next(
+        check for check in projection["checks"] if check["name"] == "projection"
+    )
+    assert projection["status"] == "error"
+    assert projection_check["status"] == "error"
+
+    with sqlite3.connect(workspace / ".memoryforge/index.sqlite") as connection:
+        connection.execute("PRAGMA foreign_keys = OFF")
+        connection.execute(
+            "INSERT INTO page_sources(page_path, source_id) VALUES (?, ?)",
+            ("wiki/pages/orphan.md", "0" * 64),
+        )
+    corrupted = json.loads(runner.invoke(app, ["doctor", "--workspace", str(workspace)]).stdout)
+    index_check = next(check for check in corrupted["checks"] if check["name"] == "index")
+    assert index_check["status"] == "error"
+    assert "foreign_key_check" in index_check["message"]
 
 
 def test_cli_watch_once_refreshes_and_stages_wiki_update(tmp_path: Path) -> None:
@@ -458,15 +535,8 @@ def test_cli_watch_stages_docs_and_multiple_code_wiki_changesets(
 
     staged_docs = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
     assert staged_docs.exit_code == 0, staged_docs.output
-    applied_docs = runner.invoke(
-        app,
-        [
-            "apply",
-            json.loads(staged_docs.stdout)["changeset_id"],
-            "--approve",
-            "--workspace",
-            str(workspace),
-        ],
+    applied_docs = review_approve_apply(
+        runner, json.loads(staged_docs.stdout)["changeset_id"], workspace
     )
     assert applied_docs.exit_code == 0, applied_docs.output
 
@@ -488,15 +558,8 @@ def test_cli_watch_stages_docs_and_multiple_code_wiki_changesets(
             ["ingest", "--code-wiki", repository_id, "--workspace", str(workspace)],
         )
         assert code_wiki.exit_code == 0, code_wiki.output
-        applied_code = runner.invoke(
-            app,
-            [
-                "apply",
-                json.loads(code_wiki.stdout)["changeset_id"],
-                "--approve",
-                "--workspace",
-                str(workspace),
-            ],
+        applied_code = review_approve_apply(
+            runner, json.loads(code_wiki.stdout)["changeset_id"], workspace
         )
         assert applied_code.exit_code == 0, applied_code.output
 

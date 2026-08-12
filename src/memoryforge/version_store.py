@@ -260,6 +260,47 @@ class GitVersionStore:
             check=True,
         )
 
+    def restore_paths(self, commit: str, paths: tuple[str, ...]) -> None:
+        """Restore only apply-owned Wiki paths from one fixed Commit."""
+        self._require_commit(commit)
+        present: list[str] = []
+        absent: list[str] = []
+        for path in paths:
+            parts = PurePosixPath(path).parts
+            if (
+                not parts
+                or parts[0] != "wiki"
+                or any(part in {"", ".", ".."} for part in parts)
+                or "\\" in path
+                or str(PurePosixPath(path)) != path
+            ):
+                raise WorkspaceError("invalid Wiki file identity")
+            if self._run(["cat-file", "-e", f"{commit}:{path}"], check=False).returncode == 0:
+                present.append(path)
+            else:
+                absent.append(path)
+        if present:
+            self._run(
+                ["restore", "--source", commit, "--staged", "--worktree", "--", *present],
+                check=True,
+            )
+        if absent:
+            self._run(["reset", "--quiet", "HEAD", "--", *absent], check=True)
+            for path in absent:
+                target = self.root / path
+                try:
+                    metadata = os.lstat(target)
+                except FileNotFoundError:
+                    continue
+                if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode):
+                    raise WorkspaceError("interrupted apply target is unsafe")
+                target.unlink()
+
+    def commit_subject(self, commit: str) -> str:
+        self._require_commit(commit)
+        completed = self._run(["show", "-s", "--format=%s", commit], check=True)
+        return cast(str, completed.stdout).strip()
+
     def commit_paths(self, paths: tuple[str, ...], message: str) -> str:
         """Commit only the stable Wiki paths produced by one approved ChangeSet."""
         if not paths:

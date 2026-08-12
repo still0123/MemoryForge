@@ -42,6 +42,7 @@ from memoryforge.workspace import (
     search_wiki_facts,
     sync_git_checkout,
 )
+from tests.cli_helpers import review_approve_apply
 
 
 def test_register_and_list_git_checkout_are_idempotent(tmp_path: Path) -> None:
@@ -169,10 +170,7 @@ def test_git_documents_get_a_repository_overview_that_rebuilds_on_update(
     assert "[README](" in overview
     assert "[retry](" in overview
 
-    applied = runner.invoke(
-        app,
-        ["apply", changeset_id, "--approve", "--workspace", str(workspace)],
-    )
+    applied = review_approve_apply(runner, changeset_id, workspace)
     assert applied.exit_code == 0, applied.output
     assert lint_workspace(workspace) == {
         "status": "clean",
@@ -215,10 +213,7 @@ def test_public_repository_topics_only_change_the_navigation_page(tmp_path: Path
     staged = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
     assert staged.exit_code == 0, staged.output
     initial_id = json.loads(staged.stdout)["changeset_id"]
-    applied = runner.invoke(
-        app,
-        ["apply", initial_id, "--approve", "--workspace", str(workspace)],
-    )
+    applied = review_approve_apply(runner, initial_id, workspace)
     assert applied.exit_code == 0, applied.output
 
     class FakeTopicProvider:
@@ -262,10 +257,7 @@ def test_public_repository_topics_only_change_the_navigation_page(tmp_path: Path
         compilation.changeset,
         compilation.candidate_files,
     )
-    applied_topics = runner.invoke(
-        app,
-        ["apply", stored.changeset.changeset_id, "--approve", "--workspace", str(workspace)],
-    )
+    applied_topics = review_approve_apply(runner, stored.changeset.changeset_id, workspace)
     assert applied_topics.exit_code == 0, applied_topics.output
     assert lint_workspace(workspace)["status"] == "clean"
 
@@ -352,10 +344,7 @@ func (m *Meter) RecordUsage() {}
     assert "- func NewMeter [^source-3]" in code_page
     assert "- func (m *Meter) RecordUsage [^source-4]" in code_page
 
-    applied = runner.invoke(
-        app,
-        ["apply", changeset_id, "--approve", "--workspace", str(workspace)],
-    )
+    applied = review_approve_apply(runner, changeset_id, workspace)
     assert applied.exit_code == 0, applied.output
     assert lint_workspace(workspace)["status"] == "clean"
     answer = runner.invoke(app, ["ask", "NewMeter", "--workspace", str(workspace)])
@@ -404,16 +393,7 @@ def test_regular_ingest_defers_to_an_applied_deterministic_code_wiki(tmp_path: P
 
     docs = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
     assert docs.exit_code == 0, docs.output
-    applied_docs = runner.invoke(
-        app,
-        [
-            "apply",
-            json.loads(docs.stdout)["changeset_id"],
-            "--approve",
-            "--workspace",
-            str(workspace),
-        ],
-    )
+    applied_docs = review_approve_apply(runner, json.loads(docs.stdout)["changeset_id"], workspace)
     assert applied_docs.exit_code == 0, applied_docs.output
 
     register_git_code_module(workspace, repository.repository_id, "internal/meter")
@@ -429,15 +409,8 @@ def test_regular_ingest_defers_to_an_applied_deterministic_code_wiki(tmp_path: P
         ],
     )
     assert code_wiki.exit_code == 0, code_wiki.output
-    applied_code = runner.invoke(
-        app,
-        [
-            "apply",
-            json.loads(code_wiki.stdout)["changeset_id"],
-            "--approve",
-            "--workspace",
-            str(workspace),
-        ],
+    applied_code = review_approve_apply(
+        runner, json.loads(code_wiki.stdout)["changeset_id"], workspace
     )
     assert applied_code.exit_code == 0, applied_code.output
 
@@ -506,10 +479,7 @@ func (m *Manager) CheckFileSystem(fs FileSystem) error {
     staged = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
     assert staged.exit_code == 0, staged.output
     changeset_id = json.loads(staged.stdout)["changeset_id"]
-    applied = runner.invoke(
-        app,
-        ["apply", changeset_id, "--approve", "--workspace", str(workspace)],
-    )
+    applied = review_approve_apply(runner, changeset_id, workspace)
     assert applied.exit_code == 0, applied.output
 
     method = answer_question(workspace, "CheckFileSystem 方法做什么？")
@@ -686,13 +656,7 @@ def test_deleted_git_document_generates_reviewable_archive_and_apply_removes_pag
     staged = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
     assert staged.exit_code == 0, staged.output
     initial_id = json.loads(staged.stdout)["changeset_id"]
-    assert (
-        runner.invoke(
-            app,
-            ["apply", initial_id, "--approve", "--workspace", str(workspace)],
-        ).exit_code
-        == 0
-    )
+    assert review_approve_apply(runner, initial_id, workspace).exit_code == 0
     page_path = workspace / "wiki/pages" / f"{source_id}.md"
     assert page_path.is_file()
     assert len(search_wiki_facts(workspace, "Retired documentation")) == 1
@@ -715,10 +679,7 @@ def test_deleted_git_document_generates_reviewable_archive_and_apply_removes_pag
     assert f"wiki/pages/{source_id}.md" not in stored.candidate_files
     assert f"pages/{source_id}.md" not in stored.candidate_files["wiki/INDEX.md"]
 
-    applied = runner.invoke(
-        app,
-        ["apply", cleanup_id, "--approve", "--workspace", str(workspace)],
-    )
+    applied = review_approve_apply(runner, cleanup_id, workspace)
     assert applied.exit_code == 0, applied.output
     assert not page_path.exists()
     assert search_wiki_facts(workspace, "Retired documentation") == ()
@@ -764,13 +725,7 @@ def test_deleted_source_rebuilds_shared_page_from_remaining_source(tmp_path: Pat
         {shared_path: shared_content, "wiki/INDEX.md": index_content},
     )
     runner = CliRunner()
-    assert (
-        runner.invoke(
-            app,
-            ["apply", changeset.changeset.changeset_id, "--approve", "--workspace", str(workspace)],
-        ).exit_code
-        == 0
-    )
+    assert review_approve_apply(runner, changeset.changeset.changeset_id, workspace).exit_code == 0
 
     (checkout / "README.md").unlink()
     _commit_all(checkout, "Remove service overview")
@@ -787,10 +742,7 @@ def test_deleted_source_rebuilds_shared_page_from_remaining_source(tmp_path: Pat
     assert "Service" not in stored.candidate_files[shared_path]
     assert "Retries stop after three attempts." in stored.candidate_files[shared_path]
 
-    applied = runner.invoke(
-        app,
-        ["apply", cleanup_id, "--approve", "--workspace", str(workspace)],
-    )
+    applied = review_approve_apply(runner, cleanup_id, workspace)
     assert applied.exit_code == 0, applied.output
     assert (workspace / shared_path).is_file()
     retry_source_id = source_by_path["docs/retry.md"].source_id
@@ -826,16 +778,7 @@ def test_repository_scope_keeps_same_keyword_queries_in_one_git_checkout(
     staged = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
     assert staged.exit_code == 0, staged.output
     assert (
-        runner.invoke(
-            app,
-            [
-                "apply",
-                json.loads(staged.stdout)["changeset_id"],
-                "--approve",
-                "--workspace",
-                str(workspace),
-            ],
-        ).exit_code
+        review_approve_apply(runner, json.loads(staged.stdout)["changeset_id"], workspace).exit_code
         == 0
     )
 

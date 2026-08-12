@@ -53,3 +53,20 @@ def test_df_proxy_downweights_terms_shared_by_every_page(tmp_path: Path) -> None
     )
 
     assert ranked == [target]
+
+
+def test_rrf_combines_rankings_without_score_calibration(tmp_path: Path) -> None:
+    first = tmp_path / "first.md"
+    second = tmp_path / "second.md"
+    third = tmp_path / "third.md"
+
+    ranked = semantic_retrieval._reciprocal_rank_fusion(
+        (
+            [first, second],
+            [second, third],
+            [second, first],
+        ),
+        max_pages=2,
+    )
+
+    assert ranked == [second, first]

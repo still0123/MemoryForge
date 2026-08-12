@@ -6,7 +6,16 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+from memoryforge.changesets import ChangeSetStore
 from memoryforge.cli import app
+from memoryforge.models import (
+    ChangeOperation,
+    ChangeOperationType,
+    ChangeSet,
+    ChangeSetStatus,
+)
+from memoryforge.workspace import Workspace
+from tests.cli_helpers import review_approve_apply
 
 
 def test_review_approve_apply_records_separate_lifecycle_steps(
@@ -91,7 +100,50 @@ def test_apply_rejects_tampered_approval_receipt(
     assert not any((workspace / "wiki/pages").glob("*.md"))
 
 
-def test_legacy_inline_approval_is_labeled_in_receipt(
+def test_apply_rejects_candidate_quote_not_grounded_by_locator(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner, workspace, _ = _staged_changeset(tmp_path, monkeypatch)
+    source = json.loads(runner.invoke(app, ["source-list", "--workspace", str(workspace)]).stdout)[
+        0
+    ]
+    opened = Workspace.open(workspace)
+    changeset_id = "chg_invalid_quote"
+    page_path = f"wiki/pages/{source['source_id']}.md"
+    candidate = (
+        "---\n"
+        'title: "Invalid"\n'
+        "type: concept\n"
+        'summary: "Invalid"\n'
+        f'sources: ["{source["source_id"]}"]\n'
+        "---\n\n"
+        "# Invalid\n\n"
+        "## Verified facts\n\n"
+        "- Fabricated fact. [^source-1]\n\n"
+        f"[^source-1]: source `{source['source_id']}` · revision "
+        f"`{source['version_id']}` · `chars:16-57`\n"
+    )
+    ChangeSetStore(opened).create(
+        ChangeSet(
+            changeset_id=changeset_id,
+            base_commit=opened.current_commit(),
+            source_ids=(source["source_id"],),
+            source_versions={source["source_id"]: source["version_id"]},
+            status=ChangeSetStatus.PROPOSED,
+            operations=(ChangeOperation(type=ChangeOperationType.CREATE_PAGE, path=page_path),),
+        ),
+        {page_path: candidate},
+    )
+
+    result = review_approve_apply(runner, changeset_id, workspace)
+
+    assert result.exit_code != 0
+    assert "workspace integrity check failed" in result.output
+    assert not (workspace / page_path).exists()
+
+
+def test_apply_rejects_removed_inline_approval_option(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -102,10 +154,9 @@ def test_legacy_inline_approval_is_labeled_in_receipt(
         ["apply", changeset_id, "--approve", "--workspace", str(workspace)],
     )
 
-    assert result.exit_code == 0, result.output
-    archived = workspace / ".memoryforge/staging/applied" / changeset_id
-    review_receipt = json.loads((archived / "review.json").read_text(encoding="utf-8"))
-    assert review_receipt["review_mode"] == "inline_legacy"
+    assert result.exit_code != 0
+    assert "No such option" in result.output
+    assert not any((workspace / "wiki/pages").glob("*.md"))
 
 
 def test_apply_warns_without_rollback_when_obsidian_rebuild_fails(
@@ -119,10 +170,7 @@ def test_apply_warns_without_rollback_when_obsidian_rebuild_fails(
 
     monkeypatch.setattr("memoryforge.cli.build_obsidian", fail_obsidian)
 
-    result = runner.invoke(
-        app,
-        ["apply", changeset_id, "--approve", "--workspace", str(workspace)],
-    )
+    result = review_approve_apply(runner, changeset_id, workspace)
 
     assert result.exit_code == 0, result.output
     payload = json.loads(result.stdout)

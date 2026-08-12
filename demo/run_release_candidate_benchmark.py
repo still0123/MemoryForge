@@ -43,11 +43,7 @@ DOCUMENTS = (
 )
 DOCUMENT_CLAIMS = {
     DOCUMENTS[0]: (
-        "v0.3.0",
         "10% / 0%",
-        "Candidate 12 development",
-        "623 passed",
-        "620 passed / 3 skipped",
         "Windows 尚未验证",
     ),
     DOCUMENTS[1]: (

@@ -11,6 +11,7 @@ import memoryforge.compiler as compiler
 from memoryforge.changesets import ChangeSetStore
 from memoryforge.cli import app
 from memoryforge.workspace import Workspace
+from tests.cli_helpers import review_approve_apply
 
 
 def test_ingest_creates_typed_pages_with_frontmatter_and_an_index(
@@ -141,16 +142,7 @@ def test_conversation_page_keeps_older_search_anchors_and_prefers_recent_summary
     assert "Historical status 0" in page
     assert "Candidate 19 is accepted" in index
 
-    applied = runner.invoke(
-        app,
-        [
-            "apply",
-            json.loads(proposal.stdout)["changeset_id"],
-            "--approve",
-            "--workspace",
-            str(workspace),
-        ],
-    )
+    applied = review_approve_apply(runner, json.loads(proposal.stdout)["changeset_id"], workspace)
     recalled = runner.invoke(app, ["recall", "--workspace", str(workspace)])
 
     assert applied.exit_code == 0, applied.output
@@ -274,16 +266,7 @@ def test_ask_uses_index_to_select_a_page_then_returns_its_source(
     )
     proposal = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
     assert proposal.exit_code == 0, proposal.output
-    applied = runner.invoke(
-        app,
-        [
-            "apply",
-            json.loads(proposal.stdout)["changeset_id"],
-            "--approve",
-            "--workspace",
-            str(workspace),
-        ],
-    )
+    applied = review_approve_apply(runner, json.loads(proposal.stdout)["changeset_id"], workspace)
     assert applied.exit_code == 0, applied.output
 
     result = runner.invoke(
@@ -513,8 +496,5 @@ def _apply_pending(runner: CliRunner, workspace: Path, changeset_id: str | None 
         proposal = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
         assert proposal.exit_code == 0, proposal.output
         changeset_id = json.loads(proposal.stdout)["changeset_id"]
-    applied = runner.invoke(
-        app,
-        ["apply", changeset_id, "--approve", "--workspace", str(workspace)],
-    )
+    applied = review_approve_apply(runner, changeset_id, workspace)
     assert applied.exit_code == 0, applied.output

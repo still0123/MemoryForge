@@ -19,6 +19,7 @@ from memoryforge.manifests import SourceManifestStore
 from memoryforge.models import GitRepositoryRecord
 from memoryforge.provider import ProviderUnavailableError
 from memoryforge.sessions import SessionStore
+from tests.cli_helpers import review_approve_apply
 
 
 def test_feishu_event_returns_a_citable_wiki_reply(tmp_path: Path, monkeypatch) -> None:
@@ -435,17 +436,11 @@ def _applied_workspace(tmp_path: Path, monkeypatch) -> Path:
     assert (
         runner.invoke(
             app,
-            ["import", str(source), "--workspace", str(workspace)],
+            ["import", str(source), "--public", "--workspace", str(workspace)],
         ).exit_code
         == 0
     )
     ingested = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
     changeset_id = json.loads(ingested.stdout)["changeset_id"]
-    assert (
-        runner.invoke(
-            app,
-            ["apply", changeset_id, "--approve", "--workspace", str(workspace)],
-        ).exit_code
-        == 0
-    )
+    assert review_approve_apply(runner, changeset_id, workspace).exit_code == 0
     return workspace

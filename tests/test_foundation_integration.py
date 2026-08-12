@@ -111,7 +111,6 @@ def test_cli_unifies_secure_import_search_and_future_contracts(
             str(source),
             "--workspace",
             str(workspace),
-            "--local-only",
             "--tag",
             "evidence",
         ],

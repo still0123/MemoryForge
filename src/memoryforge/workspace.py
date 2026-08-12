@@ -36,6 +36,8 @@ from memoryforge.wiki_facts import (
     IndexedWikiFact,
     WikiFact,
     WikiFactSearchResult,
+    citation_quote_matches_excerpt,
+    parse_page_citations,
     parse_page_facts,
 )
 
@@ -803,14 +805,18 @@ class Workspace:
         _validate_workspace_identity_readonly(resolved)
         version_store = GitVersionStore(resolved)
         version_store.validate_metadata(allow_missing=True)
+        workspace = cls(resolved)
+        if version_store.has_repository():
+            workspace.version_store.validate_metadata()
+            workspace.current_commit()
+            from memoryforge.apply_journal import recover_interrupted_apply
+
+            recover_interrupted_apply(workspace)
         _upgrade_workspace_contract(resolved)
         workspace_database(resolved)
         _backfill_source_manifests(resolved)
-        workspace = cls(resolved)
         if not workspace.config_path.is_file() or not workspace.schema_path.is_file():
             raise WorkspaceError("workspace configuration is missing")
-        workspace.version_store.validate_metadata()
-        workspace.current_commit()
         return workspace
 
     @classmethod
@@ -1069,6 +1075,41 @@ def register_feishu_document(
             """,
             (document_id, category.value, json.dumps(tags), _now()),
         )
+
+
+def reconcile_feishu_sources(
+    workspace: Workspace,
+    *,
+    document_id: str,
+    current_source_ids: set[str],
+) -> int:
+    """Deactivate Feishu sections absent from the completed document snapshot."""
+    if re.fullmatch(r"[A-Za-z0-9_-]{8,}", document_id) is None:
+        raise ValueError("Feishu document ID is invalid")
+    if any(_CONTENT_SHA256.fullmatch(source_id) is None for source_id in current_source_ids):
+        raise ValueError("Feishu source IDs must be SHA256 digests")
+    base_path = f"feishu/{document_id}.md"
+    section_prefix = f"feishu/{document_id}/"
+    with _connect(workspace.index_path) as connection:
+        rows = connection.execute(
+            """
+            SELECT versions.id, sources.source_id
+            FROM sources
+            JOIN source_versions AS versions
+              ON versions.source_id = sources.id AND versions.is_current = 1
+            WHERE sources.source_path = ?
+               OR sources.source_path LIKE ?
+            """,
+            (base_path, section_prefix + "%"),
+        ).fetchall()
+        stale_version_ids = [
+            int(row["id"]) for row in rows if str(row["source_id"]) not in current_source_ids
+        ]
+        connection.executemany(
+            "UPDATE source_versions SET is_current = 0 WHERE id = ?",
+            ((version_id,) for version_id in stale_version_ids),
+        )
+    return len(stale_version_ids)
 
 
 def list_feishu_documents(workspace: Path) -> tuple[RegisteredFeishuDocument, ...]:
@@ -2373,6 +2414,47 @@ def candidate_page_sources(candidate_files: Mapping[str, str]) -> dict[str, tupl
     return page_sources
 
 
+def validate_candidate_page_evidence(
+    workspace: Workspace,
+    candidate_files: Mapping[str, str],
+) -> None:
+    """Verify candidate citations against immutable SourceVersions before use."""
+    source_texts: dict[tuple[str, int], str] = {}
+    for path, content in candidate_files.items():
+        if not _is_stable_wiki_page_path(path):
+            continue
+        citations = parse_page_citations(content)
+        declared_sources = _page_source_ids_from_frontmatter(content)
+        represented_sources = {citation["source_id"] for citation in citations}
+        if declared_sources and not set(declared_sources) <= represented_sources:
+            raise WorkspaceIntegrityError(
+                f"candidate Wiki page lacks evidence for a declared source: {path}"
+            )
+        for citation in citations:
+            key = (citation["source_id"], citation["source_version"])
+            text = source_texts.get(key)
+            if text is None:
+                text = read_source_version_text(
+                    workspace.root,
+                    source_id=key[0],
+                    source_version=key[1],
+                )
+                source_texts[key] = text
+            match = _CHAR_LOCATOR.fullmatch(citation["locator"])
+            if match is None:
+                raise WorkspaceIntegrityError("Citation locator is invalid")
+            start = int(match.group("start"))
+            end = int(match.group("end"))
+            if start >= end or end > len(text):
+                raise WorkspaceIntegrityError("Citation locator is outside immutable evidence")
+            if citation.get("grounding", "exact") == "exact" and not citation_quote_matches_excerpt(
+                citation["quote"], text[start:end]
+            ):
+                raise WorkspaceIntegrityError(
+                    f"candidate Wiki fact does not match immutable evidence: {path}"
+                )
+
+
 def rebuild_applied_projection(workspace: Workspace) -> None:
     """Rebuild applied source, page, and fact indexes from the stable Wiki tree."""
     pages_root = workspace.root / "wiki/pages"
@@ -2384,6 +2466,7 @@ def rebuild_applied_projection(workspace: Workspace) -> None:
             candidate_files[page.relative_to(workspace.root).as_posix()] = page.read_text(
                 encoding="utf-8"
             )
+    validate_candidate_page_evidence(workspace, candidate_files)
     page_sources = candidate_page_sources(candidate_files)
     page_facts = {
         path: parse_page_facts(path, content) for path, content in candidate_files.items()

@@ -169,7 +169,6 @@ $MF init ./my-wiki
 printf '# 缓存策略\n\n用户会话缓存 30 分钟后过期。\n' > cache-note.md
 $MF import cache-note.md \
   --category design \
-  --local-only \
   --workspace ./my-wiki
 
 # 3. 生成 ChangeSet，并自动取得 ID

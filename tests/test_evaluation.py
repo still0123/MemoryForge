@@ -11,6 +11,7 @@ import memoryforge.evaluation as evaluation_module
 from memoryforge.cli import app
 from memoryforge.models import Sensitivity
 from memoryforge.workspace import init_workspace, register_git_checkout, sync_git_checkout
+from tests.cli_helpers import review_approve_apply
 
 
 def test_click_external_docs_splits_are_frozen() -> None:
@@ -76,13 +77,7 @@ def test_eval_compares_wiki_answers_with_raw_fts(tmp_path: Path, monkeypatch) ->
     ingested = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
     assert ingested.exit_code == 0, ingested.output
     changeset_id = json.loads(ingested.stdout)["changeset_id"]
-    assert (
-        runner.invoke(
-            app,
-            ["apply", changeset_id, "--approve", "--workspace", str(workspace)],
-        ).exit_code
-        == 0
-    )
+    assert review_approve_apply(runner, changeset_id, workspace).exit_code == 0
 
     result = runner.invoke(app, ["eval", str(config), "--workspace", str(workspace)])
 
@@ -283,10 +278,7 @@ def test_eval_keeps_same_relative_paths_separate_across_git_repositories(
     ingested = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
     assert ingested.exit_code == 0, ingested.output
     changeset_id = json.loads(ingested.stdout)["changeset_id"]
-    applied = runner.invoke(
-        app,
-        ["apply", changeset_id, "--approve", "--workspace", str(workspace)],
-    )
+    applied = review_approve_apply(runner, changeset_id, workspace)
     assert applied.exit_code == 0, applied.output
 
     config = tmp_path / "multi-repository-suite.json"
@@ -597,10 +589,7 @@ def _build_applied_workspace(
     ingested = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
     assert ingested.exit_code == 0, ingested.output
     changeset_id = json.loads(ingested.stdout)["changeset_id"]
-    applied = runner.invoke(
-        app,
-        ["apply", changeset_id, "--approve", "--workspace", str(workspace)],
-    )
+    applied = review_approve_apply(runner, changeset_id, workspace)
     assert applied.exit_code == 0, applied.output
     return runner, workspace
 

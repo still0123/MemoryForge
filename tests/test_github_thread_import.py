@@ -17,6 +17,7 @@ from memoryforge.github_thread_adapter import (
 from typer.testing import CliRunner
 
 from memoryforge.cli import app
+from tests.cli_helpers import review_approve_apply
 from memoryforge.importer import SourceValidationError
 from memoryforge.models import Sensitivity
 from memoryforge.workspace import init_workspace, search_sources
@@ -215,13 +216,7 @@ def test_github_thread_preserves_locator_and_exact_citation_replay(tmp_path: Pat
     staged = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
     assert staged.exit_code == 0, staged.output
     changeset_id = json.loads(staged.stdout)["changeset_id"]
-    assert (
-        runner.invoke(
-            app,
-            ["apply", changeset_id, "--approve", "--workspace", str(workspace)],
-        ).exit_code
-        == 0
-    )
+    assert review_approve_apply(runner, changeset_id, workspace).exit_code == 0
     answered = runner.invoke(
         app,
         [

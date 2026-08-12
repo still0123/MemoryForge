@@ -20,6 +20,7 @@ _RELATION_FACT = re.compile(
 )
 _RELATION_ROUTE = re.compile(r"^`[^`]+` \((?P<relation_type>[a-z_]+)\)$")
 _SYMBOL_FACT = re.compile(r"^`(?P<symbol>[^`]+)` \([^)]+\): `.*`$")
+_CODE_WIKI_FACT = re.compile(r"^`[^`]+` \((?P<kind>[^)]+)\): `(?P<code>.*)`$")
 _FOOTNOTE = re.compile(
     r"^\[\^(?P<footnote>[^\]]+)\]: source "
     r"`(?P<source_id>[a-f0-9]{64})` · "
@@ -53,6 +54,7 @@ class CitationPayload(TypedDict):
     section_path: NotRequired[str]
     routing_text: NotRequired[str]
     is_summary: NotRequired[bool]
+    grounding: NotRequired[Literal["exact", "semantic"]]
 
 
 @dataclass(frozen=True)
@@ -159,6 +161,11 @@ def parse_page_citations(content: str) -> list[CitationPayload]:
                     "source_version": int(footnote["source_version"]),
                     "locator": footnote["locator"],
                     "quote": quote,
+                    "grounding": (
+                        "semantic"
+                        if section_name in {"模块职责", "子模块分工", "核心流程", "依赖关系"}
+                        else "exact"
+                    ),
                 }
                 if relation_fact is not None:
                     citation["routing_text"] = relation_fact.group("route")
@@ -170,6 +177,26 @@ def parse_page_citations(content: str) -> list[CitationPayload]:
                     citation["section_path"] = section_name
                 citations.append(citation)
     return citations
+
+
+def citation_quote_matches_excerpt(quote: str, excerpt: str) -> bool:
+    """Check exact facts after deterministic Markdown/code normalization."""
+    normalized_quote = _normalized_grounding_text(quote)
+    normalized_excerpt = _normalized_grounding_text(excerpt)
+    if normalized_quote and normalized_quote in normalized_excerpt:
+        return True
+    if normalized_quote.startswith("Field ") and normalized_quote[6:] in normalized_excerpt:
+        return True
+    code_fact = _CODE_WIKI_FACT.fullmatch(normalized_quote)
+    if code_fact is not None and code_fact.group("kind") == "module":
+        return bool(normalized_excerpt)
+    return bool(
+        code_fact and _normalized_grounding_text(code_fact.group("code")) in normalized_excerpt
+    )
+
+
+def _normalized_grounding_text(text: str) -> str:
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def parse_page_facts(page_path: str, content: str) -> tuple[WikiFact, ...]:

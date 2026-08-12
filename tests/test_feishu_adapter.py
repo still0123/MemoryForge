@@ -223,6 +223,65 @@ def test_refresh_reimports_registered_feishu_document(tmp_path: Path, monkeypatc
     assert refreshed[0].document_id == "doxcn12345678"
     assert refreshed[0].updated == 1
     assert refreshed[0].created == 0
+    assert refreshed[0].deleted == 0
+
+
+def test_feishu_section_ids_survive_insert_and_reconcile_deleted_sections(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workspace = tmp_path / "workspace"
+    runner = CliRunner()
+    assert runner.invoke(app, ["init", str(workspace)]).exit_code == 0
+    content = {
+        "value": (
+            "<title>Storage Handbook</title>\n\n"
+            "Overview fact.\n\n"
+            "# Mounting\n\nMount fact.\n\n"
+            "# Billing\n\nBilling fact."
+        )
+    }
+
+    monkeypatch.setattr(
+        feishu_adapter,
+        "_fetch_document",
+        lambda _reference: {
+            "document_id": "doxcn12345678",
+            "content": content["value"],
+        },
+    )
+    imported = runner.invoke(
+        app,
+        ["feishu-import", "doxcn12345678", "--workspace", str(workspace)],
+    )
+    assert imported.exit_code == 0, imported.output
+    initial = _current_feishu_sources(workspace)
+
+    content["value"] = (
+        "<title>Storage Handbook</title>\n\n"
+        "Overview fact.\n\n"
+        "# Setup\n\nSetup fact.\n\n"
+        "# Mounting\n\nMount fact.\n\n"
+        "# Billing\n\nBilling fact."
+    )
+    inserted = refresh_feishu_documents(workspace)[0]
+    after_insert = _current_feishu_sources(workspace)
+
+    assert inserted.created == 1
+    assert inserted.deleted == 0
+    assert after_insert["Storage Handbook / Mounting"] == initial["Storage Handbook / Mounting"]
+    assert after_insert["Storage Handbook / Billing"] == initial["Storage Handbook / Billing"]
+
+    content["value"] = (
+        "<title>Storage Handbook</title>\n\n"
+        "Overview fact.\n\n"
+        "# Setup\n\nSetup fact.\n\n"
+        "# Mounting\n\nMount fact."
+    )
+    removed = refresh_feishu_documents(workspace)[0]
+
+    assert removed.deleted == 1
+    assert "Storage Handbook / Billing" not in _current_feishu_sources(workspace)
 
 
 def test_refresh_registers_a_preexisting_feishu_source(tmp_path: Path, monkeypatch) -> None:
@@ -253,3 +312,18 @@ def test_refresh_registers_a_preexisting_feishu_source(tmp_path: Path, monkeypat
     assert [(item.document_id, item.category.value, item.tags) for item in registered] == [
         ("doxcn12345678", "notes", ())
     ]
+
+
+def _current_feishu_sources(workspace: Path) -> dict[str, str]:
+    with closing(sqlite3.connect(Workspace.open(workspace).index_path)) as connection:
+        rows = connection.execute(
+            """
+            SELECT versions.title, sources.source_id
+            FROM sources
+            JOIN source_versions AS versions
+              ON versions.source_id = sources.id AND versions.is_current = 1
+            WHERE sources.source_path LIKE 'feishu/%'
+            ORDER BY versions.title
+            """
+        ).fetchall()
+    return {str(title): str(source_id) for title, source_id in rows}

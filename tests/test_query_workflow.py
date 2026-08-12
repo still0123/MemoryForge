@@ -16,6 +16,7 @@ from memoryforge.provider import (
     ProviderConfig,
     ProviderUnavailableError,
 )
+from tests.cli_helpers import review_approve_apply
 
 
 def test_ask_answers_from_applied_wiki_with_verifiable_citation(
@@ -1749,8 +1750,8 @@ def _workspace_with_imported_source(
 
     initialized = runner.invoke(app, ["init", str(workspace)])
     arguments = ["import", str(source)]
-    if local_only:
-        arguments.append("--local-only")
+    if not local_only:
+        arguments.append("--public")
     arguments.extend(["--workspace", str(workspace)])
     imported = runner.invoke(app, arguments)
 
@@ -1767,16 +1768,7 @@ def _apply_pending_source(runner: CliRunner, workspace: Path) -> None:
     assert ingested.exit_code == 0
     changeset_id = json.loads(ingested.stdout)["changeset_id"]
 
-    applied = runner.invoke(
-        app,
-        [
-            "apply",
-            changeset_id,
-            "--approve",
-            "--workspace",
-            str(workspace),
-        ],
-    )
+    applied = review_approve_apply(runner, changeset_id, workspace)
     assert applied.exit_code == 0
 
 

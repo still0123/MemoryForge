@@ -27,6 +27,7 @@ from memoryforge.query import (
     _safe_wiki_page,
     _terms,
 )
+from memoryforge.workspace import find_applied_page_paths, search_wiki_facts
 
 _TOKEN = re.compile(r"[a-z0-9]+|[\u4e00-\u9fff]+", re.IGNORECASE)
 _CJK = re.compile(r"^[\u4e00-\u9fff]+$")
@@ -53,27 +54,58 @@ def run_experiment(
     answered_cases = [case for case in suite.cases if case.expected_status == "answered"]
     for case in suite.cases:
         baseline_pages = _current_pages(workspace_root, case, max_pages)
+        bm25_pages = _rank_bm25_pages(
+            workspace_root,
+            case.question,
+            max_pages=max_pages,
+            repository_id=case.repository_id,
+        )
         proxy_pages = _rank_proxy_pages(workspace_root, case.question, max_pages=max_pages)
         df_pages = _rank_df_pages(workspace_root, case.question, max_pages=max_pages)
+        rrf_pages = _reciprocal_rank_fusion(
+            (
+                _current_pages(workspace_root, case, min(10, max_pages * 3)),
+                _rank_bm25_pages(
+                    workspace_root,
+                    case.question,
+                    max_pages=min(10, max_pages * 3),
+                    repository_id=case.repository_id,
+                ),
+                _rank_df_pages(
+                    workspace_root,
+                    case.question,
+                    max_pages=min(10, max_pages * 3),
+                ),
+            ),
+            max_pages=max_pages,
+        )
         if case.expected_status == "answered":
             expected = _normalise_expected_paths(case)
             baseline_sources = _page_source_paths(baseline_pages, source_paths)
+            bm25_sources = _page_source_paths(bm25_pages, source_paths)
             proxy_sources = _page_source_paths(proxy_pages, source_paths)
             df_sources = _page_source_paths(df_pages, source_paths)
+            rrf_sources = _page_source_paths(rrf_pages, source_paths)
             baseline_recalled = _recall(expected, baseline_sources, case)
+            bm25_recalled = _recall(expected, bm25_sources, case)
             proxy_recalled = _recall(expected, proxy_sources, case)
             df_recalled = _recall(expected, df_sources, case)
+            rrf_recalled = _recall(expected, rrf_sources, case)
         else:
             baseline_recalled = None
+            bm25_recalled = None
             proxy_recalled = None
             df_recalled = None
+            rrf_recalled = None
         result_cases.append(
             {
                 "id": case.id,
                 "category": case.category,
                 "baseline_recalled": baseline_recalled,
+                "bm25_recalled": bm25_recalled,
                 "proxy_recalled": proxy_recalled,
                 "df_recalled": df_recalled,
+                "rrf_recalled": rrf_recalled,
                 "baseline_page_count": len(baseline_pages),
                 "proxy_page_count": len(proxy_pages),
             }
@@ -87,18 +119,29 @@ def run_experiment(
     proxy_values = [
         bool(case["proxy_recalled"]) for case in result_cases if case["proxy_recalled"] is not None
     ]
+    bm25_values = [
+        bool(case["bm25_recalled"]) for case in result_cases if case["bm25_recalled"] is not None
+    ]
     df_values = [
         bool(case["df_recalled"]) for case in result_cases if case["df_recalled"] is not None
+    ]
+    rrf_values = [
+        bool(case["rrf_recalled"]) for case in result_cases if case["rrf_recalled"] is not None
     ]
     baseline_paraphrase = _category_values(result_cases, "paraphrase", "baseline_recalled")
     proxy_paraphrase = _category_values(result_cases, "paraphrase", "proxy_recalled")
     baseline_average_pages = _average_pages(result_cases, "baseline_page_count")
     proxy_average_pages = _average_pages(result_cases, "proxy_page_count")
     baseline_recall = _percentage(baseline_values)
+    bm25_recall = _percentage(bm25_values)
     proxy_recall = _percentage(proxy_values)
     df_recall = _percentage(df_values)
-    gain = round(proxy_recall - baseline_recall, 1)
-    eligible_for_integration = gain >= 10.0 and proxy_average_pages <= float(max_pages)
+    rrf_recall = _percentage(rrf_values)
+    rrf_gain = round(rrf_recall - baseline_recall, 1)
+    rrf_regressions = sum(
+        case["baseline_recalled"] is True and case["rrf_recalled"] is False for case in result_cases
+    )
+    eligible_for_integration = rrf_gain > 0 and rrf_regressions == 0
 
     return {
         "schema_version": 1,
@@ -124,6 +167,10 @@ def run_experiment(
             "paraphrase_source_recall_at_3": _percentage(baseline_paraphrase),
             "average_pages_ranked": baseline_average_pages,
         },
+        "bm25": {
+            "name": "SQLite FTS5 fact/source BM25",
+            "source_recall_at_3": bm25_recall,
+        },
         "proxy": {
             "name": "page-level character n-gram cosine proxy",
             "source_recall_at_3": proxy_recall,
@@ -135,13 +182,18 @@ def run_experiment(
             "source_recall_at_3": df_recall,
             "average_pages_ranked": proxy_average_pages,
         },
+        "rrf": {
+            "name": "local reciprocal-rank fusion over current, BM25, and DF rankings",
+            "source_recall_at_3": rrf_recall,
+            "regressions_against_current": rrf_regressions,
+        },
         "decision": {
-            "status": "candidate_for_integration" if eligible_for_integration else "keep_fts5",
-            "recall_gain_points": gain,
+            "status": "candidate_for_integration" if eligible_for_integration else "keep_current",
+            "recall_gain_points": rrf_gain,
             "reason": (
-                "proxy improves recall by at least 10 points within the page budget"
+                "RRF improves recall with no per-case regression"
                 if eligible_for_integration
-                else "proxy does not meet the 10-point recall-gain gate; keep the current FTS5 path"
+                else "RRF has no net gain or regresses a current case; keep production unchanged"
             ),
         },
         "cases": result_cases,
@@ -179,6 +231,51 @@ def _rank_proxy_pages(workspace_root: Path, question: str, *, max_pages: int) ->
             scored.append((score, page.relative_to(workspace_root).as_posix(), page))
     scored.sort(key=lambda item: (-item[0], item[1]))
     return [page for _, _, page in scored[:max_pages]]
+
+
+def _rank_bm25_pages(
+    workspace_root: Path,
+    question: str,
+    *,
+    max_pages: int,
+    repository_id: str | None,
+) -> list[Path]:
+    paths = [
+        result.page_path
+        for result in search_wiki_facts(
+            workspace_root,
+            question,
+            limit=max_pages,
+            repository_id=repository_id,
+        )
+    ]
+    paths.extend(
+        find_applied_page_paths(
+            workspace_root,
+            question,
+            limit=max_pages,
+            repository_id=repository_id,
+            require_all_terms=False,
+        )
+    )
+    return [
+        page
+        for path in dict.fromkeys(paths)
+        if (page := _safe_wiki_page(workspace_root, workspace_root / path)) is not None
+    ][:max_pages]
+
+
+def _reciprocal_rank_fusion(
+    rankings: tuple[list[Path], ...],
+    *,
+    max_pages: int,
+    rank_constant: int = 60,
+) -> list[Path]:
+    scores: dict[Path, float] = {}
+    for ranking in rankings:
+        for rank, page in enumerate(dict.fromkeys(ranking), start=1):
+            scores[page] = scores.get(page, 0.0) + 1.0 / (rank_constant + rank)
+    return sorted(scores, key=lambda page: (-scores[page], str(page)))[:max_pages]
 
 
 def _rank_df_pages(workspace_root: Path, question: str, *, max_pages: int) -> list[Path]:

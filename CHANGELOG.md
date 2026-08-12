@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- 冻结期可信性收尾：apply 与 lint 在消费端重放 Raw locator，拒绝无法由不可变
+  SourceVersion 支撑的精确事实；模型生成的语义叙事继续执行 SourceVersion 与 locator 绑定。
+- 本地 Portal 增加 loopback Host allowlist、CSP、frame、MIME 与 referrer 安全响应头。
+- 删除 `apply --approve` 审核捷径；所有应用必须显式执行 `review → approve → apply`。
+- 增加 apply journal：启动时恢复未提交写入，或从已生成的固定 Git Commit 重建 SQLite
+  projection 并补齐 ChangeSet 归档。
+- 飞书分片改用规范化标题与同名序号生成稳定身份；刷新时停用已删除章节对应的旧 Source。
+- 单文件导入默认 `local_only`，只有显式 `--public` 才允许未来远程模型读取。
+- `doctor` 增加 SQLite quick/foreign-key、FTS5 integrity 与 Git Wiki/projection 一致性检查。
 - Code Wiki 可通过现有 `ingest --code-wiki --llm --allow-local-llm` 组合，为父模块后序生成
   带 Citation 的职责、子模块分工、主要入口、依赖和调用流程；叶子 Symbol/Relation 页面、
   ModulePlan 与 ArchitectureGraph 保持确定性。

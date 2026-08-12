@@ -10,6 +10,7 @@ from memoryforge.folder_adapter import sync_folder
 from typer.testing import CliRunner
 
 from memoryforge.cli import app
+from tests.cli_helpers import review_approve_apply
 from memoryforge.importer import SourceValidationError
 from memoryforge.models import Sensitivity
 from memoryforge.workspace import init_workspace, search_sources
@@ -184,10 +185,7 @@ def test_folder_import_preserves_exact_citation_replay(tmp_path: Path) -> None:
     staged = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
     assert staged.exit_code == 0, staged.output
     changeset_id = json.loads(staged.stdout)["changeset_id"]
-    applied = runner.invoke(
-        app,
-        ["apply", changeset_id, "--approve", "--workspace", str(workspace)],
-    )
+    applied = review_approve_apply(runner, changeset_id, workspace)
     assert applied.exit_code == 0, applied.output
     answered = runner.invoke(
         app,

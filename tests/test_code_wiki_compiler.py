@@ -30,6 +30,7 @@ from memoryforge.workspace import (
     register_git_code_module,
     sync_git_checkout,
 )
+from tests.cli_helpers import review_approve_apply
 
 SERVICE_SOURCE = """def helper(name: str) -> str:
     return f"Hello {name}"
@@ -564,16 +565,7 @@ def test_code_wiki_archives_modules_removed_from_the_current_snapshot(
         compilation.changeset,
         compilation.candidate_files,
     )
-    result = CliRunner().invoke(
-        app,
-        [
-            "apply",
-            stored.changeset.changeset_id,
-            "--approve",
-            "--workspace",
-            str(workspace),
-        ],
-    )
+    result = review_approve_apply(CliRunner(), stored.changeset.changeset_id, workspace)
     assert result.exit_code == 0, result.output
     assert not legacy_page.exists()
     assert lint_workspace(workspace)["status"] == "clean"
@@ -592,16 +584,7 @@ def _apply_compilation(workspace: Path, compilation) -> None:
         compilation.changeset,
         compilation.candidate_files,
     )
-    result = CliRunner().invoke(
-        app,
-        [
-            "apply",
-            stored.changeset.changeset_id,
-            "--approve",
-            "--workspace",
-            str(workspace),
-        ],
-    )
+    result = review_approve_apply(CliRunner(), stored.changeset.changeset_id, workspace)
     assert result.exit_code == 0, result.output
 
 

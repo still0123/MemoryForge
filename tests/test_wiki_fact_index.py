@@ -21,6 +21,7 @@ from memoryforge.workspace import (
     search_wiki_facts,
     sync_git_checkout,
 )
+from tests.cli_helpers import review_approve_apply
 
 
 def test_apply_replaces_and_restores_searchable_wiki_facts(
@@ -78,16 +79,7 @@ def test_apply_replaces_and_restores_searchable_wiki_facts(
     staged = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
     assert staged.exit_code == 0, staged.output
     monkeypatch.setattr(GitVersionStore, "commit_paths", fail_commit)
-    failed = runner.invoke(
-        app,
-        [
-            "apply",
-            json.loads(staged.stdout)["changeset_id"],
-            "--approve",
-            "--workspace",
-            str(workspace),
-        ],
-    )
+    failed = review_approve_apply(runner, json.loads(staged.stdout)["changeset_id"], workspace)
 
     assert failed.exit_code != 0
     assert search_wiki_facts(workspace, "hundred") == ()
@@ -117,16 +109,7 @@ def test_fact_search_enforces_repository_and_page_scopes(tmp_path: Path) -> None
     runner = CliRunner()
     staged = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
     assert staged.exit_code == 0, staged.output
-    applied = runner.invoke(
-        app,
-        [
-            "apply",
-            json.loads(staged.stdout)["changeset_id"],
-            "--approve",
-            "--workspace",
-            str(workspace),
-        ],
-    )
+    applied = review_approve_apply(runner, json.loads(staged.stdout)["changeset_id"], workspace)
     assert applied.exit_code == 0, applied.output
 
     first_results = search_wiki_facts(
@@ -252,16 +235,7 @@ def test_code_wiki_fact_index_round_trips_symbol_and_relation_metadata(
         ["ingest", "--code-wiki", repository.repository_id, "--workspace", str(workspace)],
     )
     assert staged.exit_code == 0, staged.output
-    applied = runner.invoke(
-        app,
-        [
-            "apply",
-            json.loads(staged.stdout)["changeset_id"],
-            "--approve",
-            "--workspace",
-            str(workspace),
-        ],
-    )
+    applied = review_approve_apply(runner, json.loads(staged.stdout)["changeset_id"], workspace)
     assert applied.exit_code == 0, applied.output
 
     symbols = search_wiki_facts(
@@ -325,16 +299,7 @@ def _import_and_apply(runner: CliRunner, workspace: Path, source: Path) -> None:
     assert imported.exit_code == 0, imported.output
     staged = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
     assert staged.exit_code == 0, staged.output
-    applied = runner.invoke(
-        app,
-        [
-            "apply",
-            json.loads(staged.stdout)["changeset_id"],
-            "--approve",
-            "--workspace",
-            str(workspace),
-        ],
-    )
+    applied = review_approve_apply(runner, json.loads(staged.stdout)["changeset_id"], workspace)
     assert applied.exit_code == 0, applied.output
 
 

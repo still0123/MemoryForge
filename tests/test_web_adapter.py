@@ -9,6 +9,7 @@ from typer.testing import CliRunner
 
 import memoryforge.web_adapter as web_adapter
 from memoryforge.cli import app
+from tests.cli_helpers import review_approve_apply
 
 
 @pytest.mark.parametrize(
@@ -78,10 +79,7 @@ def test_web_import_keeps_article_text_and_uses_the_normal_wiki_flow(
     assert "Cache entries expire after sixty seconds" in page
     assert "Unrelated navigation" not in page
 
-    applied = runner.invoke(
-        app,
-        ["apply", changeset_id, "--approve", "--workspace", str(workspace)],
-    )
+    applied = review_approve_apply(runner, changeset_id, workspace)
     assert applied.exit_code == 0, applied.output
     answer = runner.invoke(
         app,

@@ -12,6 +12,7 @@ import memoryforge.workspace as workspace_module
 from memoryforge.cli import app
 from memoryforge.linting import lint_workspace
 from memoryforge.workspace import Workspace
+from tests.cli_helpers import review_approve_apply
 
 
 def test_lint_reports_clean_applied_wiki(tmp_path: Path, monkeypatch) -> None:
@@ -180,6 +181,26 @@ def test_lint_rejects_reversed_citation_range(tmp_path: Path, monkeypatch) -> No
     page = next((workspace / "wiki/pages").glob("*.md"))
     page.write_text(
         re.sub(r"chars:\d+-\d+", "chars:9-2", page.read_text(encoding="utf-8")),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["lint", "--workspace", str(workspace)])
+
+    assert result.exit_code == 0, result.output
+    assert [issue["code"] for issue in json.loads(result.stdout)["issues"]] == [
+        "fact_index_page_mismatch",
+        "invalid_citation",
+    ]
+
+
+def test_lint_rejects_quote_not_grounded_by_locator(tmp_path: Path, monkeypatch) -> None:
+    runner, workspace, _ = _workspace_with_applied_source(tmp_path, monkeypatch)
+    page = next((workspace / "wiki/pages").glob("*.md"))
+    page.write_text(
+        page.read_text(encoding="utf-8").replace(
+            "Cache entries expire after sixty seconds.",
+            "Cache entries never expire.",
+        ),
         encoding="utf-8",
     )
 
@@ -374,11 +395,5 @@ def _workspace_with_applied_source(
     ingested = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
     assert ingested.exit_code == 0
     changeset_id = json.loads(ingested.stdout)["changeset_id"]
-    assert (
-        runner.invoke(
-            app,
-            ["apply", changeset_id, "--approve", "--workspace", str(workspace)],
-        ).exit_code
-        == 0
-    )
+    assert review_approve_apply(runner, changeset_id, workspace).exit_code == 0
     return runner, workspace, json.loads(imported_result.stdout)

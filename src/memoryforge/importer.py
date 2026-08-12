@@ -170,7 +170,7 @@ def import_local_file(
     category: str = "notes",
     source_root: Path | None = None,
     tags: tuple[str, ...] = (),
-    sensitivity: Sensitivity = Sensitivity.PUBLIC,
+    sensitivity: Sensitivity = Sensitivity.LOCAL_ONLY,
 ) -> ImportResult:
     current_workspace = Workspace.open(workspace)
     workspace = current_workspace.root

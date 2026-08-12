@@ -6,6 +6,7 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from memoryforge.cli import app
+from tests.cli_helpers import review_approve_apply
 
 
 def test_history_and_rollback_restore_wiki_and_query_projection(
@@ -77,16 +78,7 @@ def _import_and_apply(
     assert imported.exit_code == 0, imported.output
     proposal = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
     assert proposal.exit_code == 0, proposal.output
-    applied = runner.invoke(
-        app,
-        [
-            "apply",
-            json.loads(proposal.stdout)["changeset_id"],
-            "--approve",
-            "--workspace",
-            str(workspace),
-        ],
-    )
+    applied = review_approve_apply(runner, json.loads(proposal.stdout)["changeset_id"], workspace)
     assert applied.exit_code == 0, applied.output
     payload = json.loads(applied.stdout)
     page = next(path for path in payload["files"] if path.startswith("wiki/pages/"))

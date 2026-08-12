@@ -18,7 +18,7 @@ class RefreshResult:
     @property
     def changed(self) -> bool:
         return any(result.created or result.updated for result in self.git) or any(
-            result.created or result.updated for result in self.feishu
+            result.created or result.updated or result.deleted for result in self.feishu
         )
 
 

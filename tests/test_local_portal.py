@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import hashlib
+import http.client
 import json
 import sqlite3
+import threading
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import quote
@@ -131,6 +133,36 @@ def test_local_portal_handler_and_loopback_server_bindings(
         server.server_close()
 
 
+def test_local_portal_rejects_remote_host_and_sets_security_headers(tmp_path: Path) -> None:
+    workspace = _workspace_with_pages(tmp_path, count=1)
+    server = LocalPortalServer(workspace, port=0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        connection = http.client.HTTPConnection("127.0.0.1", server.server_port)
+        connection.putrequest("GET", "/", skip_host=True)
+        connection.putheader("Host", "attacker.example")
+        connection.endheaders()
+        response = connection.getresponse()
+        assert response.status == 403
+        assert json.loads(response.read()) == {"error": "forbidden host"}
+
+        connection.request("GET", "/", headers={"Host": f"127.0.0.1:{server.server_port}"})
+        response = connection.getresponse()
+        assert response.status == 200
+        assert response.getheader("Content-Security-Policy")
+        assert response.getheader("Cross-Origin-Resource-Policy") == "same-origin"
+        assert response.getheader("Referrer-Policy") == "no-referrer"
+        assert response.getheader("X-Content-Type-Options") == "nosniff"
+        assert response.getheader("X-Frame-Options") == "DENY"
+        response.read()
+        connection.close()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
 def test_local_portal_serve_cli_help_does_not_start_server() -> None:
     from typer.testing import CliRunner
 
@@ -183,10 +215,7 @@ def _workspace_with_pages(tmp_path: Path, count: int) -> Path:
             INSERT INTO page_sources(page_path, source_id)
             VALUES (?, ?)
             """,
-            (
-                (f"wiki/pages/page-{index:02}.md", imported.source_id)
-                for index in range(count)
-            ),
+            ((f"wiki/pages/page-{index:02}.md", imported.source_id) for index in range(count)),
         )
     return workspace_root
 

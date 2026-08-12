@@ -173,8 +173,7 @@ class LocalPortalApp:
             paths=tuple(selected),
         )
         items = [
-            {"path": path, "title": _page_title(contents.get(path), path)}
-            for path in selected
+            {"path": path, "title": _page_title(contents.get(path), path)} for path in selected
         ]
         return {"total": total, "offset": offset, "limit": limit, "items": items}
 
@@ -245,17 +244,34 @@ def make_handler(portal: LocalPortalApp) -> type[BaseHTTPRequestHandler]:
         portal: LocalPortalApp
 
         def do_GET(self) -> None:
-            try:
-                status, content_type, body = self.portal.dispatch(self.path)
-            except Exception:
+            port = int(getattr(self.server, "server_port", 0))
+            if not _host_is_allowed(self.headers.get("Host", ""), port):
                 status, content_type, body = _json_response(
-                    {"error": "internal server error"},
-                    status=500,
+                    {"error": "forbidden host"},
+                    status=403,
                 )
+            else:
+                try:
+                    status, content_type, body = self.portal.dispatch(self.path)
+                except Exception:
+                    status, content_type, body = _json_response(
+                        {"error": "internal server error"},
+                        status=500,
+                    )
             self.send_response(status)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store")
+            self.send_header(
+                "Content-Security-Policy",
+                "default-src 'self'; script-src 'self' 'unsafe-inline'; "
+                "style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+                "object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+            )
+            self.send_header("Cross-Origin-Resource-Policy", "same-origin")
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("X-Frame-Options", "DENY")
             self.end_headers()
             self.wfile.write(body)
 
@@ -264,6 +280,15 @@ def make_handler(portal: LocalPortalApp) -> type[BaseHTTPRequestHandler]:
 
     LocalPortalHandler.portal = portal
     return LocalPortalHandler
+
+
+def _host_is_allowed(value: str, port: int) -> bool:
+    return value.casefold() in {
+        "127.0.0.1",
+        "localhost",
+        f"127.0.0.1:{port}",
+        f"localhost:{port}",
+    }
 
 
 class LocalPortalServer(ThreadingHTTPServer):
@@ -289,9 +314,7 @@ def serve_local_portal(workspace: Path, port: int = 8765) -> None:
 
 
 def _json_response(payload: dict[str, Any], *, status: int = 200) -> tuple[int, str, bytes]:
-    body = (json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n").encode(
-        "utf-8"
-    )
+    body = (json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
     return status, _JSON, body
 
 

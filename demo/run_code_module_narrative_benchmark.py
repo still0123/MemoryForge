@@ -129,15 +129,17 @@ def build_evidence(
         compilation.changeset,
         compilation.candidate_files,
     )
-    applied = CliRunner().invoke(
+    runner = CliRunner()
+    for command in ("review", "approve"):
+        result = runner.invoke(
+            app,
+            [command, stored.changeset.changeset_id, "--workspace", str(workspace)],
+        )
+        if result.exit_code != 0:
+            raise RuntimeError(f"narrative ChangeSet {command} failed: {result.output.strip()}")
+    applied = runner.invoke(
         app,
-        [
-            "apply",
-            stored.changeset.changeset_id,
-            "--approve",
-            "--workspace",
-            str(workspace),
-        ],
+        ["apply", stored.changeset.changeset_id, "--workspace", str(workspace)],
     )
     if applied.exit_code != 0:
         raise RuntimeError(f"narrative ChangeSet apply failed: {applied.output.strip()}")

@@ -125,6 +125,13 @@ class ChangeSetStore:
         return self.get(changeset.changeset_id)
 
     def get(self, changeset_id: str) -> StoredChangeSet:
+        return self._get(changeset_id, require_current_base=True)
+
+    def get_for_recovery(self, changeset_id: str) -> StoredChangeSet:
+        """Read an immutable proposal after its apply Commit advanced HEAD."""
+        return self._get(changeset_id, require_current_base=False)
+
+    def _get(self, changeset_id: str, *, require_current_base: bool) -> StoredChangeSet:
         _validate_changeset_id(changeset_id)
         self.workspace.validate_internal_directory(self.staging_dir)
         staging_fd = self._open_staging()
@@ -162,7 +169,8 @@ class ChangeSetStore:
                         "Staged ChangeSet immutable identity or state was modified"
                     )
                 candidate_files = self._read_candidates(directory_fd, record)
-                self._require_current_base(record.changeset)
+                if require_current_base:
+                    self._require_current_base(record.changeset)
             finally:
                 os.close(directory_fd)
         finally:
@@ -289,6 +297,54 @@ class ChangeSetStore:
         except OSError as exc:
             raise ChangeSetStoreError("Applied ChangeSet could not be archived") from exc
         return self.staging_dir / "applied" / stored.changeset.changeset_id
+
+    def ensure_applied_receipt(self, changeset_id: str, *, commit: str) -> Path:
+        """Complete or verify one applied archive after an interrupted rename."""
+        _validate_changeset_id(changeset_id)
+        applied = self.staging_dir / "applied"
+        self.workspace.validate_internal_directory(applied)
+        applied_fd = os.open(
+            applied,
+            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+        )
+        try:
+            archived_fd = os.open(
+                changeset_id,
+                os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                dir_fd=applied_fd,
+            )
+            try:
+                receipt = {
+                    "status": "APPLIED",
+                    "commit": commit,
+                    "changeset_id": changeset_id,
+                }
+                if _entry_exists(archived_fd, "receipt.json"):
+                    recorded = json.loads(_read_regular_file(archived_fd, "receipt.json"))
+                    if any(recorded.get(key) != value for key, value in receipt.items()):
+                        raise ChangeSetStoreError("Applied ChangeSet receipt is invalid")
+                else:
+                    receipt["applied_at"] = datetime.now(UTC).isoformat()
+                    _write_new_file(
+                        archived_fd,
+                        "receipt.json",
+                        (
+                            json.dumps(
+                                receipt,
+                                ensure_ascii=False,
+                                indent=2,
+                                sort_keys=True,
+                            )
+                            + "\n"
+                        ).encode(),
+                    )
+            finally:
+                os.close(archived_fd)
+        except OSError as exc:
+            raise ChangeSetStoreError("Applied ChangeSet receipt could not be recovered") from exc
+        finally:
+            os.close(applied_fd)
+        return applied / changeset_id
 
     def archive_rejected(self, stored: StoredChangeSet) -> Path:
         """Move a rejected proposal out of the pending staging namespace."""
