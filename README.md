@@ -99,7 +99,7 @@ MemoryForge 把回答、引用和召回分开评测，也保留失败结果。�
 | 文档更新后 Wiki 很容易过期 | 根据来源路由更新受影响页面，不重复生成一堆近似摘要 |
 | 问答容易胡编或找不到出处 | 先查目录和少量 Wiki 页面；需要时再回读原文并返回引用 |
 | 资料敏感，不适合直接上传 | 默认 `local_only`；是否让模型读取本地资料必须显式授权 |
-| 项目只有命令行，不直观 | 生成只读静态 Showcase；飞书保留为可选交互入口 |
+| 不想记忆整套命令行流程 | `memoryforge start` 打开本地 Portal，完成导入、审核、应用、阅读和提问 |
 
 ## 核心能力
 
@@ -166,33 +166,15 @@ MF=.venv/bin/memoryforge
 # 1. 初始化你的知识库
 $MF init ./my-wiki
 
-# 2. 创建并导入一份本地资料
-printf '# 缓存策略\n\n用户会话缓存 30 分钟后过期。\n' > cache-note.md
-$MF import cache-note.md \
-  --category design \
-  --workspace ./my-wiki
-
-# 3. 生成 ChangeSet，并自动取得 ID
-INGEST_OUTPUT=$($MF ingest --pending --workspace ./my-wiki)
-printf '%s\n' "$INGEST_OUTPUT"
-CHANGESET_ID=$(printf '%s' "$INGEST_OUTPUT" | \
-  .venv/bin/python -c 'import json,sys; print(json.load(sys.stdin)["changeset_id"])')
-
-# 4. 查看 Diff，确认后独立批准并应用
-$MF review "$CHANGESET_ID" --workspace ./my-wiki
-$MF approve "$CHANGESET_ID" --workspace ./my-wiki
-$MF apply "$CHANGESET_ID" --workspace ./my-wiki
-
-# 5. 提问
-$MF ask '用户会话缓存多久过期？' --workspace ./my-wiki
-
-# 6. 检查 Workspace
-$MF status --workspace ./my-wiki
-$MF doctor --workspace ./my-wiki
+# 2. 打开本地知识门户
+$MF start --workspace ./my-wiki
 ```
 
-整个流程不需要模型。`review` 会打印候选页面和统一 Diff；只有显式执行 `approve` 后，
-`apply` 才会修改正式 Wiki 并创建 Git Commit。生成后的 Workspace 大致如下：
+浏览器中按“添加来源 → 后台任务 → 知识更新 → 批准并应用”完成首份资料入库，再从首页提问。
+整个流程不需要模型。Portal 只绑定 `127.0.0.1`；来源处理只生成待审核 ChangeSet，只有明确
+点击“批准并应用”后才写入正式 Wiki 和新 Git Commit。等价 CLI 命令仍保留在下方“常用命令”。
+
+生成后的 Workspace 大致如下：
 
 ```text
 my-wiki/
