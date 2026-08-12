@@ -42,11 +42,13 @@ def run_agent_evaluation(
         for case in suite.cases
     ]
     answerable = [
-        case for case, evaluation_case in zip(cases, suite.cases, strict=True)
+        case
+        for case, evaluation_case in zip(cases, suite.cases, strict=True)
         if evaluation_case.expected_status == "answered"
     ]
     unanswerable = [
-        case for case, evaluation_case in zip(cases, suite.cases, strict=True)
+        case
+        for case, evaluation_case in zip(cases, suite.cases, strict=True)
         if evaluation_case.expected_status == "unknown"
     ]
     reason_counts: dict[str, int] = {}
@@ -107,9 +109,7 @@ def _evaluate_agent_case(
     answer = result["answer"]
     terms_correct = all(
         term.casefold() in answer.casefold() for term in case.required_terms
-    ) and all(
-        term.casefold() not in answer.casefold() for term in case.forbidden_terms
-    )
+    ) and all(term.casefold() not in answer.casefold() for term in case.forbidden_terms)
     if case.expected_status == "answered":
         correct = result["status"] == "answered" and terms_correct and expected_source_recalled
     else:
@@ -143,9 +143,7 @@ def _cited_sources(
 def _load_source_maps(workspace_root: Path) -> tuple[dict[str, str], dict[str, str]]:
     opened = Workspace.open_readonly(workspace_root)
     with _connect_readonly(opened.index_path) as connection:
-        source_rows = connection.execute(
-            "SELECT source_id, source_path FROM sources"
-        ).fetchall()
+        source_rows = connection.execute("SELECT source_id, source_path FROM sources").fetchall()
         repository_rows = connection.execute(
             """
             SELECT sources.source_id, revisions.repository_id
@@ -158,10 +156,7 @@ def _load_source_maps(workspace_root: Path) -> tuple[dict[str, str], dict[str, s
         ).fetchall()
     return (
         {str(row["source_id"]): str(row["source_path"]) for row in source_rows},
-        {
-            str(row["source_id"]): str(row["repository_id"])
-            for row in repository_rows
-        },
+        {str(row["source_id"]): str(row["repository_id"]) for row in repository_rows},
     )
 
 

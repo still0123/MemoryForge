@@ -148,13 +148,11 @@ def test_cli_agent_eval_exposes_max_steps_and_max_pages() -> None:
     command = get_command(app).commands["agent-eval"]
 
     assert any(
-        "--max-steps" in getattr(parameter, "opts", ())
-        and not getattr(parameter, "hidden", False)
+        "--max-steps" in getattr(parameter, "opts", ()) and not getattr(parameter, "hidden", False)
         for parameter in command.params
     )
     assert any(
-        "--max-pages" in getattr(parameter, "opts", ())
-        and not getattr(parameter, "hidden", False)
+        "--max-pages" in getattr(parameter, "opts", ()) and not getattr(parameter, "hidden", False)
         for parameter in command.params
     )
 
