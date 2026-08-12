@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from pathlib import Path
+from time import perf_counter
 from typing import Literal, TypedDict
 
 from memoryforge.changesets import ChangeSetStore
@@ -32,6 +34,15 @@ class AgentEvent(TypedDict):
     result: str
 
 
+class AgentMetrics(TypedDict):
+    hit_max_steps: bool
+    final_retry_reasons: dict[str, int]
+    evidence_reuse_count: int
+    tool_result_truncations: int
+    provider_calls: int
+    provider_latency_ms: float
+
+
 class AgentPayload(TypedDict):
     status: Literal["answered", "unknown", "max_steps", "provider_error"]
     answer: str
@@ -43,12 +54,30 @@ class AgentPayload(TypedDict):
     wiki_pages_read: int
     evidence_characters: int
     tool_result_characters: int
+    metrics: AgentMetrics
 
 
 _MAX_AGENT_PAGES = 3
 _MAX_AGENT_CITATIONS = 6
 _MAX_EVIDENCE_CHARS = 2_000
 _MAX_TOOL_RESULT_CHARS = 8_000
+_FINAL_RETRY_REASONS = (
+    "empty_answer",
+    "missing_citations",
+    "invalid_citation_indexes",
+    "unread_citations",
+    "unsupported_answer",
+)
+_FINAL_FAILURE_HINTS = {
+    "empty_answer": "Return final with a non-empty answer.",
+    "missing_citations": "Return final with at least one citation_index returned by read_evidence.",
+    "invalid_citation_indexes": "Use only citation_indexes returned by the latest search_wiki.",
+    "unread_citations": "Read every final citation with read_evidence before final.",
+    "unsupported_answer": (
+        "Return an answer supported by the exact quote returned by read_evidence; "
+        "support the original question and every answer term."
+    ),
+}
 
 
 def run_agent(
@@ -77,12 +106,17 @@ def run_agent(
     events: list[AgentEvent] = []
     evidence_characters = 0
     tool_result_characters = 0
+    evidence_by_key: dict[tuple[str, int, str], EvidencePayload] = {}
+    metrics = _new_metrics()
 
     for step_number in range(1, max_steps + 1):
         call_id = f"call-{step_number}"
+        started = perf_counter()
         try:
             decision = provider.agent_step(messages)
         except ValueError as exc:
+            metrics["provider_calls"] += 1
+            metrics["provider_latency_ms"] += (perf_counter() - started) * 1000
             events.append(
                 {
                     "step": step_number,
@@ -102,7 +136,10 @@ def run_agent(
                 "wiki_pages_read": len(latest["wiki_pages"]) if latest else 0,
                 "evidence_characters": evidence_characters,
                 "tool_result_characters": tool_result_characters,
+                "metrics": metrics,
             }
+        metrics["provider_calls"] += 1
+        metrics["provider_latency_ms"] += (perf_counter() - started) * 1000
         call_id = decision.call_id or call_id
         tool_result: object
         if decision.action == "final":
@@ -128,6 +165,7 @@ def run_agent(
                     "wiki_pages_read": len(latest["wiki_pages"]) if latest else 0,
                     "evidence_characters": evidence_characters,
                     "tool_result_characters": tool_result_characters,
+                    "metrics": metrics,
                 }
                 _save_agent_turn(
                     workspace_root,
@@ -136,21 +174,25 @@ def run_agent(
                     result,
                 )
                 return result
+            final_reason: str | None = None
             if not _citation_indexes_are_valid(latest, decision.citation_indexes):
-                tool_result = {"error": "citation_indexes contain an unknown citation"}
-            elif (
-                answer
-                and citations
-                and _citations_are_read(citations, evidence)
-                and _final_answer_is_supported(
-                    workspace_root,
-                    rewrite_query(question, recent_turns),
-                    answer,
-                    citations,
-                    max_pages=max_pages,
-                    repository_id=repository_id,
-                )
+                final_reason = "invalid_citation_indexes"
+            elif not answer:
+                final_reason = "empty_answer"
+            elif not citations:
+                final_reason = "missing_citations"
+            elif not _citations_are_read(citations, evidence):
+                final_reason = "unread_citations"
+            elif not _final_answer_is_supported(
+                workspace_root,
+                rewrite_query(question, recent_turns),
+                answer,
+                citations,
+                max_pages=max_pages,
+                repository_id=repository_id,
             ):
+                final_reason = "unsupported_answer"
+            else:
                 changeset_id = None
                 if propose_update:
                     compilation = propose_agent_update(
@@ -187,6 +229,7 @@ def run_agent(
                     "wiki_pages_read": len(latest["wiki_pages"]) if latest else 0,
                     "evidence_characters": evidence_characters,
                     "tool_result_characters": tool_result_characters,
+                    "metrics": metrics,
                 }
                 _save_agent_turn(
                     workspace_root,
@@ -195,13 +238,9 @@ def run_agent(
                     result,
                 )
                 return result
-            else:
-                tool_result = {
-                    "error": (
-                        "final answer needs citations returned by read_evidence that support "
-                        "the original question and every answer term"
-                    )
-                }
+            if final_reason is not None:
+                metrics["final_retry_reasons"][final_reason] += 1
+                tool_result = _final_failure_tool_result(latest, final_reason)
         elif decision.action == "search_wiki":
             if not decision.query or not decision.query.strip():
                 tool_result = {"error": "query is required"}
@@ -215,12 +254,20 @@ def run_agent(
                 )
                 evidence = []
                 evidence_characters = 0
+                evidence_by_key = {}
                 tool_result = _json_tool_result(latest)
         elif decision.action == "read_evidence":
-            tool_result, selected = _read_evidence(workspace_root, latest, decision.citation_index)
-            if selected is not None:
+            tool_result, selected, reused = _read_evidence(
+                workspace_root,
+                latest,
+                decision.citation_index,
+                evidence_by_key,
+            )
+            if selected is not None and not reused:
                 evidence.append(selected)
                 evidence_characters += len(selected["text"])
+            if reused:
+                metrics["evidence_reuse_count"] += 1
         elif decision.action == "search_code":
             if not allow_local:
                 tool_result = {"error": "search_code requires allow_local"}
@@ -237,6 +284,8 @@ def run_agent(
 
         bounded_result, result_characters = _bounded_tool_result(call_id, tool_result)
         tool_result_characters += result_characters
+        if bounded_result.get("truncated") is True:
+            metrics["tool_result_truncations"] += 1
         events.append(
             {
                 "step": step_number,
@@ -255,6 +304,7 @@ def run_agent(
             ]
         )
 
+    metrics["hit_max_steps"] = True
     return {
         "status": "max_steps",
         "answer": "未在限定步数内完成回答",
@@ -266,6 +316,26 @@ def run_agent(
         "wiki_pages_read": len(latest["wiki_pages"]) if latest else 0,
         "evidence_characters": evidence_characters,
         "tool_result_characters": tool_result_characters,
+        "metrics": metrics,
+    }
+
+
+def _new_metrics() -> AgentMetrics:
+    return {
+        "hit_max_steps": False,
+        "final_retry_reasons": {reason: 0 for reason in _FINAL_RETRY_REASONS},
+        "evidence_reuse_count": 0,
+        "tool_result_truncations": 0,
+        "provider_calls": 0,
+        "provider_latency_ms": 0.0,
+    }
+
+
+def _final_failure_tool_result(latest: AskPayload | None, reason: str) -> dict[str, object]:
+    return {
+        "error_code": reason,
+        "hint": _FINAL_FAILURE_HINTS[reason],
+        "valid_indexes": list(range(len(latest["citations"]))) if latest else [],
     }
 
 
@@ -397,22 +467,32 @@ def _read_evidence(
     workspace_root: Path,
     latest: AskPayload | None,
     citation_index: int | None,
-) -> tuple[dict[str, object], EvidencePayload | None]:
+    evidence_by_key: dict[tuple[str, int, str], EvidencePayload],
+) -> tuple[dict[str, object], EvidencePayload | None, bool]:
     if latest is None or not latest["citations"]:
-        return {"error": "search_wiki must run before read_evidence"}, None
+        return {"error": "search_wiki must run before read_evidence"}, None, False
     if citation_index is None:
-        return {"error": "citation_index is required"}, None
+        return {"error": "citation_index is required"}, None, False
     if isinstance(citation_index, bool) or not 0 <= citation_index < len(latest["citations"]):
-        return {"error": "citation_index is outside the latest search result"}, None
+        return {"error": "citation_index is outside the latest search result"}, None, False
     citation = latest["citations"][citation_index]
+    key = (citation["source_id"], citation["source_version"], citation["locator"])
+    selected = evidence_by_key.get(key)
+    if selected is not None:
+        return (
+            {"citation_index": citation_index, "reused": True, "evidence": selected},
+            selected,
+            True,
+        )
     text = read_source_excerpt(
         workspace_root,
         source_id=citation["source_id"],
         source_version=citation["source_version"],
         locator=citation["locator"],
     )
-    selected: EvidencePayload = {**citation, "text": text[:_MAX_EVIDENCE_CHARS]}
-    return {"citation_index": citation_index, "evidence": selected}, selected
+    selected = {**citation, "text": text[:_MAX_EVIDENCE_CHARS]}
+    evidence_by_key[key] = selected
+    return {"citation_index": citation_index, "evidence": selected}, selected, False
 
 
 def _selected_citations(
@@ -494,6 +574,22 @@ def _json_tool_result(result: AskPayload) -> dict[str, object]:
     }
 
 
+def _shorten_string_fields(value: object, field_names: frozenset[str]) -> bool:
+    changed = False
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if key in field_names and isinstance(item, str) and item:
+                value[key] = item[: len(item) // 2]
+                changed = True
+            elif _shorten_string_fields(item, field_names):
+                changed = True
+    elif isinstance(value, list):
+        for item in value:
+            if _shorten_string_fields(item, field_names):
+                changed = True
+    return changed
+
+
 def _bounded_tool_result(call_id: str, result: object) -> tuple[dict[str, object], int]:
     payload: dict[str, object] = {"call_id": call_id}
     if isinstance(result, dict):
@@ -503,12 +599,21 @@ def _bounded_tool_result(call_id: str, result: object) -> tuple[dict[str, object
     encoded = json.dumps(payload, ensure_ascii=False)
     if len(encoded) <= _MAX_TOOL_RESULT_CHARS:
         return payload, len(encoded)
-    truncated = {
-        "call_id": call_id,
-        "truncated": True,
-        "result": encoded[: _MAX_TOOL_RESULT_CHARS - 256],
-    }
-    return truncated, len(json.dumps(truncated, ensure_ascii=False))
+    truncated: dict[str, object] = {"call_id": call_id, "truncated": True}
+    truncated.update({key: deepcopy(value) for key, value in payload.items() if key != "call_id"})
+    encoded = json.dumps(truncated, ensure_ascii=False)
+    for field_names in (
+        frozenset({"quote", "snippet"}),
+        frozenset({"text", "answer"}),
+        frozenset({"result", "hint"}),
+    ):
+        while len(encoded) > _MAX_TOOL_RESULT_CHARS and _shorten_string_fields(
+            truncated, field_names
+        ):
+            encoded = json.dumps(truncated, ensure_ascii=False)
+        if len(encoded) <= _MAX_TOOL_RESULT_CHARS:
+            return truncated, len(encoded)
+    return truncated, len(encoded)
 
 
 def _event_result(result: object) -> str:

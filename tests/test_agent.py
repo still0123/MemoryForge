@@ -363,6 +363,14 @@ def test_agent_rejects_final_without_reading_its_citation(tmp_path: Path, monkey
     assert result["status"] == "max_steps"
     assert result["events"][-1]["action"] == "final"
     assert "read_evidence" in result["events"][-1]["result"]
+    final_event = json.loads(result["events"][-1]["result"])
+    assert final_event == {
+        "call_id": "call-2",
+        "error_code": "unread_citations",
+        "hint": "Read every final citation with read_evidence before final.",
+        "valid_indexes": [0],
+    }
+    assert result["metrics"]["final_retry_reasons"]["unread_citations"] == 1
 
 
 def test_agent_rejects_final_claim_not_supported_by_its_citation(
@@ -390,6 +398,10 @@ def test_agent_rejects_final_claim_not_supported_by_its_citation(
 
     assert result["status"] == "max_steps"
     assert "support the original question" in result["events"][-1]["result"]
+    final_event = json.loads(result["events"][-1]["result"])
+    assert final_event["error_code"] == "unsupported_answer"
+    assert final_event["valid_indexes"] == [0]
+    assert result["metrics"]["final_retry_reasons"]["unsupported_answer"] == 1
 
 
 def test_agent_reports_provider_error_as_terminal_status(tmp_path: Path, monkeypatch) -> None:
@@ -649,6 +661,20 @@ def test_agent_bounds_tool_result_context(tmp_path: Path, monkeypatch) -> None:
     assert result["status"] == "unknown"
     assert result["tool_result_characters"] <= 8000
     assert "truncated" in result["events"][0]["result"]
+    assert result["metrics"]["tool_result_truncations"] == 1
+    tool_message = provider.messages[1][-1]["content"]
+    payload = json.loads(tool_message.removeprefix("Tool result: "))
+    assert payload["truncated"] is True
+    assert len(json.dumps(payload, ensure_ascii=False)) <= 8000
+    assert len(payload["citations"]) == 6
+    assert [item["source_id"] for item in payload["citations"]] == [
+        item["source_id"] for item in citations
+    ]
+    assert [item["source_version"] for item in payload["citations"]] == [1] * 6
+    assert [item["locator"] for item in payload["citations"]] == [
+        item["locator"] for item in citations
+    ]
+    assert all(len(item["quote"]) < 2000 for item in payload["citations"])
 
 
 def test_agent_passes_repository_scope_to_wiki_search(tmp_path: Path, monkeypatch) -> None:
@@ -799,6 +825,122 @@ def test_cli_agent_help_exposes_update_proposal_flag() -> None:
         and not getattr(parameter, "hidden", False)
         for parameter in command.params
     )
+
+
+class _PromptOnlyWorkspace:
+    def prompt_context(self) -> str:
+        return ""
+
+
+def _patch_open_readonly(monkeypatch) -> None:
+    monkeypatch.setattr(
+        agent_module.Workspace,
+        "open_readonly",
+        classmethod(lambda _cls, _root: _PromptOnlyWorkspace()),
+    )
+
+
+def _patch_agent_search(monkeypatch) -> None:
+    _patch_open_readonly(monkeypatch)
+    citation = {
+        "source_id": "abc",
+        "source_version": 1,
+        "locator": "chars:0-47",
+        "quote": "Cache entries expire after sixty seconds.",
+    }
+    monkeypatch.setattr(
+        agent_module,
+        "_search_wiki",
+        lambda *_args, **_kwargs: {
+            "status": "answered",
+            "answer": citation["quote"],
+            "citations": [citation],
+            "wiki_pages": ["wiki/pages/cache.md"],
+            "source_id": "abc",
+            "source_version": 1,
+            "locator": "chars:0-47",
+            "quote": citation["quote"],
+        },
+    )
+
+
+@pytest.mark.parametrize(
+    ("refresh_search", "expected_reads", "expected_reuses"),
+    [(False, 1, 1), (True, 2, 0)],
+)
+def test_agent_reuses_evidence_only_within_latest_search(
+    tmp_path: Path,
+    monkeypatch,
+    refresh_search: bool,
+    expected_reads: int,
+    expected_reuses: int,
+) -> None:
+    _patch_agent_search(monkeypatch)
+    reads = 0
+
+    def capture_read(*_args: object, **_kwargs: object) -> str:
+        nonlocal reads
+        reads += 1
+        return "Cache entries expire after sixty seconds."
+
+    monkeypatch.setattr(agent_module, "read_source_excerpt", capture_read)
+    steps = [
+        AgentStep(action="search_wiki", query="cache expiry"),
+        AgentStep(action="read_evidence", citation_index=0),
+    ]
+    if refresh_search:
+        steps.append(AgentStep(action="search_wiki", query="cache expiry"))
+    steps.extend(
+        [
+            AgentStep(action="read_evidence", citation_index=0),
+            AgentStep(action="final", answer="不知道"),
+        ]
+    )
+    result = run_agent(
+        tmp_path,
+        "When do cache entries expire?",
+        provider=StubAgentProvider(steps),
+        max_steps=len(steps),
+    )
+
+    assert result["status"] == "unknown"
+    assert reads == expected_reads
+    assert result["metrics"]["evidence_reuse_count"] == expected_reuses
+    assert len(result["evidence"]) == 1
+    assert result["evidence_characters"] == len(result["evidence"][0]["text"])
+    assert result["metrics"]["hit_max_steps"] is False
+    assert result["metrics"]["provider_calls"] == len(steps)
+    assert result["metrics"]["provider_latency_ms"] >= 0
+    assert result["metrics"]["tool_result_truncations"] == 0
+
+
+def test_agent_reports_invalid_final_citation_indexes(tmp_path: Path, monkeypatch) -> None:
+    _patch_agent_search(monkeypatch)
+
+    result = run_agent(
+        tmp_path,
+        "When do cache entries expire?",
+        provider=StubAgentProvider(
+            [
+                AgentStep(action="search_wiki", query="cache expiry"),
+                AgentStep(
+                    action="final",
+                    answer="Cache entries expire after sixty seconds.",
+                    citation_indexes=(7,),
+                ),
+            ]
+        ),
+        max_steps=2,
+    )
+
+    final_event = json.loads(result["events"][-1]["result"])
+    assert result["status"] == "max_steps"
+    assert final_event["error_code"] == "invalid_citation_indexes"
+    assert final_event["valid_indexes"] == [0]
+    assert result["metrics"]["hit_max_steps"] is True
+    assert result["metrics"]["provider_calls"] == 2
+    assert result["metrics"]["provider_latency_ms"] >= 0
+    assert result["metrics"]["final_retry_reasons"]["invalid_citation_indexes"] == 1
 
 
 def _applied_public_workspace(tmp_path: Path, monkeypatch, *, local_only: bool = False) -> Path:
