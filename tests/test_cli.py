@@ -144,6 +144,21 @@ def test_query_commands_expose_repository_scope() -> None:
         )
 
 
+def test_cli_agent_eval_exposes_max_steps_and_max_pages() -> None:
+    command = get_command(app).commands["agent-eval"]
+
+    assert any(
+        "--max-steps" in getattr(parameter, "opts", ())
+        and not getattr(parameter, "hidden", False)
+        for parameter in command.params
+    )
+    assert any(
+        "--max-pages" in getattr(parameter, "opts", ())
+        and not getattr(parameter, "hidden", False)
+        for parameter in command.params
+    )
+
+
 def test_agent_clear_removes_one_local_session(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     runner = CliRunner()
