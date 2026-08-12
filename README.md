@@ -4,13 +4,13 @@
 
 <!-- memoryforge-release-claim: version=0.3.0; status=released; supported_platforms=macos+linux; active_candidate=19; platform_gate_candidate=19; platform_gate_status=accepted; review_status=accepted; macos_passed=642; linux_passed=639; linux_skipped=3; windows_status=not_verified; release_verification=passed -->
 
-> 把散落在代码仓库、设计文档、飞书和 AI 对话里的技术资料，编译成一套可维护、可追溯、可以直接在飞书提问的个人技术 Wiki。
+> 把代码、文档和 AI 对话编译成可审核、可追溯、可查询的本地技术 Wiki。
 
 > **v0.4.0 发布范围：macOS。** 完整本地门禁 `656 passed`。Linux 未在本版本重跑；
 > Windows 尚未验证。最终状态与 SHA256 以 GitHub Release 为准。
 
-[60 秒演示](#60-秒公开演示) · [5 分钟跑通](#5-分钟跑通) · [飞书接入](#用飞书展示项目) ·
-[AI 会话记忆](#ai-会话如何变成长效记忆) · [设计边界](#当前边界)
+[60 秒演示](#60-秒公开演示) · [工作原理](#工作原理) · [5 分钟跑通](#5-分钟跑通) ·
+[公开证据](#公开-evidence-与已知失败) · [设计边界](#当前边界)
 
 ![MemoryForge 工作流](assets/memoryforge-flow.svg)
 
@@ -20,44 +20,46 @@
 </p>
 <p align="center"><sub>v0.4.0 本地只读 Wiki：概览、检索、最近页面、Markdown 阅读器和引用依据。</sub></p>
 
-## 这是什么项目？
+## 为什么做 MemoryForge？
 
-写项目久了，最难找的往往不是代码，而是“为什么当初这么设计”“这个规则写在哪”“方案为什么被放弃”。这些答案通常散落在 README、`docs/`、ADR、复盘和飞书文档里，而且会持续变化。
+长期维护项目时，真正难找的往往不是代码，而是“为什么这样设计”“规则写在哪”“哪个方案已经被否决”。这些事实散落在仓库、飞书、ADR、复盘和 AI 对话里，普通搜索只能找到文本，不能说明结论是否仍有效、来自哪个版本、是否经过审核。
 
-**MemoryForge 先把资料和对话沉淀为人也能直接阅读的 Markdown Wiki，再提供带来源的渐进式检索和一个最小 Agent。** 它不是把所有内容直接塞进提示词的聊天机器人，而是一个本地优先的“技术知识编译器”。
+**MemoryForge 是一个本地优先的知识编译器。** 它把原始资料编译成可直接阅读的 Markdown Wiki；所有更新先形成 ChangeSet，再经 `review → approve → apply` 发布；查询只读取少量相关页面，证据不足时返回 `unknown`。
 
-运行后，你会得到：
+它不是“把所有文档塞进提示词”的聊天机器人。运行后得到的是：
 
-- 一套可直接阅读和 Git 版本化的 Markdown Wiki；
-- 每条事实对应的来源版本、原文位置和审核记录；
-- CLI、飞书机器人和最小 Agent 三种问答入口；
-- AI 换新会话后可按需加载、不会整库灌入上下文的长期记忆。
+- Git 版本化的 Markdown Wiki；
+- 可定位到 SourceVersion、原文位置和 Commit 的 Citation；
+- 显式、留痕的变更审核链；
+- CLI、本地只读 Portal、Obsidian 和飞书入口；
+- 可由新 AI 会话按需加载的审核后长期记忆。
 
-适合个人开发者、小团队技术负责人、需要整理多个仓库或长期维护项目知识的人。若你要的是公网 SaaS、企业权限平台或不经审核的全自动 RAG，本项目暂不适合。
+适合个人开发者、技术负责人和需要长期维护多个仓库的人。若你要的是公网 SaaS、企业权限平台或不经审核的全自动 RAG，本项目暂不适合。
 
 ## 60 秒公开演示
 
-不需要模型 Key、数据库服务或 Web 后台。三步生成可直接打开的只读静态 Showcase：
+不需要模型 Key、数据库服务或 Web 后台。在仓库根目录运行：
 
 ```bash
-python -m pip install -e '.[dev]'
-python demo/run_showcase_demo.py \
-  --workdir /private/tmp/memoryforge-showcase-demo \
-  --output /private/tmp/memoryforge-showcase
-open /private/tmp/memoryforge-showcase/index.html
+python3.11 -m venv .venv
+.venv/bin/python -m pip install .
+.venv/bin/python demo/run_showcase_demo.py \
+  --workdir /tmp/memoryforge-showcase-demo \
+  --output /tmp/memoryforge-showcase
+.venv/bin/python -m webbrowser \
+  file:///tmp/memoryforge-showcase/index.html
 ```
 
-如果 Codex 内置浏览器对 `file://` 页面提示“无法加载”，在输出目录启动一个
-仅绑定本机的静态服务器，再打开 `http://127.0.0.1:8765/index.html`：
+若浏览器拦截 `file://`，启动仅绑定本机的静态服务器，再打开
+`http://127.0.0.1:8765/index.html`：
 
 ```bash
-cd /private/tmp/memoryforge-showcase
-/path/to/MemoryForge/.venv/bin/python -m http.server 8765 --bind 127.0.0.1
+.venv/bin/python -m http.server 8765 \
+  --bind 127.0.0.1 \
+  --directory /tmp/memoryforge-showcase
 ```
 
-该服务器只读、只监听本机，不会上传 Wiki 内容；终端保持运行即可浏览页面。
-
-它从仓库内固定的 Python、Go、TypeScript 公开夹具开始，真实执行
+Demo 从仓库内固定的 Python、Go、TypeScript 公开夹具开始，真实执行
 `import → Code Index → ChangeSet → review → approve → apply → query → showcase`，并展示来源版本、
 Wiki 树、Diff、Citation Trace、Benchmark、保留的失败案例、正确拒答和 Mermaid 架构。输出只有
 `index.html`、`showcase.json` 和所有权 marker；没有远程脚本或网络请求。
@@ -72,20 +74,21 @@ Wiki 树、Diff、Citation Trace、Benchmark、保留的失败案例、正确拒
 | 主题相关就尝试回答 | support score 不足时返回 `unknown` |
 | 很难重放一次结论 | Citation 固定到 SourceVersion、locator、Commit 和 SHA256 |
 
-### 当前公开 Evidence
+## 公开 Evidence 与已知失败
 
-| 结果 | 指标 | 边界 |
+MemoryForge 把回答、引用和召回分开评测，也保留失败结果。以下数字只适用于各自冻结的数据集，不能外推为任意仓库或生产 SLA。
+
+| Evidence | 结果 | 边界 |
 | --- | ---: | --- |
-| v0.4.0 本地门禁 | macOS **656 passed** | Linux 未在本版本重跑；Windows 未验证 |
-| v0.4.0 本地 Wiki Portal | 公开夹具浏览器验收通过 | 无远程脚本、无模型 Key、只读 |
-| 三语言 Code Wiki | Symbol / core Relation / Mermaid / Citation 均为 **100%** | 固定公开夹具 |
-| AgentSkill-Eval 文档 Wiki | Answer **96.7%**，Citation **100%** | 单一公开仓库 30 题 |
-| learn-claude-code support score development | Answer / selective accuracy **100%**，coverage **90%**，risk **0%** | 10 题；confirmation 未运行 |
+| v0.4.0 本地门禁 | macOS **656 passed** | Linux 未重跑；Windows 未验证 |
+| AgentSkill-Eval 文档 Wiki | Answer **96.7%**；Citation **100%**；拒答 **100%** | 单一公开仓库，30 题 |
+| 三语言 Code Wiki | Symbol / core Relation / Mermaid / Citation **100%** | 固定公开夹具，不等于全仓 precision / recall |
+| Code Module Narrative | 事实覆盖 **90%**；Citation **100%** | 未发布开发集；真实 `seed-2.1-turbo`，20 题 |
 | Click 外部迁移 | development / holdout Answer **10% / 0%** | 真实负结果，未隐藏 |
-| Static Showcase development | **4/4**，本地详情泄漏 **0**，Workspace 变更 **0** | confirmation 未运行 |
-| v0.3.0 Candidate 19 development | **6/6**；package/query/privacy/artifact contracts | accepted；静态终审 **0 P0/P1/P2** |
-| v0.3.0 本地门禁 | macOS **642 passed**；Linux **639 passed / 3 skipped** | Windows 未验证，不属于支持范围 |
-| 历史：v0.3.0 RC Candidate 12 development | macOS **623 passed**；Debian **620 passed / 3 skipped** | 静态终审 rejected；详细记录在 Evidence registry |
+
+复现方法见 [公开 Benchmark](docs/BENCHMARK.md)，历史主张与限制见
+[Evidence Claims](docs/EVIDENCE_CLAIMS.md)，所有接受、拒绝和被替代的实验见
+[Benchmark Registry](docs/research/BENCHMARK_REGISTRY.md)。
 
 ## 它解决了什么问题？
 
@@ -113,7 +116,9 @@ Wiki 树、Diff、Citation Trace、Benchmark、保留的失败案例、正确拒
 - **只读展示**：`memoryforge showcase build` 生成自包含静态 Evidence 页面；默认隐藏
   `local_only` 来源、页面、ChangeSet 和 Citation 细节。
 
-### 一份资料如何进入正式 Wiki？
+## 工作原理
+
+### 发布链
 
 ```mermaid
 flowchart LR
@@ -125,9 +130,10 @@ flowchart LR
     D -->|"不接受"| G["reject：保留记录，不改 Wiki"]
 ```
 
-生成和授权分开。`watch`、Botmux Hook 或飞书自动收录都只能生成草稿，不能绕过审核直接改正式 Wiki。
+推荐流程将生成、审阅、授权和落盘分开。`watch`、Botmux Hook 或飞书自动收录都只能生成草稿，
+不能直接修改正式 Wiki。
 
-## 一次提问是怎么完成的？
+### 查询链
 
 ```mermaid
 flowchart TD
@@ -146,42 +152,47 @@ flowchart TD
 
 ## 5 分钟跑通
 
-环境要求：Python 3.11+，macOS 或 Linux。
+环境要求：Python 3.11+。v0.4.0 正式验证 macOS；Linux 未在本版本重跑完整门禁。
 
 ```bash
 git clone https://github.com/still0123/MemoryForge.git
 cd MemoryForge
 
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install -e '.[dev]'
+python3.11 -m venv .venv
+.venv/bin/python -m pip install .
+MF=.venv/bin/memoryforge
 
 # 1. 初始化你的知识库
-memoryforge init ./my-wiki
+$MF init ./my-wiki
 
-# 2. 导入一份资料
-memoryforge import ./notes/cache.md --category design --workspace ./my-wiki
+# 2. 创建并导入一份本地资料
+printf '# 缓存策略\n\n用户会话缓存 30 分钟后过期。\n' > cache-note.md
+$MF import cache-note.md \
+  --category design \
+  --local-only \
+  --workspace ./my-wiki
 
-# 3. 先生成变更预览，独立审批后再写入 Wiki
-memoryforge ingest --pending --workspace ./my-wiki
-memoryforge review <changeset-id> --workspace ./my-wiki
-memoryforge approve <changeset-id> --workspace ./my-wiki
-memoryforge apply <changeset-id> --workspace ./my-wiki
+# 3. 生成 ChangeSet，并自动取得 ID
+INGEST_OUTPUT=$($MF ingest --pending --workspace ./my-wiki)
+printf '%s\n' "$INGEST_OUTPUT"
+CHANGESET_ID=$(printf '%s' "$INGEST_OUTPUT" | \
+  .venv/bin/python -c 'import json,sys; print(json.load(sys.stdin)["changeset_id"])')
 
-# 4. 查看状态、待审核变更和来源
-memoryforge status --workspace ./my-wiki
-memoryforge changeset-list --workspace ./my-wiki
-memoryforge source-list --workspace ./my-wiki
-memoryforge doctor --workspace ./my-wiki
+# 4. 查看 Diff，确认后独立批准并应用
+$MF review "$CHANGESET_ID" --workspace ./my-wiki
+$MF approve "$CHANGESET_ID" --workspace ./my-wiki
+$MF apply "$CHANGESET_ID" --workspace ./my-wiki
 
 # 5. 提问
-memoryforge ask '缓存多久过期？' --workspace ./my-wiki
+$MF ask '用户会话缓存多久过期？' --workspace ./my-wiki
 
-# 6. 新 AI 会话加载已审核的近期记忆
-memoryforge recall --workspace ./my-wiki
+# 6. 检查 Workspace
+$MF status --workspace ./my-wiki
+$MF doctor --workspace ./my-wiki
 ```
 
-生成后的 Workspace 大致如下：
+整个流程不需要模型。`review` 会打印候选页面和统一 Diff；只有显式执行 `approve` 后，
+`apply` 才会修改正式 Wiki 并创建 Git Commit。生成后的 Workspace 大致如下：
 
 ```text
 my-wiki/
@@ -295,48 +306,13 @@ init -> git-add --public -> git-sync -> ingest -> review -> approve -> apply -> 
 
 Raw FTS 只负责检索，不生成答案，所以不能拿它计算回答、引用或拒答准确率。完整方法、失败案例和复现说明见 [公开 Benchmark](docs/BENCHMARK.md)。
 
-### 从 Wheel 独立复现
+### 发布复现
 
-发布检查会创建全新虚拟环境，只安装 Wheel，并运行 CLI、代码 Wiki Benchmark 和可选的完整公开
-Demo。脚本会拒绝从源码 checkout 导入 `memoryforge`：
-
-```bash
-uv build --wheel --out-dir dist
-.venv/bin/python demo/run_release_check.py \
-  --wheel dist/memoryforge-0.4.0-py3-none-any.whl \
-  --workdir /private/tmp/memoryforge-release-check \
-  --output /private/tmp/memoryforge-release-provenance.json \
-  --code-evidence-output demo/results/code_wiki_public.json \
-  --public-evidence-output demo/results/agent_skill_eval_public.json \
-  --public-source-repo /absolute/path/to/AgentSkill-Eval
-```
-
-公开仓库必须 checkout 到 `93f5dc05229da250b041850ad8deeeec886ef304`。提交的
-[`release_provenance.json`](demo/results/release_provenance.json) 是 v0.2.0 的历史发布证据。
-v0.4.0 的实际 import 路径、依赖版本、Wheel/sdist SHA256 和 tag Commit 以 GitHub Release
-中的 `release-provenance.json` 与 `SHA256SUMS` 为准。
-
-### 本地零付费门禁
-
-仓库已关闭 GitHub Actions，后续不使用 hosted runner。完整检查、双 clean-room 构建和 SHA256
-Evidence 在本机执行：
-
-```bash
-./scripts/check_local.sh
-
-# release-candidate 双隔离构建
-python scripts/build_release.py \
-  --output /private/tmp/memoryforge-v0.4.0-release
-```
-
-Windows PowerShell 提供实验性本地检查，但 v0.4.0 未验证 Windows：
-
-```powershell
-.\scripts\check_local.ps1
-```
-
-产物默认写入被 Git 忽略的 `local-evidence/<UTC timestamp>/`。安装、命名产物和手动发布流程见
-[本地免费工具链](docs/LOCAL_FREE_TOOLING.md)。
+发布门禁在本机执行 Ruff、Mypy、pytest、Wheel/sdist 双 clean-room 安装、Workspace
+backup/restore 和 SHA256 回放，不使用 hosted runner。完整命令、产物命名和手动发布流程见
+[本地免费工具链](docs/LOCAL_FREE_TOOLING.md)；Wheel 独立复现参数见
+[`demo/run_release_check.py`](demo/run_release_check.py)。v0.4.0 的最终 Commit、依赖版本和
+制品 SHA256 以 GitHub Release 附带的 `release-provenance.json` 与 `SHA256SUMS` 为准。
 
 如果要按秋招面试的方式完整演示，直接看 [秋招演示与面试说明](docs/PORTFOLIO_DEMO.md)。里面包含 3 分钟讲解顺序、公开 Demo 命令、飞书展示命令和常见追问。
 
@@ -420,16 +396,9 @@ memoryforge showcase serve --workspace <workspace> --port 8765
 ## Obsidian 本地视图
 
 `memoryforge obsidian-build --workspace <workspace>` 只在 `obsidian/` 生成
-Obsidian 可读的导航 Markdown：总入口、私有过程、稳定知识和共享业务状态。输出使用普通
-Markdown、frontmatter 和相对链接，不依赖 Dataview 或其他插件，也不复制 `wiki/pages/`
-正文。在 Obsidian 中把整个 `<workspace>` 作为 Vault 打开，再进入 `obsidian/Home.md`；
-不要只把 `obsidian/` 子目录作为 Vault，否则页面链接会落到 Vault 外。
-
-分类规则固定且可解释：任一来源为 `local_only` 的页面进入私有过程；全部来源为
-`public` 且任一来源显式带 `shared-state` 标签的页面进入共享业务状态；其余公开页面进入
-稳定知识。共享视图绝不包含 `local_only` 页面。该目录自动忽略 Git 跟踪，不参与
-`query`、`search` 或页面来源投影，重复执行只覆盖自己的导航文件，不修改 `raw/`、
-`wiki/` 或 SQLite 投影，也不会自动打开 GUI 或 publish。
+Obsidian 导航 Markdown，不复制 Wiki 正文，也不依赖插件。把整个 `<workspace>` 作为 Vault
+打开，再进入 `obsidian/Home.md`。`local_only` 页面不会进入共享业务状态；重复构建不修改
+`raw/`、`wiki/` 或 SQLite 投影。
 
 ## AI 会话如何变成长效记忆
 
@@ -446,24 +415,13 @@ flowchart LR
     G -. "新结论再次收录" .-> B
 ```
 
-三种收录方式：飞书中手动 `/wiki 收录`、Botmux Hook 自动生成草稿、Codex rollout JSONL 本地导入。三种方式都不会自动批准。
-
-飞书私聊还支持以下轻量上下文命令：
+三种收录方式都只生成 `local_only` 草稿，不会自动批准：
 
 ```text
-/project efs-mgr       # 当前聊天固定到某个已登记仓库
-/project clear         # 清除项目范围
-/resume <session-id>   # 恢复本机保存的另一段会话
-/resume clear          # 退出恢复会话
-/wiki 收录             # 将当前会话最近 3 轮生成本地记忆草稿
-/wiki auto on          # 后续每轮自动更新本地记忆草稿
-/wiki auto off         # 停止自动更新；保留已有草稿
+飞书：/wiki 收录 或 /wiki auto on
+Botmux：生命周期 Hook 调用 memoryforge botmux-hook
+Codex：memoryforge codex-import <rollout.jsonl>
 ```
-
-`/project` 只改变当前聊天的 Wiki 检索范围，`/resume` 只读取本机保存的有限会话上下文；
-`/wiki 收录` 生成 `local_only` 来源，仍须执行 `ingest → review → approve → apply` 才会进入
-正式 Wiki。它们不会把公司代码、飞书正文或会话上传到 GitHub。`watch` 只生成待审核
-ChangeSet，不会自动覆盖正式 Wiki。
 
 Codex 本地对话可直接从 rollout JSONL 收录，只保留 user / assistant 文本；系统提示、
 推理和工具输出会被排除：
@@ -473,64 +431,25 @@ memoryforge codex-import ~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl \
   --title '本次讨论主题' --workspace <workspace>
 ```
 
-命令一次导入一个会话，默认 `local_only`，重复执行会更新同一来源。Claude 等其他对话
-可先导出为 Markdown 或 TXT，再复用安全导入路径：
+AI 回复始终按未验证材料处理；只有走完 `ingest → review → approve → apply` 才进入正式
+Wiki。`memoryforge recall` 只返回已应用的近期结论、决策、未完成事项和引用，不调用模型。
+`memoryforge codex-setup` 可把这条有界 recall 规则写入项目 `AGENTS.md`。Botmux 事件配置格式见
+[官方 Hook 文档](https://deepcoldy.github.io/botmux/hooks.html)。
 
-```bash
-memoryforge import codex-session.md --category notes \
-  --tag conversation --tag platform:codex --local-only \
-  --workspace <workspace>
-```
+## 文档导航
 
-AI 回复按未验证材料处理；审核通过后，新会话即可从同一 Wiki 检索这些长期记忆。
-编译会话来源时，Wiki 页面只保留最近 8 条消息的少量可检索片段并按最新优先展示；
-完整对话仍保存在不可变 raw Evidence 中，不会整段塞进日常查询上下文。
-新建 AI 会话时可运行 `memoryforge recall --workspace <workspace>`；命令只读取已应用的
-会话页面，返回近期摘要、决策、未完成事项和引用，不调用模型，也不修改 Workspace。
-执行一次 `memoryforge codex-setup <project> --workspace <workspace>` 后，MemoryForge 会在项目
-`AGENTS.md` 写入有界、可重复更新的 recall 指令；之后 Codex 新任务自动先读取近期记忆。
+- [SPEC：架构、数据模型与安全边界](SPEC.md)
+- [公开 Benchmark：方法、结果与失败案例](docs/BENCHMARK.md)
+- [Code Module Narrative：后序编译与 Citation 契约](docs/research/CODE_MODULE_NARRATIVE.md)
+- [本地 Wiki Portal：只读与隐私约束](docs/LOCAL_WIKI_PORTAL_SPEC.md)
+- [用户评测指南：为私有 Workspace 建立 50 题题集](docs/USER_EVALUATION.md)
+- [秋招演示：3 分钟讲解与常见追问](docs/PORTFOLIO_DEMO.md)
+- [CHANGELOG：版本范围与验证结果](CHANGELOG.md)
 
-`history` 只读列出 Wiki Commit；`rollback` 只接受当前 Commit 的祖先，并追加一个新的恢复
-Commit，同时重建 SQLite 查询投影。它不会删除原 Git 历史。
-
-Botmux 托管的 Codex 等会话可用生命周期 Hook 自动收录。将下面配置写入
-`~/.botmux/data/hooks.json`；把命令和 Workspace 改为绝对路径：
-
-```json
-[
-  {
-    "event": "topic.new",
-    "command": "/absolute/MemoryForge/.venv/bin/memoryforge botmux-hook --workspace /absolute/my-wiki",
-    "redact": { "fullContentEvents": ["topic.new"] }
-  },
-  {
-    "event": "thread.reply",
-    "command": "/absolute/MemoryForge/.venv/bin/memoryforge botmux-hook --workspace /absolute/my-wiki",
-    "redact": { "fullContentEvents": ["thread.reply"] }
-  },
-  {
-    "event": "outbound.send",
-    "command": "/absolute/MemoryForge/.venv/bin/memoryforge botmux-hook --workspace /absolute/my-wiki",
-    "redact": { "fullContentEvents": ["outbound.send"] }
-  },
-  {
-    "event": "outbound.reply",
-    "command": "/absolute/MemoryForge/.venv/bin/memoryforge botmux-hook --workspace /absolute/my-wiki",
-    "redact": { "fullContentEvents": ["outbound.reply"] }
-  },
-  {
-    "event": "session.exit",
-    "command": "/absolute/MemoryForge/.venv/bin/memoryforge botmux-hook --workspace /absolute/my-wiki"
-  }
-]
-```
-
-执行 `botmux restart` 后生效。Hook 只收录文本，忽略流式卡片 JSON；内容默认
-`local_only`，不会自动批准或应用。Botmux Hook 格式见
-[官方文档](https://deepcoldy.github.io/botmux/hooks.html)。
-
-更多命令请运行 `memoryforge --help`。实现细节与数据模型见 [SPEC.md](SPEC.md)，下一阶段的完整实施计划见 [NEXT_PHASE_SPEC.md](NEXT_PHASE_SPEC.md)。
+更多命令运行 `memoryforge --help`。
 
 ## 当前边界
 
-当前刻意不做公网部署、群聊、多用户权限、定时同步、向量数据库、知识图谱和通用编码 Agent。这些能力可以后续添加，但现在优先把“个人技术 Wiki 如何持续更新、可靠查询并回到证据”这一件事做深。
+当前版本功能冻结，后续只修 Bug、错误回答和文档。项目刻意不做公网部署、群聊、多用户权限、
+向量数据库、知识图谱、通用编码 Agent 或多 Agent 编排；主线只服务“个人技术 Wiki 如何持续
+更新、可靠查询并回到证据”。
