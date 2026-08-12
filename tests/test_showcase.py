@@ -9,7 +9,7 @@ import pytest
 from typer.testing import CliRunner
 
 from memoryforge.cli import app
-from memoryforge.showcase import ShowcaseBuildError, _markdown_html, build_showcase
+from memoryforge.showcase import ShowcaseBuildError, _markdown_html, _page_group, build_showcase
 
 
 def test_showcase_builds_complete_public_snapshot_without_mutating_workspace(
@@ -79,21 +79,21 @@ def test_showcase_builds_complete_public_snapshot_without_mutating_workspace(
     ):
         assert f'id="{section}"' in html
     assert '<html lang="zh-CN">' in html
-    assert "我的技术 Wiki" in html
+    assert "我的技术知识库" in html
     assert "Private launch plan" not in html
     assert "http://" not in html
     assert "https://" not in html
     assert 'id="wiki-search"' in html
     assert 'data-wiki-target="wiki-page-0"' in html
     assert 'data-wiki-key="wiki/pages/' in html
-    assert "搜索标题、路径或正文" in html
+    assert "筛选当前资料库" in html
     assert 'class="wiki-markdown"' in html
     assert 'class="wiki-group"' in html
     assert "依据来源" in html
     assert "Code: src/service.py" in html
     assert "代码：src/service.py" in html
     assert "最近更新" in html
-    assert "你的 Wiki 目录" in html
+    assert "知识库目录" in html
     assert "项目 · repo" in html
     assert 'data-wiki-filter="repo"' in html
     assert 'data-wiki-filter-mode="project"' in html
@@ -104,6 +104,11 @@ def test_showcase_builds_complete_public_snapshot_without_mutating_workspace(
     assert 'class="page-meta"' in html
     assert 'class="citation-details"' in html
     assert "src.service" in html
+    assert 'class="page-rail"' in html
+    assert 'id="reader-toggle"' in html
+    assert 'id="theme-toggle"' in html
+    assert "memoryforge-reader-mode" in html
+    assert "#page=" in html
     assert _tree_sha256(workspace) == before
 
 
@@ -123,11 +128,38 @@ def test_showcase_collapses_full_citation_identifiers() -> None:
 
 
 def test_showcase_localizes_generated_code_headings() -> None:
-    rendered = _markdown_html("# Code: src/service.py\n\n## Code outline\n\n## Verified facts\n")
+    rendered = _markdown_html(
+        "# Code: src/service.py\n\n"
+        "## Module\n\n"
+        "- Path: `src/service.py`\n"
+        "- Languages: python\n"
+        "- Verified symbols: 4\n\n"
+        "## Architecture\n\n"
+        "## Verified dependencies\n\n"
+        "## Verified facts\n\n"
+        "## Sources\n"
+    )
 
     assert "代码：src/service.py" in rendered
-    assert "代码结构" in rendered
+    assert "模块信息" in rendered
+    assert "路径：" in rendered
+    assert "语言：" in rendered
+    assert "已验证符号数：" in rendered
+    assert "架构关系" in rendered
+    assert "已验证依赖" in rendered
     assert "已验证事实" in rendered
+    assert "证据来源" in rendered
+
+
+def test_showcase_groups_code_pages_by_stable_page_path() -> None:
+    assert (
+        _page_group(
+            "Service",
+            [{"name": "repo"}],
+            page_path="wiki/pages/code/abc123/src/service.md",
+        )
+        == "代码 · repo · src"
+    )
 
 
 def test_showcase_rebuild_is_deterministic_and_replaces_only_owned_output(

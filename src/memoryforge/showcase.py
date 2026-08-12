@@ -567,143 +567,258 @@ def _render_html(snapshot: dict[str, Any]) -> str:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>我的技术 Wiki · MemoryForge</title>
+<title>我的技术知识库 · MemoryForge</title>
+<script>
+try {{
+  const theme = localStorage.getItem("memoryforge-theme");
+  if (theme) document.documentElement.dataset.theme = theme;
+}} catch (_) {{}}
+</script>
 <style>
-:root {{ color-scheme: dark; --bg:#0b1020; --panel:#151d32; --panel-2:#10182b;
-  --line:#2b3858; --text:#e8edf8; --muted:#9eabc5; --accent:#71d1b3;
-  --accent-2:#9bb7ff; --bad:#ff8f8f; }}
-* {{ box-sizing:border-box }} body {{ margin:0; background:var(--bg); color:var(--text);
-  font:15px/1.6 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif }}
-main {{ max-width:1440px; margin:auto; padding:28px 24px 80px }}
-h1 {{ margin:4px 0 8px; font-size:34px }} h2 {{ margin-top:42px;
-  border-bottom:1px solid var(--line);
-  padding-bottom:10px }} h3 {{ color:var(--accent) }}
-.portal-header {{ padding:24px; background:linear-gradient(135deg,#172440,#10182b);
-  border:1px solid var(--line);
-  border-radius:14px }} .kicker {{ color:var(--accent); font-size:12px; letter-spacing:.12em }}
-.personal-search {{ margin-top:20px; padding-top:16px; border-top:1px solid var(--line) }}
-.personal-search label {{ display:block; margin-bottom:7px; color:var(--accent-2);
-  font-weight:600 }}
-.search-row {{ display:flex; gap:8px }} .global-search {{ flex:1; min-width:0; padding:12px 14px;
-  color:var(--text); background:#080d19; border:1px solid var(--line); border-radius:8px;
-  font:inherit }} .search-button {{ padding:0 16px; color:#081019; background:var(--accent);
-  border:0; border-radius:8px; cursor:pointer; font:inherit; font-weight:600 }}
-.search-button:hover {{ filter:brightness(1.08) }}
-.commit {{ display:inline-block; margin-top:4px; color:var(--accent-2) }}
-.commit summary {{ padding:3px 7px; border:1px solid var(--line); border-radius:6px }}
-.commit code {{ display:block; margin-top:6px; padding:6px 8px; color:var(--muted);
-  background:#080d19; border-radius:6px }}
-.meta,.grid {{ display:grid; gap:14px; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)) }}
+:root {{ color-scheme:light; --bg:#f7f7f5; --panel:#ffffff; --panel-2:#f1f3f2;
+  --line:#dde2df; --text:#202522; --muted:#6e7772; --accent:#247a6b;
+  --accent-soft:#dff3ed; --link:#315fbd; --bad:#b42318; --code:#f3f5f4;
+  --shadow:0 10px 30px rgba(30,45,38,.06); }}
+:root[data-theme="dark"] {{ color-scheme:dark; --bg:#0f1211; --panel:#151918;
+  --panel-2:#1b211f; --line:#2b3431; --text:#e8ecea; --muted:#9aa5a0;
+  --accent:#68cbb6; --accent-soft:#173a32; --link:#9ab5ff; --bad:#ff9b92;
+  --code:#0c0f0e; --shadow:0 14px 38px rgba(0,0,0,.22); }}
+@media (prefers-color-scheme:dark) {{
+  :root:not([data-theme="light"]) {{ color-scheme:dark; --bg:#0f1211; --panel:#151918;
+    --panel-2:#1b211f; --line:#2b3431; --text:#e8ecea; --muted:#9aa5a0;
+    --accent:#68cbb6; --accent-soft:#173a32; --link:#9ab5ff; --bad:#ff9b92;
+    --code:#0c0f0e; --shadow:0 14px 38px rgba(0,0,0,.22); }}
+}}
+* {{ box-sizing:border-box }}
+html {{ scroll-behavior:smooth }}
+body {{ margin:0; background:var(--bg); color:var(--text);
+  font:15px/1.65 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif }}
+button,input {{ font:inherit }}
+button {{ color:inherit }}
+a {{ color:var(--link) }}
+.site-header {{ position:sticky; top:0; z-index:20; display:grid;
+  grid-template-columns:auto auto minmax(240px,720px) auto; gap:20px; align-items:center;
+  min-height:64px; padding:9px 24px; background:color-mix(in srgb,var(--bg) 90%,transparent);
+  border-bottom:1px solid var(--line); backdrop-filter:blur(16px) }}
+.brand {{ display:flex; align-items:center; gap:10px; color:var(--text); text-decoration:none;
+  font-weight:700; white-space:nowrap }}
+.brand-mark {{ display:grid; width:34px; height:34px; place-items:center; color:#fff;
+  background:var(--accent); border-radius:9px; font-size:12px; letter-spacing:.06em }}
+.brand-copy small {{ display:block; color:var(--muted); font-size:10px; font-weight:500;
+  letter-spacing:.08em; text-transform:uppercase }}
+.site-nav {{ display:flex; gap:4px }}
+.site-nav a {{ padding:6px 8px; color:var(--muted); border-radius:6px; text-decoration:none }}
+.site-nav a:hover {{ color:var(--text); background:var(--panel-2) }}
+.header-search {{ display:flex; align-items:center; min-width:0; height:40px; padding-left:12px;
+  background:var(--panel); border:1px solid var(--line); border-radius:9px;
+  box-shadow:0 1px 2px rgba(0,0,0,.03) }}
+.global-search {{ flex:1; min-width:0; color:var(--text); background:transparent; border:0;
+  outline:0 }}
+.search-shortcut {{ margin:0 8px; padding:2px 6px; color:var(--muted);
+  background:var(--panel-2); border:1px solid var(--line); border-radius:5px; font-size:11px }}
+.search-button {{ align-self:stretch; padding:0 13px; color:var(--accent); background:transparent;
+  border:0; border-left:1px solid var(--line); cursor:pointer; font-weight:650 }}
+.header-actions {{ display:flex; gap:6px }}
+.tool-button {{ padding:7px 10px; color:var(--muted); background:var(--panel);
+  border:1px solid var(--line); border-radius:8px; cursor:pointer }}
+.tool-button:hover,.tool-button[aria-pressed="true"] {{ color:var(--accent);
+  background:var(--accent-soft); border-color:var(--accent) }}
+.explorer-toggle {{ display:none }}
+.portal-main {{ max-width:1600px; margin:auto; padding:24px 24px 80px }}
+.section-heading {{ display:flex; align-items:end; justify-content:space-between; gap:20px;
+  margin:8px 0 14px }}
+.section-heading h1,.section-heading h2 {{ margin:0; border:0; padding:0 }}
+.section-heading h1 {{ font-size:28px; letter-spacing:-.025em }}
+.section-heading h2 {{ font-size:20px }}
+.section-heading p {{ margin:3px 0 0; color:var(--muted) }}
+.eyebrow {{ color:var(--accent); font-size:11px; font-weight:700; letter-spacing:.12em }}
+.commit {{ color:var(--muted); font-size:12px }}
+.commit summary {{ padding:5px 8px; border:1px solid var(--line); border-radius:7px }}
+.commit code {{ display:block; margin-top:6px; padding:6px 8px; background:var(--code);
+  border-radius:6px }}
+.meta,.grid {{ display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)) }}
 .card {{ background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px;
-  overflow:auto }} .muted {{ color:var(--muted) }} .good {{ color:var(--accent) }}
-.bad {{ color:var(--bad) }} code,pre {{ white-space:pre-wrap; overflow-wrap:anywhere;
+  overflow:auto }}
+.muted {{ color:var(--muted) }} .good {{ color:var(--accent) }} .bad {{ color:var(--bad) }}
+code,pre {{ white-space:pre-wrap; overflow-wrap:anywhere;
   font-family:ui-monospace,SFMono-Regular,Menlo,monospace }}
-pre {{ background:#080d19; border:1px solid var(--line); border-radius:8px; padding:14px }}
+pre {{ background:var(--code); border:1px solid var(--line); border-radius:8px; padding:14px }}
 table {{ width:100%; border-collapse:collapse }} th,td {{ text-align:left; padding:8px;
   border-bottom:1px solid var(--line); vertical-align:top }}
-nav {{ position:sticky; top:0; z-index:3; margin:14px 0; padding:11px 14px;
-  background:rgba(11,16,32,.94);
-  border:1px solid var(--line); border-radius:9px; backdrop-filter:blur(8px) }}
-nav a {{ color:var(--accent); margin-right:14px; text-decoration:none }}
-nav a:hover {{ text-decoration:underline }}
-svg {{ width:100%; min-height:180px }} .secondary-section details {{ background:var(--panel-2);
-  border:1px solid var(--line); border-radius:10px; padding:0 14px }}
-details summary {{ cursor:pointer; padding:12px 0; color:var(--accent-2) }}
-.overview-grid {{ display:grid; gap:14px;
-  grid-template-columns:repeat(auto-fit,minmax(180px,1fr)) }}
-.overview-card {{ background:var(--panel); border:1px solid var(--line);
-  border-radius:10px; padding:16px }}
-.overview-card strong {{ color:var(--muted); font-size:12px; text-transform:uppercase }}
-.overview-card span {{ display:block; margin-top:4px; font-size:24px; color:var(--accent) }}
-.overview-panels {{ display:grid; grid-template-columns:minmax(0,1.4fr) minmax(260px,1fr);
-  gap:14px; margin-top:14px }} .overview-panel h3 {{ margin-top:0 }}
-.directory-grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr));
-  gap:8px; margin-top:14px }}
-.directory-item {{ display:flex; justify-content:space-between; gap:8px; padding:9px 11px;
-  color:var(--text); background:var(--panel-2); border:1px solid var(--line); border-radius:8px;
-  text-align:left; cursor:pointer; font:inherit }}
-.directory-item:hover {{ background:#202b47 }}
+details summary {{ cursor:pointer }}
+svg {{ width:100%; min-height:180px }}
+#overview {{ padding-bottom:28px; border-bottom:1px solid var(--line) }}
+.overview-grid {{ display:grid; gap:10px; grid-template-columns:repeat(5,minmax(120px,1fr)) }}
+.overview-card {{ background:var(--panel); border:1px solid var(--line); border-radius:9px;
+  padding:13px 14px }}
+.overview-card strong {{ color:var(--muted); font-size:11px; font-weight:600 }}
+.overview-card span {{ display:block; margin-top:2px; color:var(--text); font-size:22px;
+  font-weight:650; font-variant-numeric:tabular-nums }}
+.overview-panels {{ display:grid; grid-template-columns:minmax(0,1.5fr) minmax(260px,1fr);
+  gap:10px; margin-top:10px }}
+.overview-panel h3 {{ margin:0 0 3px; font-size:15px }}
+.directory-grid {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+  gap:7px; margin-top:12px }}
+.directory-item {{ display:flex; justify-content:space-between; gap:8px; padding:8px 10px;
+  color:var(--text); background:var(--panel-2); border:1px solid transparent; border-radius:7px;
+  text-align:left; cursor:pointer }}
+.directory-item:hover {{ border-color:var(--accent); background:var(--accent-soft) }}
 .directory-item span {{ color:var(--accent); font-variant-numeric:tabular-nums }}
-.recent-list {{ margin:0; padding-left:24px }} .recent-list li {{ margin:8px 0 }}
+.recent-list {{ margin:0; padding-left:20px }} .recent-list li {{ margin:5px 0 }}
 .recent-list small {{ display:block; color:var(--muted) }}
-.recent-opened {{ display:block; width:100%; margin:5px 0; padding:8px 10px; color:var(--text);
-  background:#202b47; border:1px solid var(--line); border-radius:7px; text-align:left;
+.recent-opened {{ display:block; width:100%; margin:4px 0; padding:7px 9px; color:var(--text);
+  background:var(--panel-2); border:1px solid transparent; border-radius:7px; text-align:left;
   cursor:pointer }}
-.recent-opened:hover {{ background:#293859 }}
+.recent-opened:hover {{ border-color:var(--line) }}
 .recent-opened small {{ display:block; color:var(--muted) }}
-.quick-links {{ display:grid; gap:8px }} .quick-link {{ display:block; padding:10px 12px;
-  color:var(--accent-2); background:#202b47; border:1px solid var(--line); border-radius:7px;
-  text-decoration:none }} .quick-link:hover {{ background:#293859 }}
-.wiki-layout {{ display:grid; grid-template-columns:minmax(250px,310px) minmax(0,1fr);
-  gap:14px; align-items:start }}
-.wiki-list {{ position:sticky; top:64px; max-height:calc(100vh - 88px); overflow:auto }}
-.wiki-search {{ width:100%; margin-bottom:10px; padding:10px 12px; color:var(--text);
-  background:#080d19; border:1px solid var(--line); border-radius:8px }}
-.wiki-group {{ margin:8px 0; border:1px solid var(--line); border-radius:8px; overflow:hidden }}
-.wiki-group summary {{ padding:9px 10px; background:var(--panel-2); font-size:13px }}
-.wiki-result {{ display:block; width:100%; padding:10px; color:var(--text); background:none;
-  border:0; border-bottom:1px solid var(--line); text-align:left; cursor:pointer }}
-.wiki-result:hover,.wiki-result[aria-selected="true"] {{ background:#202b47 }}
-.wiki-result small {{ display:block; color:var(--muted) }}
-.wiki-reader {{ min-height:320px; min-width:0 }} .wiki-page[hidden] {{ display:none }}
-.wiki-page h3 {{ margin-top:0; font-size:24px }} .wiki-meta {{ display:flex;
-  flex-wrap:wrap; gap:8px;
-  align-items:center }} .wiki-meta code {{ color:var(--muted) }}
-.page-meta {{ margin:8px 0 14px; border:1px solid var(--line); border-radius:7px }}
-.page-meta summary {{ padding:7px 10px; font-size:12px }}
-.page-meta .wiki-meta {{ padding:0 10px 9px }}
-.page-outline {{ margin:14px 0; padding:10px 12px; background:var(--panel-2);
-  border-left:3px solid var(--accent-2) }}
-.page-outline strong {{ display:block; margin-bottom:5px }}
-.page-outline a {{ display:block; margin:3px 0; color:var(--accent-2); text-decoration:none }}
-.page-outline a:hover {{ text-decoration:underline }}
-.page-summary {{ margin:16px 0; padding:12px 14px; border-left:3px solid var(--accent);
-  background:var(--panel-2); color:var(--text) }}
-.wiki-evidence {{ display:flex; flex-wrap:wrap; gap:6px; margin:16px 0; padding:10px 0;
-  border-top:1px solid var(--line); border-bottom:1px solid var(--line) }}
-.evidence-chip {{ display:inline-flex; flex-direction:column; gap:1px; padding:6px 8px;
-  background:#202b47; border:1px solid var(--line); border-radius:7px; font-size:12px }}
+.wiki-section {{ padding-top:26px }}
+.wiki-layout {{ display:grid; grid-template-columns:280px minmax(0,1fr); gap:0;
+  min-height:70vh; background:var(--panel); border:1px solid var(--line); border-radius:12px;
+  box-shadow:var(--shadow); overflow:clip }}
+.wiki-list {{ position:sticky; top:80px; align-self:start; height:calc(100vh - 104px);
+  padding:14px 10px; overflow:auto; background:var(--panel-2); border-right:1px solid var(--line) }}
+.explorer-head {{ display:flex; align-items:center; justify-content:space-between;
+  padding:2px 5px 10px }}
+.explorer-head strong {{ font-size:13px }}
+.explorer-head span {{ color:var(--muted); font-size:11px }}
+.wiki-search {{ width:100%; margin-bottom:9px; padding:9px 10px; color:var(--text);
+  background:var(--panel); border:1px solid var(--line); border-radius:7px; outline:0 }}
+.wiki-search:focus,.global-search:focus {{ border-color:var(--accent) }}
+.search-status {{ min-height:20px; padding:0 5px 5px; color:var(--muted); font-size:11px }}
+.wiki-group {{ margin:5px 0; border:0 }}
+.wiki-group summary {{ display:flex; justify-content:space-between; padding:7px 6px;
+  color:var(--muted); font-size:11px; font-weight:700; letter-spacing:.04em;
+  text-transform:uppercase }}
+.wiki-result {{ display:block; width:100%; margin:2px 0; padding:8px 9px; color:var(--text);
+  background:transparent; border:0; border-radius:7px; text-align:left; cursor:pointer }}
+.wiki-result:hover {{ background:color-mix(in srgb,var(--accent-soft) 55%,transparent) }}
+.wiki-result[aria-selected="true"] {{ color:var(--accent); background:var(--accent-soft);
+  box-shadow:inset 3px 0 var(--accent) }}
+.wiki-result strong {{ display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }}
+.wiki-result small {{ display:block; overflow:hidden; color:var(--muted); font-size:11px;
+  text-overflow:ellipsis; white-space:nowrap }}
+.wiki-reader {{ min-width:0; min-height:520px }}
+.wiki-page {{ display:grid; grid-template-columns:minmax(0,820px) 220px;
+  justify-content:center; gap:48px; padding:38px 40px 64px }}
+.wiki-page[hidden] {{ display:none }}
+.wiki-content {{ min-width:0 }}
+.page-kicker {{ margin-bottom:8px; color:var(--accent); font-size:11px; font-weight:700;
+  letter-spacing:.08em }}
+.wiki-page-title {{ margin:0; color:var(--text); font-size:34px; line-height:1.2;
+  letter-spacing:-.03em }}
+.page-summary {{ margin:16px 0 22px; padding:13px 15px; background:var(--accent-soft);
+  border-left:3px solid var(--accent); border-radius:0 7px 7px 0 }}
+.page-rail {{ position:sticky; top:88px; align-self:start; max-height:calc(100vh - 112px);
+  padding-top:4px; overflow:auto }}
+.page-outline {{ margin:0 0 20px; padding:0 0 16px; border-bottom:1px solid var(--line) }}
+.page-outline strong,.evidence-title {{ display:block; margin-bottom:7px; color:var(--muted);
+  font-size:11px; letter-spacing:.06em; text-transform:uppercase }}
+.page-outline a {{ display:block; margin:5px 0; color:var(--muted); font-size:12px;
+  line-height:1.4; text-decoration:none }}
+.page-outline a:hover {{ color:var(--accent) }}
+.page-outline .toc-level-3 {{ padding-left:10px }}
+.wiki-evidence {{ display:grid; gap:6px }}
+.evidence-chip {{ display:flex; flex-direction:column; gap:1px; padding:7px 8px;
+  background:var(--panel-2); border:1px solid var(--line); border-radius:7px; font-size:11px }}
+.evidence-chip strong {{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap }}
 .evidence-chip small {{ color:var(--muted) }}
-.wiki-markdown {{ max-width:950px;
-  font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-  line-height:1.7 }} .wiki-markdown h1,.wiki-markdown h2,.wiki-markdown h3,.wiki-markdown h4,
-.wiki-markdown h5,.wiki-markdown h6 {{ color:var(--text); border:0;
-  margin:1.3em 0 .45em; padding:0 }}
-.wiki-markdown p {{ margin:.7em 0 }} .wiki-markdown ul,.wiki-markdown ol {{ padding-left:24px }}
-.wiki-markdown li {{ margin:3px 0 }} .wiki-markdown code {{ padding:2px 4px;
-  background:#202b47; border-radius:4px }}
-.wiki-markdown pre {{ margin:12px 0; font-family:ui-monospace,SFMono-Regular,Menlo,monospace }}
-.wiki-markdown pre code {{ padding:0; background:transparent }} .md-link {{ color:var(--accent-2) }}
-.citation-ref {{ color:var(--accent-2) }}
-.citation-details {{ margin-top:18px; padding:0 12px; background:var(--panel-2);
+.wiki-markdown {{ color:var(--text); font-size:16px; line-height:1.8 }}
+.wiki-markdown h1,.wiki-markdown h2,.wiki-markdown h3,.wiki-markdown h4,
+.wiki-markdown h5,.wiki-markdown h6 {{ color:var(--text); border:0; line-height:1.35;
+  margin:1.7em 0 .55em; padding:0; scroll-margin-top:82px }}
+.wiki-markdown h2 {{ padding-bottom:7px; border-bottom:1px solid var(--line); font-size:23px }}
+.wiki-markdown h3 {{ font-size:19px }}
+.wiki-markdown p {{ margin:.8em 0 }}
+.wiki-markdown ul,.wiki-markdown ol {{ padding-left:24px }}
+.wiki-markdown li {{ margin:4px 0 }}
+.wiki-markdown code {{ padding:2px 5px; background:var(--code); border:1px solid var(--line);
+  border-radius:4px; font-size:.88em }}
+.wiki-markdown pre {{ margin:16px 0; overflow:auto }}
+.wiki-markdown pre code {{ padding:0; background:transparent; border:0 }}
+.md-link,.citation-ref {{ color:var(--link) }}
+.citation-details {{ margin-top:22px; padding:0 12px; background:var(--panel-2);
   border:1px solid var(--line); border-radius:8px }}
 .citation-details pre {{ margin:0 0 12px; color:var(--muted) }}
+.page-meta {{ margin-top:30px; border-top:1px solid var(--line) }}
+.page-meta summary {{ padding:12px 0; color:var(--muted); font-size:12px }}
+.wiki-meta {{ display:flex; flex-wrap:wrap; gap:8px; align-items:center }}
+.wiki-meta code {{ color:var(--muted) }}
 .source-identity {{ margin:8px 0 }} .source-identity code {{ display:block; padding:7px 9px;
-  background:#080d19; border-radius:6px }}
-@media (max-width:760px) {{ .wiki-layout {{ grid-template-columns:1fr }}
+  background:var(--code); border-radius:6px }}
+.audit-shell {{ margin-top:28px }}
+.audit-shell>details {{ background:var(--panel); border:1px solid var(--line); border-radius:10px }}
+.audit-shell>details>summary {{ display:flex; justify-content:space-between; padding:14px 16px;
+  color:var(--text); font-weight:650 }}
+.audit-content {{ padding:0 16px 18px }}
+.secondary-section {{ padding-top:8px }}
+.secondary-section h2 {{ margin:22px 0 10px; font-size:17px }}
+.secondary-section>details {{ background:var(--panel-2); border:1px solid var(--line);
+  border-radius:8px; padding:0 12px }}
+.quick-links {{ display:grid; gap:8px }}
+.quick-link {{ display:block; padding:10px 12px; color:var(--link); background:var(--panel-2);
+  border:1px solid var(--line); border-radius:7px; text-decoration:none }}
+body.reader-mode #overview,body.reader-mode .site-nav,body.reader-mode .wiki-list,
+body.reader-mode .page-rail,body.reader-mode .audit-shell {{ display:none }}
+body.reader-mode .site-header {{ grid-template-columns:auto minmax(240px,720px) auto }}
+body.reader-mode .wiki-section {{ padding-top:10px }}
+body.reader-mode .wiki-layout {{ display:block; background:transparent; border:0; box-shadow:none }}
+body.reader-mode .wiki-page {{ display:block; max-width:820px; margin:auto; padding-top:32px }}
+body.reader-mode .wiki-page[hidden] {{ display:none }}
+@media (max-width:1180px) {{
+  .site-header {{ grid-template-columns:auto minmax(220px,1fr) auto }}
+  .site-nav {{ display:none }}
+  .wiki-page {{ grid-template-columns:minmax(0,820px); padding:34px 36px }}
+  .page-rail {{ display:none }}
+}}
+@media (max-width:780px) {{
+  .site-header {{ grid-template-columns:auto minmax(0,1fr) auto; gap:9px; padding:8px 12px }}
+  .brand-copy,.search-shortcut,.header-actions .reader-toggle {{ display:none }}
+  .explorer-toggle {{ display:inline-flex }}
+  .portal-main {{ padding:14px 12px 48px }}
+  .overview-grid {{ grid-template-columns:repeat(2,1fr) }}
   .overview-panels {{ grid-template-columns:1fr }}
-  .wiki-list {{ position:static; max-height:42vh }} nav {{ position:static }}
-  main {{ padding:16px 12px 56px }} }}
+  .section-heading {{ align-items:start }}
+  .wiki-layout {{ display:block; overflow:visible }}
+  .wiki-list {{ display:none }}
+  body.explorer-open {{ overflow:hidden }}
+  body.explorer-open .wiki-list {{ position:fixed; z-index:30; inset:64px 0 0; display:block;
+    width:100%; height:auto; max-height:none; border:0; border-radius:0 }}
+  .wiki-page {{ display:block; padding:28px 20px 48px }}
+  .wiki-page[hidden] {{ display:none }}
+  .wiki-page-title {{ font-size:29px }}
+}}
 </style>
 </head>
-<body><main>
-<header class="portal-header">
-<div class="kicker">MemoryForge · 本机只读</div>
-<h1>我的技术 Wiki</h1>
-<p class="muted">代码、项目资料和 AI 对话集中到一处。先找页面，再按需查看依据。</p>
-<details class="commit"><summary>知识快照 {_h(short_commit)}</summary>
-<code>{_h(snapshot["workspace_commit"])}</code></details>
-<div class="personal-search"><label for="global-search">查找记忆</label>
-<div class="search-row"><input id="global-search" class="global-search" type="search"
-placeholder="搜索项目、AI 对话、代码或关键词"><button id="global-search-button"
-class="search-button" type="button">检索</button></div>
-<small class="muted">按 Enter，或使用 ⌘K / Ctrl+K 聚焦搜索。</small></div>
+<body>
+<header class="site-header">
+<a class="brand" href="#overview"><span class="brand-mark">MF</span>
+<span class="brand-copy">MemoryForge<small>个人知识库</small></span></a>
+<nav class="site-nav" aria-label="门户导航">{_nav()}</nav>
+<div class="header-search"><input id="global-search" class="global-search" type="search"
+placeholder="搜索全部资料…" aria-label="搜索全部资料"><kbd class="search-shortcut">⌘K</kbd>
+<button id="global-search-button" class="search-button" type="button">搜索</button></div>
+<div class="header-actions">
+<button id="explorer-toggle" class="tool-button explorer-toggle" type="button"
+aria-expanded="false">目录</button>
+<button id="reader-toggle" class="tool-button reader-toggle" type="button"
+aria-pressed="false">阅读</button>
+<button id="theme-toggle" class="tool-button" type="button" aria-label="切换明暗主题">主题</button>
+</div>
 </header>
-<nav aria-label="门户导航">{_nav()}</nav>
-<section id="overview"><h2>概览</h2>{overview_section}</section>
-<section id="wiki"><h2>Wiki 页面树</h2><p class="muted">按标题、来源路径或正文搜索；
-选择页面查看渲染后的 Markdown 与依据。</p>
+<main class="portal-main">
+<section id="overview">
+<div class="section-heading"><div><span class="eyebrow">知识库概览</span>
+<h1>我的技术知识库</h1><p>浏览项目、笔记、代码知识和已审核的 AI 对话。</p></div>
+<details class="commit"><summary>快照 {_h(short_commit)}</summary>
+<code>{_h(snapshot["workspace_commit"])}</code></details></div>
+{overview_section}</section>
+<section id="wiki" class="wiki-section">
+<div class="section-heading"><div><span class="eyebrow">资料浏览</span>
+<h2>资料库</h2><p>左侧选择资料，中间专注阅读，右侧快速定位章节和证据。</p></div></div>
 {_pages_html(pages)}</section>
+<section id="audit" class="audit-shell"><details><summary>
+<span>审计与系统信息</span><span class="muted">来源、变更、查询和评测</span></summary>
+<div class="audit-content">
 <section id="sources" class="secondary-section"><h2>来源与版本</h2>
 <details><summary>来源登记 · {_h(len(sources))} 个来源</summary>
 {sources_section}</details></section>
@@ -719,6 +834,7 @@ class="search-button" type="button">检索</button></div>
 <details><summary>查看评测案例</summary>{_failures_html(benchmark)}</details></section>
 <section id="architecture" class="secondary-section"><h2>代码 Wiki 架构</h2>
 <details><summary>查看生成的架构</summary>{architecture_section}</details></section>
+</div></details></section>
 </main>{_portal_script()}</body></html>
 """
 
@@ -727,11 +843,9 @@ def _nav() -> str:
     return " ".join(
         f'<a href="#{identifier}">{_h(label)}</a>'
         for identifier, label in (
-            ("overview", "首页"),
-            ("wiki", "Wiki"),
-            ("query-trace", "查询"),
-            ("architecture", "架构"),
-            ("sources", "来源与审计"),
+            ("overview", "概览"),
+            ("wiki", "资料库"),
+            ("audit", "审计"),
         )
     )
 
@@ -741,7 +855,13 @@ def _overview_html(snapshot: dict[str, Any]) -> str:
     group_counts: dict[str, int] = defaultdict(int)
     project_counts: dict[str, int] = defaultdict(int)
     for page in pages:
-        group_counts[_page_group(str(page["title"]), page.get("repositories"))] += 1
+        group_counts[
+            _page_group(
+                str(page["title"]),
+                page.get("repositories"),
+                page_path=str(page["path"]),
+            )
+        ] += 1
         project = _page_project(page.get("repositories"))
         if project:
             project_counts[project] += 1
@@ -762,19 +882,31 @@ def _overview_html(snapshot: dict[str, Any]) -> str:
         if updated:
             title = str(page["title"])
             recent.append(
-                (updated, _display_title(title), _page_group(title, page.get("repositories")))
+                (
+                    updated,
+                    _display_title(title),
+                    _page_group(
+                        title,
+                        page.get("repositories"),
+                        page_path=str(page["path"]),
+                    ),
+                )
             )
     recent_items = "".join(
         f"<li><strong>{_h(title)}</strong><small>{_h(group)} · {_h(updated)}</small></li>"
         for updated, title, group in sorted(recent, reverse=True)[:6]
     )
     recent_html = f'<ol class="recent-list">{recent_items}</ol>' if recent_items else _empty()
-    ordered_groups = ([("AI 对话", ai_count, "AI 对话", "group")] if ai_count else []) + [
-        (f"项目 · {name}", count, name, "project")
-        for name, count in sorted(project_counts.items(), key=lambda item: (-item[1], item[0]))
-    ]
+    ordered_groups = (
+        ([("代码知识", code_count, "代码 ·", "prefix")] if code_count else [])
+        + ([("AI 对话", ai_count, "AI 对话", "group")] if ai_count else [])
+        + [
+            (f"项目 · {name}", count, name, "project")
+            for name, count in sorted(project_counts.items(), key=lambda item: (-item[1], item[0]))
+        ]
+    )
     if other_count:
-        ordered_groups.append(("专题与文档", other_count, "", "text"))
+        ordered_groups.append(("专题与文档", other_count, "", "other"))
     directory_html = "".join(
         f'<button class="directory-item" type="button" data-wiki-filter="{_h(filter_value)}" '
         f'data-wiki-filter-mode="{mode}">'
@@ -788,7 +920,7 @@ def _overview_html(snapshot: dict[str, Any]) -> str:
             for label, value in values
         )
         + '</div><div class="overview-panels">'
-        + '<article class="card overview-panel"><h3>你的 Wiki 目录</h3>'
+        + '<article class="card overview-panel"><h3>知识库目录</h3>'
         + '<p class="muted">按项目和内容类型整理。完整目录在下方页面树。</p>'
         + f'<div class="directory-grid">{directory_html}</div></article>'
         + '<article class="card overview-panel"><h3>最近打开</h3>'
@@ -840,7 +972,11 @@ def _pages_html(pages: list[dict[str, Any]]) -> str:
         selected = "true" if index == 0 else "false"
         hidden = "" if index == 0 else " hidden"
         target = f"wiki-page-{index}"
-        page_group = _page_group(str(page["title"]), page.get("repositories"))
+        page_group = _page_group(
+            str(page["title"]),
+            page.get("repositories"),
+            page_path=str(page["path"]),
+        )
         page_project = _page_project(page.get("repositories"))
         groups[page_group].append(target)
         display_title = _display_title(str(page["title"]))
@@ -888,34 +1024,46 @@ def _pages_html(pages: list[dict[str, Any]]) -> str:
         outline = _markdown_outline(body, target)
         readers.append(
             f'<article class="wiki-page" id="{target}"{hidden}>'
-            f"<h3>{_h(display_title)}</h3>{summary_html}{page_meta}{outline}"
-            f'<div class="wiki-evidence"><span class="muted">依据来源</span>{sources}</div>'
-            f'<div class="wiki-markdown">'
-            f"{_markdown_html(body, heading_prefix=target)}</div></article>"
+            f'<div class="wiki-content"><div class="page-kicker">{_h(page_group)}</div>'
+            f'<h1 class="wiki-page-title">{_h(display_title)}</h1>{summary_html}'
+            f'<div class="wiki-markdown">{_markdown_html(body, heading_prefix=target)}</div>'
+            f'{page_meta}</div><aside class="page-rail">{outline}'
+            f'<div class="wiki-evidence"><span class="evidence-title">依据来源</span>'
+            f"{sources}</div></aside></article>"
         )
     result_by_target = {f"wiki-page-{index}": result for index, result in enumerate(results)}
     grouped_results = [
-        f'<details class="wiki-group" data-wiki-group{(" open" if group == "AI 对话" else "")}>'
+        f'<details class="wiki-group" data-wiki-group{" open" if index == 0 else ""}>'
         f"<summary>{_h(group)} "
         f'<span class="muted">· {len(targets)}</span></summary>'
         + "".join(result_by_target[target] for target in targets)
         + "</details>"
-        for group, targets in sorted(groups.items())
+        for index, (group, targets) in enumerate(sorted(groups.items()))
     ]
     return (
-        '<div class="wiki-layout"><aside class="card wiki-list">'
-        '<label for="wiki-search"><strong>Wiki 页面</strong></label>'
+        '<div class="wiki-layout"><aside class="wiki-list">'
+        f'<div class="explorer-head"><strong>资料目录</strong><span>{len(pages)} 页</span></div>'
         '<input id="wiki-search" class="wiki-search" type="search" '
-        'placeholder="搜索标题、路径或正文">'
+        'placeholder="筛选当前资料库…" aria-label="筛选当前资料库">'
+        '<div id="wiki-search-status" class="search-status" aria-live="polite"></div>'
         '<div id="wiki-results">' + "".join(grouped_results) + "</div>"
-        '<p id="wiki-no-results" class="muted" hidden>没有匹配的 Wiki 页面。</p>'
-        '</aside><div class="card wiki-reader">' + "".join(readers) + "</div></div>"
+        '<p id="wiki-no-results" class="muted" hidden>没有匹配的知识页面。</p>'
+        '</aside><div class="wiki-reader">' + "".join(readers) + "</div></div>"
     )
 
 
-def _page_group(title: str, repositories: list[dict[str, Any]] | None = None) -> str:
-    if title.startswith("Code:") or title.startswith("Code module:"):
-        path = title.split(":", 1)[1].strip()
+def _page_group(
+    title: str,
+    repositories: list[dict[str, Any]] | None = None,
+    *,
+    page_path: str = "",
+) -> str:
+    if page_path.startswith("wiki/pages/code/") or title.startswith(("Code:", "Code module:")):
+        if title.startswith(("Code:", "Code module:")):
+            path = title.split(":", 1)[1].strip()
+        else:
+            parts = page_path.split("/")
+            path = "/".join(parts[4:]) if len(parts) > 4 else title
         root = path.split("/", 1)[0] or "root"
         repository_names = sorted(
             str(repository["name"]) for repository in repositories or [] if repository.get("name")
@@ -981,11 +1129,38 @@ def _display_wiki_text(value: str) -> str:
     translated_title = _display_title(value)
     if translated_title != value:
         return translated_title
-    if value == "Code outline":
-        return "代码结构"
-    if value == "Verified facts":
-        return "已验证事实"
+    exact = {
+        "Architecture": "架构关系",
+        "Child modules": "子模块",
+        "Code outline": "代码结构",
+        "Model summary (unverified)": "模型摘要（未验证）",
+        "Module": "模块信息",
+        "Related pages": "相关页面",
+        "Sources": "证据来源",
+        "Verified dependencies": "已验证依赖",
+        "Verified facts": "已验证事实",
+        "Verified symbols": "已验证符号",
+        "This page is generated from the deterministic module hierarchy.": (
+            "本页由确定性模块层级生成。"
+        ),
+    }
+    if value in exact:
+        return exact[value]
+    symbol_summary = re.fullmatch(r"(\d+) verified code symbols in module (.+)\.", value)
+    if symbol_summary is not None:
+        return f"模块 {symbol_summary.group(2)} 包含 {symbol_summary.group(1)} 个已验证代码符号。"
+    navigation_summary = re.fullmatch(
+        r"Navigation for deterministic code module (.+)\.",
+        value,
+    )
+    if navigation_summary is not None:
+        return f"确定性代码模块 {navigation_summary.group(1)} 的导航页。"
     for prefix, label in (
+        ("Verified symbols:", "已验证符号数："),
+        ("Languages:", "语言："),
+        ("Language:", "语言："),
+        ("Path:", "路径："),
+        ("File:", "文件："),
         ("Python code:", "Python 代码："),
         ("Go code:", "Go 代码："),
         ("Markdown document:", "Markdown 文档："),
@@ -993,7 +1168,23 @@ def _display_wiki_text(value: str) -> str:
     ):
         if value.startswith(prefix):
             return label + value[len(prefix) :].strip()
-    return value
+    translated = value
+    for original, label in (
+        (" (calls):", "（调用）："),
+        (" (imports):", "（导入）："),
+        (" (contains):", "（包含）："),
+        (" (inherits):", "（继承）："),
+        (" (implements):", "（实现）："),
+        (" (references):", "（引用）："),
+        (" (package):", "（包）："),
+        (" (struct):", "（结构体）："),
+        (" (function):", "（函数）："),
+        (" (method):", "（方法）："),
+        (" (module):", "（模块）："),
+        (" (class):", "（类）："),
+    ):
+        translated = translated.replace(original, label)
+    return translated
 
 
 def _without_duplicate_title(markdown: str, title: str) -> str:
@@ -1033,10 +1224,11 @@ def _markdown_outline(markdown: str, prefix: str) -> str:
     if not headings:
         return ""
     links = "".join(
-        f'<a href="#{prefix}-heading-{index}">{_markdown_inline(_display_wiki_text(text))}</a>'
-        for index, (_, text) in enumerate(headings)
+        f'<a class="toc-level-{min(level, 3)}" href="#{prefix}-heading-{index}">'
+        f"{_markdown_inline(_display_wiki_text(text))}</a>"
+        for index, (level, text) in enumerate(headings)
     )
-    return f'<nav class="page-outline" aria-label="页面结构"><strong>页面结构</strong>{links}</nav>'
+    return f'<nav class="page-outline" aria-label="页面结构"><strong>本页目录</strong>{links}</nav>'
 
 
 def _markdown_headings(markdown: str) -> list[tuple[int, str]]:
@@ -1072,7 +1264,8 @@ def _markdown_html(markdown: str, *, heading_prefix: str = "") -> str:
 
     def flush_paragraph() -> None:
         if paragraph:
-            output.append(f"<p>{_markdown_inline(' '.join(paragraph), footnote_numbers)}</p>")
+            text = _display_wiki_text(" ".join(paragraph))
+            output.append(f"<p>{_markdown_inline(text, footnote_numbers)}</p>")
             paragraph.clear()
 
     def close_list() -> None:
@@ -1136,7 +1329,7 @@ def _markdown_html(markdown: str, *, heading_prefix: str = "") -> str:
                 list_kind = kind
             match = bullet if bullet is not None else numbered
             assert match is not None
-            item = match.group(1)
+            item = _display_wiki_text(match.group(1))
             output.append(f"<li>{_markdown_inline(item, footnote_numbers)}</li>")
             continue
         close_list()
@@ -1147,14 +1340,15 @@ def _markdown_html(markdown: str, *, heading_prefix: str = "") -> str:
     close_list()
     if footnotes:
         citation_text = "\n".join(
-            f"{number}. {text.replace('`', '')}"
+            f"{number}. "
+            f"{_display_wiki_text(text.replace('source ', '来源 ').replace('revision ', '版本 '))}"
             for number, (_, text) in enumerate(footnotes, start=1)
         )
         output.append(
             f'<details class="citation-details"><summary>引用详情 · {len(footnotes)} 条</summary>'
             f"<pre>{_h(citation_text)}</pre></details>"
         )
-    return "".join(output) or '<p class="muted">Wiki 页面为空。</p>'
+    return "".join(output) or '<p class="muted">知识页面为空。</p>'
 
 
 def _markdown_inline(
@@ -1188,11 +1382,22 @@ const wikiPages = new Map(wikiButtons.map(button => [
 const wikiSearch = document.getElementById('wiki-search');
 const globalSearch = document.getElementById('global-search');
 const recentOpened = document.getElementById('recent-opened-list');
+const searchStatus = document.getElementById('wiki-search-status');
+const themeButton = document.getElementById('theme-toggle');
+const readerButton = document.getElementById('reader-toggle');
+const explorerButton = document.getElementById('explorer-toggle');
 const recentKey = 'memoryforge-recent-wiki-v1';
-function selectWiki(button) {
+const themeKey = 'memoryforge-theme';
+const readerKey = 'memoryforge-reader-mode';
+function selectWiki(button, { updateHash = true, remember = true } = {}) {
   wikiButtons.forEach(item => item.setAttribute('aria-selected', String(item === button)));
   wikiPages.forEach((page, id) => { page.hidden = id !== button.dataset.wikiTarget; });
-  recordRecent(button.dataset.wikiKey);
+  if (remember) recordRecent(button.dataset.wikiKey);
+  if (updateHash) {
+    history.replaceState(null, '', `#page=${encodeURIComponent(button.dataset.wikiKey)}`);
+  }
+  document.body.classList.remove('explorer-open');
+  explorerButton?.setAttribute('aria-expanded', 'false');
 }
 wikiButtons.forEach(button => button.addEventListener('click', () => selectWiki(button)));
 function applyWikiSearch(value, mode = 'text') {
@@ -1203,6 +1408,11 @@ function applyWikiSearch(value, mode = 'text') {
     let matches = searchable.includes(query);
     if (mode === 'project') matches = button.dataset.wikiProject === value;
     if (mode === 'group') matches = button.dataset.wikiGroup === value;
+    if (mode === 'prefix') matches = button.dataset.wikiGroup.startsWith(value);
+    if (mode === 'other') {
+      matches = button.dataset.wikiGroup !== 'AI 对话' &&
+        !button.dataset.wikiGroup.startsWith('代码 ·');
+    }
     button.hidden = !matches;
   });
   wikiGroups.forEach(group => {
@@ -1211,6 +1421,8 @@ function applyWikiSearch(value, mode = 'text') {
   });
   const visible = wikiButtons.filter(button => !button.hidden);
   document.getElementById('wiki-no-results').hidden = visible.length !== 0;
+  if (searchStatus) searchStatus.textContent = query || mode !== 'text'
+    ? `${visible.length} 个匹配页面` : '';
   if (visible.length) {
     const selected = visible.find(button => button.getAttribute('aria-selected') === 'true');
     const next = selected || visible[0];
@@ -1228,7 +1440,7 @@ function jumpToSearch() {
   if (!wikiSearch || !globalSearch) return;
   wikiSearch.value = globalSearch.value;
   applyWikiSearch(globalSearch.value);
-  document.getElementById('wiki')?.scrollIntoView({ behavior: 'smooth' });
+  document.getElementById('wiki')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   wikiSearch.focus({ preventScroll: true });
 }
 globalSearch?.addEventListener('input', event => applyWikiSearch(event.target.value));
@@ -1250,6 +1462,35 @@ document.addEventListener('keydown', event => {
   if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
     event.preventDefault(); globalSearch?.focus();
   }
+  if (event.key === '/' && !['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) {
+    event.preventDefault(); globalSearch?.focus();
+  }
+  if (event.key === 'Escape') {
+    document.body.classList.remove('explorer-open');
+    explorerButton?.setAttribute('aria-expanded', 'false');
+  }
+});
+function currentTheme() {
+  if (document.documentElement.dataset.theme) return document.documentElement.dataset.theme;
+  return matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+themeButton?.addEventListener('click', () => {
+  const theme = currentTheme() === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = theme;
+  try { localStorage.setItem(themeKey, theme); } catch (_) {}
+});
+function setReaderMode(active) {
+  document.body.classList.toggle('reader-mode', active);
+  readerButton?.setAttribute('aria-pressed', String(active));
+}
+readerButton?.addEventListener('click', () => {
+  const active = !document.body.classList.contains('reader-mode');
+  setReaderMode(active);
+  try { localStorage.setItem(readerKey, String(active)); } catch (_) {}
+});
+explorerButton?.addEventListener('click', () => {
+  const active = document.body.classList.toggle('explorer-open');
+  explorerButton.setAttribute('aria-expanded', String(active));
 });
 function readRecent() {
   try {
@@ -1280,7 +1521,7 @@ function renderRecent(ids = readRecent()) {
     const recent = document.createElement('button');
     recent.className = 'recent-opened'; recent.type = 'button';
     const title = document.createElement('strong');
-    title.textContent = source.querySelector('strong')?.textContent || 'Wiki 页面';
+    title.textContent = source.querySelector('strong')?.textContent || '知识页面';
     const path = document.createElement('small');
     path.textContent = source.querySelector('small')?.textContent || '';
     recent.append(title, path);
@@ -1291,7 +1532,17 @@ function renderRecent(ids = readRecent()) {
     recentOpened.appendChild(recent);
   });
 }
+try { setReaderMode(localStorage.getItem(readerKey) === 'true'); } catch (_) {}
 renderRecent();
+const initialPath = location.hash.startsWith('#page=')
+  ? decodeURIComponent(location.hash.slice(6)) : '';
+const initialButton = wikiButtons.find(button => button.dataset.wikiKey === initialPath);
+if (initialButton) {
+  selectWiki(initialButton, { updateHash: false, remember: false });
+  initialButton.closest('.wiki-group')?.setAttribute('open', '');
+} else if (wikiButtons[0]) {
+  selectWiki(wikiButtons[0], { updateHash: false, remember: false });
+}
 </script>"""
 
 

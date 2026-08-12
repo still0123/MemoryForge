@@ -26,6 +26,7 @@ class GitSnapshot:
     repository_identity: str
     remote_name: str | None = None
     remote_url: str | None = None
+    branch: str | None = None
 
 
 def scan_git_documentation(
@@ -146,12 +147,15 @@ def snapshot_git_repository(checkout: Path) -> GitSnapshot:
     remote_result = _run_git(repository_root, "config", "--get", "remote.origin.url")
     configured_remote = remote_result.stdout.strip() if remote_result.returncode == 0 else ""
     remote_url = _sanitize_remote_url(configured_remote) or _sanitize_scp_remote(configured_remote)
+    branch_result = _run_git(repository_root, "branch", "--show-current")
+    branch = branch_result.stdout.strip() if branch_result.returncode == 0 else ""
     return GitSnapshot(
         repository_root=repository_root,
         revision=revision_result.stdout.strip(),
         repository_identity=remote_url or str(repository_root),
         remote_name="origin" if remote_url is not None else None,
         remote_url=remote_url,
+        branch=branch or None,
     )
 
 
