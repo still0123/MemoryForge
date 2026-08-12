@@ -81,7 +81,8 @@ The 20 manually labelled questions are frozen in
 `demo/evaluation/code_module_narrative_development.json` and executed by
 `demo/run_code_module_narrative_benchmark.py`. The controlled-provider gate
 covers the full compile, review/apply, projection rebuild, and evaluation path
-at 20/20 with 100% Citation grounding.
+at 20/20 with 100% Citation grounding. Provider fallback is recorded as failed
+coverage instead of aborting the evidence run.
 
 Run a real configured provider with:
 
@@ -91,6 +92,10 @@ python demo/run_code_module_narrative_benchmark.py \
   --output local-evidence/code-module-narrative.json
 ```
 
-No real local model or human fact-coverage run has been executed because the
-current environment has no provider configuration. The `80%` target is
-therefore not reported as achieved.
+On 2026-08-12, a clean-worktree run at commit `354b07ac9192d659d9e264b15fb42f7560c376d7`
+used the local OpenAI-compatible `seed-2.1-turbo` provider. All three parent
+modules synthesized, projection rebuild and lint passed, manually labelled fact
+coverage was 90%, and Citation grounding was 100%. The two uncovered cases were
+`py-purpose` and `py-normalize-flow`: their expected sources were cited, but the
+generated text omitted one required evaluation term. This is a development-set
+result, not a claim about unseen repositories.

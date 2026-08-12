@@ -8,8 +8,10 @@
 - 严格拒绝未知 JSON 字段和越界 Citation；Provider 超时或无效输出保留确定性页面并标记
   `synthesis_status: fallback`。单文件变化只刷新对应叶子及其祖先说明，删除模块同步清理父级引用。
 - 父模块后序读取直接子模块的已验证叙事；临时 `fallback` 会在下次带 Provider 的编译中重试。
-- 冻结并接通 20 题模块职责/调用流程评测。受控 Provider 门禁为 20/20、Citation grounding
-  100%；真实本地模型因当前环境未配置 Provider，人工事实覆盖率尚未执行，不声明结果。
+- 冻结并接通 20 题模块职责/调用流程评测。受控 Provider 门禁为 20/20；真实
+  `seed-2.1-turbo` 开发集事实覆盖率为 90%、Citation grounding 为 100%。
+- Provider 超时从 30 秒调至 60 秒，覆盖本地模型实测 30 秒以上的正常响应；benchmark 会保留
+  `fallback` 为失败证据，不再因单个模块降级而中断。
 - 完成本项后恢复功能冻结；不增加向量库、知识图谱、公网部署、多用户、群聊或多 Agent。
 
 <!-- memoryforge-release-claim: version=0.4.0; status=released; supported_platforms=macos; macos_passed=656; linux_status=not_rerun; windows_status=not_verified; release_verification=passed -->
