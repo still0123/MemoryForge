@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 from datetime import datetime
 from enum import StrEnum
+from collections.abc import Iterable, Mapping
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -151,7 +152,7 @@ def detect_conflicts(
     conflicts: list[KnowledgeConflict] = []
     existing_list = list(existing_claims)
     pending_list = list(pending)
-    now = datetime.utcnow()
+    now = datetime.now().astimezone()
 
     claims_by_key: dict[str, list[Claim]] = {}
     for claim in existing_list:
@@ -274,6 +275,70 @@ def detect_conflicts(
 
     conflicts.sort(key=lambda c: (c.conflict_id,))
     return tuple(conflicts)
+
+
+def persist_conflicts(connection: Any, conflicts: Iterable[KnowledgeConflict]) -> None:
+    """Persist detected conflicts without overwriting an existing resolution."""
+    for conflict in conflicts:
+        connection.execute(
+            """
+            INSERT INTO knowledge_conflicts (
+                conflict_id, repository_id, page_path, subject_key, kind,
+                left_claim_id, left_source_id, left_source_version, left_locator,
+                right_claim_id, right_source_id, right_source_version, right_locator,
+                detected_at, resolution, resolved_by_changeset_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(conflict_id) DO NOTHING
+            """,
+            (
+                conflict.conflict_id,
+                conflict.repository_id,
+                conflict.page_path,
+                conflict.subject_key,
+                conflict.kind.value,
+                conflict.left.claim_id,
+                conflict.left.source_id,
+                conflict.left.source_version,
+                conflict.left.locator,
+                conflict.right.claim_id,
+                conflict.right.source_id,
+                conflict.right.source_version,
+                conflict.right.locator,
+                conflict.detected_at.isoformat(),
+                conflict.resolution.value,
+                conflict.resolved_by_changeset_id,
+            ),
+        )
+    connection.commit()
+
+
+def conflict_from_row(row: Mapping[str, Any]) -> KnowledgeConflict:
+    return KnowledgeConflict(
+        conflict_id=str(row["conflict_id"]),
+        repository_id=(str(row["repository_id"]) if row["repository_id"] is not None else None),
+        page_path=str(row["page_path"]),
+        subject_key=str(row["subject_key"]),
+        kind=ConflictKind(str(row["kind"])),
+        left=EvidenceRef(
+            claim_id=str(row["left_claim_id"]),
+            source_id=str(row["left_source_id"]),
+            source_version=int(row["left_source_version"]),
+            locator=str(row["left_locator"]),
+        ),
+        right=EvidenceRef(
+            claim_id=str(row["right_claim_id"]),
+            source_id=str(row["right_source_id"]),
+            source_version=int(row["right_source_version"]),
+            locator=str(row["right_locator"]),
+        ),
+        detected_at=datetime.fromisoformat(str(row["detected_at"])),
+        resolution=ConflictResolution(str(row["resolution"])),
+        resolved_by_changeset_id=(
+            str(row["resolved_by_changeset_id"])
+            if row["resolved_by_changeset_id"] is not None
+            else None
+        ),
+    )
 
 
 def resolve_conflict(

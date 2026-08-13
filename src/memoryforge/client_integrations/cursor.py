@@ -7,7 +7,6 @@ from pathlib import Path
 from memoryforge.client_integrations.common import (
     IntegrationPlan,
     IntegrationResult,
-    host_id,
     mcp_command,
     server_name,
 )
@@ -16,8 +15,7 @@ from memoryforge.client_integrations.common import (
 def _cursor_mcp_json_example(workspace: Path, project: Path) -> str:
     agent = "cursor"
     python = Path(sys.executable)
-    hid = host_id(agent, workspace, project)
-    cmd = mcp_command(python, workspace, project, hid, "micro")
+    cmd = mcp_command(python, workspace, project, "micro")
     sname = server_name(agent)
     fragment = {
         "mcpServers": {

@@ -327,32 +327,47 @@ def _relation_lane(
     if not seed_symbol_ids:
         return []
 
-    sym_by_id = {s.get("symbol_id"): s for s in code_symbols if s.get("repository_id") == repository_id}
+    sym_by_id = {
+        str(symbol.get("symbol_id")): symbol
+        for symbol in code_symbols
+        if symbol.get("repository_id") == repository_id and symbol.get("symbol_id")
+    }
+    symbol_id_by_name = {
+        str(symbol.get("qualified_name")): symbol_id
+        for symbol_id, symbol in sym_by_id.items()
+        if symbol.get("qualified_name")
+    }
     fact_by_symbol: dict[str, dict[str, Any]] = {}
     for fact in facts:
         sym = fact.get("symbol")
         if sym:
             fact_by_symbol.setdefault(sym, fact)
 
+    seed_ids = {
+        symbol_id_by_name.get(name, name)
+        for name in seed_symbol_ids
+    }
     related_symbol_ids: set[str] = set()
     for rel in code_relations:
         if rel.get("repository_id") != repository_id:
             continue
         src = rel.get("source_symbol_id", "")
         tgt = rel.get("target_symbol_id", "")
-        if src in seed_symbol_ids:
+        if src in seed_ids:
             related_symbol_ids.add(tgt)
-        if tgt in seed_symbol_ids:
+        if tgt in seed_ids:
             related_symbol_ids.add(src)
 
-    related_symbol_ids.difference_update(seed_symbol_ids)
+    related_symbol_ids.difference_update(seed_ids)
     if not related_symbol_ids:
         return []
 
     hits: list[tuple[dict[str, Any], str]] = []
     for sid in related_symbol_ids:
-        if sid in fact_by_symbol:
-            hits.append((fact_by_symbol[sid], sid))
+        symbol = sym_by_id.get(sid, {})
+        qualified_name = str(symbol.get("qualified_name", sid))
+        if qualified_name in fact_by_symbol:
+            hits.append((fact_by_symbol[qualified_name], sid))
 
     hits.sort(key=lambda x: (x[0]["page_path"], x[0]["locator"], x[1]))
     result: list[tuple[dict[str, Any], int]] = []

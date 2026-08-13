@@ -60,20 +60,17 @@ def test_mcp_command_contains_absolute_paths_and_profile(tmp_path: Path) -> None
     project = tmp_path / "prj"
     workspace.mkdir()
     project.mkdir()
-    hid = host_id("codex", workspace, project)
-    cmd = mcp_command(python, workspace, project, hid, "micro")
+    cmd = mcp_command(python, workspace, project, "micro")
 
     assert cmd[0] == str(python.resolve())
     assert "-m" in cmd
     assert "memoryforge" in cmd
     assert "mcp" in cmd
     assert "--workspace" in cmd
-    assert "--project" in cmd
-    assert "--host-id" in cmd
+    assert "--project-root" in cmd
+    assert "--project" not in cmd
+    assert "--host-id" not in cmd
     assert "--profile" in cmd
-
-    host_idx = cmd.index("--host-id") + 1
-    assert cmd[host_idx] == hid
 
     profile_idx = cmd.index("--profile") + 1
     assert cmd[profile_idx] == "micro"
@@ -82,7 +79,7 @@ def test_mcp_command_contains_absolute_paths_and_profile(tmp_path: Path) -> None
     assert cmd[workspace_idx] == str(workspace.resolve())
     assert Path(cmd[workspace_idx]).is_absolute()
 
-    project_idx = cmd.index("--project") + 1
+    project_idx = cmd.index("--project-root") + 1
     assert cmd[project_idx] == str(project.resolve())
     assert Path(cmd[project_idx]).is_absolute()
 

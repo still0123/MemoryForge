@@ -23,7 +23,10 @@ from memoryforge.workspace import (
     is_generated_navigation_page,
 )
 
-_INDEX_ENTRY = re.compile(r"^- \[[^\]]+\]\((?P<path>[^)]+)\) — .+$", re.MULTILINE)
+_INDEX_ENTRY = re.compile(
+    r"^- \[(?:\\.|[^\]])+\]\((?P<path>[^)]+)\) — .+$",
+    re.MULTILINE,
+)
 _RELATED_PAGE_LINK = re.compile(r"^- \[[^\]]+\]\((?P<path>[^)]+\.md)\)$", re.MULTILINE)
 _PAGE_TYPES = {"entity", "concept", "synthesis"}
 
@@ -40,9 +43,15 @@ class LintPayload(TypedDict):
     issues: list[LintIssue]
 
 
-def lint_workspace(workspace_root: Path) -> LintPayload:
+def lint_workspace(
+    workspace_root: Path,
+    *,
+    evidence_root: Path | None = None,
+    require_navigation: bool = True,
+) -> LintPayload:
     """Check generated pages, citations, and INDEX.md without writing anything."""
     workspace_root = workspace_root.absolute()
+    evidence_root = (evidence_root or workspace_root).absolute()
     wiki_root = workspace_root / "wiki"
     pages_root = wiki_root / "pages"
     issues: list[LintIssue] = []
@@ -64,7 +73,7 @@ def lint_workspace(workspace_root: Path) -> LintPayload:
             )
         )
         return {"status": "issues", "checked_pages": 0, "issues": issues}
-    indexed_paths = _indexed_page_paths(workspace_root, issues)
+    indexed_paths = _indexed_page_paths(workspace_root, issues) if require_navigation else set()
     if issues:
         return {"status": "issues", "checked_pages": 0, "issues": issues}
 
@@ -137,7 +146,7 @@ def lint_workspace(workspace_root: Path) -> LintPayload:
                         issues,
                     )
                     _lint_citations(
-                        workspace_root,
+                        evidence_root,
                         index,
                         relative_path,
                         content,
@@ -145,7 +154,7 @@ def lint_workspace(workspace_root: Path) -> LintPayload:
                         issues,
                     )
                 _lint_related_page_links(relative_path, content, page_paths, issues)
-                if relative_path not in indexed_paths:
+                if require_navigation and relative_path not in indexed_paths:
                     issues.append(
                         _issue(
                             "missing_index_entry",
@@ -176,7 +185,7 @@ def lint_workspace(workspace_root: Path) -> LintPayload:
                 else:
                     _lint_source_freshness(index, relative_path, source_ids, issues)
                 _lint_citations(
-                    workspace_root,
+                    evidence_root,
                     index,
                     relative_path,
                     content,
@@ -184,7 +193,7 @@ def lint_workspace(workspace_root: Path) -> LintPayload:
                     issues,
                 )
             _lint_related_page_links(relative_path, content, page_paths, issues)
-            if relative_path not in indexed_paths:
+            if require_navigation and relative_path not in indexed_paths:
                 issues.append(
                     _issue(
                         "missing_index_entry",
@@ -211,14 +220,15 @@ def lint_workspace(workspace_root: Path) -> LintPayload:
     finally:
         index.close()
 
-    for indexed_path in sorted(indexed_paths - page_paths):
-        issues.append(
-            _issue(
-                "index_missing_page",
-                "wiki/INDEX.md",
-                f"linked page does not exist: {indexed_path}",
+    if require_navigation:
+        for indexed_path in sorted(indexed_paths - page_paths):
+            issues.append(
+                _issue(
+                    "index_missing_page",
+                    "wiki/INDEX.md",
+                    f"linked page does not exist: {indexed_path}",
+                )
             )
-        )
 
     issues.sort(key=lambda issue: (issue["path"], issue["code"], issue["message"]))
     return {

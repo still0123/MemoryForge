@@ -22,15 +22,17 @@ from memoryforge.errors import ChangeSetStoreError, WorkspaceError
 from memoryforge.models import (
     ApprovalReceipt,
     AutomationDecisionReceipt,
+    ChangeOrigin,
     ChangeSet,
     ChangeSetStatus,
     ReviewActorType,
     ReviewReceipt,
+    RiskLevel,
     StagedChangeSet,
     StagedWikiFile,
 )
 from memoryforge.platform_lock import exclusive_posix_directory_lock
-from memoryforge.workspace import Workspace, WorkspaceIntegrityError
+from memoryforge.workspace import Workspace, WorkspaceIntegrityError, _connect
 
 CHANGESET_ID_PATTERN = re.compile(r"^chg_[A-Za-z0-9_-]+$")
 CHANGESET_FILENAME = "changeset.json"
@@ -56,6 +58,26 @@ class StoredChangeSet:
         return self.record.changeset
 
 
+def _proposal_drafts(
+    changeset: ChangeSet,
+    candidate_files: Mapping[str, str],
+) -> tuple[object, ...]:
+    from memoryforge.knowledge_conflicts import ProposalDraft
+
+    origins = {operation.path: operation.origin for operation in changeset.operations}
+    return tuple(
+        ProposalDraft(
+            page_path=path,
+            content=content,
+            citations=changeset.claims,
+            origin=origins.get(path) or ChangeOrigin.AGENT_PROPOSAL,
+            risk=RiskLevel.HIGH,
+        )
+        for path, content in sorted(candidate_files.items())
+        if path.startswith("wiki/pages/") and path.endswith(".md")
+    )
+
+
 class ChangeSetStore:
     """Stores PROPOSED records without writing the stable Wiki tree."""
 
@@ -71,6 +93,7 @@ class ChangeSetStore:
         if changeset.status is not ChangeSetStatus.PROPOSED:
             raise ChangeSetStoreError("New ChangeSets must start in PROPOSED state")
         temp_name = f".{changeset.changeset_id}.{uuid.uuid4().hex}.tmp"
+        detected_conflicts = ()
         try:
             with self._locked_staging() as staging_fd:
                 current_commit = self.workspace.current_commit()
@@ -91,23 +114,7 @@ class ChangeSetStore:
                     ) from exc
 
                 record = self._build_record(changeset, candidate_files)
-                try:
-                    from memoryforge.knowledge_conflicts import detect_conflicts
-                    from memoryforge.knowledge_conflicts import SCHEMA_SQL as _CONFLICT_SCHEMA  # noqa: F401
-
-                    try:
-                        conflicts = detect_conflicts(
-                            candidate=record.proposal if hasattr(record, "proposal") else changeset,
-                            existing_claims=(),
-                        )
-                        if conflicts:
-                            metadata = dict(record.metadata or {})
-                            metadata["open_conflict_ids"] = [c.conflict_id for c in conflicts]
-                            metadata["conflict_count"] = len(conflicts)
-                    except Exception:  # noqa: BLE001
-                        pass
-                except Exception:  # noqa: BLE001
-                    pass
+                detected_conflicts = self._detect_conflicts(changeset, candidate_files)
                 os.mkdir(temp_name, 0o700, dir_fd=staging_fd)
                 temp_fd = os.open(
                     temp_name,
@@ -143,7 +150,13 @@ class ChangeSetStore:
             temporary_path = self.staging_dir / temp_name
             if temporary_path.exists() and not temporary_path.is_symlink():
                 shutil.rmtree(temporary_path)
-        return self.get(changeset.changeset_id)
+        stored = self.get(changeset.changeset_id)
+        if detected_conflicts:
+            from memoryforge.knowledge_conflicts import persist_conflicts
+
+            with _connect(self.workspace.index_path) as connection:
+                persist_conflicts(connection, detected_conflicts)
+        return stored
 
     def get(self, changeset_id: str) -> StoredChangeSet:
         return self._get(changeset_id, require_current_base=True)
@@ -668,6 +681,39 @@ class ChangeSetStore:
             )
         except ValidationError as exc:
             raise ChangeSetStoreError(f"Invalid ChangeSet staging payload: {exc}") from exc
+
+    def _detect_conflicts(
+        self, changeset: ChangeSet, candidate_files: Mapping[str, str]
+    ) -> tuple[object, ...]:
+        from memoryforge.knowledge_conflicts import detect_conflicts
+
+        pending = [
+            draft
+            for stored in self._list_all_for_conflict_detection()
+            if stored.changeset.base_commit == changeset.base_commit
+            for draft in _proposal_drafts(stored.changeset, stored.candidate_files)
+        ]
+        conflicts = []
+        for candidate in _proposal_drafts(changeset, candidate_files):
+            conflicts.extend(
+                detect_conflicts(
+                    candidate=candidate,
+                    existing_claims=changeset.claims,
+                    pending=pending,
+                )
+            )
+        return tuple({conflict.conflict_id: conflict for conflict in conflicts}.values())
+
+    def _list_all_for_conflict_detection(self) -> list[StoredChangeSet]:
+        self.workspace.validate_internal_directory(self.staging_dir)
+        staging_fd = self._open_staging()
+        try:
+            identifiers = sorted(
+                name for name in os.listdir(staging_fd) if CHANGESET_ID_PATTERN.fullmatch(name)
+            )
+        finally:
+            os.close(staging_fd)
+        return [self.get_for_recovery(identifier) for identifier in identifiers]
 
     def _write_record(
         self,

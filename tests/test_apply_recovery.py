@@ -3,12 +3,16 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 import memoryforge.apply_journal as apply_journal_module
+import memoryforge.lifecycle as lifecycle_module
 from memoryforge.apply_journal import ApplyJournalStore
 from memoryforge.changesets import ChangeSetStore
 from memoryforge.cli import app
+from memoryforge.errors import WorkspaceError
+from memoryforge.lifecycle import apply_changeset
 from memoryforge.linting import lint_workspace
 from memoryforge.wiki_facts import parse_page_facts
 from memoryforge.workspace import Workspace, candidate_page_sources
@@ -83,6 +87,33 @@ def test_committed_apply_recovers_projection_and_archive(tmp_path: Path, monkeyp
     assert json.loads((archived / "receipt.json").read_text(encoding="utf-8"))["commit"] == commit
     assert recovered.page_paths_for_source(stored.changeset.source_ids[0])
     assert lint_workspace(workspace)["status"] == "clean"
+
+
+def test_candidate_lint_failure_does_not_mutate_stable_workspace(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runner, workspace, changeset_id = _staged_changeset(tmp_path, monkeypatch)
+    assert (
+        runner.invoke(app, ["review", changeset_id, "--workspace", str(workspace)]).exit_code
+        == 0
+    )
+    assert (
+        runner.invoke(app, ["approve", changeset_id, "--workspace", str(workspace)]).exit_code
+        == 0
+    )
+    before = Workspace.open_readonly(workspace).current_commit()
+    monkeypatch.setattr(
+        lifecycle_module,
+        "lint_workspace",
+        lambda *_args, **_kwargs: {"status": "issues", "checked_pages": 0, "issues": []},
+    )
+
+    with pytest.raises(WorkspaceError, match="stable Workspace was not changed"):
+        apply_changeset(workspace, changeset_id)
+
+    assert Workspace.open_readonly(workspace).current_commit() == before
+    assert not list((workspace / "wiki" / "pages").glob("*.md"))
 
 
 def test_committed_apply_reuses_matching_projection(tmp_path: Path, monkeypatch) -> None:

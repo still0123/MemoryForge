@@ -2518,12 +2518,19 @@ def client_plan(
     try:
         from memoryforge.client_integrations import get_adapter
         adapter = get_adapter(agent)
-        plan = adapter.plan_install(workspace, project, capture_enabled=capture_enabled)
+        plan = adapter.plan_install(workspace, project, capture=capture_enabled)
         if write_config and not dry_run:
             import subprocess
-            for step in getattr(plan, "commands", []):
-                subprocess.run(step, shell=True, check=False)
-        _json_out({"status": "ok", "agent": agent, "plan": plan, "applied": write_config and not dry_run})
+            for step in plan.commands:
+                subprocess.run(step, check=True)
+        _json_out(
+            {
+                "status": "ok",
+                "agent": agent,
+                "plan": plan.model_dump(mode="json"),
+                "applied": write_config and not dry_run,
+            }
+        )
     except Exception as exc:  # noqa: BLE001
         _json_out({"status": "error", "error": str(exc)})
 
@@ -2567,7 +2574,17 @@ def capture_drain(workspace: Annotated[Path, typer.Option("--workspace", "-w")] 
         db = workspace_database(workspace)
         with _connect(db) as conn:
             result = drain_capture_spool(workspace, conn)
-        _json_out({"status": "ok", "result": result})
+        _json_out(
+            {
+                "status": "ok",
+                "result": {
+                    "processed": result.processed,
+                    "failed": result.failed,
+                    "skipped_duplicates": result.skipped_duplicates,
+                    "errors": list(result.errors),
+                },
+            }
+        )
     except Exception as exc:  # noqa: BLE001
         _json_out({"status": "error", "error": str(exc)})
 
@@ -2581,9 +2598,18 @@ def capture_handoff(
 ) -> None:
     """薄命令 → handoff.build_handoff。"""
     try:
-        from memoryforge import handoff
-        result = handoff.build_handoff(workspace, repository_id=repo_id, before_iso=before, max_characters=max_chars)
-        _json_out({"status": "ok", "handoff": result})
+        from memoryforge.capture_inbox import drain_capture_spool
+        from memoryforge.handoff import build_handoff
+        from memoryforge.workspace import workspace_database, _connect
+        with _connect(workspace_database(workspace)) as connection:
+            drain_capture_spool(workspace, connection)
+            result = build_handoff(
+                connection,
+                repository_id=repo_id,
+                before=(datetime.fromisoformat(before) if before else datetime.now(UTC)),
+                max_characters=max_chars,
+            )
+        _json_out({"status": "ok", "handoff": result.model_dump(mode="json")})
     except Exception as exc:  # noqa: BLE001
         _json_out({"status": "error", "error": str(exc)})
 
@@ -2597,12 +2623,16 @@ def capture_proposal(
 ) -> None:
     """薄命令 → handoff.show_session_proposal。"""
     try:
-        from memoryforge import handoff
-        result = handoff.show_session_proposal(workspace, repository_id=repo_id, session_id=session)
+        from memoryforge.capture_inbox import build_capture_proposal
+        from memoryforge.workspace import workspace_database, _connect
+        with _connect(workspace_database(workspace)) as connection:
+            result = build_capture_proposal(
+                connection, repository_id=repo_id, session_id=session
+            )
         if print_output:
-            _json_out(result)
+            _json_out(result.__dict__)
         else:
-            _json_out({"status": "ok", "proposal": result})
+            _json_out({"status": "ok", "proposal": result.__dict__})
     except Exception as exc:  # noqa: BLE001
         _json_out({"status": "error", "error": str(exc)})
 
@@ -2653,13 +2683,13 @@ def conflict_list(
     try:
         from memoryforge.workspace import workspace_database, _connect
         db = workspace_database(workspace)
-        sql = "SELECT conflict_id, page_path, state FROM knowledge_conflicts WHERE 1=1"
+        sql = "SELECT conflict_id, page_path, resolution FROM knowledge_conflicts WHERE 1=1"
         params: list[object] = []
         if page:
             sql += " AND page_path = ?"
             params.append(page)
         if open_only:
-            sql += " AND state = 'open'"
+            sql += " AND resolution = 'open'"
         with _connect(db) as conn:
             rows = conn.execute(sql, tuple(params)).fetchall()
         _json_out({"status": "ok", "conflicts": [dict(r) for r in rows]})
@@ -2694,7 +2724,11 @@ def conflict_resolve(
 ) -> None:
     """薄命令 → knowledge_conflicts.resolve_conflict。"""
     try:
-        from memoryforge.knowledge_conflicts import resolve_conflict, ConflictResolution
+        from memoryforge.knowledge_conflicts import (
+            ConflictResolution,
+            conflict_from_row,
+            resolve_conflict,
+        )
         from memoryforge.workspace import workspace_database, _connect
         db = workspace_database(workspace)
         with _connect(db) as conn:
@@ -2705,9 +2739,12 @@ def conflict_resolve(
             if row is None:
                 _json_out({"status": "error", "error": "not found"})
                 return
-        from memoryforge.knowledge_conflicts import KnowledgeConflict
-        conflict = KnowledgeConflict.model_validate(dict(row))
-        proposal = resolve_conflict(conflict, resolution=ConflictResolution(resolution))
+        conflict = conflict_from_row(row)
+        proposal = resolve_conflict(
+            conflict,
+            resolution=ConflictResolution(resolution),
+            citations=(),
+        )
         _json_out({"status": "ok", "proposal": proposal.model_dump(mode="json") if proposal else None})
     except Exception as exc:  # noqa: BLE001
         _json_out({"status": "error", "error": str(exc)})

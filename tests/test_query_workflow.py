@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +12,8 @@ import memoryforge.cli as cli_module
 import memoryforge.query as query_module
 import memoryforge.workspace as workspace_module
 from memoryforge.cli import app
+from memoryforge.egress_models import EgressClass, SourceEgressRule
+from memoryforge.egress_policy import upsert_rule
 from memoryforge.provider import (
     OpenAICompatibleProvider,
     ProviderConfig,
@@ -726,6 +729,17 @@ def test_ask_llm_allows_local_only_evidence_when_explicitly_trusted(
         local_only=True,
     )
     _apply_pending_source(runner, workspace)
+    with workspace_module._connect(workspace / ".memoryforge" / "index.sqlite") as connection:
+        upsert_rule(
+            connection,
+            SourceEgressRule(
+                source_id=imported["source_id"],
+                egress_class=EgressClass.HOST_ALLOWED,
+                allowed_hosts=("local-cli",),
+                updated_at=datetime.now(UTC),
+                actor="test",
+            ),
+        )
     captured: list[dict[str, object]] = []
 
     def transport(request) -> bytes:
@@ -757,6 +771,32 @@ def test_ask_llm_allows_local_only_evidence_when_explicitly_trusted(
     assert result["status"] == "answered"
     assert result["citations"][0]["source_id"] == imported["source_id"]
     assert captured
+
+
+def test_ask_llm_does_not_egress_local_evidence_without_host_policy(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    runner, workspace, _ = _workspace_with_imported_source(
+        tmp_path,
+        monkeypatch,
+        "# Cache policy\n\nCache entries expire after sixty seconds.\n",
+        local_only=True,
+    )
+    _apply_pending_source(runner, workspace)
+
+    provider = OpenAICompatibleProvider(
+        ProviderConfig("https://example.test", "test-key", "test-model"),
+        transport=lambda _request: (_ for _ in ()).throw(AssertionError("must not call provider")),
+    )
+    result = query_module.answer_question(
+        workspace,
+        "When do cache entries expire?",
+        provider=provider,
+        allow_local=True,
+    )
+
+    assert result["status"] == "unknown"
 
 
 def test_ask_cli_uses_llm_only_when_explicitly_requested(tmp_path: Path, monkeypatch) -> None:

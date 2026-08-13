@@ -67,6 +67,35 @@ def test_evaluate_staged_auto_applies_deterministic_import(
     assert evaluation.summary()["decision"] == "auto_apply"
 
 
+def test_evaluate_staged_requires_review_for_open_page_conflict(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace, changeset_id = _staged_changeset(tmp_path, monkeypatch)
+    opened = Workspace.open(workspace)
+    stored = ChangeSetStore(opened).get(changeset_id)
+    page_path = next(path for path in stored.candidate_files if path.startswith("wiki/pages/"))
+    with sqlite3.connect(opened.index_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO knowledge_conflicts (
+                conflict_id, repository_id, page_path, subject_key, kind,
+                left_claim_id, left_source_id, left_source_version, left_locator,
+                right_claim_id, right_source_id, right_source_version, right_locator,
+                detected_at, resolution, resolved_by_changeset_id
+            ) VALUES (?, NULL, ?, 'same_page_pending', 'same_target',
+                      'left', 'pending', 1, 'chars:0-1',
+                      'right', 'pending', 1, 'chars:0-1',
+                      '2026-01-01T00:00:00+00:00', 'open', NULL)
+            """,
+            ("test_open_conflict", page_path),
+        )
+    evaluation = evaluate_staged(opened, stored, load_policy(opened.root))
+
+    assert evaluation.decision is AutomationDecision.REVIEW_REQUIRED
+    assert "open_conflict_block" in evaluation.reason_codes
+
+
 def test_auto_apply_applies_low_and_records_receipts(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -166,6 +166,27 @@ def evaluate_staged(
         low_max_changed_pages=policy.limits.low_max_changed_pages,
         low_max_changed_lines=policy.limits.low_max_changed_lines,
     )
+    candidate_pages = tuple(
+        sorted(
+            path
+            for path in stored.candidate_files
+            if path.startswith("wiki/pages/") and path.endswith(".md")
+        )
+    )
+    open_conflict_ids: tuple[str, ...] = ()
+    if candidate_pages:
+        placeholders = ", ".join("?" for _ in candidate_pages)
+        with _connect_readonly(opened.index_path) as connection:
+            rows = connection.execute(
+                f"""
+                SELECT conflict_id
+                FROM knowledge_conflicts
+                WHERE resolution = 'open' AND page_path IN ({placeholders})
+                ORDER BY conflict_id
+                """,
+                candidate_pages,
+            ).fetchall()
+        open_conflict_ids = tuple(str(row["conflict_id"]) for row in rows)
     evaluation = decide(
         policy,
         profile=profile,
@@ -173,6 +194,7 @@ def evaluate_staged(
         reason_codes=reason_codes,
         source_trust=trust,
         block_reasons=tuple(block_reasons),
+        open_conflict_ids=open_conflict_ids,
     )
     validation = build_validation_report(
         checks=(

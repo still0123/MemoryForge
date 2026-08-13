@@ -6,7 +6,6 @@ from pathlib import Path
 from memoryforge.client_integrations.common import (
     IntegrationPlan,
     IntegrationResult,
-    host_id,
     mcp_command,
     server_name,
 )
@@ -20,8 +19,7 @@ def plan_install(
 ) -> IntegrationPlan:
     agent = "claude"
     python = Path(sys.executable)
-    hid = host_id(agent, workspace, project)
-    cmd = mcp_command(python, workspace, project, hid, "micro")
+    cmd = mcp_command(python, workspace, project, "micro")
     sname = server_name(agent)
 
     commands: tuple[tuple[str, ...], ...] = (

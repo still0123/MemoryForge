@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import difflib
 import re
+import shutil
+import tempfile
 from collections.abc import Callable
 from contextlib import suppress
 from pathlib import Path
@@ -11,12 +13,12 @@ from typing import Any
 
 from memoryforge.apply_journal import ApplyJournalStore
 from memoryforge.changesets import ChangeSetStore, StoredChangeSet
-from memoryforge.errors import MemoryForgeError
+from memoryforge.errors import MemoryForgeError, WorkspaceError
 from memoryforge.linting import lint_workspace
 from memoryforge.models import ChangeOperationType
 from memoryforge.obsidian import build_obsidian
 from memoryforge.showcase import _markdown_document
-from memoryforge.wiki_facts import IndexedWikiFact, parse_page_facts
+from memoryforge.wiki_facts import IndexedWikiFact, WikiFact, parse_page_facts
 from memoryforge.workspace import (
     Workspace,
     _connect_readonly,
@@ -128,6 +130,16 @@ def _apply_stored(
         if path.startswith("wiki/pages/") and path.endswith(".md")
     }
     page_facts.update({path: () for path in archive_paths})
+    lint = _lint_candidate_tree(
+        opened,
+        candidate_files=stored.candidate_files,
+        archive_paths=archive_paths,
+        source_versions=stored.changeset.source_versions,
+        page_sources=page_sources,
+        page_facts=page_facts,
+    )
+    if lint["status"] != "clean":
+        raise WorkspaceError("candidate Wiki lint failed; stable Workspace was not changed")
     journal_store = ApplyJournalStore(opened)
     journal = journal_store.prepare(
         stored.changeset.changeset_id,
@@ -163,7 +175,12 @@ def _apply_stored(
             )
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_text(content, encoding="utf-8")
-        lint = lint_workspace(opened.root)
+        lint = lint_workspace(
+            opened.root,
+            require_navigation="wiki/INDEX.md" in stored.candidate_files,
+        )
+        if lint["status"] != "clean":
+            raise WorkspaceError("applied Wiki lint failed; restoring stable Workspace")
         commit = opened.version_store.commit_paths(
             paths,
             commit_message or f"knowledge: apply {stored.changeset.changeset_id}",
@@ -206,6 +223,42 @@ def _apply_stored(
         "obsidian": obsidian,
         "lint": lint,
     }
+
+
+def _lint_candidate_tree(
+    opened: Workspace,
+    *,
+    candidate_files: dict[str, str],
+    archive_paths: tuple[str, ...],
+    source_versions: dict[str, int],
+    page_sources: dict[str, tuple[str, ...]],
+    page_facts: dict[str, tuple[WikiFact, ...]],
+) -> dict[str, object]:
+    """Lint the prospective tree and projection before mutating stable state."""
+    with tempfile.TemporaryDirectory(prefix="memoryforge-lint-") as temporary:
+        root = Path(temporary)
+        shutil.copytree(opened.root / "wiki", root / "wiki")
+        internal = root / ".memoryforge"
+        internal.mkdir(mode=0o700)
+        shutil.copy2(opened.index_path, internal / "index.sqlite")
+        (root / "raw").mkdir()
+        for path in archive_paths:
+            (root / path).unlink(missing_ok=True)
+        for path, content in candidate_files.items():
+            destination = root / path
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_text(content, encoding="utf-8")
+
+        overlay = Workspace(root)
+        overlay.record_applied_source_versions(source_versions)
+        overlay.replace_applied_page_sources(page_sources)
+        overlay.remove_applied_page_sources(archive_paths)
+        overlay.replace_applied_page_facts(page_facts)
+        return lint_workspace(
+            root,
+            evidence_root=opened.root,
+            require_navigation="wiki/INDEX.md" in candidate_files,
+        )
 
 
 def _update_summary(opened: Workspace, stored: StoredChangeSet) -> dict[str, Any]:

@@ -49,7 +49,6 @@ def mcp_command(
     python: Path,
     workspace: Path,
     project: Path,
-    host_id: str,
     profile: str,
 ) -> list[str]:
     python_abs = str(python.resolve())
@@ -62,10 +61,8 @@ def mcp_command(
         "mcp",
         "--workspace",
         workspace_abs,
-        "--project",
+        "--project-root",
         project_abs,
-        "--host-id",
-        host_id,
         "--profile",
         profile,
     ]

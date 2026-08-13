@@ -14,7 +14,7 @@ from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, Literal, NotRequired, TypedDict
 
 from memoryforge.egress_models import EgressRequest
-from memoryforge.egress_policy import decide_egress, filter_visible_sources, record_disclosure
+from memoryforge.egress_policy import decide_egress, record_disclosure
 from memoryforge.egress_policy import rule_sha256 as _egress_rule_sha256
 from memoryforge.freshness import FreshnessState, page_freshness
 from memoryforge.provider import OpenAICompatibleProvider, ProviderUnavailableError
@@ -28,6 +28,7 @@ from memoryforge.wiki_facts import parse_page_citations as _page_citations
 from memoryforge.workspace import (
     DATABASE_RELATIVE_PATH,
     _connect,
+    _connect_readonly,
     find_applied_code_symbol_facts,
     find_applied_page_paths,
     find_applied_wiki_fact_page_paths,
@@ -284,9 +285,22 @@ def answer_question(
                 )
 
             visible: VisibleSource = _visible_source
-            applied_wiki_facts_list: list[dict[str, Any]] = []
+            applied_wiki_facts_list = _retrieval_wiki_facts(workspace_root, repository_id)
             code_index_snapshot_symbols: list[dict[str, Any]] = []
             code_index_snapshot_relations: list[dict[str, Any]] = []
+            try:
+                from memoryforge.code_index import build_code_index
+
+                snapshot = build_code_index(workspace_root, repository_id)
+                code_index_snapshot_symbols = [
+                    symbol.model_dump(mode="json") for symbol in snapshot.symbols
+                ]
+                code_index_snapshot_relations = [
+                    relation.model_dump(mode="json") for relation in snapshot.relations
+                ]
+            except Exception as exc:  # noqa: BLE001
+                # Code indexing is optional: Wiki facts remain a usable fallback.
+                logging.debug("retrieval_v2 code index unavailable: %s", exc)
             try:
                 retrieval_v2_result = retrieve_candidates(
                     workspace_root,
@@ -317,6 +331,11 @@ def answer_question(
     code_page_paths: set[str] = set()
     conversation_page_paths: set[str] = set()
     code_page_identifiers: dict[str, set[str]] = {}
+    retrieval_page_paths = (
+        tuple(dict.fromkeys(candidate.page_path for candidate in retrieval_v2_result.candidates))
+        if retrieval_v2_result is not None
+        else ()
+    )
 
     for page_rank, page in enumerate(
         _candidate_pages(
@@ -328,6 +347,7 @@ def answer_question(
             repository_id=repository_id,
             prefer_index_routes=max_citations > 1 or _has_many_index_routes(workspace_root),
             exact_symbol_page_paths=exact_symbol_page_paths,
+            preferred_page_paths=retrieval_page_paths,
         )
     ):
         content = page.read_text(encoding="utf-8")
@@ -598,7 +618,7 @@ def answer_question(
                 except Exception as exc:  # noqa: BLE001
                     logging.debug("page_freshness skipped for %s: %s", page_path, exc)
                 filtered_selected.append((page_path, citation))
-            selected = filtered_selected or selected
+            selected = filtered_selected
         if stale_page_penalty:
             retrieval_debug["freshness_warnings"] = list(page_freshness_warnings)
     except Exception as exc:  # noqa: BLE001
@@ -705,57 +725,60 @@ def _model_answer(
             last_redaction = redaction_result
             redacted_citation["quote"] = redaction_result.redacted_text
         except Exception as exc:  # noqa: BLE001
-            logging.debug("redact_for_model skipped: %s", exc)
+            logging.debug("redact_for_model failed closed: %s", exc)
+            return None
         redacted_matches.append((page_path, redacted_citation))  # type: ignore[arg-type]
         source_refs.append((str(citation["source_id"]), int(citation["source_version"])))
 
-    try:
-        if egress_request is not None and last_redaction is not None:
-            db_path = workspace_root / DATABASE_RELATIVE_PATH
-            if db_path.is_file():
+    if egress_request is not None and last_redaction is not None:
+        db_path = workspace_root / DATABASE_RELATIVE_PATH
+        if db_path.is_file():
+            try:
                 from memoryforge.models import Sensitivity
-                policy_sha = "0" * 64
+
+                combined_text = "\n".join(
+                    str(citation.get("quote", "")) for _, citation in redacted_matches
+                )
+                if len(combined_text) > egress_request.max_characters:
+                    return None
                 with _connect(db_path) as conn:
-                    all_allowed = True
-                    for source_id, source_version in source_refs:
-                        try:
-                            sensitivity = Sensitivity.PUBLIC
+                    policy_schema = conn.execute(
+                        "SELECT 1 FROM sqlite_master "
+                        "WHERE type = 'table' AND name = 'source_versions'"
+                    ).fetchone()
+                    if policy_schema is None:
+                        # Static Wiki fixtures have no managed source registry. They
+                        # require the caller's explicit local opt-in to use a model.
+                        if not allow_local:
+                            return None
+                    else:
+                        for source_id, source_version in dict.fromkeys(source_refs):
                             row = conn.execute(
                                 "SELECT sensitivity FROM source_versions WHERE id = ?",
                                 (source_version,),
                             ).fetchone()
-                            if row is not None:
-                                sensitivity = Sensitivity(str(row[0]))
+                            if row is None:
+                                return None
                             decision = decide_egress(
                                 conn,
                                 request=egress_request,
                                 source_id=source_id,
                                 source_version=source_version,
-                                sensitivity=sensitivity,
+                                sensitivity=Sensitivity(str(row[0])),
                             )
                             if not decision.allowed:
-                                all_allowed = False
-                                break
-                        except Exception:
-                            continue
-                    if all_allowed and egress_request.purpose in ("context", "evidence"):
-                        try:
-                            combined_text = "\n".join(
-                                q for _, c in redacted_matches for q in [str(c.get("quote", ""))]
-                            )
-                            policy_sha = _egress_policy_digest(conn)
-                            record_disclosure(
-                                conn,
-                                request=egress_request,
-                                text=combined_text,
-                                source_refs=tuple(source_refs),
-                                redaction=last_redaction,
-                                policy_sha256=policy_sha,
-                            )
-                        except Exception as exc:  # noqa: BLE001
-                            logging.debug("record_disclosure skipped: %s", exc)
-    except Exception as exc:  # noqa: BLE001
-        logging.debug("egress integration in _model_answer skipped: %s", exc)
+                                return None
+                        record_disclosure(
+                            conn,
+                            request=egress_request,
+                            text=combined_text,
+                            source_refs=tuple(dict.fromkeys(source_refs)),
+                            redaction=last_redaction,
+                            policy_sha256=_egress_policy_digest(conn),
+                        )
+            except Exception as exc:  # noqa: BLE001
+                logging.debug("egress check or receipt failed closed: %s", exc)
+                return None
 
     answer, indexes = provider.answer_with_evidence(
         _answer_messages(question, redacted_matches, conversation_context)
@@ -1266,6 +1289,36 @@ def _code_identifier_tokens(text: str) -> set[str]:
     return {match.group() for match in _EXPLICIT_CODE_IDENTIFIER.finditer(text)}
 
 
+def _retrieval_wiki_facts(
+    workspace_root: Path,
+    repository_id: str,
+) -> list[dict[str, Any]]:
+    """Load only applied facts for Retrieval v2's bounded routing lanes."""
+    database = workspace_root / DATABASE_RELATIVE_PATH
+    if not database.is_file() or database.is_symlink():
+        return []
+    try:
+        with _connect_readonly(database) as connection:
+            rows = connection.execute(
+                """
+                SELECT facts.page_path, facts.repository_id, facts.source_id,
+                       facts.source_version, facts.locator, facts.section_path,
+                       facts.quote, facts.routing_text, facts.symbol, facts.relation_type
+                FROM wiki_facts AS facts
+                JOIN applied_source_versions AS applied
+                  ON applied.source_id = facts.source_id
+                 AND applied.source_version_id = facts.source_version
+                WHERE facts.repository_id IS NULL OR facts.repository_id = ?
+                ORDER BY facts.page_path, facts.locator
+                """,
+                (repository_id,),
+            ).fetchall()
+    except sqlite3.Error as exc:
+        logging.debug("retrieval_v2 fact load unavailable: %s", exc)
+        return []
+    return [dict(row) for row in rows]
+
+
 def _candidate_pages(
     workspace_root: Path,
     question: str,
@@ -1276,6 +1329,7 @@ def _candidate_pages(
     repository_id: str | None,
     prefer_index_routes: bool = False,
     exact_symbol_page_paths: tuple[str, ...] = (),
+    preferred_page_paths: tuple[str, ...] = (),
 ) -> list[Path]:
     wiki_root = workspace_root / "wiki"
     index = wiki_root / "INDEX.md"
@@ -1398,6 +1452,12 @@ def _candidate_pages(
         for path in exact_symbol_page_paths
         if (page := _safe_wiki_page(workspace_root, workspace_root / path)) is not None
     ]
+    preferred_pages = [
+        page
+        for path in preferred_page_paths
+        if (page := _safe_wiki_page(workspace_root, workspace_root / path)) is not None
+        and (allowed_paths is None or str(page.relative_to(workspace_root)) in allowed_paths)
+    ]
     if definition_question:
         ordered_pages = (
             *explanatory_pages,
@@ -1419,7 +1479,7 @@ def _candidate_pages(
             max_pages=max_pages,
             repository_id=repository_id,
         )
-    ordered_pages = (*exact_symbol_pages, *exact_code_pages, *ordered_pages)
+    ordered_pages = (*exact_symbol_pages, *exact_code_pages, *preferred_pages, *ordered_pages)
     if (exact_symbol_pages or exact_code_pages) and (
         not _is_code_relation_question(question)
         or any(marker in question for marker in ("方法", "字段", "属性", "函数"))

@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal, TYPE_CHECKING
 
@@ -40,7 +41,12 @@ from memoryforge.agent_access import (
 )
 from memoryforge.changesets import ChangeSetStore
 from memoryforge.models import GitRepositoryRecord
-from memoryforge.workspace import Workspace, _connect, _connect_readonly
+from memoryforge.workspace import (
+    Workspace,
+    _connect,
+    _connect_readonly,
+    is_public_source_version,
+)
 
 if TYPE_CHECKING:
     from memoryforge.wiki_facts import CitationPayload
@@ -205,6 +211,17 @@ def build_server(
             from memoryforge.code_intelligence import symbol_context
             from memoryforge.code_impact import impact_analysis, call_paths, analyze_diff
             from memoryforge.code_history import why_changed
+            from memoryforge.code_index import build_code_index
+
+            def snapshot():
+                return build_code_index(bindings.workspace, bindings.scope.repository_id)
+
+            def visible(source_id: str, source_version: int) -> bool:
+                return bindings.allow_local or is_public_source_version(
+                    bindings.workspace,
+                    source_id=source_id,
+                    source_version=source_version,
+                )
 
             @server.tool(name="memoryforge_symbol_context", annotations=_READ_ONLY_ANNOTATIONS)
             def memoryforge_symbol_context(
@@ -213,14 +230,13 @@ def build_server(
                 max_relations: int = 20,
             ) -> dict[str, object]:
                 """薄工具 → code_intelligence.symbol_context。"""
-                repo = repository_id or bindings.scope.repository_id
                 try:
                     return symbol_context(
-                        bindings.workspace,
+                        snapshot(),
                         identifier,
-                        repository_id=repo,
+                        visible_source=visible,
                         max_relations=max(1, int(max_relations)),
-                    )
+                    ).model_dump(mode="json")
                 except Exception as exc:  # noqa: BLE001
                     return {"status": "error", "error": str(exc)}
 
@@ -235,38 +251,37 @@ def build_server(
                 changed_paths: list[str] | None = None,
             ) -> dict[str, object]:
                 """薄工具 → code_impact / code_history 四种模式。"""
-                repo = repository_id or bindings.scope.repository_id
                 paths = tuple(changed_paths or [])
                 try:
                     if mode == "impact":
                         return impact_analysis(
-                            bindings.workspace,
+                            snapshot(),
                             target_symbol,
-                            repository_id=repo,
+                            visible_source=visible,
                             max_depth=max(1, int(max_depth)),
-                        )
+                        ).model_dump(mode="json")
                     if mode == "call_paths":
+                        if not end_symbol:
+                            return {"status": "error", "error": "end_symbol is required"}
                         return call_paths(
-                            bindings.workspace,
+                            snapshot(),
                             target_symbol,
-                            repository_id=repo,
-                            start_symbol=start_symbol,
-                            end_symbol=end_symbol,
+                            end_symbol,
+                            visible_source=visible,
                             max_depth=max(1, int(max_depth)),
-                        )
+                        ).model_dump(mode="json")
                     if mode == "diff":
                         return analyze_diff(
-                            bindings.workspace,
-                            changed_paths=paths,
-                            repository_id=repo,
-                        )
+                            None, snapshot(), paths, visible_source=visible
+                        ).model_dump(mode="json")
                     if mode == "why_changed":
                         checkout = Path(bindings.scope.checkout_path)
                         return why_changed(
                             checkout,
-                            target_symbol=target_symbol,
-                            changed_paths=paths,
-                        )
+                            commit_sha=snapshot().commit_sha,
+                            relative_path=(paths[0] if paths else target_symbol),
+                            symbol=target_symbol,
+                        ).model_dump(mode="json")
                     return {"status": "error", "error": f"unknown mode: {mode}"}
                 except Exception as exc:  # noqa: BLE001
                     return {"status": "error", "error": str(exc)}
@@ -275,8 +290,13 @@ def build_server(
 
     if profile == "capture":
         try:
-            from memoryforge.capture_inbox import spool_event
-            from memoryforge import handoff as _handoff_mod
+            from memoryforge.capture_inbox import (
+                RedactionResult,
+                build_capture_proposal,
+                drain_capture_spool,
+                spool_capture_event,
+            )
+            from memoryforge.handoff import build_handoff
             from memoryforge.capture_models import CaptureEvent
 
             @server.tool(name="memoryforge_spool_event")
@@ -284,12 +304,18 @@ def build_server(
                 """接收 CaptureEvent JSON → capture_inbox.spool_event。"""
                 try:
                     parsed = CaptureEvent.model_validate_json(event_json)
-                    result = spool_event(bindings.workspace, parsed)
+                    if parsed.repository_id != bindings.scope.repository_id:
+                        return {"status": "error", "error": "repository scope is fixed"}
+                    result = spool_capture_event(
+                        bindings.workspace,
+                        parsed,
+                        sanitize=lambda text: RedactionResult(text=text),
+                    )
                     return {"status": "ok", "result": result}
                 except Exception as exc:  # noqa: BLE001
                     return {"status": "error", "error": str(exc)}
 
-            @server.tool(name="memoryforge_handoff", annotations=_READ_ONLY_ANNOTATIONS)
+            @server.tool(name="memoryforge_handoff", annotations=_WRITE_ANNOTATIONS)
             def memoryforge_handoff(
                 repo_id: str,
                 before: str | None = None,
@@ -297,12 +323,16 @@ def build_server(
             ) -> dict[str, object]:
                 """薄工具 → handoff.build_handoff。"""
                 try:
-                    return _handoff_mod.build_handoff(
-                        bindings.workspace,
-                        repository_id=repo_id,
-                        before_iso=before,
-                        max_characters=max(1, int(max_chars)),
-                    )
+                    if repo_id != bindings.scope.repository_id:
+                        return {"status": "error", "error": "repository scope is fixed"}
+                    with _connect(Workspace(bindings.workspace).index_path) as connection:
+                        drain_capture_spool(bindings.workspace, connection)
+                        return build_handoff(
+                            connection,
+                            repository_id=repo_id,
+                            before=(datetime.fromisoformat(before) if before else datetime.now(UTC)),
+                            max_characters=max(1, int(max_chars)),
+                        ).model_dump(mode="json")
                 except Exception as exc:  # noqa: BLE001
                     return {"status": "error", "error": str(exc)}
 
@@ -314,15 +344,17 @@ def build_server(
             ) -> dict[str, object]:
                 """薄工具 → capture proposal 展示。"""
                 try:
-                    result = _handoff_mod.show_session_proposal(
-                        bindings.workspace,
-                        repository_id=repo_id,
-                        session_id=session,
-                    )
-                    if print_output:
-                        import json as _json
-                        print(_json.dumps(result, ensure_ascii=False, indent=2))
-                    return {"status": "ok", "proposal": result}
+                    if repo_id != bindings.scope.repository_id:
+                        return {"status": "error", "error": "repository scope is fixed"}
+                    with _connect(Workspace(bindings.workspace).index_path) as connection:
+                        result = build_capture_proposal(
+                            connection, repository_id=repo_id, session_id=session
+                        )
+                    # MCP stdout is reserved for protocol frames. Keep the
+                    # compatibility flag, but always return the payload through
+                    # the tool result instead of printing it.
+                    del print_output
+                    return {"status": "ok", "proposal": result.__dict__}
                 except Exception as exc:  # noqa: BLE001
                     return {"status": "error", "error": str(exc)}
         except Exception as exc:  # noqa: BLE001

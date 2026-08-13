@@ -40,6 +40,8 @@ def test_release_builder_reserves_output_before_building(
 ) -> None:
     output = tmp_path / "release"
     commit = "a" * 40
+    monkeypatch.setattr(release_builder.platform, "python_implementation", lambda: "CPython")
+    monkeypatch.setattr(release_builder.sys, "version_info", (3, 11))
     monkeypatch.setattr(
         release_builder,
         "_git",
