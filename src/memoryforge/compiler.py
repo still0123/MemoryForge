@@ -14,6 +14,7 @@ from memoryforge.changesets import StoredChangeSet
 from memoryforge.models import (
     ChangeOperation,
     ChangeOperationType,
+    ChangeOrigin,
     ChangeSet,
     ChangeSetStatus,
     CompilationPlan,
@@ -299,8 +300,16 @@ def compile_repository_topics(
             base_commit=base_commit,
             status=ChangeSetStatus.PROPOSED,
             operations=(
-                ChangeOperation(type=ChangeOperationType.UPDATE_PAGE, path=overview_path),
-                ChangeOperation(type=ChangeOperationType.UPDATE_PAGE, path=index_path),
+                ChangeOperation(
+                    type=ChangeOperationType.UPDATE_PAGE,
+                    path=overview_path,
+                    origin=ChangeOrigin.LLM_COMPILATION,
+                ),
+                ChangeOperation(
+                    type=ChangeOperationType.UPDATE_PAGE,
+                    path=index_path,
+                    origin=ChangeOrigin.DETERMINISTIC_NAVIGATION,
+                ),
             ),
         ),
         candidate_files=candidate_files,
@@ -339,7 +348,13 @@ def _compile_deterministically(
             if stable_path.is_file()
             else ChangeOperationType.CREATE_PAGE
         )
-        operations.append(ChangeOperation(type=operation_type, path=path))
+        operations.append(
+            ChangeOperation(
+                type=operation_type,
+                path=path,
+                origin=ChangeOrigin.DETERMINISTIC_IMPORT,
+            )
+        )
         if len(page_sources) == 1:
             source = page_sources[0]
             content = _read_source_text(workspace, source)
@@ -365,6 +380,7 @@ def _compile_deterministically(
                     else ChangeOperationType.CREATE_PAGE
                 ),
                 path=path,
+                origin=ChangeOrigin.DETERMINISTIC_NAVIGATION,
             )
         )
         candidate_files[path] = content
@@ -379,6 +395,7 @@ def _compile_deterministically(
                 else ChangeOperationType.CREATE_PAGE
             ),
             path=index_path,
+            origin=ChangeOrigin.DETERMINISTIC_NAVIGATION,
         )
     )
     candidate_files[index_path] = _render_index(workspace, candidate_files)
@@ -426,10 +443,20 @@ def _compile_missing_repository_overviews(workspace: Workspace) -> Compilation |
     candidate_files = dict(overviews)
     candidate_files[index_path] = _render_index(workspace, candidate_files)
     operations = [
-        ChangeOperation(type=ChangeOperationType.CREATE_PAGE, path=path)
+        ChangeOperation(
+            type=ChangeOperationType.CREATE_PAGE,
+            path=path,
+            origin=ChangeOrigin.DETERMINISTIC_NAVIGATION,
+        )
         for path in sorted(overviews)
     ]
-    operations.append(ChangeOperation(type=ChangeOperationType.UPDATE_PAGE, path=index_path))
+    operations.append(
+        ChangeOperation(
+            type=ChangeOperationType.UPDATE_PAGE,
+            path=index_path,
+            origin=ChangeOrigin.DETERMINISTIC_NAVIGATION,
+        )
+    )
     base_commit = workspace.current_commit()
     identity = "\n".join([base_commit, "repository-overviews", *sorted(overviews)])
     return Compilation(
@@ -504,6 +531,7 @@ def _compile_stale_pages(
                 ChangeOperation(
                     type=ChangeOperationType.ARCHIVE_PAGE,
                     path=stale_page.path,
+                    origin=ChangeOrigin.DETERMINISTIC_CLEANUP,
                 )
             )
             removed_paths.add(stale_page.path)
@@ -533,6 +561,7 @@ def _compile_stale_pages(
             ChangeOperation(
                 type=ChangeOperationType.UPDATE_PAGE,
                 path=stale_page.path,
+                origin=ChangeOrigin.DETERMINISTIC_IMPORT,
             )
         )
 
@@ -565,6 +594,7 @@ def _compile_stale_pages(
                         else ChangeOperationType.CREATE_PAGE
                     ),
                     path=overview_path,
+                    origin=ChangeOrigin.DETERMINISTIC_NAVIGATION,
                 )
             )
         elif (workspace.root / overview_path).is_file():
@@ -573,6 +603,7 @@ def _compile_stale_pages(
                 ChangeOperation(
                     type=ChangeOperationType.ARCHIVE_PAGE,
                     path=overview_path,
+                    origin=ChangeOrigin.DETERMINISTIC_CLEANUP,
                 )
             )
 
@@ -590,6 +621,7 @@ def _compile_stale_pages(
                 else ChangeOperationType.CREATE_PAGE
             ),
             path=index_path,
+            origin=ChangeOrigin.DETERMINISTIC_NAVIGATION,
         )
     )
     _add_relations_page(
@@ -732,7 +764,14 @@ def _compile_with_provider(
                 page_path,
                 source_ids=change.source_ids,
             ).model_dump(mode="json")
-        operations.append(ChangeOperation(type=operation_type, path=page_path, details=details))
+        operations.append(
+            ChangeOperation(
+                type=operation_type,
+                path=page_path,
+                details=details,
+                origin=ChangeOrigin.LLM_COMPILATION,
+            )
+        )
         used_source_ids.extend(change.source_ids)
 
     if not candidate_files:
@@ -750,6 +789,7 @@ def _compile_with_provider(
                 else ChangeOperationType.CREATE_PAGE
             ),
             path=index_path,
+            origin=ChangeOrigin.DETERMINISTIC_NAVIGATION,
         )
     )
     candidate_files[index_path] = _render_index(workspace, candidate_files)
@@ -1258,11 +1298,18 @@ def propose_agent_update(
             type=ChangeOperationType.UPDATE_PAGE,
             path=candidate.path,
             details={"origin": "agent", "question": question},
+            origin=ChangeOrigin.AGENT_PROPOSAL,
         )
     ]
     index_path = "wiki/INDEX.md"
     candidate_files[index_path] = _render_index(workspace, candidate_files)
-    operations.append(ChangeOperation(type=ChangeOperationType.UPDATE_PAGE, path=index_path))
+    operations.append(
+        ChangeOperation(
+            type=ChangeOperationType.UPDATE_PAGE,
+            path=index_path,
+            origin=ChangeOrigin.DETERMINISTIC_NAVIGATION,
+        )
+    )
     _add_relations_page(workspace, candidate_files, operations)
 
     base_commit = workspace.current_commit()
@@ -1576,6 +1623,7 @@ def _add_relations_page(
                 else ChangeOperationType.CREATE_PAGE
             ),
             path=relations_path,
+            origin=ChangeOrigin.DETERMINISTIC_NAVIGATION,
         )
     )
 

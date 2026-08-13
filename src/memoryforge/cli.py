@@ -19,6 +19,22 @@ import typer
 from memoryforge import __version__
 from memoryforge.agent import run_agent
 from memoryforge.agent_evaluation import run_agent_evaluation
+from memoryforge.automation_policy import (
+    BUILTIN_PROFILES,
+    AutomationPolicy,
+    decide,
+    effective_profile,
+    effective_trust,
+    load_policy,
+    policy_sha256,
+    save_policy,
+)
+from memoryforge.automation_validation import (
+    BLOCK_BASE_COMMIT_CHANGED,
+    BLOCK_STALE_SOURCE_VERSION,
+    assess_operation,
+    change_set_risk,
+)
 from memoryforge.botmux_adapter import BotmuxHookError, handle_botmux_hook
 from memoryforge.changesets import ChangeSetStore, StoredChangeSet
 from memoryforge.code_index import build_code_index
@@ -56,7 +72,7 @@ from memoryforge.lifecycle import (
 )
 from memoryforge.linting import lint_workspace
 from memoryforge.local_portal import serve_local_portal
-from memoryforge.models import Sensitivity
+from memoryforge.models import Sensitivity, SourceTrust
 from memoryforge.module_planner import build_architecture_graph, build_module_plan
 from memoryforge.obsidian import OUTPUT_RELATIVE, build_obsidian
 from memoryforge.platform_lock import inspect_posix_namespace_lock_root
@@ -95,6 +111,12 @@ app = typer.Typer(
 )
 showcase_app = typer.Typer(no_args_is_help=True, help="Build a read-only static Showcase.")
 app.add_typer(showcase_app, name="showcase")
+
+policy_app = typer.Typer(
+    no_args_is_help=True,
+    help="Inspect and edit the automation policy (shadow mode).",
+)
+app.add_typer(policy_app, name="policy")
 
 WorkspaceOption = Annotated[
     Path,
@@ -1302,11 +1324,120 @@ def ingest(
 
 
 @app.command("changeset-list")
-def changeset_list(workspace: WorkspaceOption = Path(".")) -> None:
+def changeset_list(
+    workspace: WorkspaceOption = Path("."),
+    decision: Annotated[
+        str | None,
+        typer.Option(
+            "--decision",
+            help="Filter by simulated decision: auto_apply, review_required, blocked.",
+        ),
+    ] = None,
+) -> None:
     """List pending ChangeSets that can be reviewed and applied."""
+    if decision is not None and decision not in {"auto_apply", "review_required", "blocked"}:
+        _exit_with_safe_error(ValueError(f"unknown decision: {decision}"))
     try:
         opened = Workspace.open_readonly(workspace)
-        result = [_changeset_summary(stored) for stored in ChangeSetStore(opened).list_all()]
+        policy = load_policy(opened.root)
+        result = []
+        for stored in ChangeSetStore(opened).list_all():
+            summary = _changeset_summary(stored)
+            if decision is not None:
+                simulated = _simulate_stored(opened, stored, policy)
+                summary["decision"] = simulated
+                if str(simulated.get("decision")) != decision:
+                    continue
+            result.append(summary)
+    except (
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+@policy_app.command("show")
+def policy_show(workspace: WorkspaceOption = Path(".")) -> None:
+    """Print the effective automation policy and its canonical SHA256."""
+    try:
+        opened = Workspace.open_readonly(workspace)
+        policy = load_policy(opened.root)
+    except (
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(
+        json.dumps(
+            {
+                "policy": json.loads(policy.model_dump_json()),
+                "policy_sha256": policy_sha256(policy),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
+@policy_app.command("set")
+def policy_set(
+    profile: Annotated[str, typer.Argument(help="Built-in profile to switch to.")],
+    workspace: WorkspaceOption = Path("."),
+) -> None:
+    """Switch the workspace to a built-in profile (manual/balanced/autonomous/custom)."""
+    if profile not in BUILTIN_PROFILES:
+        _exit_with_safe_error(
+            ValueError(
+                f"unknown profile: {profile} (choose from {', '.join(sorted(BUILTIN_PROFILES))})"
+            )
+        )
+    try:
+        opened = Workspace.open(workspace)
+        with opened.exclusive_lock():
+            updated = load_policy(opened.root).model_copy(update={"profile": profile})
+            save_policy(opened.root, updated)
+    except (
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(
+        json.dumps(
+            {"profile": profile, "policy_sha256": policy_sha256(updated)},
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
+
+
+@policy_app.command("simulate")
+def policy_simulate(
+    changeset_id: Annotated[str | None, typer.Argument()] = None,
+    workspace: WorkspaceOption = Path("."),
+) -> None:
+    """Simulate the current policy against staged proposals without writing."""
+    try:
+        opened = Workspace.open_readonly(workspace)
+        policy = load_policy(opened.root)
+        store = ChangeSetStore(opened)
+        stored_list = [store.get(changeset_id)] if changeset_id else store.list_all()
+        result = [_simulate_stored(opened, stored, policy) for stored in stored_list]
     except (
         MemoryForgeError,
         WorkspaceIntegrityError,
@@ -2072,6 +2203,105 @@ def _changeset_summary(stored: StoredChangeSet) -> dict[str, object]:
     payload["base_commit"] = stored.changeset.base_commit
     payload["source_ids"] = list(stored.changeset.source_ids)
     return payload
+
+
+def _simulate_stored(
+    opened: Workspace,
+    stored: StoredChangeSet,
+    policy: AutomationPolicy,
+) -> dict[str, object]:
+    """Run the shadow decision engine over one staged ChangeSet (read-only)."""
+    changeset = stored.changeset
+    block_reasons: list[str] = []
+    if changeset.base_commit != opened.current_commit():
+        block_reasons.append(BLOCK_BASE_COMMIT_CHANGED)
+    current_versions = _current_source_versions(opened, changeset.source_ids)
+    if any(
+        changeset.source_versions.get(source_id) != row["version_id"]
+        for source_id, row in current_versions.items()
+    ):
+        block_reasons.append(BLOCK_STALE_SOURCE_VERSION)
+    trust_defaults = {
+        source_id: SourceTrust.UNTRUSTED if row["untrusted"] else SourceTrust.STANDARD
+        for source_id, row in current_versions.items()
+    }
+    trust = effective_trust(policy, changeset.source_ids, trust_defaults)
+    profile = effective_profile(policy, changeset.source_ids)
+    page_sources = candidate_page_sources(stored.candidate_files)
+    assessments = []
+    for operation in changeset.operations:
+        before = opened.version_store.read_text_at(changeset.base_commit, operation.path) or ""
+        after = stored.candidate_files.get(operation.path, "")
+        source_count = len(page_sources.get(operation.path, ())) or len(changeset.source_ids)
+        assessments.append(
+            assess_operation(
+                operation,
+                before=before,
+                after=after,
+                source_count=source_count,
+                source_trust=trust,
+            )
+        )
+    risk, reason_codes = change_set_risk(
+        tuple(assessments),
+        low_max_changed_pages=policy.limits.low_max_changed_pages,
+        low_max_changed_lines=policy.limits.low_max_changed_lines,
+    )
+    evaluation = decide(
+        policy,
+        profile=profile,
+        risk=risk,
+        reason_codes=reason_codes,
+        source_trust=trust,
+        block_reasons=tuple(block_reasons),
+    )
+    return {
+        "changeset_id": changeset.changeset_id,
+        "decision": evaluation.decision.value,
+        "risk": evaluation.risk.value,
+        "reason_codes": list(evaluation.reason_codes),
+        "profile": evaluation.policy_id,
+        "policy_sha256": evaluation.policy_sha256,
+        "source_trust": trust.value,
+        "operations": [
+            {
+                "path": item.path,
+                "origin": item.origin.value if item.origin is not None else None,
+                "risk": item.risk.value,
+                "reason_codes": list(item.reason_codes),
+                "changed_lines": item.changed_lines,
+            }
+            for item in assessments
+        ],
+    }
+
+
+def _current_source_versions(
+    opened: Workspace,
+    source_ids: tuple[str, ...],
+) -> dict[str, dict[str, object]]:
+    """Map source_id to its current version id and untrusted-tag flag."""
+    if not source_ids:
+        return {}
+    placeholders = ", ".join("?" for _ in source_ids)
+    with _connect_readonly(opened.index_path) as connection:
+        rows = connection.execute(
+            f"""
+            SELECT sources.source_id, versions.id, versions.tags_json
+            FROM sources
+            JOIN source_versions AS versions ON versions.source_id = sources.id
+            WHERE sources.source_id IN ({placeholders}) AND versions.is_current = 1
+            """,
+            tuple(source_ids),
+        ).fetchall()
+    result: dict[str, dict[str, object]] = {}
+    for row in rows:
+        tags = json.loads(str(row["tags_json"]))
+        result[str(row["source_id"])] = {
+            "version_id": int(row["id"]),
+            "untrusted": "conversation" in tags or "platform:codex" in tags,
+        }
+    return result
 
 
 def _doctor_report(workspace: Path) -> dict[str, object]:

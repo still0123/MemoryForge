@@ -27,6 +27,7 @@ from memoryforge.compiler import Compilation, _render_index
 from memoryforge.models import (
     ChangeOperation,
     ChangeOperationType,
+    ChangeOrigin,
     ChangeSet,
     ChangeSetStatus,
     ChangeSetValidation,
@@ -169,6 +170,7 @@ def compile_code_wiki(
                         "module_plan_id": plan.plan_id,
                         "architecture_graph_id": graph.graph_id,
                     },
+                    origin=ChangeOrigin.DETERMINISTIC_NAVIGATION,
                 )
             )
             continue
@@ -183,6 +185,13 @@ def compile_code_wiki(
             for edge in outgoing.get(module.module_id, ())
             for relation_id in edge.relation_ids
         )
+        page_origin = (
+            ChangeOrigin.DETERMINISTIC_NAVIGATION
+            if not module.symbol_ids
+            else ChangeOrigin.LLM_MODULE_SYNTHESIS
+            if provider is not None
+            else ChangeOrigin.CODE_INDEX
+        )
         operations.append(
             ChangeOperation(
                 type=operation_type,
@@ -196,6 +205,7 @@ def compile_code_wiki(
                     "symbol_ids": list(module.symbol_ids),
                     "relation_ids": list(relation_ids),
                 },
+                origin=page_origin,
             )
         )
     for path in sorted(archived_paths):
@@ -208,6 +218,7 @@ def compile_code_wiki(
                     "code_index_id": snapshot.index_id,
                     "reason": "module is absent from the current deterministic plan",
                 },
+                origin=ChangeOrigin.DETERMINISTIC_CLEANUP,
             )
         )
 

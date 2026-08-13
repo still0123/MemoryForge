@@ -268,6 +268,43 @@ CREATE TABLE IF NOT EXISTS folder_source_versions (
     """
 CREATE INDEX IF NOT EXISTS idx_folder_source_versions_path
 ON folder_source_versions(folder_id, relative_path)""",
+    """
+CREATE TABLE IF NOT EXISTS source_policies (
+    source_id TEXT PRIMARY KEY REFERENCES sources(source_id),
+    trust TEXT NOT NULL,
+    profile TEXT,
+    allow_single_source_archive INTEGER NOT NULL DEFAULT 0
+        CHECK (allow_single_source_archive IN (0, 1)),
+    updated_at TEXT NOT NULL
+)""",
+    """
+CREATE TABLE IF NOT EXISTS automation_decisions (
+    changeset_id TEXT PRIMARY KEY,
+    proposal_sha256 TEXT NOT NULL,
+    validation_sha256 TEXT NOT NULL,
+    policy_sha256 TEXT NOT NULL,
+    decision TEXT NOT NULL,
+    risk TEXT NOT NULL,
+    reason_codes_json TEXT NOT NULL
+)""",
+    """
+CREATE TABLE IF NOT EXISTS automation_events (
+    id INTEGER PRIMARY KEY,
+    event_type TEXT NOT NULL,
+    changeset_id TEXT,
+    occurred_at TEXT NOT NULL,
+    details_json TEXT NOT NULL
+)""",
+    """
+CREATE INDEX IF NOT EXISTS idx_automation_events_changeset
+ON automation_events(changeset_id, id)""",
+    """
+CREATE TABLE IF NOT EXISTS page_protection (
+    page_path TEXT PRIMARY KEY,
+    protected INTEGER NOT NULL CHECK (protected IN (0, 1)),
+    reason TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+)""",
     _SOURCE_FTS_SCHEMA_STATEMENT,
     _WIKI_FACT_FTS_SCHEMA_STATEMENT,
     """

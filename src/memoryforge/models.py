@@ -53,6 +53,44 @@ class LintSeverity(StrEnum):
     HIGH = "HIGH"
 
 
+class ChangeOrigin(StrEnum):
+    """Trusted compile-path origin of one Wiki change. Never set by a Provider."""
+
+    DETERMINISTIC_IMPORT = "deterministic_import"
+    CODE_INDEX = "code_index"
+    DETERMINISTIC_NAVIGATION = "deterministic_navigation"
+    DETERMINISTIC_CLEANUP = "deterministic_cleanup"
+    LLM_COMPILATION = "llm_compilation"
+    LLM_MODULE_SYNTHESIS = "llm_module_synthesis"
+    AGENT_PROPOSAL = "agent_proposal"
+    USER_AUTHORED = "user_authored"
+
+
+class RiskLevel(StrEnum):
+    LOW = "low"
+    MODERATE = "moderate"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+class AutomationDecision(StrEnum):
+    AUTO_APPLY = "auto_apply"
+    REVIEW_REQUIRED = "review_required"
+    BLOCKED = "blocked"
+    NOOP = "noop"
+
+
+class SourceTrust(StrEnum):
+    UNTRUSTED = "untrusted"
+    STANDARD = "standard"
+    TRUSTED = "trusted"
+
+
+class ReviewActorType(StrEnum):
+    HUMAN = "human"
+    POLICY = "policy"
+
+
 def _validate_wiki_path(path: str) -> None:
     parts = path.split("/")
     if (
@@ -395,6 +433,7 @@ class ChangeOperation(BaseModel):
     type: ChangeOperationType
     path: str = Field(pattern=r"^wiki/")
     details: dict[str, Any] = Field(default_factory=dict)
+    origin: ChangeOrigin | None = None
 
     @model_validator(mode="after")
     def validate_path(self) -> ChangeOperation:
@@ -408,6 +447,52 @@ class ChangeSetValidation(BaseModel):
     citation_coverage: float = Field(ge=0.0, le=1.0)
     unresolved_conflicts: int = Field(ge=0)
     schema_errors: int = Field(ge=0)
+
+
+class OperationAssessment(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    path: str = Field(pattern=r"^wiki/")
+    origin: ChangeOrigin | None = None
+    operation_type: ChangeOperationType
+    risk: RiskLevel
+    reason_codes: tuple[str, ...] = ()
+    changed_lines: int = Field(ge=0)
+    source_count: int = Field(ge=0)
+    touches_verified_facts: bool = False
+    touches_user_protected_content: bool = False
+
+
+class ValidationCheck(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    check_id: str = Field(min_length=1)
+    status: Literal["passed", "failed", "not_applicable"]
+    evidence: dict[str, Any] = Field(default_factory=dict)
+
+
+class ValidationReport(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: int = Field(default=1, ge=1)
+    checks: tuple[ValidationCheck, ...] = ()
+    candidate_tree_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    source_versions_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    generated_at: datetime
+
+
+class AutomationDecisionReceipt(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    changeset_id: str = Field(pattern=r"^chg_[a-zA-Z0-9_-]+$")
+    proposal_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    validation_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    policy_id: str = Field(min_length=1)
+    policy_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    decision: AutomationDecision
+    risk: RiskLevel
+    reason_codes: tuple[str, ...] = ()
+    decided_at: datetime
 
 
 class ModelUsage(BaseModel):
