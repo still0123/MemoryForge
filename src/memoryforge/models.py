@@ -611,7 +611,10 @@ class ReviewReceipt(BaseModel):
     changeset_id: str = Field(pattern=r"^chg_[a-zA-Z0-9_-]+$")
     proposal_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
     status: Literal["VALIDATED"] = "VALIDATED"
-    review_mode: Literal["displayed", "inline_legacy"] = "displayed"
+    actor_type: ReviewActorType = ReviewActorType.HUMAN
+    actor_id: str = Field(default="human", min_length=1)
+    review_mode: Literal["displayed", "inline_legacy", "policy"] = "displayed"
+    decision_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
     reviewed_at: datetime
 
 
@@ -622,6 +625,11 @@ class ApprovalReceipt(BaseModel):
     proposal_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
     review_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
     status: Literal["APPROVED"] = "APPROVED"
+    actor_type: ReviewActorType = ReviewActorType.HUMAN
+    actor_id: str = Field(default="human", min_length=1)
+    decision_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+    policy_sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+    approval_reason_codes: tuple[str, ...] = ()
     approved_at: datetime
 
 

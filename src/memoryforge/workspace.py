@@ -459,6 +459,66 @@ class Workspace:
                 "ChangeSet source versions are no longer current: " + ", ".join(stale)
             )
 
+    def record_automation_decision(
+        self,
+        changeset_id: str,
+        *,
+        proposal_sha256: str,
+        validation_sha256: str,
+        policy_sha256: str,
+        decision: str,
+        risk: str,
+        reason_codes: tuple[str, ...],
+    ) -> None:
+        """Record one automation decision for a staged ChangeSet (upsert)."""
+        with _connect(self.index_path) as connection:
+            connection.execute(
+                """
+                INSERT INTO automation_decisions(
+                    changeset_id, proposal_sha256, validation_sha256, policy_sha256,
+                    decision, risk, reason_codes_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(changeset_id) DO UPDATE SET
+                    proposal_sha256 = excluded.proposal_sha256,
+                    validation_sha256 = excluded.validation_sha256,
+                    policy_sha256 = excluded.policy_sha256,
+                    decision = excluded.decision,
+                    risk = excluded.risk,
+                    reason_codes_json = excluded.reason_codes_json
+                """,
+                (
+                    changeset_id,
+                    proposal_sha256,
+                    validation_sha256,
+                    policy_sha256,
+                    decision,
+                    risk,
+                    json.dumps(reason_codes, ensure_ascii=False),
+                ),
+            )
+
+    def record_automation_event(
+        self,
+        event_type: str,
+        *,
+        changeset_id: str | None = None,
+        details: dict[str, object] | None = None,
+    ) -> None:
+        """Append one automation lifecycle event to the audit log."""
+        with _connect(self.index_path) as connection:
+            connection.execute(
+                """
+                INSERT INTO automation_events(event_type, changeset_id, occurred_at, details_json)
+                VALUES (?, ?, ?, ?)
+                """,
+                (
+                    event_type,
+                    changeset_id,
+                    datetime.now(UTC).isoformat(),
+                    json.dumps(details or {}, ensure_ascii=False),
+                ),
+            )
+
     def record_applied_source_versions(
         self,
         source_versions: Mapping[str, int],

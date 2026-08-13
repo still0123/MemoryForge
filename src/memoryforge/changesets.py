@@ -21,8 +21,10 @@ from pydantic import ValidationError
 from memoryforge.errors import ChangeSetStoreError, WorkspaceError
 from memoryforge.models import (
     ApprovalReceipt,
+    AutomationDecisionReceipt,
     ChangeSet,
     ChangeSetStatus,
+    ReviewActorType,
     ReviewReceipt,
     StagedChangeSet,
     StagedWikiFile,
@@ -38,6 +40,8 @@ REVIEW_FILENAME = "review.json"
 REVIEW_DIGEST_FILENAME = "review.sha256"
 APPROVAL_FILENAME = "approval.json"
 APPROVAL_DIGEST_FILENAME = "approval.sha256"
+DECISION_FILENAME = "decision.json"
+DECISION_DIGEST_FILENAME = "decision.sha256"
 
 
 @dataclass(frozen=True)
@@ -197,14 +201,20 @@ class ChangeSetStore:
         self,
         stored: StoredChangeSet,
         *,
-        mode: Literal["displayed", "inline_legacy"] = "displayed",
+        mode: Literal["displayed", "inline_legacy", "policy"] = "displayed",
+        actor_type: ReviewActorType = ReviewActorType.HUMAN,
+        actor_id: str = "human",
+        decision_sha256: str | None = None,
     ) -> ReviewReceipt:
-        """Bind a human-visible review event to the immutable proposal."""
+        """Bind a review event (human-visible or policy-driven) to the immutable proposal."""
 
         review = ReviewReceipt(
             changeset_id=stored.changeset.changeset_id,
             proposal_sha256=stored.proposal_sha256,
             review_mode=mode,
+            actor_type=actor_type,
+            actor_id=actor_id,
+            decision_sha256=decision_sha256,
             reviewed_at=datetime.now(UTC),
         )
         existing = self._read_review(stored)
@@ -218,7 +228,16 @@ class ChangeSetStore:
         )
         return self._require_review(stored)
 
-    def approve(self, stored: StoredChangeSet) -> ApprovalReceipt:
+    def approve(
+        self,
+        stored: StoredChangeSet,
+        *,
+        actor_type: ReviewActorType = ReviewActorType.HUMAN,
+        actor_id: str = "human",
+        decision_sha256: str | None = None,
+        policy_sha256: str | None = None,
+        approval_reason_codes: tuple[str, ...] = (),
+    ) -> ApprovalReceipt:
         """Approve an already reviewed proposal without changing stable Wiki files."""
 
         review_payload, review = self._require_review_payload(stored)
@@ -229,6 +248,11 @@ class ChangeSetStore:
             changeset_id=stored.changeset.changeset_id,
             proposal_sha256=stored.proposal_sha256,
             review_sha256=hashlib.sha256(review_payload).hexdigest(),
+            actor_type=actor_type,
+            actor_id=actor_id,
+            decision_sha256=decision_sha256,
+            policy_sha256=policy_sha256,
+            approval_reason_codes=approval_reason_codes,
             approved_at=datetime.now(UTC),
         )
         self._write_receipt(
@@ -238,6 +262,29 @@ class ChangeSetStore:
             (approval.model_dump_json(indent=2) + "\n").encode(),
         )
         return self.require_approved(stored)
+
+    def write_decision(
+        self,
+        stored: StoredChangeSet,
+        receipt: AutomationDecisionReceipt,
+    ) -> AutomationDecisionReceipt:
+        """Persist a bound automation decision receipt for one staged proposal."""
+
+        existing = self._read_decision(stored)
+        if existing is not None:
+            return existing
+        self._write_receipt(
+            stored,
+            DECISION_FILENAME,
+            DECISION_DIGEST_FILENAME,
+            (receipt.model_dump_json(indent=2) + "\n").encode(),
+        )
+        return self._require_decision(stored)
+
+    def read_decision(self, stored: StoredChangeSet) -> AutomationDecisionReceipt | None:
+        """Return the recorded automation decision receipt, if any."""
+
+        return self._read_decision(stored)
 
     def require_approved(self, stored: StoredChangeSet) -> ApprovalReceipt:
         """Return the bound approval receipt or fail closed."""
@@ -432,6 +479,32 @@ class ChangeSetStore:
             changeset_id=receipt.changeset_id,
             proposal_sha256=receipt.proposal_sha256,
         )
+        return receipt
+
+    def _read_decision(
+        self,
+        stored: StoredChangeSet,
+    ) -> AutomationDecisionReceipt | None:
+        payload = self._read_receipt(stored, DECISION_FILENAME, DECISION_DIGEST_FILENAME)
+        if payload is None:
+            return None
+        try:
+            receipt = AutomationDecisionReceipt.model_validate_json(payload)
+        except ValidationError as exc:
+            raise ChangeSetStoreError("Staged ChangeSet decision receipt is invalid") from exc
+        self._require_receipt_binding(
+            stored,
+            changeset_id=receipt.changeset_id,
+            proposal_sha256=receipt.proposal_sha256,
+        )
+        return receipt
+
+    def _require_decision(self, stored: StoredChangeSet) -> AutomationDecisionReceipt:
+        receipt = self._read_decision(stored)
+        if receipt is None:
+            raise ChangeSetStoreError(
+                f"ChangeSet has no recorded automation decision: {stored.changeset.changeset_id}"
+            )
         return receipt
 
     @staticmethod

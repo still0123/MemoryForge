@@ -104,6 +104,7 @@ def _apply_stored(
     stored: StoredChangeSet,
     *,
     obsidian_builder: Callable[[Path], dict[str, object]],
+    commit_message: str | None = None,
 ) -> dict[str, Any]:
     archive_paths = tuple(
         sorted(
@@ -165,7 +166,7 @@ def _apply_stored(
         lint = lint_workspace(opened.root)
         commit = opened.version_store.commit_paths(
             paths,
-            f"knowledge: apply {stored.changeset.changeset_id}",
+            commit_message or f"knowledge: apply {stored.changeset.changeset_id}",
         )
     except Exception:
         for destination, previous in previous_files.items():
