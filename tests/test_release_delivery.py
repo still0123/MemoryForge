@@ -63,6 +63,7 @@ def test_release_package_inputs_and_build_environment_are_stable(
 ) -> None:
     root = Path(__file__).resolve().parent.parent
     project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+    assert project["project"]["name"] == release_builder.DISTRIBUTION_NAME
     assert project["project"]["readme"] == "PACKAGE_README.md"
     assert project["tool"]["hatch"]["build"]["targets"]["sdist"]["include"] == [
         "/LICENSE",
@@ -192,7 +193,7 @@ def test_sdist_clean_room_passes_constraints_to_isolated_pip(
     monkeypatch.setattr(release_builder, "_run", fake_run)
 
     release_builder._check_sdist_clean_room(
-        tmp_path / "memoryforge-0.4.0.tar.gz",
+        tmp_path / "memoryforge_wiki-0.4.0.tar.gz",
         tmp_path / "clean",
         constraints=constraints,
         cwd=tmp_path,
@@ -445,10 +446,10 @@ def test_workspace_release_drill_measures_showcase_privacy(tmp_path: Path) -> No
 def test_release_builder_rejects_nested_artifacts(tmp_path: Path) -> None:
     clean = tmp_path / "clean.tar.gz"
     dirty = tmp_path / "dirty.tar.gz"
-    _tar(clean, "memoryforge-0.4.0/pyproject.toml")
+    _tar(clean, "memoryforge_wiki-0.4.0/pyproject.toml")
     _tar(
         dirty,
-        "memoryforge-0.4.0/demo/results/artifacts/candidate/memoryforge.whl",
+        "memoryforge_wiki-0.4.0/demo/results/artifacts/candidate/memoryforge_wiki.whl",
     )
 
     release_builder._validate_sdist(clean)

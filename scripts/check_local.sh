@@ -93,7 +93,7 @@ fi
   "$workdir/build/bin/python" -m build \
     --wheel --sdist --no-isolation --outdir "$output/dist"
 )
-"$workdir/build/bin/python" - "$output"/dist/memoryforge-*.tar.gz <<'PY'
+"$workdir/build/bin/python" - "$output"/dist/memoryforge_wiki-*.tar.gz <<'PY'
 import sys
 import tarfile
 
@@ -111,7 +111,7 @@ PY
 (
   cd "$snapshot"
   PIP_CONSTRAINT="$snapshot/constraints/dev.txt" "$python" demo/run_release_check.py \
-    --wheel "$output"/dist/memoryforge-*.whl \
+    --wheel "$output"/dist/memoryforge_wiki-*.whl \
     --workdir "$workdir/wheel" \
     --code-evidence-output "$output/code-wiki-evidence.json" \
     --output "$output/release-provenance.json"
@@ -124,7 +124,7 @@ PY
 "$workdir/sdist/bin/python" -m pip install \
   --isolated --index-url https://pypi.org/simple \
   -c "$snapshot/constraints/dev.txt" \
-  --no-build-isolation "$output"/dist/memoryforge-*.tar.gz
+  --no-build-isolation "$output"/dist/memoryforge_wiki-*.tar.gz
 (
   cd "$workdir"
   env -u PYTHONPATH PYTHONNOUSERSITE=1 \
@@ -140,7 +140,7 @@ environment = Path(sys.argv[1]).resolve()
 import_path = Path(memoryforge.__file__).resolve()
 if not import_path.is_relative_to(environment):
     raise SystemExit(f"sdist import escaped clean environment: {import_path}")
-print(importlib.metadata.version("memoryforge"))
+print(importlib.metadata.version("memoryforge-wiki"))
 PY
   env -u PYTHONPATH PYTHONNOUSERSITE=1 \
     "$workdir/sdist/bin/python" -I -m memoryforge --version

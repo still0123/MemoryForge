@@ -101,7 +101,7 @@ lint、可信 Mermaid 架构图、确定性评测和单文件增量更新。它�
 ```bash
 uv build --wheel --out-dir dist
 .venv/bin/python demo/run_release_check.py \
-  --wheel dist/memoryforge-0.4.0-py3-none-any.whl \
+  --wheel dist/memoryforge_wiki-0.4.0-py3-none-any.whl \
   --workdir /private/tmp/memoryforge-release-check \
   --output /private/tmp/memoryforge-v040-release-provenance.json \
   --code-evidence-output demo/results/code_wiki_public.json \

@@ -3,7 +3,7 @@ requires = ["hatchling>=1.25"]
 build-backend = "hatchling.build"
 
 [project]
-name = "memoryforge"
+name = "memoryforge-wiki"
 version = "0.4.0"
 description = "A local-first, auditable knowledge compiler for technical docs and source code."
 readme = "PACKAGE_README.md"

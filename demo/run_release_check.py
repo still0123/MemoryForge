@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+DISTRIBUTION_NAME = "memoryforge-wiki"
 PINNED_PUBLIC_COMMIT = "93f5dc05229da250b041850ad8deeeec886ef304"
 PINNED_PUBLIC_REPOSITORY_ID = "db29dfd06f0a2853c9764f1393b680d6a592b1a5771a012b6e1387fc17aac597"
 _VALIDATOR_SPEC = importlib.util.spec_from_file_location(
@@ -85,7 +86,7 @@ def main(argv: list[str] | None = None) -> None:
     probe["import_path"] = import_path.relative_to(workdir).as_posix()
     _run(python, "-m", "memoryforge", "--help", cwd=workdir, env=env)
     cli_version = _run(python, "-m", "memoryforge", "--version", cwd=workdir, env=env).strip()
-    if cli_version != probe["packages"]["memoryforge"]:
+    if cli_version != probe["packages"][DISTRIBUTION_NAME]:
         raise SystemExit("clean-room CLI version does not match Wheel metadata")
 
     code_output = workdir / "code_wiki_evidence.json"
@@ -134,7 +135,7 @@ def main(argv: list[str] | None = None) -> None:
         "memoryforge_commit": _git_output(REPO_ROOT, "rev-parse", "HEAD"),
         "memoryforge_worktree_dirty": bool(_git_output(REPO_ROOT, "status", "--porcelain")),
         "package": {
-            "version": probe["packages"]["memoryforge"],
+            "version": probe["packages"][DISTRIBUTION_NAME],
             "wheel": wheel.name,
             "wheel_sha256": _sha256(wheel),
             "import_path": probe["import_path"],
@@ -142,7 +143,7 @@ def main(argv: list[str] | None = None) -> None:
             "dependencies": {
                 name: version
                 for name, version in probe["packages"].items()
-                if name != "memoryforge"
+                if name != DISTRIBUTION_NAME
             },
         },
         "runtime": {
@@ -238,7 +239,7 @@ def _validate_public_evidence(evidence: dict[str, Any]) -> None:
 
 def _probe_script() -> str:
     packages = (
-        "memoryforge",
+        DISTRIBUTION_NAME,
         "pydantic",
         "tree-sitter",
         "tree-sitter-go",
