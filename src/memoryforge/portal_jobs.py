@@ -20,7 +20,7 @@ from datetime import UTC, datetime, timedelta
 from functools import partial
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 
 from memoryforge.changesets import ChangeSetStore
 from memoryforge.codex_adapter import CodexImportError, import_codex_rollout
@@ -57,6 +57,7 @@ _CODE_SUFFIXES = {".go": "Go", ".py": "Python", ".ts": "TypeScript", ".tsx": "Ty
 _AUTOMATION_TYPES = {"code", "codex", "feishu"}
 _ACTIVE_STATUSES = {"queued", "running"}
 _FINAL_STATUSES = {"waiting_review", "completed", "failed", "cancelled"}
+_GIT_CLONE_TIMEOUT_SECONDS = 120
 
 
 class PortalJobManager:
@@ -405,8 +406,12 @@ def _execute_import(
     changed = False
     progress("导入来源", 25, "正在写入不可变 SourceVersion。")
 
-    if kind == "repository":
-        checkout = Path(_required_string(payload, "path")).expanduser()
+    if kind in {"repository", "repository_url"}:
+        checkout = (
+            _clone_git_repository(workspace, _required_string(payload, "url"), progress)
+            if kind == "repository_url"
+            else Path(_required_string(payload, "path")).expanduser()
+        )
         opened = Workspace.open(workspace)
         with opened.exclusive_lock():
             repository = register_git_checkout(workspace, checkout, sensitivity=sensitivity)
@@ -593,6 +598,15 @@ def _preview_payload(kind: str, payload: dict[str, Any]) -> dict[str, Any]:
             "languages": languages,
             "privacy": "local_only",
         }
+    if kind == "repository_url":
+        url = _normalise_git_repository_url(_required_string(payload, "url"))
+        return {
+            "kind": kind,
+            "title": Path(urlsplit(url).path).stem or "Git 仓库",
+            "host": urlsplit(url).hostname,
+            "download": "确认后下载到本机并编译为待审核 Wiki",
+            "privacy": "local_only",
+        }
     if kind == "codex":
         path = Path(_required_string(payload, "path")).expanduser()
         if path.suffix.lower() == ".jsonl":
@@ -652,6 +666,75 @@ def _preview_payload(kind: str, payload: dict[str, Any]) -> dict[str, Any]:
             "privacy": "local_only",
         }
     raise ValueError("unsupported source kind")
+
+
+def _clone_git_repository(
+    workspace: Path,
+    url: str,
+    progress: Callable[[str, int, str], None],
+) -> Path:
+    normalized = _normalise_git_repository_url(url)
+    opened = Workspace.open(workspace)
+    checkouts = opened.internal_dir / "checkouts"
+    _ensure_state_directory(opened.root, checkouts)
+    checkout = checkouts / hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:24]
+    if checkout.is_symlink():
+        raise ValueError("managed Git checkout is unsafe")
+    if checkout.exists():
+        snapshot = snapshot_git_repository(checkout)
+        if snapshot.remote_url != normalized:
+            raise ValueError("managed Git checkout identity does not match URL")
+        return checkout
+
+    progress("下载仓库", 15, "正在将 Git 仓库下载到本机。")
+    environment = os.environ | {
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_TERMINAL_PROMPT": "0",
+        "GIT_TEMPLATE_DIR": "",
+    }
+    try:
+        result = subprocess.run(
+            [
+                "git",
+                "-c",
+                "protocol.file.allow=never",
+                "-c",
+                "protocol.ext.allow=never",
+                "clone",
+                "--depth=1",
+                "--no-tags",
+                "--",
+                normalized,
+                str(checkout),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=_GIT_CLONE_TIMEOUT_SECONDS,
+            env=environment,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise GitRepositoryError("could not clone Git repository") from exc
+    if result.returncode != 0 or checkout.is_symlink() or not checkout.is_dir():
+        raise GitRepositoryError("could not clone Git repository")
+    return checkout
+
+
+def _normalise_git_repository_url(value: str) -> str:
+    parsed = urlsplit(value.strip())
+    if (
+        parsed.scheme.lower() != "https"
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ValueError("Git 仓库链接仅支持不含凭据的 HTTPS URL")
+    path = parsed.path.rstrip("/")
+    if not path or path == "/":
+        raise ValueError("Git 仓库链接缺少仓库路径")
+    return urlunsplit(("https", parsed.netloc, path, "", ""))
 
 
 def _codex_rollouts() -> list[Path]:

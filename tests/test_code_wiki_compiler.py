@@ -17,6 +17,7 @@ from memoryforge.code_wiki_compiler import (
     CodeWikiCompilationError,
     compile_code_wiki,
 )
+from memoryforge.compiler import _render_index
 from memoryforge.evaluation import run_evaluation
 from memoryforge.linting import lint_workspace
 from memoryforge.module_planner import build_architecture_graph, build_module_plan
@@ -219,6 +220,23 @@ def test_code_wiki_redacts_sensitive_literals_from_pages_and_model_input(
         Workspace.open(workspace),
         compilation.candidate_files,
     )
+
+
+def test_index_redacts_sensitive_page_summaries(tmp_path: Path) -> None:
+    workspace = init_workspace(tmp_path / "workspace")
+    access_key = "AKLT" + "A" * 32
+    (workspace / "wiki/INDEX.md").write_text(
+        "# Knowledge Index\n\n"
+        "Use this page to find the relevant Wiki page before reading it.\n\n"
+        "## Concepts\n\n"
+        f"- [Config](pages/config.md) — settings = {{'ak': '{access_key}'}}\n",
+        encoding="utf-8",
+    )
+
+    rendered = _render_index(Workspace.open(workspace), {})
+
+    assert access_key not in rendered
+    assert "<redacted>" in rendered
 
 
 def test_code_module_synthesis_requires_explicit_local_authorization(

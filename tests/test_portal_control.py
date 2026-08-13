@@ -7,6 +7,7 @@ import subprocess
 import threading
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 import memoryforge.cli as cli_module
@@ -226,6 +227,51 @@ def test_portal_repository_and_codex_sources_stay_private_by_default(
         assert "conversation" in json.loads(tags)
     finally:
         portal.close()
+
+
+def test_portal_git_url_source_clones_then_stages_private_wiki(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workspace = Workspace.initialize(tmp_path / "workspace").root
+    checkout = _repository(tmp_path / "repository")
+    url = "https://github.com/example/service.git"
+    cloned: list[str] = []
+
+    def fake_clone(root: Path, received_url: str, progress) -> Path:
+        assert root == workspace
+        progress("下载仓库", 15, "正在将 Git 仓库下载到本机。")
+        cloned.append(received_url)
+        return checkout
+
+    monkeypatch.setattr(portal_jobs, "_clone_git_repository", fake_clone)
+    portal = LocalPortalApp(workspace)
+    try:
+        preview = json.loads(
+            portal.dispatch_post(
+                "/api/sources/preview", {"kind": "repository_url", "url": url}
+            )[2]
+        )
+        assert preview["title"] == "service"
+        assert preview["privacy"] == "local_only"
+        assert "下载" in preview["download"]
+
+        submitted = json.loads(
+            portal.dispatch_post("/api/sources", {"kind": "repository_url", "url": url})[2]
+        )
+        job = portal.jobs.wait(submitted["id"], timeout=20)
+        assert cloned == [url]
+        assert job["status"] == "waiting_review"
+        assert job["changeset_ids"]
+    finally:
+        portal.close()
+
+
+def test_portal_git_url_rejects_local_and_credentialed_urls() -> None:
+    with pytest.raises(ValueError, match="HTTPS"):
+        portal_jobs._normalise_git_repository_url("file:///private/repository")
+    with pytest.raises(ValueError, match="HTTPS"):
+        portal_jobs._normalise_git_repository_url("https://token@example.com/team/repository.git")
 
 
 def test_portal_post_requires_same_origin_json_and_csrf(tmp_path: Path) -> None:

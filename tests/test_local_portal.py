@@ -162,6 +162,7 @@ def test_local_portal_index_shell_is_small_and_self_contained(tmp_path: Path) ->
     assert 'heading("来源管理"' in script
     assert 'section("可阅读知识"' in script
     assert 'section("继续探索"' in script
+    assert "Git 仓库链接（HTTPS）" in script
 
 
 def test_local_portal_classifies_projects_sources_templates_and_relations(

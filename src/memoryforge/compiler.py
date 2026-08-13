@@ -73,6 +73,13 @@ _INDEX_ENTRY = re.compile(
     r"- \[(?P<title>(?:\\.|[^\]])+)\]"
     r"\((?P<path>[^)]+)\) — (?P<summary>.+)"
 )
+_INDEX_ACCESS_KEY = re.compile(r"\b(?:AKLT|LTAI)[A-Za-z0-9+/=]{12,}")
+_INDEX_SECRET_VALUE = re.compile(
+    r"(?P<prefix>(?:[a-z0-9_]*(?:password|passwd|token|secret|access[a-z0-9_]*key)"
+    r"[a-z0-9_]*|['\"](?:ak|sk)['\"]|\b(?:ak|sk)\b)\s*[:=]\s*['\"])[^'\"]+"
+    r"(?P<suffix>['\"])",
+    re.IGNORECASE,
+)
 _WORDS = re.compile(r"[a-z0-9]+|[\u4e00-\u9fff]+", re.IGNORECASE)
 _CJK = re.compile(r"^[\u4e00-\u9fff]+$")
 _RELATED_PAGE_LINK = re.compile(r"^- \[[^\]]+\]\((?P<path>[^)]+\.md)\)$", re.MULTILINE)
@@ -2383,8 +2390,19 @@ def _render_index(
         lines.extend(["", f"## {sections[page_type]}", ""])
         for page in typed_pages:
             link = page.path.removeprefix("wiki/")
-            lines.append(f"- [{_escape_link_text(page.title)}]({link}) — {page.summary}")
+            lines.append(
+                f"- [{_escape_link_text(page.title)}]({link}) — "
+                f"{_redact_index_summary(page.summary)}"
+            )
     return "\n".join(lines) + "\n"
+
+
+def _redact_index_summary(summary: str) -> str:
+    redacted = _INDEX_ACCESS_KEY.sub("<redacted>", summary)
+    return _INDEX_SECRET_VALUE.sub(
+        lambda match: f"{match['prefix']}<redacted>{match['suffix']}",
+        redacted,
+    )
 
 
 def _index_summaries(content: str) -> list[PageSummary]:

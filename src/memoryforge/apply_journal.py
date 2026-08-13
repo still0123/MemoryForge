@@ -13,9 +13,16 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 
 from memoryforge.changesets import ChangeSetStore
 from memoryforge.errors import WorkspaceError
-from memoryforge.workspace import Workspace, rebuild_applied_projection
+from memoryforge.wiki_facts import parse_page_facts
+from memoryforge.workspace import (
+    Workspace,
+    _connect_readonly,
+    candidate_page_sources,
+    rebuild_applied_projection,
+)
 
 _JOURNAL_NAME = "apply-journal.json"
+_MAX_JOURNAL_BYTES = 1024 * 1024
 
 
 class ApplyJournal(BaseModel):
@@ -74,12 +81,12 @@ class ApplyJournalStore:
                 if not stat.S_ISREG(os.fstat(descriptor).st_mode):
                     raise WorkspaceError("apply journal must be a regular file")
                 with os.fdopen(descriptor, "rb", closefd=False) as source:
-                    payload = source.read(64 * 1024 + 1)
+                    payload = source.read(_MAX_JOURNAL_BYTES + 1)
             finally:
                 os.close(descriptor)
         finally:
             os.close(directory_fd)
-        if len(payload) > 64 * 1024:
+        if len(payload) > _MAX_JOURNAL_BYTES:
             raise WorkspaceError("apply journal exceeds its size limit")
         try:
             return ApplyJournal.model_validate_json(payload)
@@ -182,7 +189,8 @@ def _recover_locked(
         if journal.phase == "committed":
             raise WorkspaceError("apply journal Commit is missing from Workspace history")
         workspace.version_store.restore_paths(journal.base_commit, journal.paths)
-        rebuild_applied_projection(workspace)
+        if not _projection_matches_commit(workspace, journal.base_commit):
+            rebuild_applied_projection(workspace)
         store.clear()
         return
 
@@ -199,7 +207,8 @@ def _recover_locked(
         raise WorkspaceError("apply journal does not match the current Workspace Commit")
 
     workspace.version_store.restore_paths(commit, journal.paths)
-    rebuild_applied_projection(workspace)
+    if not _projection_matches_commit(workspace, commit):
+        rebuild_applied_projection(workspace)
     changesets = ChangeSetStore(workspace)
     pending = workspace.staging_dir / journal.changeset_id
     applied = workspace.staging_dir / "applied" / journal.changeset_id
@@ -216,3 +225,28 @@ def _recover_locked(
     else:
         raise WorkspaceError("apply journal has no staged or archived ChangeSet")
     store.clear()
+
+
+def _projection_matches_commit(workspace: Workspace, commit: str) -> bool:
+    paths = workspace.version_store.list_wiki_paths_at(commit)
+    contents = workspace.version_store.read_wiki_texts_at(commit, paths=paths) if paths else {}
+    expected_sources = {
+        (page_path, source_id)
+        for page_path, source_ids in candidate_page_sources(contents).items()
+        for source_id in source_ids
+    }
+    expected_facts = {
+        (page_path, fact.fact_id)
+        for page_path, content in contents.items()
+        for fact in parse_page_facts(page_path, content)
+    }
+    with _connect_readonly(workspace.index_path) as connection:
+        actual_sources = {
+            (str(row[0]), str(row[1]))
+            for row in connection.execute("SELECT page_path, source_id FROM page_sources")
+        }
+        actual_facts = {
+            (str(row[0]), str(row[1]))
+            for row in connection.execute("SELECT page_path, fact_id FROM wiki_facts")
+        }
+    return expected_sources == actual_sources and expected_facts == actual_facts

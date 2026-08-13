@@ -803,6 +803,7 @@ function sourcePayload(kind,value,selectionId){
   if(kind==="repository"||kind==="codex"||kind==="file"||kind==="folder"){
     return selectionId&&kind==="codex"?{kind,selection_id:selectionId}:{kind,path:value}
   }
+  if(kind==="repository_url")return{kind,url:value};
   if(kind==="feishu")return{kind,document:value};
   return{kind,url:value}
 }
@@ -821,7 +822,8 @@ async function renderAddSource(){
   let previewed=false;
   const kind=element("select");
   [
-    ["repository","代码仓库"],["codex","AI 会话"],["feishu","飞书文档"],
+    ["repository","本地 Git 仓库"],["repository_url","Git 仓库链接（HTTPS）"],
+    ["codex","AI 会话"],["feishu","飞书文档"],
     ["file","文件"],["folder","文件夹"],["web","网页"],["github","GitHub 讨论"]
   ].forEach(([value,label])=>kind.append(element("option",{value,text:label})));
   const value=element("input",{placeholder:"本地路径"});
@@ -836,7 +838,8 @@ async function renderAddSource(){
     selectionId="";previewed=false;preview.textContent="";choices.textContent="";
     const selected=kind.value;
     value.placeholder={
-      repository:"本地 Git 仓库路径",codex:"Codex rollout JSONL 路径",
+      repository:"本地 Git 仓库路径",repository_url:"HTTPS Git 链接，例如 https://github.com/owner/repo.git",
+      codex:"Codex rollout JSONL 路径",
       feishu:"飞书文档或 Wiki 链接",file:"Markdown/TXT 文件路径",
       folder:"本地文件夹路径",web:"公开网页 URL",github:"GitHub Issue/PR URL"
     }[selected];

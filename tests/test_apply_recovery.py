@@ -5,11 +5,26 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
+import memoryforge.apply_journal as apply_journal_module
 from memoryforge.apply_journal import ApplyJournalStore
 from memoryforge.changesets import ChangeSetStore
 from memoryforge.cli import app
 from memoryforge.linting import lint_workspace
-from memoryforge.workspace import Workspace
+from memoryforge.wiki_facts import parse_page_facts
+from memoryforge.workspace import Workspace, candidate_page_sources
+
+
+def test_apply_journal_supports_large_changesets(tmp_path: Path) -> None:
+    workspace = Workspace.initialize(tmp_path / "workspace")
+    paths = tuple(
+        f"wiki/pages/code/repository/module-{index:04d}/page.md" for index in range(2_000)
+    )
+    store = ApplyJournalStore(workspace)
+
+    journal = store.prepare("chg_large", workspace.current_commit(), paths)
+
+    assert store.path.stat().st_size > 64 * 1024
+    assert store.load() == journal
 
 
 def test_prepared_apply_recovers_worktree_and_projection(tmp_path: Path, monkeypatch) -> None:
@@ -68,6 +83,48 @@ def test_committed_apply_recovers_projection_and_archive(tmp_path: Path, monkeyp
     assert json.loads((archived / "receipt.json").read_text(encoding="utf-8"))["commit"] == commit
     assert recovered.page_paths_for_source(stored.changeset.source_ids[0])
     assert lint_workspace(workspace)["status"] == "clean"
+
+
+def test_committed_apply_reuses_matching_projection(tmp_path: Path, monkeypatch) -> None:
+    runner, workspace, changeset_id = _staged_changeset(tmp_path, monkeypatch)
+    assert runner.invoke(
+        app,
+        ["review", changeset_id, "--workspace", str(workspace)],
+    ).exit_code == 0
+    assert runner.invoke(
+        app,
+        ["approve", changeset_id, "--workspace", str(workspace)],
+    ).exit_code == 0
+    opened = Workspace.open(workspace)
+    stored = ChangeSetStore(opened).get(changeset_id)
+    paths = tuple(sorted(stored.candidate_files))
+    journal_store = ApplyJournalStore(opened)
+    journal = journal_store.prepare(changeset_id, stored.changeset.base_commit, paths)
+    opened.record_applied_source_versions(stored.changeset.source_versions)
+    opened.replace_applied_page_sources(candidate_page_sources(stored.candidate_files))
+    opened.replace_applied_page_facts(
+        {
+            path: parse_page_facts(path, content)
+            for path, content in stored.candidate_files.items()
+            if path.startswith("wiki/pages/")
+        }
+    )
+    for path, content in stored.candidate_files.items():
+        destination = workspace / path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(content, encoding="utf-8")
+    commit = opened.version_store.commit_paths(paths, f"knowledge: apply {changeset_id}")
+    journal_store.mark_committed(journal, commit)
+
+    def fail_rebuild(_workspace: Workspace) -> None:
+        raise AssertionError("matching projection must not be rebuilt")
+
+    monkeypatch.setattr(apply_journal_module, "rebuild_applied_projection", fail_rebuild)
+    recovered = Workspace.open(workspace)
+
+    assert recovered.current_commit() == commit
+    assert ApplyJournalStore(recovered).load() is None
+    assert (workspace / ".memoryforge/staging/applied" / changeset_id).is_dir()
 
 
 def _staged_changeset(
