@@ -12,6 +12,9 @@ dist/
 # Local MemoryForge workspaces and credentials
 .env
 .env.*
+# Claude Desktop app patch marker and uv lockfile stay local-only, never committed.
+claude-app-path.txt
+uv.lock
 .memoryforge/
 demo-workspace/
 memoryforge-demo/
