@@ -44,18 +44,23 @@ description: >-
 # MemoryForge knowledge
 
 1. Route first: inspect the current checkout for exact symbols, call chains, errors, files, or
-   line numbers. Call `memoryforge_context` for internal operational procedures, environment
-   access or login, configuration, history, rationale, prior decisions, cross-repository
-   context, or when no checkout is available.
+   line numbers. Call `memoryforge_context` for project facts and how-to questions: internal
+   operations, environment access or login, configuration, history, rationale, prior
+   decisions, cross-repository context, or when no checkout is available. Use
+   `memoryforge_recall` only for latest-session summaries, never for a factual how-to.
 2. Interpret `evidence_status`:
-   - `grounded`: answer with citations; do not repeat local or remote repository searches.
+   - `grounded`: answer from `project_answer` with citations. Never say the knowledge base
+     lacked evidence, and do not repeat local or remote repository searches.
    - `partial`: state supported facts, then verify only `unsupported_aspects` when
      `answer_strategy.source_verification_required` is true.
    - `no_local_evidence`: say the Wiki does not establish a project fact; clearly labeled
      general guidance is still allowed.
 3. Call `memoryforge_read_evidence` only when exact source text is needed.
 4. For cross-repository questions, keep full repository names in one Workspace query.
-5. Never invent project facts or citations. Skip unrelated general questions.
+5. A work machine, jump host, bastion and target host are distinct unless cited evidence says
+   otherwise. Never substitute one host's alias, address, account or procedure for another.
+6. Treat `verification_status: unverified_history` as a useful lead, not a reviewed fact.
+   Never invent project facts or citations. Skip unrelated general questions.
 """
 
 _CODEX_SKILL_UI = """interface:

@@ -194,6 +194,30 @@ def _answer_strategy(question: str, evidence_status: str) -> dict[str, object]:
     }
 
 
+def _response_mode(evidence_status: str) -> str:
+    if evidence_status == "grounded":
+        return "answer_from_project_evidence"
+    if evidence_status == "partial":
+        return "answer_with_evidence_boundary"
+    return "general_guidance_only"
+
+
+def _verification_status(citations: list[dict[str, object]]) -> str:
+    """Separate reviewed project evidence from explicitly unverified history."""
+    if not citations:
+        return "no_evidence"
+    unverified_markers = ("assistant conclusions", "conversation notes (unverified)")
+    unverified = [
+        any(marker in str(citation.get("section", "")).casefold() for marker in unverified_markers)
+        for citation in citations
+    ]
+    if all(unverified):
+        return "unverified_history"
+    if any(unverified):
+        return "mixed_evidence"
+    return "reviewed_project_evidence"
+
+
 def resolve_repository_scope(workspace: Path, project_path: Path) -> GitRepositoryRecord:
     """Bind ``project_path`` to the registered Git checkout it lives under.
 
@@ -374,16 +398,23 @@ def _query_context(
         for citation in result["citations"]
     ]
     support: SupportPayload | dict[str, object] = result.get("support") or {}
-    content = {
-        "answer_hint": answer_hint,
-        "evidence_status": evidence_status,
-        "supported_claims": result.get("supported_claims", []),
-        "unsupported_aspects": result.get("unsupported_aspects", []),
-        "answer_strategy": answer_strategy,
-        "wiki_pages": wiki_pages,
-        "citations": citations,
-        "support": support,
-    }
+
+    def context_content() -> dict[str, object]:
+        return {
+            "project_answer": answer_hint,
+            "answer_hint": answer_hint,
+            "evidence_status": evidence_status,
+            "verification_status": _verification_status(citations),
+            "response_mode": _response_mode(evidence_status),
+            "supported_claims": result.get("supported_claims", []),
+            "unsupported_aspects": result.get("unsupported_aspects", []),
+            "answer_strategy": answer_strategy,
+            "wiki_pages": wiki_pages,
+            "citations": citations,
+            "support": support,
+        }
+
+    content = context_content()
     output_characters = len(json.dumps(content, ensure_ascii=False))
     truncated = False
     if output_characters > _CONTEXT_MAX_OUTPUT_CHARACTERS:
@@ -395,53 +426,41 @@ def _query_context(
                 for page in wiki_pages
                 if page["path"] in {citation["wiki_page"] for citation in citations}
             ]
-            content = {
-                "answer_hint": answer_hint,
-                "evidence_status": evidence_status,
-                "supported_claims": result.get("supported_claims", []),
-                "unsupported_aspects": result.get("unsupported_aspects", []),
-                "answer_strategy": answer_strategy,
-                "wiki_pages": wiki_pages,
-                "citations": citations,
-                "support": support,
-            }
+            content = context_content()
             if len(json.dumps(content, ensure_ascii=False)) <= _CONTEXT_MAX_OUTPUT_CHARACTERS:
                 break
         else:
+            empty_answer_size = len(
+                json.dumps(
+                    {
+                        "project_answer": "",
+                        "answer_hint": "",
+                        "evidence_status": evidence_status,
+                        "verification_status": _verification_status(citations),
+                        "response_mode": _response_mode(evidence_status),
+                        "supported_claims": [],
+                        "unsupported_aspects": result.get("unsupported_aspects", []),
+                        "answer_strategy": answer_strategy,
+                        "wiki_pages": wiki_pages,
+                        "citations": citations,
+                        "support": support,
+                    },
+                    ensure_ascii=False,
+                )
+            )
             answer_hint = _truncate_text(
                 answer_hint,
-                _CONTEXT_MAX_OUTPUT_CHARACTERS
-                - len(
-                    json.dumps(
-                        {
-                            "answer_hint": "",
-                            "evidence_status": evidence_status,
-                            "supported_claims": [],
-                            "unsupported_aspects": result.get("unsupported_aspects", []),
-                            "answer_strategy": answer_strategy,
-                            "wiki_pages": wiki_pages,
-                            "citations": citations,
-                            "support": support,
-                        },
-                        ensure_ascii=False,
-                    )
-                ),
+                max(0, (_CONTEXT_MAX_OUTPUT_CHARACTERS - empty_answer_size) // 2),
             )
-            content = {
-                "answer_hint": answer_hint,
-                "evidence_status": evidence_status,
-                "supported_claims": result.get("supported_claims", []),
-                "unsupported_aspects": result.get("unsupported_aspects", []),
-                "answer_strategy": answer_strategy,
-                "wiki_pages": wiki_pages,
-                "citations": citations,
-                "support": support,
-            }
+            content = context_content()
         output_characters = len(json.dumps(content, ensure_ascii=False))
     payload: dict[str, object] = {
         "status": "ok",
         "evidence_status": evidence_status,
+        "verification_status": _verification_status(citations),
+        "response_mode": _response_mode(evidence_status),
         "workspace_commit": workspace_commit,
+        "project_answer": answer_hint,
         "answer_hint": answer_hint,
         "supported_claims": result.get("supported_claims", []),
         "unsupported_aspects": result.get("unsupported_aspects", []),

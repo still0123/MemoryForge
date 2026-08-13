@@ -527,6 +527,10 @@ def answer_question(
             answer_citation_limit,
             question_terms=question_terms,
             required_sources=min_source_count,
+            minimum_citations=min(
+                answer_citation_limit,
+                _answer_citation_limit(question, 1),
+            ),
         )
         answer = (
             _fallback_answer(question, selected)
@@ -562,6 +566,10 @@ def answer_question(
                 answer_citation_limit,
                 question_terms=question_terms,
                 required_sources=min_source_count,
+                minimum_citations=min(
+                    answer_citation_limit,
+                    _answer_citation_limit(question, 1),
+                ),
             )
             answer = _fallback_answer(question, selected)
             model_status = "fallback"
@@ -1730,6 +1738,7 @@ def _top_matches(
     *,
     question_terms: set[str],
     required_sources: int = 1,
+    minimum_citations: int = 1,
 ) -> list[tuple[str, CitationPayload]]:
     # ponytail: greedy page-level coverage is O(n²), sufficient for the 6-citation budget.
     selected: list[tuple[str, CitationPayload]] = []
@@ -1767,9 +1776,17 @@ def _top_matches(
                 ),
             )
         _, page_path, citation = remaining.pop(selected_index)
+        new_terms = _matching_terms(question_terms, citation) - covered_terms
+        source = (citation["source_id"], citation["source_version"])
+        if (
+            len(selected) >= minimum_citations
+            and len(selected_sources) >= required_sources
+            and not new_terms
+        ):
+            break
         selected.append((page_path, citation))
-        selected_sources.add((citation["source_id"], citation["source_version"]))
-        covered_terms.update(_matching_terms(question_terms, citation))
+        selected_sources.add(source)
+        covered_terms.update(new_terms)
     return selected
 
 

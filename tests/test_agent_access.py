@@ -107,6 +107,9 @@ def test_mcp_evidence_contract_separates_operation_and_partial_evidence(
 
     assert payload["status"] == "ok"
     assert payload["evidence_status"] == "partial"
+    assert payload["response_mode"] == "answer_with_evidence_boundary"
+    assert payload["verification_status"] == "reviewed_project_evidence"
+    assert payload["project_answer"] == "alpha-mgr imports beta-mgr/api."
     assert payload["answer_hint"] == "alpha-mgr imports beta-mgr/api."
     assert payload["unsupported_aspects"] == ["runtime_call_not_verified"]
     assert payload["answer_strategy"] == {
@@ -115,6 +118,13 @@ def test_mcp_evidence_contract_separates_operation_and_partial_evidence(
         "source_verification_required": True,
     }
     assert len(payload["citations"]) == 1
+
+
+def test_mcp_marks_conversation_conclusions_as_unverified_history() -> None:
+    citations = [{"section": "Assistant conclusions"}]
+
+    assert agent_access_module._verification_status(citations) == "unverified_history"
+    assert agent_access_module._response_mode("grounded") == "answer_from_project_evidence"
 
 
 def _git(repository: Path, *arguments: str) -> None:

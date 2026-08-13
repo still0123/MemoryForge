@@ -1222,6 +1222,31 @@ def test_ask_can_return_multiple_citations_when_requested(tmp_path: Path, monkey
     assert "Friday" in result["answer"]
 
 
+def test_top_matches_does_not_fill_budget_with_same_term_noise() -> None:
+    useful = {
+        "source_id": "a" * 64,
+        "source_version": 1,
+        "locator": "chars:0-40",
+        "quote": "登录链路使用 Kerberos 连接跳板机。",
+    }
+    noise = {
+        "source_id": "b" * 64,
+        "source_version": 1,
+        "locator": "chars:0-80",
+        "quote": "该代码常量用于跳板机登录配置。",
+    }
+
+    selected = query_module._top_matches(
+        [((2,), "wiki/pages/runbook.md", useful), ((1,), "wiki/pages/code.md", noise)],
+        6,
+        question_terms=query_module._expanded_question_terms(
+            query_module._terms("跳板机怎么登录？")
+        ),
+    )
+
+    assert selected == [("wiki/pages/runbook.md", useful)]
+
+
 def test_top_matches_prefers_a_citation_that_covers_new_terms() -> None:
     first = {
         "source_id": "a" * 64,
