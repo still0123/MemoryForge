@@ -22,6 +22,7 @@ retrieval/support implementation.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import sqlite3
@@ -115,6 +116,25 @@ def resolve_repository_scope(workspace: Path, project_path: Path) -> GitReposito
         candidates,
         key=lambda record: len(Path(record.checkout_path).resolve(strict=False).parts),
     )
+
+
+def server_name(workspace: Path, project_root: Path) -> str:
+    """Return the stable, unique MCP server name for one binding (§8).
+
+    ``memoryforge-<project-slug>-<first8(sha256(canonical_workspace + "\\0"
+    + canonical_project_root))>``. The same Workspace + project always yields
+    the same name; a different binding yields a different name, so Host
+    configurations can never silently overwrite each other.
+    """
+    canonical_workspace = str(workspace.resolve(strict=False))
+    canonical_project = str(project_root.resolve(strict=False))
+    digest = hashlib.sha256(
+        f"{canonical_workspace}\0{canonical_project}".encode()
+    ).hexdigest()[:8]
+    slug = re.sub(r"[^a-z0-9]+", "-", Path(canonical_project).name.lower()).strip("-")
+    if not slug:
+        slug = "project"
+    return f"memoryforge-{slug}-{digest}"
 
 
 def query_context(

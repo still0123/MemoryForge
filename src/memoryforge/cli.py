@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import platform
@@ -63,6 +64,7 @@ from memoryforge.lifecycle import (
 )
 from memoryforge.linting import lint_workspace
 from memoryforge.local_portal import serve_local_portal
+from memoryforge.mcp_server import build_server
 from memoryforge.models import Sensitivity
 from memoryforge.module_planner import build_architecture_graph, build_module_plan
 from memoryforge.obsidian import OUTPUT_RELATIVE, build_obsidian
@@ -1873,6 +1875,41 @@ def rollback(
             indent=2,
         )
     )
+
+
+@app.command()
+def mcp(
+    project_root: Annotated[
+        Path,
+        typer.Option(
+            "--project-root",
+            help="Project directory inside one registered Git checkout.",
+        ),
+    ],
+    allow_local_llm: Annotated[
+        bool,
+        typer.Option(
+            "--allow-local-llm",
+            help="Allow local_only content in this read-only connection.",
+        ),
+    ] = False,
+    workspace: WorkspaceOption = Path("."),
+) -> None:
+    """Run the read-only MCP stdio server; stdout carries only the protocol."""
+    try:
+        opened = Workspace.open_readonly(workspace)
+        server = build_server(opened.root, project_root, allow_local=allow_local_llm)
+    except (
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    asyncio.run(server.run_stdio_async())
 
 
 @app.command()

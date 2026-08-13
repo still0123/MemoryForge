@@ -30,6 +30,7 @@ classifiers = [
   "Topic :: Text Processing :: Indexing",
 ]
 dependencies = [
+  "mcp>=2,<3",
   "pydantic>=2.7,<3",
   "tree-sitter>=0.23,<0.26",
   "tree-sitter-go>=0.23,<1",
