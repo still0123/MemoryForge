@@ -65,6 +65,7 @@ def test_release_package_inputs_and_build_environment_are_stable(
     project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
     assert project["project"]["readme"] == "PACKAGE_README.md"
     assert project["tool"]["hatch"]["build"]["targets"]["sdist"]["include"] == [
+        "/LICENSE",
         "/PACKAGE_README.md",
         "/pyproject.toml",
         "/src",

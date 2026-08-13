@@ -22,6 +22,7 @@ def test_package_and_cli_versions_match_v040() -> None:
     assert memoryforge.__version__ == "0.4.0"
     assert project["project"]["readme"] == "PACKAGE_README.md"
     assert project["tool"]["hatch"]["build"]["targets"]["sdist"]["include"] == [
+        "/LICENSE",
         "/PACKAGE_README.md",
         "/pyproject.toml",
         "/src",

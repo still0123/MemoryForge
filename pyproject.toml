@@ -5,11 +5,30 @@ build-backend = "hatchling.build"
 [project]
 name = "memoryforge"
 version = "0.4.0"
-description = "An auditable local knowledge ingestion and search CLI."
+description = "A local-first, auditable knowledge compiler for technical docs and source code."
 readme = "PACKAGE_README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = { file = "LICENSE" }
 authors = [{ name = "ranmaoxia0123" }]
+keywords = [
+  "ai-agent",
+  "knowledge-management",
+  "local-first",
+  "rag",
+  "wiki",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: MacOS",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Topic :: Documentation",
+  "Topic :: Software Development :: Documentation",
+  "Topic :: Text Processing :: Indexing",
+]
 dependencies = [
   "pydantic>=2.7,<3",
   "tree-sitter>=0.23,<0.26",
@@ -32,11 +51,19 @@ dev = [
 [project.scripts]
 memoryforge = "memoryforge.cli:main"
 
+[project.urls]
+Homepage = "https://github.com/still0123/MemoryForge"
+Documentation = "https://github.com/still0123/MemoryForge#readme"
+Repository = "https://github.com/still0123/MemoryForge.git"
+Issues = "https://github.com/still0123/MemoryForge/issues"
+Changelog = "https://github.com/still0123/MemoryForge/blob/main/CHANGELOG.md"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/memoryforge"]
 
 [tool.hatch.build.targets.sdist]
 include = [
+  "/LICENSE",
   "/PACKAGE_README.md",
   "/pyproject.toml",
   "/src",

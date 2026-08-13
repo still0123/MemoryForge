@@ -1,236 +1,211 @@
 # 秋招演示与面试说明
 
-<!-- memoryforge-release-claim: version=0.3.0; status=released; supported_platforms=macos+linux; active_candidate=19; platform_gate_candidate=19; platform_gate_status=accepted; review_status=accepted; macos_passed=642; linux_passed=639; linux_skipped=3; windows_status=not_verified; release_verification=passed -->
+<!-- memoryforge-release-claim: version=0.4.0; status=released; supported_platforms=macos; macos_passed=656; linux_status=not_rerun; windows_status=not_verified; release_verification=passed -->
 
-这份文档用于把 MemoryForge 讲成一个完整项目。演示只使用公开的 `AgentSkill-Eval` 文档，不使用公司代码、真实飞书正文、Token 或 App Secret。
+这份文档按当前 v0.4 主线讲解 MemoryForge。演示只使用仓库内固定夹具或公开
+`AgentSkill-Eval` 文档，不使用公司代码、真实飞书正文、Token 或 App Secret。
 
-## 一句话介绍
+## 版本口径
 
-MemoryForge 是一个本地优先的技术知识 Wiki 编译器：它把 Git、Markdown、飞书文档或公开网页编译成可审核的 Markdown Wiki，再通过渐进式查询和最小 Agent 给出带来源的答案。
+| 范围 | 状态 |
+| --- | --- |
+| `v0.4.0` 正式发布 | macOS `656 passed`；Linux 未重跑；Windows 未验证 |
+| 当前 `main` | 增加未发布的本地 Portal 控制面和冻结期加固；macOS `722 passed` |
+| 功能边界 | 已冻结，只修 Bug、错误回答和文档 |
 
-它的重点不是“再做一个聊天机器人”，而是解决三个问题：知识如何持续沉淀、答案如何控制读取范围、结论如何回到原始证据。
+演示时先说明自己展示的是 `v0.4.0` Release 还是当前 `main`，不要把 `main` 的 Portal 门禁写成
+v0.4.0 的发布结果。
 
-## 3 分钟演示顺序
+## 30 秒介绍
 
-### 1. 先展示项目结构
+> MemoryForge 是一个本地优先的技术知识 Wiki 编译器。它把 Git、文档、飞书和 AI 对话先编译成
+> 可审核的 Markdown Wiki，再通过渐进式查询和受限 Agent 给出带来源的答案。项目重点不是再做
+> 一个聊天机器人，而是解决知识如何持续更新、结论如何人工审核、回答如何回到原始证据。
+
+## 3 分钟演示
+
+### 1. 先讲主链
 
 ```text
-原始资料
-   ↓
-Source Manifest + 原文快照
-   ↓
-WikiCompiler：生成 ChangeSet
-   ↓ review / approve / apply
-Markdown Wiki：INDEX.md + pages/
-   ↓
-渐进式查询：索引 → 页面 → 必要时原文
-   ↓
-CLI / MiniClaude Agent / 飞书机器人
+代码 / 文档 / 飞书 / AI 对话
+        ↓
+不可变 SourceVersion
+        ↓
+WikiCompiler 生成 ChangeSet
+        ↓ review → approve → apply
+Markdown Wiki + Git Commit
+        ↓
+INDEX → 少量 Wiki 页面 → 必要时原文
+        ↓
+Portal / CLI / MiniClaude Agent / 飞书
 ```
 
-面试时可以直接说：
+讲解重点：
 
-> 我没有把所有资料直接塞给模型，而是先把资料编译成可读、可审核、可增量更新的 Wiki。查询时先读目录和少量页面，只有需要核验时才回到原文，并且回答必须带来源。
+- 原始资料不会直接覆盖 Wiki；
+- `review`、`approve`、`apply` 分开留痕；
+- 查询读少量页面，证据不足就返回 `unknown`；
+- Citation 可以回到固定版本和原文 locator。
 
-### 2. 跑公开端到端 Demo
-
-最快路径不依赖外部仓库或模型 Key：
+### 2. 跑零 Key 端到端 Demo
 
 ```bash
+python3.11 -m venv .venv
+.venv/bin/python -m pip install .
 .venv/bin/python demo/run_showcase_demo.py \
   --workdir /private/tmp/memoryforge-showcase-demo \
   --output /private/tmp/memoryforge-showcase
 open /private/tmp/memoryforge-showcase/index.html
 ```
 
-按页面顺序展示来源版本、Wiki 树、ChangeSet Diff、`review → approve → apply`、Query/Citation
-Trace、正向指标、Click 外部失败、正确拒答和 Code Wiki Mermaid。页面为只读静态文件，不依赖
-正在运行的服务。
+按页面顺序展示：
 
-完整文档 Wiki 复现仍可使用已存在的公开 Git checkout：
+1. SourceVersion 和 Wiki 树；
+2. ChangeSet Diff 与 `review → approve → apply`；
+3. Query / Citation Trace；
+4. 正向 Benchmark、正确拒答和 Click 外部失败；
+5. Python、Go、TypeScript Code Wiki 的 Mermaid 架构图。
 
-准备一个已经存在的公开 Git checkout，然后执行：
+这条路径使用固定公开夹具，真实执行：
+
+```text
+import → Code Index → ChangeSet → review → approve → apply → query → showcase
+```
+
+### 3. 展示一个回答和一个拒答
+
+若已准备公开 `AgentSkill-Eval` checkout：
 
 ```bash
 .venv/bin/python demo/run_public_demo.py \
   --source-repo /absolute/path/to/AgentSkill-Eval \
   --workspace /private/tmp/memoryforge-public-demo \
   --output /private/tmp/memoryforge-public-result.json
-```
 
-它会依次执行：
-
-```text
-init → git-add → git-sync → ingest → review → approve → apply → lint → ask → eval
-```
-
-本次公开基线使用 `AgentSkill-Eval@93f5dc0`，会导入 56 个来源文件，生成 57 个 Wiki 文件，运行
-30 道题。当前结果是：回答准确率 96.7%、Top-3 来源召回率 96.2%、引用落地准确率 100%、
-拒答准确率 100%。同一题集上的 Raw FTS Top-3 来源召回率为 57.7%，完整方法见
-[公开 Benchmark](BENCHMARK.md)。
-
-随后展示 [Click 外部评测](CLICK_DOCS_BENCHMARK.md)：20 道冻结题中 development/holdout 的
-Answer accuracy 只有 10%/0%，尽管 Citation grounding 都是 100%。这说明工程链路可信不等于
-问答能力已经通用化；引用可回读也不等于答案正确。
-
-再打开 [`code_wiki_public.json`](../demo/results/code_wiki_public.json) 和
-[`release_provenance.json`](../demo/results/release_provenance.json)：前者证明三语言 Symbol、
-Relation、Module、Mermaid edge 和 Citation 指标均为 100%，单文件更新只影响 20% 的源码模块页；
-后者是 v0.2.0 的历史发布证据。v0.3.0 的 Wheel/sdist、SHA256、benchmark summary 和
-provenance 由双隔离本地构建生成。v0.3.0 支持 macOS 与 Linux；Windows 尚未验证，不外推为
-Windows 可用。
-
-当前 Candidate 7 本地门禁为 macOS 599 passed、Linux 596 passed / 3 skipped，coverage 均为
-88%；Wheel/sdist 与 development 字节一致。原生 Windows confirmation 未运行。这组结果只证明
-固定 Commit 的本地交付链路，不外推为 Windows 成功。
-
-Candidate 5 最终静态审查为 0 P0 / 10 P1 / 2 P2，结果 rejected。审查失败优先于本地门禁成功，
-因此不得授权 confirmation。
-
-Candidate 6 development 已 6/6 通过，并从 detached Commit 快照构建；最终静态审查为
-0 P0 / 9 P1 / 3 P2，结果 rejected。development 与本地门禁制品不一致，故不得授权 confirmation。
-
-Candidate 7 已固定 package 输入和构建 epoch；development 6/6 通过。macOS 首次本地门禁因旧
-`sdist.exclude` 测试合同而 598/599 rejected，失败保留。修复测试合同后，同一 package bytes
-通过双平台门禁。最终静态审查发现 0 P0 / 10 P1 / 3 P2，结果 rejected；13 条原始发现保留，
-因此不得授权 confirmation。
-
-Candidate 8 development 已 6/6 通过：固定 checkout EOL；Summary schema 2 绑定 acceptance 与
-negative Commit；冻结 manifest 从实际哈希题集计数；Workspace drill 验证正确 answer、Citation、
-unknown 和恢复重放。本地门禁为 macOS 604 passed、Linux 601 passed / 3 skipped；两端 package
-bytes 与 development 一致，retained SHA256SUMS 可原位重放。终审发现 0 P0 / 4 P1 / 2 P2，
-结果 rejected；6 条发现保留，因此不得授权 confirmation。
-
-Candidate 9 development 已 6/6 通过：版本探针不再继承 coverage 环境，历史 review sidecar
-从固定 Commit 复算，Showcase 指标与最终 case 一致，Code Wiki 的 12 项 metrics、6 项 gates、
-incremental 与原始 Evidence 完整绑定。本地门禁为 macOS 607 passed、Linux 604 passed / 3 skipped；
-Wheel、sdist 与 raw Code Wiki Evidence 跨平台同字节。终审发现 0 P0 / 10 P1 / 4 P2，结果
-rejected；14 条发现保留，confirmation 继续关闭。
-
-Candidate 10 已生成完整 Summary schema 3 与可重算的 Workspace drill schema 2；旧 development
-consumer 仍要求 schema 1，故结果为 5/6 rejected。该负结果及全部 artifacts 已保留，未运行
-confirmation/holdout。
-
-Candidate 11 统一使用 schema-aware consumer 后 development 6/6 通过。公开 Evidence 现可直接
-复算 answer、Citation、unknown、backup/restore replay，并保留 experiment repository、development
-split 和完整历史身份。本地门禁为 macOS 609 passed、Linux 606 passed / 3 skipped；package 与
-raw Code Wiki Evidence 跨平台同字节。终审发现 0 P0 / 8 P1 / 4 P2，结果 rejected；12 条独立
-发现保留，confirmation 继续关闭。
-
-Candidate 12 development 6/6 通过，并关闭 Candidate 11 的 12 个审查根因：package metadata、
-Registry-to-Commit、verify Evidence/support、跨平台隐私路径、clean-room import、Git fixture
-identity、PowerShell 恢复、artifact root 和 passed-review 状态均由确定性 consumer 重放。
-Candidate 12 本地门禁为 macOS 623 passed、Linux 620 passed / 3 skipped；Wheel、sdist 与 raw
-Code Wiki Evidence 跨平台同字节。终审发现 0 P0 / 9 P1 / 7 P2，结果 rejected；20 条 raw
-findings 与 16 条去重后独立根因保留，confirmation 继续关闭。
-
-随后展示 support-score development：Answer 与 Selective Accuracy 为 100%，Coverage 为 90%，
-Risk 为 0%；同时明确 confirmation 尚未运行。这样可以说明“有正向指标，但不越过冻结 split
-提前外推”。
-
-### 3. 展示带引用的回答
-
-```bash
-memoryforge ask '统计器如何避免把模拟实验结果当成真实结论？' \
+.venv/bin/memoryforge ask \
+  '统计器如何避免把模拟实验结果当成真实结论？' \
   --workspace /private/tmp/memoryforge-public-demo \
   --debug --verify
 ```
 
-重点展示输出里的三部分：
+重点展示输出里的：
 
-- `answer`：回答内容；
-- `citations`：引用的 Wiki 页面、版本和字符范围；
-- `trace`：本次查询展开了哪些索引、页面和原文证据。
+- `answer`：只组织已命中的事实；
+- `citations`：Wiki 页面、来源版本和字符范围；
+- `trace`：实际展开的索引、页面和原文证据。
 
-然后再问一个知识库没有的问题：
+再问知识库没有的问题：
 
 ```bash
-memoryforge ask '这个项目的 Kubernetes 集群有几个节点？' \
+.venv/bin/memoryforge ask \
+  '这个项目的 Kubernetes 集群有几个节点？' \
   --workspace /private/tmp/memoryforge-public-demo
 ```
 
-它应当拒答，而不是编造一个节点数。这是项目很适合面试展示的地方：系统不仅要答得对，还要知道什么时候没有证据。
+系统应拒答，而不是编造节点数。
 
-### 4. 展示 MiniClaude Agent
+### 4. 最后展示发布证据
+
+打开 [`v0.4.0 Release`](https://github.com/still0123/MemoryForge/releases/tag/v0.4.0)，展示：
+
+- Wheel 和 sdist；
+- 两次隔离构建的同字节制品；
+- `release-provenance.json`；
+- `benchmark-summary.json`；
+- `workspace-drill.json`；
+- `SHA256SUMS`。
+
+正式口径：
+
+| Evidence | 结果 | 边界 |
+| --- | ---: | --- |
+| v0.4.0 发布门禁 | macOS **656 passed** | Linux 未重跑，Windows 未验证 |
+| AgentSkill-Eval | Answer **96.7%**；Source recall@3 **96.2%** | 30 道固定公开题 |
+| Citation / Abstention | **100% / 100%** | 同一固定题集 |
+| 三语言 Code Wiki | Symbol / Relation / Mermaid / Citation **100%** | 固定公开夹具 |
+| Click 外部迁移 | Answer **10% / 0%** | development / holdout 真实负结果 |
+
+这些结果证明固定数据集上的工程链路，不代表任意仓库的通用准确率。完整方法见
+[公开 Benchmark](BENCHMARK.md)，主张边界见 [Evidence Claims](EVIDENCE_CLAIMS.md)。
+
+## 可选展示
+
+### 本地 Portal
+
+当前 `main` 可运行：
 
 ```bash
-memoryforge agent '统计器如何避免把模拟实验结果当成真实结论？' \
+.venv/bin/memoryforge init /private/tmp/memoryforge-portal-demo
+.venv/bin/memoryforge start \
+  --workspace /private/tmp/memoryforge-portal-demo
+```
+
+展示“添加来源 → 后台任务 → 知识更新 → 批准并应用 → 阅读/提问”。明确说明这是当前
+`main` 的未发布控制面，不改写 v0.4.0 Release Evidence。
+
+### MiniClaude Agent
+
+```bash
+.venv/bin/memoryforge agent \
+  '统计器如何避免把模拟实验结果当成真实结论？' \
   --workspace /private/tmp/memoryforge-public-demo
 ```
 
-Agent 只有三个工具：`search_wiki`、`read_evidence`、`final`。它不能执行 Shell、调用通用写文件工具、调用 Subagent 或自行扩展工具；session 由系统写入专用本地目录。这样可以把 Agent 的职责限制在“找证据、读证据、组织答案”。
+Agent 只有 `search_wiki`、`read_evidence`、`final` 三个工具，没有 Shell、任意写文件、
+Subagent 或 MCP 权限。它的职责只是找证据、读证据、组织答案。
 
-连续追问时使用同一个本地 session：
-
-```bash
-memoryforge agent '管控面主要做什么？' \
-  --session interview \
-  --workspace /private/tmp/memoryforge-public-demo
-memoryforge agent '那数据面呢？' \
-  --session interview \
-  --workspace /private/tmp/memoryforge-public-demo
-memoryforge agent-clear interview \
-  --workspace /private/tmp/memoryforge-public-demo
-```
-
-session 只保存最近 3 轮的有限文本和引用片段，保存在 Workspace 的 `.memoryforge/sessions/`，
-不进入公开 Wiki 或 Git 提交。飞书服务按 `chat_id` 隔离会话；拿不到稳定会话标识时自动使用单轮模式。
-
-### 5. 可选展示飞书入口
-
-飞书只作为可选交互层，Wiki 真值和静态 Showcase 都保存在本地。纯确定性模式：
+### 飞书入口
 
 ```bash
-memoryforge feishu-serve \
-  --workspace /path/to/your-wiki
+memoryforge feishu-serve --workspace /path/to/your-wiki
 ```
 
-如果已经配置了 OpenAI 兼容模型，并且明确允许模型读取本次命中的本地证据：
+飞书只是交互层，不保存另一份真值；模型不可用时会回退到已验证 Wiki 事实。完整配置见
+[FEISHU_MVP_SPEC.md](../FEISHU_MVP_SPEC.md)。
 
-```bash
-memoryforge feishu-serve \
-  --llm --allow-local-llm \
-  --workspace /path/to/your-wiki
-```
-
-如果模型服务临时超时或返回 503，回答会自动回退到已验证的 Wiki 事实，并在 CLI JSON 中标记 `model_status: fallback`；飞书仍然会收到带来源的回答。飞书服务不会自动抓取整个飞书空间，也不会把本地知识库上传到 GitHub。完整接入说明见 [FEISHU_MVP_SPEC.md](../FEISHU_MVP_SPEC.md)。
-
-## 面试官可能追问什么
+## 常见追问
 
 ### 为什么不是普通 RAG？
 
-普通 RAG 通常直接对原文做切片、召回和拼接。MemoryForge 多了一层可维护的 Wiki：资料先被编译成主题页面，页面有稳定路由和来源引用；查询先读 `INDEX.md`，再展开少量页面，最后才按需回到原文。
+普通 RAG 通常直接切片、召回和拼接。MemoryForge 多了一层可维护的 Wiki：来源先被编译成稳定
+主题页面，更新先审核，查询最后才按需回原文。
 
 ### 为什么不用向量数据库？
 
-当前数据规模下，SQLite FTS5 已经满足公开评测，且更容易部署、解释和复现。仓库还保留了语义检索实验；只有当扩展评测证明关键词召回不足，才考虑加入 Embedding。这个取舍是用评测决定基础设施，而不是先堆技术。
+当前规模下 SQLite FTS5 已满足固定公开评测，部署和重放更简单。只有新的真实用户与外部评测
+证明关键词召回不足时，才值得引入 Embedding。
 
 ### 如何防止模型胡编？
 
-模型只能整理已经命中的证据，引用索引由程序校验；没有可接受证据时返回“不知道”。`local_only` 资料默认不发送给模型，必须显式传入 `--allow-local-llm`。
-
-### Wiki 更新怎么做？
-
-新资料先生成 ChangeSet，不直接覆盖正式 Wiki。用户先 `review` 看变更，再用 `approve` 明确批准，最后由 `apply` 写入；更新失败可以查看历史并回滚。这样 Wiki 是可维护的项目资产，而不是一次性摘要。
+模型只能整理已命中的证据；Citation 由程序校验。没有足够证据时返回 `unknown`。
+`local_only` 资料默认不发送给模型，必须显式传入 `--allow-local-llm`。
 
 ### Mermaid 架构图为什么可信？
 
-图节点来自确定性 `ModulePlan`，图边来自真实 `CodeRelation` 聚合；每条边都带完整 edge ID 和
-Relation Citation，可回读到固定 Git Blob 的字符范围。系统不让模型猜边，证据不属于源模块时直接
-拒绝编译。
+节点来自确定性 `ModulePlan`，边来自真实 `CodeRelation` 聚合；每条边绑定固定 Git Blob 的
+Citation。模型只允许补充带引用的模块叙事，不能生成架构边。
 
-## 项目边界
+### 为什么保留失败结果？
 
-当前版本刻意不做公网部署、群聊、多用户权限、定时同步、向量数据库、知识图谱和通用编码 Agent。这些不是遗漏，而是为了把“个人技术 Wiki 的编译、增量更新、可信查询和证据回溯”做深。
+Citation 可回读不等于答案正确。Click 外测的失败用于限制结论，避免只展示正向指标。
 
-完整主张、Evidence 和不能外推的边界见 [Evidence Claims](EVIDENCE_CLAIMS.md)。
+## 演示前检查
 
-## 演示前检查清单
+- [ ] 只使用公开或虚构资料。
+- [ ] 明确区分 `v0.4.0` Release 与当前 `main`。
+- [ ] Demo 能从空 Workspace 重新跑通。
+- [ ] 至少展示一次审核链、一个正常回答和一个拒答。
+- [ ] 所有简历数字都能回到提交的 JSON 或 Release 资产。
+- [ ] 不把局部 Benchmark 外推为生产 SLA。
 
-- [ ] 只使用公开或脱敏资料；不把公司代码、飞书正文、Token、App Secret 放进仓库。
-- [ ] 公开 Demo 能从空 Workspace 重新跑通。
-- [ ] 发布 Wheel 能在全新 venv 通过 `run_release_check.py`，并核对 SHA256。
-- [ ] `memoryforge lint --workspace <workspace>` 返回 `clean`。
-- [ ] 至少演示一个正常回答和一个拒答。
-- [ ] 至少展示一次 `review → approve → apply` 的 Wiki 变更流程。
-- [ ] 如果展示模型，单独记录模型耗时，不把私有调用日志提交到 GitHub。
+## 历史研究
+
+v0.3.0 的逐 Candidate 过程不再放在当前演示主线。完整记录见
+[v0.3 Release Candidate Specification](V030_RELEASE_CANDIDATE_SPEC.md) 和
+[Release Delivery Research](research/V030_RELEASE_DELIVERY.md)。
+
+<!-- memoryforge-release-claim: version=0.3.0; status=released; supported_platforms=macos+linux; active_candidate=19; platform_gate_candidate=19; platform_gate_status=accepted; review_status=accepted; macos_passed=642; linux_passed=639; linux_skipped=3; windows_status=not_verified; release_verification=passed -->
+
+历史口径：v0.3.0 支持 macOS 与 Linux；Candidate 12 中间门禁为 `623 passed` 和
+`620 passed / 3 skipped`，Click development/holdout 为 `10%/0%`，Windows 尚未验证。
+这些数字只用于定位历史 Evidence，不代表 v0.4.0 或当前 `main`。
