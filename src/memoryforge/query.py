@@ -153,10 +153,17 @@ def answer_question(
     min_source_count: int = 1,
     provider: OpenAICompatibleProvider | None = None,
     allow_local: bool = False,
+    public_only: bool = False,
     repository_id: str | None = None,
     conversation_context: str = "",
 ) -> AskPayload:
-    """Answer from a bounded set of Wiki pages, expanding raw evidence only on request."""
+    """Answer from a bounded set of Wiki pages, expanding raw evidence only on request.
+
+    ``public_only`` applies the sensitivity gate to the non-LLM path (and to
+    code Symbol matches) *before* Support scoring and answer assembly, so
+    ``Sensitivity.LOCAL_ONLY`` facts can never influence page selection,
+    Support or the answer. The CLI keeps its current behavior by default.
+    """
     _validate_max_pages(max_pages)
     _validate_max_citations(max_citations)
     _validate_min_source_count(min_source_count)
@@ -204,6 +211,16 @@ def answer_question(
         question,
         repository_id=repository_id,
     )
+    if public_only:
+        symbol_matches = tuple(
+            match
+            for match in symbol_matches
+            if is_public_source_version(
+                workspace_root,
+                source_id=match.source_id,
+                source_version=match.source_version,
+            )
+        )
     exact_symbol_fact_keys = {
         _citation_fact_key(match.page_path, match) for match in symbol_matches
     }
@@ -397,6 +414,10 @@ def answer_question(
 
     model_status: Literal["used", "fallback"] | None = None
     if provider is None:
+        if public_only:
+            matches = _usable_matches(workspace_root, matches, allow_local=False)
+            if not matches:
+                return _unknown_payload(debug, trace)
         selected = _top_matches(
             matches,
             answer_citation_limit,

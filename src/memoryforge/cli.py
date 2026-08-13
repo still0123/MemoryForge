@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import os
 import platform
-import re
 import shlex
 import shutil
 import sqlite3
@@ -18,6 +17,7 @@ import typer
 
 from memoryforge import __version__
 from memoryforge.agent import run_agent
+from memoryforge.agent_access import recall_context
 from memoryforge.agent_evaluation import run_agent_evaluation
 from memoryforge.automation_apply import evaluate_staged, run_automation_apply
 from memoryforge.automation_policy import (
@@ -73,11 +73,7 @@ from memoryforge.refresh import refresh_workspace
 from memoryforge.sessions import SessionStore
 from memoryforge.showcase import build_showcase
 from memoryforge.web_adapter import WebPageError, import_html_file, import_web_page
-from memoryforge.wiki_facts import (
-    is_conversation_process_note,
-    parse_page_citations,
-    parse_page_facts,
-)
+from memoryforge.wiki_facts import parse_page_facts
 from memoryforge.workspace import (
     Workspace,
     WorkspaceIntegrityError,
@@ -113,29 +109,6 @@ WorkspaceOption = Annotated[
     typer.Option("--workspace", "-w", help="Initialized MemoryForge workspace."),
 ]
 
-_RECALL_DECISION_MARKERS = (
-    "决定",
-    "采用",
-    "选择",
-    "已完成",
-    "完成了",
-    "优化完成",
-    "decided",
-    "implemented",
-)
-_RECALL_OPEN_ITEM_MARKERS = (
-    "下一步",
-    "待办",
-    "未完成",
-    "尚未",
-    "未推送",
-    "需要继续",
-    "todo",
-    "next step",
-    "follow-up",
-    "not pushed",
-    "remaining",
-)
 _CODEX_RECALL_BEGIN = "<!-- BEGIN MEMORYFORGE RECALL -->"
 _CODEX_RECALL_END = "<!-- END MEMORYFORGE RECALL -->"
 
@@ -1597,120 +1570,7 @@ def recall(
 ) -> None:
     """Return compact, cited startup context from applied conversation memories."""
     try:
-        opened = Workspace.open_readonly(workspace)
-        with sqlite3.connect(
-            opened.index_path.as_uri() + "?mode=ro",
-            uri=True,
-            timeout=30,
-        ) as connection:
-            connection.row_factory = sqlite3.Row
-            connection.execute("PRAGMA query_only = ON")
-            rows = connection.execute(
-                """
-                SELECT
-                    facts.page_path,
-                    facts.source_id,
-                    facts.source_version,
-                    facts.locator,
-                    facts.section_path,
-                    facts.quote,
-                    versions.title,
-                    versions.observed_at
-                FROM wiki_facts AS facts
-                JOIN applied_source_versions AS applied
-                  ON applied.source_id = facts.source_id
-                 AND applied.source_version_id = facts.source_version
-                JOIN sources ON sources.source_id = facts.source_id
-                JOIN source_versions AS versions
-                  ON versions.id = facts.source_version
-                 AND versions.source_id = sources.id
-                WHERE versions.tags_json LIKE '%"conversation"%'
-                ORDER BY
-                    versions.observed_at DESC,
-                    facts.page_path,
-                    facts.rowid
-                """
-            ).fetchall()
-        summary_locators: dict[str, str] = {}
-        for row in rows:
-            page_path = str(row["page_path"])
-            if page_path in summary_locators:
-                continue
-            page = opened.root / page_path
-            if page.is_file() and not page.is_symlink():
-                citations = parse_page_citations(page.read_text(encoding="utf-8"))
-                if citations:
-                    summary_locators[page_path] = citations[0]["locator"]
-        rows = sorted(
-            rows,
-            key=lambda row: (
-                str(row["observed_at"]),
-                str(row["locator"]) == summary_locators.get(str(row["page_path"])),
-            ),
-            reverse=True,
-        )
-        summary = next(
-            (str(row["quote"]).strip() for row in rows if not str(row["section_path"])),
-            None,
-        )
-        notes: list[dict[str, object]] = []
-        seen: set[str] = set()
-        seen_pages: set[str] = set()
-        seen_topics: set[str] = set()
-        for row in rows:
-            quote = str(row["quote"]).strip()
-            section = str(row["section_path"])
-            page_path = str(row["page_path"])
-            topic = _recall_topic_key(str(row["title"]))
-            if (
-                not row["section_path"]
-                or not quote
-                or quote in seen
-                or page_path in seen_pages
-                or topic in seen_topics
-                or "user message" in section.lower()
-                or "user prompts (search only)" in section.lower()
-                or quote.lstrip().startswith(("```", "func ", "def "))
-                or any(marker in quote for marker in ("你偏好", "值得“记忆”", "你常做的是"))
-                or is_conversation_process_note(quote)
-                or len(quote) < 24
-                or (len(quote) < 40 and quote.endswith((":", "：")))
-            ):
-                continue
-            seen.add(quote)
-            seen_pages.add(page_path)
-            seen_topics.add(topic)
-            notes.append(
-                {
-                    "title": str(row["title"]),
-                    "role": section,
-                    "text": quote,
-                    "observed_at": str(row["observed_at"]),
-                    "citation": {
-                        "source_id": str(row["source_id"]),
-                        "source_version": int(row["source_version"]),
-                        "locator": str(row["locator"]),
-                        "wiki_page": page_path,
-                    },
-                }
-            )
-            if len(notes) == limit:
-                break
-        if summary is None and notes:
-            summary = str(notes[0]["text"])
-        decisions = _recall_matching_notes(notes, _RECALL_DECISION_MARKERS)
-        open_items = _recall_matching_notes(notes, _RECALL_OPEN_ITEM_MARKERS)
-        result = {
-            "status": "recalled" if notes else "empty",
-            "warning": (
-                "Conversation memories are unverified; check citations before relying on them."
-            ),
-            "summary": summary,
-            "recent_memories": notes,
-            "decisions": decisions,
-            "open_items": open_items,
-            "startup_context": _render_recall_context(summary, decisions, open_items, notes),
-        }
+        result = recall_context(workspace, limit=limit)
     except (
         MemoryForgeError,
         WorkspaceIntegrityError,
@@ -1784,57 +1644,6 @@ def codex_setup(
     ) as exc:
         _exit_with_safe_error(exc)
     typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
-
-
-def _recall_matching_notes(
-    notes: list[dict[str, object]], markers: tuple[str, ...]
-) -> list[dict[str, object]]:
-    matches = []
-    for note in notes:
-        text = str(note["text"]).lower()
-        if any(marker in text for marker in markers):
-            matches.append(note)
-        if len(matches) == 3:
-            break
-    return matches
-
-
-def _recall_topic_key(title: str) -> str:
-    for identifier in re.findall(r"[A-Z][A-Za-z0-9]+", title):
-        if identifier.casefold() == "codex":
-            continue
-        topic = re.sub(r"^(?:Create|Update|Delete|Get|Check|Build|Find)", "", identifier)
-        if len(topic) >= 5:
-            return topic.casefold()
-    return title.casefold()
-
-
-def _render_recall_context(
-    summary: str | None,
-    decisions: list[dict[str, object]],
-    open_items: list[dict[str, object]],
-    notes: list[dict[str, object]],
-) -> str:
-    if not notes:
-        return "No applied conversation memory found."
-    lines = [
-        "Unverified recalled conversation memory. Verify important claims against citations.",
-        f"Summary: {summary}",
-    ]
-    lines.append(
-        "Recent sessions: " + " | ".join(f"{item['title']}: {item['text']}" for item in notes)
-    )
-    if decisions:
-        lines.append("Recent decisions: " + " | ".join(str(item["text"]) for item in decisions))
-    if open_items:
-        lines.append("Open items: " + " | ".join(str(item["text"]) for item in open_items))
-    pages = []
-    for item in notes:
-        citation = item["citation"]
-        if isinstance(citation, dict) and citation["wiki_page"] not in pages:
-            pages.append(citation["wiki_page"])
-    lines.append("Evidence pages: " + ", ".join(str(page) for page in pages))
-    return "\n".join(lines)
 
 
 @app.command()

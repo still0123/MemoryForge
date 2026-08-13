@@ -19,3 +19,11 @@ class ChangeSetStoreError(MemoryForgeError):
 
 class LifecycleError(MemoryForgeError):
     """Raised when a ChangeSet review transition cannot proceed."""
+
+
+class UnmappedProjectError(MemoryForgeError):
+    """Raised when an AI Host project path is not bound to any registered Git checkout.
+
+    Agent Access fails closed: an unmapped project never degrades into an
+    unscoped whole-Workspace query.
+    """

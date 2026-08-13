@@ -59,6 +59,7 @@ class CitationPayload(TypedDict):
     routing_text: NotRequired[str]
     is_summary: NotRequired[bool]
     grounding: NotRequired[Literal["exact", "semantic"]]
+    wiki_page: NotRequired[str]
 
 
 @dataclass(frozen=True)
