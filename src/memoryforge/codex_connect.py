@@ -88,6 +88,22 @@ def mcp_command(
     return command
 
 
+def router_mcp_command(workspace: Path, *, allow_local: bool = False) -> list[str]:
+    """The one global stdio command; the Host selects a registered Root."""
+    command = [
+        sys.executable,
+        "-m",
+        "memoryforge",
+        "mcp",
+        "--workspace",
+        str(workspace.resolve(strict=False)),
+        "--router",
+    ]
+    if allow_local:
+        command.append("--allow-local-llm")
+    return command
+
+
 def install_agents_block(
     agents_path: Path,
     *,
@@ -180,6 +196,56 @@ def connect_codex(
         "repository_id": scope.repository_id,
         "command": command,
         "agents_file": str(agents_path),
+        "restart_hint": (
+            "Restart Codex (or the ChatGPT desktop app / IDE extension) and check with /mcp."
+        ),
+    }
+
+
+def connect_codex_router(
+    workspace: Path,
+    *,
+    allow_local: bool = False,
+    codex_executable: str = "codex",
+) -> dict[str, object]:
+    """Register one global server that routes through the current MCP Root.
+
+    Unlike :func:`connect_codex`, this does not write any project files and
+    does not bind configuration to a single checkout.
+    """
+    name = "memoryforge"
+    command = router_mcp_command(workspace, allow_local=allow_local)
+    codex = shutil.which(codex_executable)
+    if codex is None:
+        return {
+            "status": "codex_not_found",
+            "server": name,
+            "routing": "mcp_roots",
+            "install_command": shlex.join(["codex", "mcp", "add", name, "--", *command]),
+            "restart_hint": (
+                "Install the Codex CLI, then re-run this command to register "
+                "the server automatically."
+            ),
+        }
+    existing = _existing_command(codex, name)
+    if existing is None:
+        _run_codex(codex, ["mcp", "add", name, "--", *command], "codex mcp add failed")
+        action = "added"
+    elif existing != command:
+        raise CodexConnectConflictError(
+            "MCP server already registered with a different command:\n"
+            f"  registered: {shlex.join(existing)}\n"
+            f"  expected:   {shlex.join(command)}\n"
+            "Refusing to overwrite. Remove or update the server with "
+            "'codex mcp' first."
+        )
+    else:
+        action = "unchanged"
+    return {
+        "status": "connected" if action == "added" else "unchanged",
+        "server": name,
+        "routing": "mcp_roots",
+        "command": command,
         "restart_hint": (
             "Restart Codex (or the ChatGPT desktop app / IDE extension) and check with /mcp."
         ),

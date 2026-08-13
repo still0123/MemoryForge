@@ -476,7 +476,7 @@ memoryforge connect codex /absolute/path/to/project \
 ### 其他 AI Host：复制配置（不自动改写）
 
 只有 Codex 有官方、可验证的 CLI，所以只有 Codex 支持自动接入。Claude Code、Claude
-Desktop、Cursor、VS Code 和 ChatGPT Desktop 都使用可复制的配置片段；`mcp-config`
+Desktop、VS Code 和 ChatGPT Desktop 都使用可复制的配置片段；`mcp-config`
 只输出文本，绝不直接改写这些 Host 的配置文件：
 
 ```bash
@@ -488,7 +488,6 @@ memoryforge mcp-config --project-root /absolute/path/to/project \
 
 - **Claude Code**：项目根目录 `.mcp.json`；
 - **Claude Desktop**：`claude_desktop_config.json`（`mcpServers` 键）；
-- **Cursor**：`.cursor/mcp.json`；
 - **VS Code**：`.vscode/mcp.json`。
 
 粘贴后重启对应 Host，确认 Server 出现在 MCP 列表中，再从项目目录提问验证

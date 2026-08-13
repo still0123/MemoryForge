@@ -1,6 +1,6 @@
 # Multi-Client MCP Setup Guide
 
-MemoryForge MCP server supports four AI coding clients: **Codex**, **Claude Code**, **Cursor**, and **Gemini**.
+MemoryForge MCP server supports three AI coding clients: **Codex**, **Claude Code**, and **Gemini**.
 Each client has a different installation path and capture-hook capability.
 
 > **Default:** Capture Inbox is **disabled** by default. Opt in explicitly via the `--capture` flag when planning.
@@ -15,7 +15,6 @@ Each client has a different installation path and capture-hook capability.
 | Codex    | project | `codex mcp add ...`       | Supported (opt-in)   | Via Codex CLI; requires hook trust review |
 | Claude   | project | `claude mcp add ...` / `.mcp.json` | Supported (opt-in) | Project-level `.mcp.json` fallback      |
 | Gemini   | user    | `gemini mcp add ...`      | Supported (opt-in)   | Defaults to user-level config           |
-| Cursor   | user    | Manual `mcpServers` JSON  | **Not supported**    | Read-only MCP; manual JSON paste        |
 
 ---
 
@@ -93,31 +92,6 @@ gemini mcp add memoryforge-gemini -- \
     --profile   micro
 ```
 
-### 2.4 Cursor (user scope, manual JSON, NO capture)
-
-Cursor does **not** support MCP hooks today. Capture is explicitly not available.
-Paste the JSON below into Cursor → Settings → MCP.
-
-```json
-{
-  "mcpServers": {
-    "memoryforge-cursor": {
-      "command": "/path/to/python",
-      "args": [
-        "-m", "memoryforge", "mcp",
-        "--workspace", "/path/to/workspace",
-        "--project",   "/path/to/project",
-        "--host-id",   "cursor:<8-char-hash>",
-        "--profile",   "micro"
-      ],
-      "readOnly": true
-    }
-  }
-}
-```
-
----
-
 ## 3. Hook Event Reference (Capture Clients Only)
 
 When `--capture` is enabled, MemoryForge subscribes to these hook events:
@@ -144,7 +118,7 @@ When `--capture` is enabled, MemoryForge subscribes to these hook events:
 | Mode              | Mutates Files? | Runs Subprocess? | Typical Use                      |
 |-------------------|----------------|------------------|----------------------------------|
 | **Dry-run Plan**  | ❌ No          | ❌ No            | Default; used by tests and previews |
-| **Write-config**  | ✅ Yes         | ❌ No            | Write `.mcp.json` (Claude/Cursor) via CLI flag |
+| **Write-config**  | ✅ Yes         | ❌ No            | Write `.mcp.json` (Claude) via CLI flag |
 | **CLI install**   | ❌ No*         | ✅ Yes           | Delegated to integration layer; calls `codex mcp add` etc. |
 
 \* Client CLIs may write to their own config locations.
@@ -163,7 +137,6 @@ claude mcp remove memoryforge-claude
 # Gemini
 gemini mcp remove memoryforge-gemini
 
-# Cursor: manually remove the memoryforge-cursor entry from MCP settings JSON.
 ```
 
 ---
@@ -179,7 +152,6 @@ Each client installation is identified by a stable **host ID**:
 Examples:
 - `codex:a1b2c3d4`
 - `claude:ff00ff00`
-- `cursor:deadbeef`
 - `gemini:1234abcd`
 
 The host ID binds a running MCP server to one (workspace, project) pair and

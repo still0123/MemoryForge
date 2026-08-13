@@ -19,7 +19,7 @@ class ManagedFileChange(BaseModel):
 class IntegrationPlan(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    agent: Literal["codex", "claude", "cursor", "gemini"]
+    agent: Literal["codex", "claude", "gemini"]
     scope: Literal["project", "user"]
     server_name: str = Field(min_length=1)
     commands: tuple[tuple[str, ...], ...] = ()

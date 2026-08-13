@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from typing import Literal
 
 from memoryforge.client_integrations.common import (
     IntegrationPlan,
@@ -17,7 +18,7 @@ def plan_install(
     *,
     capture: bool = False,
 ) -> IntegrationPlan:
-    agent = "codex"
+    agent: Literal["codex"] = "codex"
     python = Path(sys.executable)
     cmd = mcp_command(python, workspace, project, "micro")
     sname = server_name(agent)

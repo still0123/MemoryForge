@@ -4,8 +4,8 @@ Only Codex has an official, verifiable CLI, so it is the only Host with an
 automatic adapter (``connect codex`` in :mod:`memoryforge.codex_connect`).
 Every other Host gets copyable configuration only: the standard ``mcpServers``
 JSON object (Claude Code ``.mcp.json``, Claude Desktop
-``claude_desktop_config.json``, Cursor ``.cursor/mcp.json``, VS Code
-``.vscode/mcp.json``) or the Codex ``~/.codex/config.toml`` ``[mcp_servers.*]``
+``claude_desktop_config.json``, VS Code ``.vscode/mcp.json``) or the Codex
+``~/.codex/config.toml`` ``[mcp_servers.*]``
 block (also used by the ChatGPT Desktop app). This module never parses or
 edits Host configuration files.
 
@@ -34,8 +34,7 @@ def mcp_servers_config(
 
     Paste the value (or the whole object) into a Host config that reads the
     MCP ``mcpServers`` schema: Claude Code ``.mcp.json``, Claude Desktop
-    ``claude_desktop_config.json``, Cursor ``.cursor/mcp.json`` or VS Code
-    ``.vscode/mcp.json``.
+    ``claude_desktop_config.json`` or VS Code ``.vscode/mcp.json``.
     """
     command = mcp_command(workspace, project_root, allow_local=allow_local)
     return {

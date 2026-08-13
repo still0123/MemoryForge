@@ -1,6 +1,7 @@
-from memoryforge.client_integrations import codex as codex
+from types import ModuleType
+
 from memoryforge.client_integrations import claude as claude
-from memoryforge.client_integrations import cursor as cursor
+from memoryforge.client_integrations import codex as codex
 from memoryforge.client_integrations import gemini as gemini
 from memoryforge.client_integrations.common import (
     IntegrationPlan as IntegrationPlan,
@@ -19,11 +20,10 @@ from memoryforge.client_integrations.common import (
 )
 
 
-def get_adapter(agent: str):
+def get_adapter(agent: str) -> ModuleType:
     adapters = {
         "codex": "memoryforge.client_integrations.codex",
         "claude": "memoryforge.client_integrations.claude",
-        "cursor": "memoryforge.client_integrations.cursor",
         "gemini": "memoryforge.client_integrations.gemini",
     }
     module_name = adapters.get(agent)
@@ -36,7 +36,6 @@ def get_adapter(agent: str):
 __all__ = [
     "codex",
     "claude",
-    "cursor",
     "gemini",
     "IntegrationPlan",
     "IntegrationResult",

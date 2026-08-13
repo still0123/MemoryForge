@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import sys
-import tempfile
 from pathlib import Path
 
+import pytest
+
+from memoryforge.client_integrations import get_adapter
 from memoryforge.client_integrations.common import (
     IntegrationPlan,
     IntegrationResult,
@@ -52,6 +54,11 @@ def test_host_id_differs_by_project(tmp_path: Path) -> None:
     id_a = host_id("codex", workspace, project_a)
     id_b = host_id("codex", workspace, project_b)
     assert id_a != id_b
+
+
+def test_cursor_adapter_is_not_supported() -> None:
+    with pytest.raises(ValueError, match="unknown client adapter: cursor"):
+        get_adapter("cursor")
 
 
 def test_mcp_command_contains_absolute_paths_and_profile(tmp_path: Path) -> None:

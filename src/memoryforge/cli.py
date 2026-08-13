@@ -37,6 +37,7 @@ from memoryforge.codex_connect import (
     AGENTS_RECALL_BEGIN,
     AGENTS_RECALL_END,
     connect_codex,
+    connect_codex_router,
     install_agents_block,
 )
 from memoryforge.compiler import (
@@ -72,7 +73,7 @@ from memoryforge.lifecycle import (
 )
 from memoryforge.linting import lint_workspace
 from memoryforge.local_portal import serve_local_portal
-from memoryforge.mcp_server import build_server
+from memoryforge.mcp_server import build_router_server, build_server
 from memoryforge.models import Sensitivity
 from memoryforge.module_planner import build_architecture_graph, build_module_plan
 from memoryforge.obsidian import OUTPUT_RELATIVE, build_obsidian
@@ -1866,12 +1867,19 @@ def rollback(
 @app.command()
 def mcp(
     project_root: Annotated[
-        Path,
+        Path | None,
         typer.Option(
             "--project-root",
-            help="Project directory inside one registered Git checkout.",
+            help="Project directory inside one registered Git checkout (required unless --router).",
         ),
-    ],
+    ] = None,
+    router: Annotated[
+        bool,
+        typer.Option(
+            "--router",
+            help="Route each read-only request through the Host's current MCP Root.",
+        ),
+    ] = False,
     allow_local_llm: Annotated[
         bool,
         typer.Option(
@@ -1897,12 +1905,21 @@ def mcp(
             safe_profile = profile  # type: ignore[assignment]
         else:
             raise ValueError(f"unknown profile: {profile}")
-        server = build_server(
-            opened.root,
-            project_root,
-            allow_local=allow_local_llm,
-            profile=safe_profile,  # type: ignore[arg-type]
-        )
+        if router:
+            if project_root is not None:
+                raise ValueError("--project-root cannot be used with --router")
+            if safe_profile not in (None, "micro"):
+                raise ValueError("--router supports only the default or micro profile")
+            server = build_router_server(opened.root, allow_local=allow_local_llm)
+        else:
+            if project_root is None:
+                raise ValueError("--project-root is required unless --router is set")
+            server = build_server(
+                opened.root,
+                project_root,
+                allow_local=allow_local_llm,
+                profile=safe_profile,  # type: ignore[arg-type]
+            )
     except (
         MemoryForgeError,
         WorkspaceIntegrityError,
@@ -1971,11 +1988,11 @@ def mcp_config(
 def connect(
     host: Annotated[str, typer.Argument(help="AI Host to connect; only 'codex' is supported.")],
     project: Annotated[
-        Path,
+        Path | None,
         typer.Argument(
-            help="Project directory bound to one registered Git checkout.",
+            help="Optional project directory. Omit it to install one global MCP Root router.",
         ),
-    ],
+    ] = None,
     allow_local_llm: Annotated[
         bool,
         typer.Option(
@@ -1989,7 +2006,11 @@ def connect(
     try:
         if host != "codex":
             raise ValueError(f"unsupported AI Host '{host}'; only 'codex' is supported")
-        result = connect_codex(workspace, project, allow_local=allow_local_llm)
+        result = (
+            connect_codex_router(workspace, allow_local=allow_local_llm)
+            if project is None
+            else connect_codex(workspace, project, allow_local=allow_local_llm)
+        )
     except (
         MemoryForgeError,
         WorkspaceIntegrityError,
@@ -2507,7 +2528,7 @@ def _json_out(payload: object) -> None:
 
 @client_app.command("plan")
 def client_plan(
-    agent: Annotated[str, typer.Argument(help="codex|claude|gemini|cursor")],
+    agent: Annotated[str, typer.Argument(help="codex|claude|gemini")],
     workspace: Annotated[Path, typer.Option("--workspace", "-w")] = Path("."),
     project: Annotated[Path, typer.Option("--project", "-p")] = Path("."),
     capture_enabled: Annotated[bool, typer.Option("--capture")] = False,

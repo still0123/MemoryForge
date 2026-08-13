@@ -42,8 +42,8 @@ memoryforge mcp-config --project-root /absolute/path/to/project \
 ```
 
 Paste the printed `mcpServers` object into Claude Code `.mcp.json`, Claude
-Desktop `claude_desktop_config.json`, Cursor `.cursor/mcp.json`, or VS Code
-`.vscode/mcp.json`. For a `~/.codex/config.toml` `[mcp_servers.*]` block, use
+Desktop `claude_desktop_config.json`, or VS Code `.vscode/mcp.json`. For a
+`~/.codex/config.toml` `[mcp_servers.*]` block, use
 `--format toml`. The generated server name and command are identical to the
 ones `connect codex` registers, so both paths interoperate.
 
