@@ -18,10 +18,12 @@ def test_package_and_cli_versions_match_v040() -> None:
     root = Path(__file__).resolve().parent.parent
     project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
 
+    assert project["project"]["name"] == "memoryforge-wiki"
     assert project["project"]["version"] == "0.4.0"
     assert memoryforge.__version__ == "0.4.0"
     assert project["project"]["readme"] == "PACKAGE_README.md"
     assert project["tool"]["hatch"]["build"]["targets"]["sdist"]["include"] == [
+        "/LICENSE",
         "/PACKAGE_README.md",
         "/pyproject.toml",
         "/src",
@@ -63,6 +65,8 @@ def test_local_check_keeps_the_quality_and_artifact_contract() -> None:
         "sdist import escaped clean environment",
         "sdist contains retained or nested artifacts",
         "/demo/results/artifacts/",
+        "dist/memoryforge_wiki-*.whl",
+        "dist/memoryforge_wiki-*.tar.gz",
         '"$workdir/sdist/bin/python" -I -m memoryforge --version',
         "hashlib.sha256",
         "SHA256SUMS",
@@ -99,6 +103,8 @@ def test_powershell_gate_uses_literal_paths_and_isolated_sdist_probe() -> None:
         "sdist import escaped clean environment",
         "sdist contains retained or nested artifacts",
         "/demo/results/artifacts/",
+        '"memoryforge_wiki-*.whl"',
+        '"memoryforge_wiki-*.tar.gz"',
         'Invoke-External $SdistPython @("-I", "-m", "memoryforge", "--version")',
     ):
         assert required in script

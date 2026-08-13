@@ -1,5 +1,8 @@
 # MemoryForge 简历表述
 
+版本口径：`v0.4.0` 正式发布，macOS 本地门禁 `656 passed`；Linux 未在本版本重跑，
+Windows 未验证。当前 `main` 的 Portal 加固尚未发布，不与 v0.4.0 Release Evidence 混写。
+
 ## 一行版本
 
 独立设计并实现本地优先的个人技术 Wiki 编译系统，将 Git、文档和飞书资料编译为可审核 Markdown Wiki，通过渐进式检索与受限 Agent 输出可回溯答案。
@@ -14,12 +17,15 @@ Python · SQLite FTS5 · Pydantic · Typer · OpenAI-compatible API · 飞书
 - 使用 Tree-sitter 构建 Python、Go、TypeScript/TSX 的确定性 Code Wiki；架构图边绑定真实
   `CodeRelation` Citation，固定夹具上的 Symbol、Relation、Module 和 Mermaid 指标均为 100%，
   单文件更新页面比例为 20%。
+- 构建仅绑定 `127.0.0.1` 的本地知识 Portal，将来源预览、后台任务、Diff 审核、批准应用、
+  阅读和提问串为一条可恢复流程；自动更新只生成待审核 ChangeSet，不自动批准。
 - 构建公开可复现评测：在 `AgentSkill-Eval` 56 个公开资料上生成 57 个 Wiki 页面，30 题中回答
   准确率 96.7%、Top-3 来源召回率 96.2%、多来源完整覆盖率 100%；相对 Raw FTS 基线的 57.7%
   来源召回，验证 Wiki 路由在固定领域的收益；同时冻结 Click 20 题外测并保留 10%/0% 的负结果，
   独立复评回答准确率为 5.0%，证明发布结论不会用 Citation 100% 掩盖 Answer accuracy 失败。
 - 建立 Evidence-driven 发布链：固定开发与构建依赖，执行 Wheel/sdist 双 clean-room、
-  SHA256、tag/Commit provenance 与远端资产手动回下载校验；关闭付费 hosted CI，统一使用本地门禁。
+  SHA256、tag/Commit provenance 与远端资产手动回下载校验；v0.4.0 在 macOS 完成
+  `656 passed` 本地门禁。
 
 ## 面试时的 30 秒介绍
 

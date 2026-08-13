@@ -169,7 +169,7 @@ try {
         Pop-Location
     }
 
-    $Wheel = Get-SingleArtifact $Dist "memoryforge-*.whl"
+    $Wheel = Get-SingleArtifact $Dist "memoryforge_wiki-*.whl"
     $PreviousConstraint = $env:PIP_CONSTRAINT
     $env:PIP_CONSTRAINT = Join-Path $Snapshot "constraints\dev.txt"
     try {
@@ -203,7 +203,7 @@ try {
         "-c", (Join-Path $Snapshot "constraints\dev.txt"),
         "hatchling"
     )
-    $Sdist = Get-SingleArtifact $Dist "memoryforge-*.tar.gz"
+    $Sdist = Get-SingleArtifact $Dist "memoryforge_wiki-*.tar.gz"
     $SdistCheck = @(
         "import sys,tarfile",
         "names=tarfile.open(sys.argv[1]).getnames()",

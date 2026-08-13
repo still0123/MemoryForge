@@ -187,14 +187,12 @@ def test_code_wiki_redacts_sensitive_literals_from_pages_and_model_input(
         tmp_path,
         {
             "src/client.py": (
-                'class Client:\n'
+                "class Client:\n"
                 '    def __init__(self, AccountDesc="Admin@1234", password="Password123!"):\n'
                 "        self.password = password\n"
             ),
             "src/service.py": (
-                "from src.client import Client\n\n"
-                "def build():\n"
-                '    return Client("Admin@1234")\n'
+                'from src.client import Client\n\ndef build():\n    return Client("Admin@1234")\n'
             ),
         },
     )
@@ -594,8 +592,7 @@ def test_code_wiki_uses_wider_markdown_delimiters_for_struct_tags(tmp_path: Path
         tmp_path,
         {
             "src/model.go": (
-                'package model\n\n'
-                'type Page struct { Offset int `json:"Offset,omitempty"` }\n'
+                'package model\n\ntype Page struct { Offset int `json:"Offset,omitempty"` }\n'
             )
         },
     )

@@ -466,9 +466,7 @@ class LocalPortalApp:
                 job_id = parsed.path.removeprefix("/api/jobs/")
                 return _json_response(self._with_commit(self.jobs.get(job_id)))
             if parsed.path == "/api/updates":
-                return _json_response(
-                    self._with_commit({"items": list_updates(self.root)})
-                )
+                return _json_response(self._with_commit({"items": list_updates(self.root)}))
             if parsed.path.startswith("/api/updates/"):
                 changeset_id = parsed.path.removeprefix("/api/updates/")
                 return _json_response(get_update(self.root, changeset_id))
@@ -521,9 +519,7 @@ class LocalPortalApp:
         parsed = urlparse(request_path)
         try:
             if parsed.path == "/api/sources/preview":
-                return _json_response(
-                    self._with_commit(self.jobs.preview(payload))
-                )
+                return _json_response(self._with_commit(self.jobs.preview(payload)))
             if parsed.path == "/api/sources":
                 return _json_response(
                     self._with_commit(self.jobs.submit_source(payload)),
@@ -540,28 +536,20 @@ class LocalPortalApp:
                 return _json_response(self._with_commit(self.jobs.cancel(job_id)))
             if parsed.path.startswith("/api/updates/") and parsed.path.endswith("/reject"):
                 changeset_id = parsed.path.removeprefix("/api/updates/").removesuffix("/reject")
-                return _json_response(
-                    self._with_commit(reject_changeset(self.root, changeset_id))
-                )
-            if (
-                parsed.path.startswith("/api/updates/")
-                and parsed.path.endswith("/approve-and-apply")
+                return _json_response(self._with_commit(reject_changeset(self.root, changeset_id)))
+            if parsed.path.startswith("/api/updates/") and parsed.path.endswith(
+                "/approve-and-apply"
             ):
-                changeset_id = (
-                    parsed.path.removeprefix("/api/updates/")
-                    .removesuffix("/approve-and-apply")
+                changeset_id = parsed.path.removeprefix("/api/updates/").removesuffix(
+                    "/approve-and-apply"
                 )
                 update = get_update(self.root, changeset_id)
                 return _json_response(
-                    self._with_commit(
-                        self.jobs.submit_apply(changeset_id, str(update["name"]))
-                    ),
+                    self._with_commit(self.jobs.submit_apply(changeset_id, str(update["name"]))),
                     status=202,
                 )
             if parsed.path == "/api/automation":
-                return _json_response(
-                    self._with_commit(configure_automation(self.root, payload))
-                )
+                return _json_response(self._with_commit(configure_automation(self.root, payload)))
             if parsed.path == "/api/ask":
                 question = payload.get("question")
                 if not isinstance(question, str) or not question.strip():
@@ -937,11 +925,7 @@ def _parse_upload(
     body: bytes,
 ) -> tuple[str, bytes, str, bool, bool]:
     message = BytesParser(policy=policy.default).parsebytes(
-        (
-            f"Content-Type: {content_type}\r\n"
-            "MIME-Version: 1.0\r\n\r\n"
-        ).encode("ascii")
-        + body
+        (f"Content-Type: {content_type}\r\nMIME-Version: 1.0\r\n\r\n").encode("ascii") + body
     )
     filename = ""
     content = b""

@@ -190,6 +190,7 @@ func After() {}
     assert "internal.meter.Before" in names
     assert "internal.meter.After" in names
 
+
 def _synced_go_repository(
     tmp_path: Path,
     *,

@@ -84,6 +84,7 @@ RELEASE_DRILL_FIXTURE = {
     "source_id": "8864360214e8fa15d97f8019b8392729520e066c469d2e8475ec3e07c8734c68",
 }
 RELEASE_DRILL_WORKSPACE_COMMIT = "682b277b30ae3f8963f0eb1276c888215cb1c8c3"
+CURRENT_RELEASE_DRILL_WORKSPACE_COMMIT = "b64427a75b029405910600be4ba323be13695701"
 _RESULTS = "demo/results/"
 HISTORICAL_REVIEW_SCOPES = {
     _RESULTS + "artifacts/release_candidate_review_candidate_5/review-scope.json": {
@@ -3110,6 +3111,7 @@ def _release_drill_contract(
     commit: str,
     *,
     evidence_revision: int = 10,
+    expected_workspace_commit: str = RELEASE_DRILL_WORKSPACE_COMMIT,
 ) -> bool:
     if not isinstance(payload, dict):
         return False
@@ -3216,7 +3218,7 @@ def _release_drill_contract(
             evidence_revision >= 14
             and (
                 not _strict_mapping(fixture, RELEASE_DRILL_FIXTURE)
-                or workspace.get("original_commit") != RELEASE_DRILL_WORKSPACE_COMMIT
+                or workspace.get("original_commit") != expected_workspace_commit
             )
         )
     ):

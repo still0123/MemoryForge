@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from memoryforge.code_index import CodeIndexError, build_code_index
+from memoryforge.code_index import build_code_index
 from memoryforge.code_models import (
     CodeIndexSnapshot,
     CodeLanguage,

@@ -53,9 +53,7 @@ def review_changeset(workspace: Path, changeset_id: str) -> dict[str, Any]:
         "status": stored.changeset.status.value,
         "reviewed_at": receipt.reviewed_at.isoformat(),
         "candidate_files": stored.candidate_files,
-        "unified_diff": {
-            item["path"]: item["diff"] for item in details["pages"]
-        },
+        "unified_diff": {item["path"]: item["diff"] for item in details["pages"]},
     }
 
 
@@ -116,9 +114,7 @@ def _apply_stored(
     )
     if any(not path.startswith("wiki/pages/") for path in archive_paths):
         raise ValueError("ARCHIVE_PAGE operations must target wiki/pages/")
-    existing_archive_paths = tuple(
-        path for path in archive_paths if (opened.root / path).is_file()
-    )
+    existing_archive_paths = tuple(path for path in archive_paths if (opened.root / path).is_file())
     paths = tuple(sorted(set(stored.candidate_files) | set(existing_archive_paths)))
     opened.version_store.require_clean_paths(paths)
     opened.require_current_source_versions(stored.changeset.source_versions)

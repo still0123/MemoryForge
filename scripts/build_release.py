@@ -22,6 +22,8 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SOURCE_ROOT = REPO_ROOT / "src"
 TARGET_VERSION = "0.4.0"
+DISTRIBUTION_NAME = "memoryforge-wiki"
+ARTIFACT_STEM = "memoryforge_wiki"
 CONSTRAINTS = REPO_ROOT / "constraints/dev.txt"
 FORBIDDEN_SDIST_PARTS = ("/demo/results/artifacts/",)
 SOURCE_DATE_EPOCH = "315532800"
@@ -261,8 +263,8 @@ def _isolated_build(
         cwd=repo_root,
         environment=build_environment,
     )
-    wheel = _single(destination, "memoryforge-*.whl")
-    sdist = _single(destination, "memoryforge-*.tar.gz")
+    wheel = _single(destination, f"{ARTIFACT_STEM}-*.whl")
+    sdist = _single(destination, f"{ARTIFACT_STEM}-*.tar.gz")
     _validate_sdist(sdist)
     return {
         "name": name,
@@ -352,7 +354,8 @@ def _check_sdist_clean_room(
                 "-c",
                 (
                     "import importlib.metadata,json,memoryforge;"
-                    "print(json.dumps({'version':importlib.metadata.version('memoryforge'),"
+                    f"print(json.dumps({{'version':importlib.metadata.version("
+                    f"{DISTRIBUTION_NAME!r}),"
                     "'import_path':memoryforge.__file__}))"
                 ),
             ],
@@ -388,6 +391,8 @@ def _require_version(
     source_root: Path = SOURCE_ROOT,
 ) -> None:
     project = tomllib.loads((repo_root / "pyproject.toml").read_text(encoding="utf-8"))
+    if project["project"]["name"] != DISTRIBUTION_NAME:
+        raise SystemExit(f"release distribution must be {DISTRIBUTION_NAME}")
     versions = {
         str(project["project"]["version"]),
         _source_module_version(source_root),

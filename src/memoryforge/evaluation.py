@@ -438,8 +438,7 @@ def _citation_quote_grounded(quote: str, excerpt: str) -> bool:
         return True
     code_fact = _CODE_WIKI_FACT.fullmatch(normalised_quote)
     return bool(
-        code_fact
-        and _normalise(code_fact.group("code").replace("\\`", "`")) in normalised_excerpt
+        code_fact and _normalise(code_fact.group("code").replace("\\`", "`")) in normalised_excerpt
     )
 
 

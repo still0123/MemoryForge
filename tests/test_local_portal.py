@@ -193,8 +193,7 @@ def test_local_portal_classifies_projects_sources_templates_and_relations(
     projects = json.loads(portal.dispatch("/api/projects")[2])
     assert {item["name"] for item in projects["items"]} == {"alpha", "beta"}
     assert all(
-        "checkout_path" not in item and "remote_url" not in item
-        for item in projects["items"]
+        "checkout_path" not in item and "remote_url" not in item for item in projects["items"]
     )
     assert "token@" not in json.dumps(projects)
     alpha = next(item for item in projects["items"] if item["name"] == "alpha")
@@ -210,9 +209,9 @@ def test_local_portal_classifies_projects_sources_templates_and_relations(
     assert all("source_id" not in item for item in conversations["items"])
 
     filtered = json.loads(
-        portal.dispatch(
-            f"/api/pages?kind=code&project={repositories['alpha']}&offset=0&limit=50"
-        )[2]
+        portal.dispatch(f"/api/pages?kind=code&project={repositories['alpha']}&offset=0&limit=50")[
+            2
+        ]
     )
     assert filtered["total"] == 2
     assert {item["kind"] for item in filtered["items"]} == {"code"}
@@ -220,9 +219,7 @@ def test_local_portal_classifies_projects_sources_templates_and_relations(
     assert code_item["template"] == "code_file"
     assert code_item["relative_path"] == "src/store.py"
 
-    alpha_project = json.loads(
-        portal.dispatch(f"/api/project?id={repositories['alpha']}")[2]
-    )
+    alpha_project = json.loads(portal.dispatch(f"/api/project?id={repositories['alpha']}")[2])
     assert alpha_project["overview"] == []
     assert [item["path"] for item in alpha_project["modules"]] == [paths["module"]]
     assert alpha_project["file_count"] == 1
@@ -244,9 +241,7 @@ def test_local_portal_classifies_projects_sources_templates_and_relations(
         assert page["workspace_commit"] == summary["workspace_commit"]
         assert "content" in page and "html" in page
 
-    code_page = json.loads(
-        portal.dispatch("/api/page?path=" + quote(paths["code"], safe=""))[2]
-    )
+    code_page = json.loads(portal.dispatch("/api/page?path=" + quote(paths["code"], safe=""))[2])
     assert "职责" in code_page["html"]
     assert "主要类型与方法" in code_page["html"]
     assert "代码依据" in code_page["html"]
@@ -259,8 +254,7 @@ def test_local_portal_classifies_projects_sources_templates_and_relations(
     mentioned_paths = {item["path"] for item in conversation["related"]["exact_mentions"]}
     assert paths["code"] in mentioned_paths
     assert all(
-        "pkg.Store" not in item["detail"]
-        for item in conversation["related"]["exact_mentions"]
+        "pkg.Store" not in item["detail"] for item in conversation["related"]["exact_mentions"]
     )
 
     reverse = {
@@ -270,9 +264,7 @@ def test_local_portal_classifies_projects_sources_templates_and_relations(
     }
     assert paths["conversation"] in reverse
 
-    feishu = json.loads(
-        portal.dispatch("/api/page?path=" + quote(paths["feishu"], safe=""))[2]
-    )
+    feishu = json.loads(portal.dispatch("/api/page?path=" + quote(paths["feishu"], safe=""))[2])
     assert paths["conversation"] in {item["path"] for item in feishu["related"]["direct"]}
 
 

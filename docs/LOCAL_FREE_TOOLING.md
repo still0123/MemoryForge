@@ -65,8 +65,8 @@ git push origin v0.4.0
 
 gh release create v0.4.0 --verify-tag --generate-notes
 gh release upload v0.4.0 \
-  local-evidence/v0.4.0-release/memoryforge-*.whl \
-  local-evidence/v0.4.0-release/memoryforge-*.tar.gz \
+  local-evidence/v0.4.0-release/memoryforge_wiki-*.whl \
+  local-evidence/v0.4.0-release/memoryforge_wiki-*.tar.gz \
   local-evidence/v0.4.0-release/release-provenance.json \
   local-evidence/v0.4.0-release/benchmark-summary.json \
   local-evidence/v0.4.0-release/workspace-drill.json \

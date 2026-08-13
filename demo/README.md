@@ -2,6 +2,18 @@
 
 `demo/run_public_demo.py` 把 MemoryForge 现有 CLI 按真实用户路径串起来，对一个或多个**已经克隆好的**本地公开 Git 仓库跑出一份可提交、可复现的证据 JSON。它不注册新命令、不 clone/fetch/checkout、不调用模型、不读取 `.env`。
 
+## 目录边界
+
+| 内容 | 入口 |
+| --- | --- |
+| 第一次体验 | `run_showcase_demo.py` |
+| 当前公开基线 | `results/agent_skill_eval_public.json`、`results/code_wiki_public.json` |
+| 发布制品 | [v0.4.0 GitHub Release](https://github.com/still0123/MemoryForge/releases/tag/v0.4.0) |
+| rejected / superseded 历史 | [Research Archive](../docs/research/README.md) |
+
+`results/artifacts/` 保留旧 Candidate 的离线重放原始件，不是产品入口。功能冻结后不再为展示增加
+新的 benchmark；只有真实用户反馈暴露可复现问题时才补对应 Evidence。
+
 ## 运行
 
 ```bash
@@ -89,9 +101,9 @@ lint、可信 Mermaid 架构图、确定性评测和单文件增量更新。它�
 ```bash
 uv build --wheel --out-dir dist
 .venv/bin/python demo/run_release_check.py \
-  --wheel dist/memoryforge-0.4.0-py3-none-any.whl \
+  --wheel dist/memoryforge_wiki-0.4.0-py3-none-any.whl \
   --workdir /private/tmp/memoryforge-release-check \
-  --output /private/tmp/memoryforge-v030-release-provenance.json \
+  --output /private/tmp/memoryforge-v040-release-provenance.json \
   --code-evidence-output demo/results/code_wiki_public.json \
   --public-evidence-output demo/results/agent_skill_eval_public.json \
   --public-source-repo /absolute/path/to/AgentSkill-Eval

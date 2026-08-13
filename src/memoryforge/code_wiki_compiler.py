@@ -853,11 +853,7 @@ def _insert_before_first_section(content: str, addition: str) -> str:
     if first_section < 0:
         raise CodeWikiCompilationError("code module page is missing its reading sections")
     return (
-        content[:first_section].rstrip()
-        + "\n\n"
-        + addition
-        + "\n\n"
-        + content[first_section + 1 :]
+        content[:first_section].rstrip() + "\n\n" + addition + "\n\n" + content[first_section + 1 :]
     )
 
 

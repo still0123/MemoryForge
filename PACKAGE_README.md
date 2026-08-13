@@ -5,5 +5,10 @@ source repositories. It preserves source versions, reviewable changes, Wiki
 pages, and replayable citations while supporting deterministic offline
 evaluation.
 
+```bash
+python -m pip install memoryforge-wiki
+memoryforge --help
+```
+
 Project documentation, benchmark Evidence, and release status are maintained
-in the source repository.
+at <https://github.com/still0123/MemoryForge>.
