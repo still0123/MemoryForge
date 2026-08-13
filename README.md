@@ -13,6 +13,7 @@ macOS 完成 `656 passed` 发布门禁，Windows 尚未验证。当前 `main` �
 验证数字见下方[公开证据](#公开证据)。
 
 [5 分钟跑通](#5-分钟跑通) · [60 秒演示](#60-秒公开演示) ·
+[在 Codex 中使用](#在-codex-中使用推荐) · [macOS 桌面端](#macos-桌面端推荐日常使用) ·
 [公开证据](#公开证据) · [演示讲稿](docs/PORTFOLIO_DEMO.md) ·
 [设计文档](SPEC.md)
 
@@ -32,6 +33,67 @@ macOS 完成 `656 passed` 发布门禁，Windows 尚未验证。当前 `main` �
 ![MemoryForge 本地知识门户首页示意图](assets/02-memoryforge-portal-home.png)
 
 <sub>上图为依据当前 Portal 信息架构制作的**示例数据高保真模拟图**，不是伪装成真实运行数据的截图。</sub>
+
+## 从建库到在 AI 中提问
+
+MemoryForge 的日常使用是两段式的：先把资料变成**已审核的 Wiki**；再在你平常使用的
+Codex 对话中按需查它。不是把整个 Wiki 或全部历史对话塞进每一个新会话。
+
+![首次建立知识库：导入来源、编译 Wiki、审核应用、连接 Codex](assets/usage/01-first-wiki.png)
+
+### 1. 建立可信知识
+
+在一个单独的 Workspace 中导入代码、文档或对话；每次资料更新都走
+`ingest → review → approve → apply`。只有应用后的页面会成为 AI 可查询的长期知识。
+
+```bash
+memoryforge init /absolute/path/to/my-wiki
+memoryforge import /absolute/path/to/design.md --workspace /absolute/path/to/my-wiki
+memoryforge ingest --pending --workspace /absolute/path/to/my-wiki
+# 在 Portal 或 CLI 中 review → approve → apply
+```
+
+代码仓库需要先通过 `git-add → git-sync → ingest --code-wiki` 进入同一个 Workspace；完整步骤见
+[中文使用指南](docs/USER_GUIDE_CN.md#6-导入代码仓库并生成-code-wiki)。
+
+### 2. 只连接 Codex 一次
+
+对**一个 Workspace**执行一次全局连接：
+
+```bash
+memoryforge connect codex --workspace /absolute/path/to/my-wiki
+```
+
+重启 Codex（或 ChatGPT Desktop / IDE 扩展）后，用 `/mcp` 确认 `memoryforge` 已出现。此推荐模式
+只注册一个本地只读 MCP Server，**不会为每个仓库重复注册，也不会改写项目的 `AGENTS.md`**。
+
+之后直接在任何新对话中正常提问即可。Codex 会在问题涉及项目历史、既有决策或 Wiki 时，调用
+`memoryforge_context`；不必每次先说“请查 MemoryForge”。若某次回答必须以知识库为准，可以明确说
+“先查 MemoryForge，再回答”。
+
+MemoryForge 搜索整个已应用 Workspace：当前打开的已登记项目只会使本项目页面排在前面，**不是**
+访问边界。因此空白新对话、未登记项目，以及跨多个仓库的提问都能工作。
+
+### 3. 按需展开，控制 Token
+
+![渐进式加载记忆：先找页面，再读引用，最后核验原文](assets/usage/03-progressive-recall.png)
+
+一次查询先返回少量相关页面和 Citation；只有需要时才读取某条原文 Evidence。这样既避免上下文
+污染，也保留“这句话来自哪里”的核验路径。没有足够证据时，系统会返回 `unknown`，而不是补全猜测。
+
+### 4. AI 的新结论仍需审核
+
+![AI 建议必须形成 ChangeSet，经用户审核后才写入正式 Wiki 和 Git](assets/usage/05-review-and-apply.png)
+
+AI 可以基于 Citation 提出 ChangeSet，但不能直接改变正式 Wiki 或 Git。你在 Portal 或 CLI 中查看 Diff、
+批准并应用后，它才会成为后续对话可复用的知识。
+
+> 默认只向 AI Host 提供 `public` 来源。`local_only` 内容必须在连接时显式使用
+> `--allow-local-llm` 授权，且该授权会作用于这个 Workspace 的全部命中内容。
+
+项目专属连接仍可使用 `memoryforge connect codex /absolute/path/to/project`；它适用于只希望在该项目
+中安装 on-demand 指令的场景。大多数个人多仓库工作流应使用上面的全局连接。详见
+[全局 Codex MCP Router](docs/GLOBAL_CODEX_MCP_ROUTER.md)。
 
 ## 核心产品
 
@@ -142,6 +204,35 @@ $MF apply   <changeset-id> --workspace ./my-wiki
 $MF ask '这个项目为什么这样设计？' --workspace ./my-wiki
 ```
 
+## macOS 桌面端（推荐日常使用）
+
+桌面端把本地 Portal 放进原生 macOS 窗口：日常只需双击应用，不打开浏览器，也不会访问远程网页。
+首次使用需选择已初始化的 Workspace；之后会自动重开上次的知识库。
+
+从源码安装并构建：
+
+```bash
+git clone https://github.com/still0123/MemoryForge.git
+cd MemoryForge
+
+python3.11 -m venv .venv
+.venv/bin/python -m pip install -e '.[desktop]'
+.venv/bin/memoryforge init ./my-wiki  # 已有 Workspace 时跳过
+./scripts/build_macos_app.sh
+open dist/MemoryForge.app
+```
+
+随后可直接双击 `dist/MemoryForge.app`。第一次请选择 `my-wiki` 这样的已初始化 Workspace，
+而不是 MemoryForge 的源码目录；日常使用路径为“添加来源 → 后台任务 → 知识更新 → 批准并应用”。
+
+开发时也可以不打包，直接运行：
+
+```bash
+.venv/bin/memoryforge desktop --workspace ./my-wiki
+```
+
+完整说明见 [macOS 桌面端指南](docs/DESKTOP_APP_CN.md)。
+
 ## 60 秒公开演示
 
 不需要模型 Key、数据库服务或外部仓库：
@@ -199,6 +290,7 @@ import → Code Index → ChangeSet → review → approve → apply → query �
 | 文档 | 内容 |
 | --- | --- |
 | [中文使用指南](docs/USER_GUIDE_CN.md) | 安装、导入、问答与 AI Host MCP 接入 |
+| [macOS 桌面端指南](docs/DESKTOP_APP_CN.md) | 原生窗口、Workspace 选择与打包方式 |
 | [SPEC.md](SPEC.md) | 架构、数据模型和安全边界 |
 | [本地 Portal](docs/LOCAL_DYNAMIC_PORTAL_SPEC.md) | 阅读、任务、审核和控制面 |
 | [公开 Benchmark](docs/BENCHMARK.md) | 方法、结果、负案例和复现命令 |

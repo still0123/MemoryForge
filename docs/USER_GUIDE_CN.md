@@ -430,95 +430,98 @@ memoryforge ingest --pending --workspace "$MF_WORKSPACE"
 memoryforge changeset-list --workspace "$MF_WORKSPACE"
 ```
 
-## 13. 新 Codex 对话如何加载旧记忆
+## 13. 在新 Codex 对话中按需加载旧记忆
 
-MemoryForge 不把整个历史聊天塞进新对话。`recall` 只返回少量、已经应用的近期会话摘要、决策、
-未完成事项和 Wiki Citation。
+MemoryForge 不会把整个 Wiki 或历史聊天自动塞进新对话。推荐一次注册一个全局 MCP Router：它在
+问题相关时返回少量页面与 Citation，并在需要时才展开 Evidence。
 
-### 手动加载
+### 推荐：一个 Workspace 只连接一次
 
-在新任务开始时运行：
+先确保想让 AI 使用的资料已经完成 `ingest → review → approve → apply`，再运行：
+
+```bash
+memoryforge connect codex --workspace "$MF_WORKSPACE"
+```
+
+该命令通过 Codex CLI 注册一个名为 `memoryforge` 的本地只读 MCP Server。它不为每个仓库重复
+注册，也不会改写任何项目的 `AGENTS.md`。完成后重启 Codex（或 ChatGPT Desktop / IDE 扩展），
+并用 `/mcp` 确认 `memoryforge` 已出现。
+
+此后可在任何新对话中正常提问，例如“这个调用为什么这样设计？”或“这两个仓库如何协作？”。
+无需每次先说“请查 MemoryForge”；当问题与项目历史、既有决策或已编译 Wiki 有关时，Codex 可调用
+`memoryforge_context`。若某个回答必须以知识库为准，可以明确说“先查 MemoryForge，再回答”。
+
+查询按下面的顺序渐进展开：
+
+```text
+问题 → memoryforge_context（最多 3 页、6 个 Citation）
+     → 必要时 memoryforge_read_evidence（单条原文片段）
+     → 有足够支持才回答；否则 unknown
+```
+
+因此它节省 Token，也不会把无关 Wiki 页面污染当前对话。
+
+### 跨仓库、新对话和未登记项目如何处理
+
+全局 Router 始终搜索整个**已应用的 Workspace**。如果 Codex 当前目录属于一个已登记的 Git checkout，
+该项目的页面只会获得排序优先级；它不是访问控制边界。没有项目目录、未登记项目，或问题涉及多个
+仓库时，MemoryForge 仍可搜索整个 Workspace，只是不偏向任何一个仓库。
+
+“已登记”只决定仓库是否已被收录为知识来源，而不是决定某个对话是否允许查询。真正的边界是来源的
+敏感级别：全局连接默认只返回 `public` 内容。若你确认某个 AI Host 可以接收本地资料，才在连接时显式
+授权：
+
+```bash
+memoryforge connect codex --workspace "$MF_WORKSPACE" --allow-local-llm
+```
+
+这会允许该 Workspace 命中的 `local_only` 内容进入 Codex 模型上下文；不要因为“方便”而默认开启。
+
+### 手动 `recall`：仅作为后备或摘要查看
+
+想在终端查看少量已应用的会话摘要、决策和未完成事项时，可运行：
 
 ```bash
 memoryforge recall --workspace "$MF_WORKSPACE"
-```
-
-默认最多返回 3 条近期记忆，可调整到 1 至 20：
-
-```bash
 memoryforge recall --limit 5 --workspace "$MF_WORKSPACE"
 ```
 
-若状态是 `empty`，说明还没有已应用的会话 Wiki；检查是否只完成了 `codex-import`，却还没有
-完成 `ingest → review → approve → apply`。
+`recall` 的会话记忆仍是未验证历史，应根据 Citation 回到 Wiki 或原文核验。状态为 `empty` 表示尚未
+应用会话 Wiki，而不是 MCP 连接故障。
 
-### 为某个项目接入 on-demand MCP（推荐）
+### 可选：只绑定一个项目
 
-对项目执行一次：
+如果你刻意只想让某一个项目在 Codex 中获得 on-demand 指令，可以使用项目专属连接：
+
+![项目专属 Codex 接入：连接命令、受管理的 AGENTS.md、MCP、按需检索](../assets/usage/02-codex-connection.png)
 
 ```bash
 memoryforge connect codex /absolute/path/to/project \
   --workspace "$MF_WORKSPACE"
 ```
 
-该命令通过 Codex 官方 CLI（`codex mcp get/add`）注册一个只读 MCP Server，并在项目
-`AGENTS.md` 中安装 on-demand knowledge 指令。以后从该项目目录开始 Codex 新任务时，模型按需
-调用 `memoryforge_context` / `memoryforge_read_evidence` 渐进式加载历史记忆，不再在任务开始
-时运行整个 `recall`。
-
-`connect codex` 可重复执行且幂等；已注册的 Server 命令一致时保持不变，不一致时报冲突并拒绝
-覆盖。它不会直接改写 `~/.codex/config.toml`、认证文件或模型配置。连接完成后重启对应 Host，
-并用 `/mcp` 检查。
-
-本地敏感内容默认不进入模型上下文；只有显式传入 `--allow-local-llm` 的固定 Server 命令才允许
-返回 `local_only` 内容。
+它会为该项目注册单独 Server，并写入一个受管理的 `AGENTS.md` 块。这个模式更适合严格项目边界；
+个人维护多个相互引用的仓库时，优先使用上面的全局 Router。
 
 ### 其他 AI Host：复制配置（不自动改写）
 
-只有 Codex 有官方、可验证的 CLI，所以只有 Codex 支持自动接入。Claude Code、Claude
-Desktop、VS Code 和 ChatGPT Desktop 都使用可复制的配置片段；`mcp-config`
-只输出文本，绝不直接改写这些 Host 的配置文件：
+Claude Code、Claude Desktop 和 VS Code 可使用项目专属 MCP 配置片段。`mcp-config` 只输出文本，
+绝不直接改写这些 Host 的配置文件：
 
 ```bash
 memoryforge mcp-config --project-root /absolute/path/to/project \
   --workspace "$MF_WORKSPACE" --format json
 ```
 
-输出标准 `mcpServers` JSON，把整个 `mcpServers` 对象粘贴到：
-
-- **Claude Code**：项目根目录 `.mcp.json`；
-- **Claude Desktop**：`claude_desktop_config.json`（`mcpServers` 键）；
-- **VS Code**：`.vscode/mcp.json`。
-
-粘贴后重启对应 Host，确认 Server 出现在 MCP 列表中，再从项目目录提问验证
-`memoryforge_context`。
-
-Codex 的手动后备配置（`~/.codex/config.toml`，ChatGPT Desktop 共用同一份）使用
-TOML 片段：
+输出标准 `mcpServers` JSON；将其粘贴到对应 Host 的 MCP 配置后重启 Host，再用
+`memoryforge_context` 验证。Codex 的手动后备配置也可生成 TOML：
 
 ```bash
 memoryforge mcp-config --project-root /absolute/path/to/project \
   --workspace "$MF_WORKSPACE" --format toml
 ```
 
-把输出的 `[mcp_servers.*]` 块追加到 `~/.codex/config.toml`。仍然优先使用
-`connect codex` 自动注册，手动片段只在 CLI 不可用时作为后备。两种方式生成的
-Server 名与命令完全一致，可以互换，不会产生重复注册。
-
-### 旧方式：`codex-setup`（兼容保留）
-
-早期版本在项目 `AGENTS.md` 安装“每个新任务先运行 recall”的指令：
-
-```bash
-memoryforge codex-setup /absolute/path/to/project \
-  --workspace "$MF_WORKSPACE"
-```
-
-该命令仍可使用，与新方式共用同一个 managed block 安装器，不会同时安装两个 MemoryForge
-block。新项目请改用 `connect codex`。
-
-若新对话不属于任何项目，没有稳定的项目 `AGENTS.md` 可读取，应手动运行 `recall`。不要为了
-“全局记忆”把整个 Wiki 自动注入每次对话；这会增加无关上下文。
+早期的 `memoryforge codex-setup` 会强制每个新任务先运行 `recall`，只为兼容保留；新项目不要使用它。
 
 ## 14. 自动更新已有来源
 
