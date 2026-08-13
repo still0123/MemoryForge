@@ -86,7 +86,10 @@ class PageEntry:
             "title": self.title,
             "summary": self.summary,
             "kind": self.kind,
+            "template": self.subtype,
             "project": project,
+            "module_path": self.module_path,
+            "relative_path": self.relative_path,
             "updated": self.updated,
             "status": self.status,
         }
@@ -185,6 +188,11 @@ class PortalCatalog:
                     and related.kind in {"conversation", "feishu", "note"}
                 ):
                     related_paths.add(related.path)
+        file_pages = [
+            page
+            for page in pages
+            if page.kind == "code" and page.subtype == "code_file"
+        ]
         return {
             "workspace_commit": self.commit,
             **repository.public(),
@@ -193,12 +201,14 @@ class PortalCatalog:
                 page.public()
                 for page in pages
                 if page.kind == "code" and page.subtype == "code_module"
+                and page.module_path is not None
+                and "/" not in page.module_path
             ],
-            "files": [
-                page.public()
-                for page in pages
-                if page.kind == "code" and page.subtype == "code_file"
-            ],
+            # A large repository can contain thousands of file pages. The portal
+            # starts from architecture and modules; it keeps only a small set of
+            # file examples in this response and leaves exhaustive lookup to search.
+            "file_count": len(file_pages),
+            "files": [page.public() for page in file_pages[:12]],
             "related": [self.pages[path].public() for path in sorted(related_paths)],
         }
 
@@ -485,7 +495,12 @@ class PortalCatalog:
             module_path = (
                 _module_path(page_path, page_repository_id) if kind == "code" else None
             )
-            subtype = _page_subtype(kind, generated, relative_path)
+            subtype = _page_subtype(
+                kind,
+                generated,
+                relative_path,
+                metadata.get("module_id"),
+            )
             title_match = _TITLE.search(body)
             title = metadata.get("title") or (
                 title_match.group(1) if title_match is not None else PurePosixPath(page_path).stem
@@ -520,6 +535,18 @@ class PortalCatalog:
                         repository.languages.add(language)
             if kind in {"conversation", "feishu", "note", "project"}:
                 scan_texts[page_path] = body
+
+        for repository in self.repositories.values():
+            current_code_pages = [
+                path
+                for path in repository.page_paths
+                if self.pages[path].module_path is not None
+            ]
+            if current_code_pages:
+                # New CodeWiki pages use repository-scoped paths. Keep this
+                # current hierarchy as the project view; legacy hash-named
+                # pages remain searchable but no longer bury the reader.
+                repository.page_paths = current_code_pages
 
         direct: dict[str, dict[str, Relation]] = defaultdict(dict)
         mentions: dict[str, dict[str, Relation]] = defaultdict(dict)
@@ -652,11 +679,18 @@ def _page_kind(
     return "note"
 
 
-def _page_subtype(kind: str, generated: str, relative_path: str | None) -> str:
+def _page_subtype(
+    kind: str,
+    generated: str,
+    relative_path: str | None,
+    module_id: str | None,
+) -> str:
     if kind == "project":
         return "project"
     if kind == "code":
-        if generated == "code_wiki" or relative_path is not None:
+        if generated == "code_wiki" and module_id:
+            return "code_module"
+        if relative_path is not None:
             return "code_file"
         return "code_module"
     return kind

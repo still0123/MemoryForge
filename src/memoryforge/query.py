@@ -163,6 +163,7 @@ def answer_question(
     base_question_terms = _terms(question)
     question_terms = _expanded_question_terms(base_question_terms)
     identifier_terms = {term for term in base_question_terms if not _CJK.fullmatch(term)}
+    definition_question = _is_definition_question(question)
     yes_no_focus_terms = _yes_no_focus_terms(question)
     focus_terms = _question_focus_terms(question) | yes_no_focus_terms
     if "子模" in base_question_terms:
@@ -310,6 +311,8 @@ def answer_question(
                     required_overlap = 2
             sufficient_match = len(overlap) >= required_overlap
             if page_path in local_morphology_pages and overlap - exact_overlap:
+                sufficient_match = True
+            if definition_question and overlap & identifier_terms:
                 sufficient_match = True
             if "字段" in base_question_terms and overlap & focus_terms:
                 sufficient_match = True
@@ -1028,7 +1031,8 @@ def _candidate_pages(
 ) -> list[Path]:
     wiki_root = workspace_root / "wiki"
     index = wiki_root / "INDEX.md"
-    scored: list[tuple[tuple[int, ...], Path]] = []
+    scored: list[tuple[tuple[int, ...], bool, Path]] = []
+    definition_question = _is_definition_question(question)
     allowed_paths = (
         set(repository_page_paths(workspace_root, repository_id))
         if repository_id is not None
@@ -1058,11 +1062,14 @@ def _candidate_pages(
                     (
                         (
                             int(module_path is not None),
+                            _definition_title_score(title) if definition_question else 0,
+                            int(definition_question and _is_definition_title(title, question)),
                             -extra_module_parts if module_path is not None else 0,
                             sum(not _CJK.fullmatch(term) for term in overlap),
                             len(overlap),
                             sum(len(term) for term in overlap),
                         ),
+                        _is_code_index_title(title),
                         page,
                     )
                 )
@@ -1117,11 +1124,23 @@ def _candidate_pages(
             -candidate[0][2],
             -candidate[0][3],
             -candidate[0][4],
-            str(candidate[1].relative_to(workspace_root)),
+            -candidate[0][5],
+            -candidate[0][6],
+            str(candidate[2].relative_to(workspace_root)),
         ),
     )
-    module_pages = [page for score, page in ranked_index if score[0]]
-    index_pages = [page for score, page in ranked_index if not score[0]]
+    module_pages = [page for score, _, page in ranked_index if score[0]]
+    index_pages = [page for score, _, page in ranked_index if not score[0]]
+    explanatory_pages = [
+        page for score, code_title, page in ranked_index if not score[0] and not code_title
+    ]
+    has_explanatory_definition = any(
+        not code_title and (score[1] or score[2])
+        for score, code_title, _ in ranked_index
+    )
+    code_index_pages = [
+        page for score, code_title, page in ranked_index if not score[0] and code_title
+    ]
     relaxed_pages = [
         page
         for path in relaxed_fts_paths
@@ -1132,12 +1151,25 @@ def _candidate_pages(
         for path in exact_symbol_page_paths
         if (page := _safe_wiki_page(workspace_root, workspace_root / path)) is not None
     ]
-    ordered_pages = (*module_pages, *fact_pages, *strict_pages)
-    exact_code_pages = _exact_code_pages(
-        workspace_root,
-        question,
-        max_pages=max_pages,
-        repository_id=repository_id,
+    if definition_question:
+        ordered_pages = (
+            *explanatory_pages,
+            *fact_pages,
+            *strict_pages,
+            *module_pages,
+            *code_index_pages,
+        )
+    else:
+        ordered_pages = (*module_pages, *fact_pages, *strict_pages)
+    exact_code_pages = (
+        _exact_code_pages(
+            workspace_root,
+            question,
+            max_pages=max_pages,
+            repository_id=repository_id,
+        )
+        if not definition_question or not has_explanatory_definition
+        else ()
     )
     ordered_pages = (*exact_symbol_pages, *exact_code_pages, *ordered_pages)
     if (exact_symbol_pages or exact_code_pages) and (
@@ -1752,3 +1784,26 @@ def _expanded_question_terms(question_terms: set[str]) -> set[str]:
     if {"不可", "可用"} & question_terms:
         expanded.update(_FAILURE_TERM_EXPANSIONS)
     return expanded
+
+
+def _is_definition_question(question: str) -> bool:
+    return any(marker in question for marker in ("是什么", "什么是", "是啥", "简介", "介绍一下"))
+
+
+def _is_definition_title(title: str, question: str) -> bool:
+    identifiers = re.findall(r"[A-Za-z][A-Za-z0-9_-]*", question)
+    folded_title = title.casefold()
+    return any(
+        len(identifier) > 1 and folded_title.startswith(identifier.casefold())
+        for identifier in identifiers
+    )
+
+
+def _definition_title_score(title: str) -> int:
+    if "官方定义" in title:
+        return 2
+    return int(any(marker in title for marker in ("定义", "概览", "总览", "一句话", "简介")))
+
+
+def _is_code_index_title(title: str) -> bool:
+    return title.lower().startswith(("code: ", "code module: "))

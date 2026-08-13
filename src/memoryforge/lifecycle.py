@@ -96,7 +96,7 @@ def reject_changeset(workspace: Path, changeset_id: str) -> dict[str, str]:
     opened = Workspace.open(workspace)
     with opened.exclusive_lock():
         store = ChangeSetStore(opened)
-        store.archive_rejected(store.get(changeset_id))
+        store.archive_rejected(store.get_for_recovery(changeset_id))
     return {"changeset_id": changeset_id, "status": "REJECTED"}
 
 

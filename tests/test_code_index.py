@@ -174,21 +174,62 @@ else:
     assert "@overload" not in symbols[0].signature
 
 
-def test_python_index_rejects_syntax_errors_in_synced_evidence(tmp_path: Path) -> None:
+def test_python_index_skips_syntax_errors_in_synced_evidence(tmp_path: Path) -> None:
     checkout, workspace, repository_id = _synced_python_repository(
         tmp_path,
         "def broken(:\n    pass\n",
     )
 
-    with pytest.raises(CodeIndexError, match="syntax errors"):
-        build_code_index(workspace, repository_id)
+    snapshot = build_code_index(workspace, repository_id)
 
     assert (checkout / "src/service.py").is_file()
+    assert snapshot.symbols == ()
+    assert snapshot.source_versions == {}
+
+
+def test_python_index_skips_noncanonical_module_paths(tmp_path: Path) -> None:
+    checkout, workspace, repository_id = _synced_python_repository(
+        tmp_path,
+        "def healthy():\n    return True\n",
+        relative_path="src/ service.py",
+    )
+
+    snapshot = build_code_index(workspace, repository_id)
+
+    assert (checkout / "src/ service.py").is_file()
+    assert snapshot.symbols == ()
+    assert snapshot.source_versions == {}
+
+
+def test_python_index_redacts_sensitive_string_defaults(tmp_path: Path) -> None:
+    source = """def connect(
+    password="private",
+    client_token="token-value",
+    s3_ak: str="access-key",
+    region="cn-test",
+    optional_token=None,
+):
+    return region
+"""
+    _checkout, workspace, repository_id = _synced_python_repository(tmp_path, source)
+
+    signature = _symbol(build_code_index(workspace, repository_id), "src.service.connect").signature
+
+    assert 'password="<redacted>"' in signature
+    assert 'client_token="<redacted>"' in signature
+    assert 's3_ak: str="<redacted>"' in signature
+    assert 'region="cn-test"' in signature
+    assert "optional_token=None" in signature
+    assert "private" not in signature
+    assert "token-value" not in signature
+    assert "access-key" not in signature
 
 
 def _synced_python_repository(
     tmp_path: Path,
     source: str,
+    *,
+    relative_path: str = "src/service.py",
 ) -> tuple[Path, Path, str]:
     checkout = tmp_path / "repository"
     checkout.mkdir()
@@ -196,8 +237,9 @@ def _synced_python_repository(
     _git(checkout, "config", "user.email", "test@example.com")
     _git(checkout, "config", "user.name", "Test User")
     (checkout / "README.md").write_text("# Service\n", encoding="utf-8")
-    (checkout / "src").mkdir()
-    (checkout / "src/service.py").write_text(source, encoding="utf-8")
+    source_path = checkout / relative_path
+    source_path.parent.mkdir(parents=True)
+    source_path.write_text(source, encoding="utf-8")
     _commit_all(checkout, "Add Python service")
 
     workspace = init_workspace(tmp_path / "workspace")

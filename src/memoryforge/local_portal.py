@@ -26,6 +26,7 @@ from memoryforge.portal_jobs import (
     automation_status,
     configure_automation,
 )
+from memoryforge.provider import OpenAICompatibleProvider
 from memoryforge.query import answer_question
 from memoryforge.showcase import _display_wiki_text, _markdown_document, _markdown_html
 from memoryforge.workspace import (
@@ -317,9 +318,17 @@ Promise.all([loadSummary(),loadPages()]).then(()=>{
 class LocalPortalApp:
     """Testable portal logic: no process, no persistent page cache."""
 
-    def __init__(self, workspace: Path) -> None:
+    def __init__(
+        self,
+        workspace: Path,
+        *,
+        provider: OpenAICompatibleProvider | None = None,
+        allow_local_llm: bool = False,
+    ) -> None:
         self.workspace = Workspace.open_readonly(workspace)
         self.root = self.workspace.root
+        self.provider = provider
+        self.allow_local_llm = allow_local_llm
         self._catalog_cache: PortalCatalog | None = None
         self._catalog_lock = Lock()
         self.jobs = PortalJobManager(self.root)
@@ -557,7 +566,13 @@ class LocalPortalApp:
                 question = payload.get("question")
                 if not isinstance(question, str) or not question.strip():
                     raise ValueError("question is required")
-                answer = answer_question(self.root, question.strip(), max_citations=3)
+                answer = answer_question(
+                    self.root,
+                    question.strip(),
+                    max_citations=3,
+                    provider=self.provider,
+                    allow_local=self.allow_local_llm,
+                )
                 return _json_response(
                     self._with_commit(
                         {
@@ -822,8 +837,19 @@ class LocalPortalServer(ThreadingHTTPServer):
     allow_reuse_address = True
     daemon_threads = True
 
-    def __init__(self, workspace: Path, port: int = 8765) -> None:
-        self.app = LocalPortalApp(workspace)
+    def __init__(
+        self,
+        workspace: Path,
+        port: int = 8765,
+        *,
+        provider: OpenAICompatibleProvider | None = None,
+        allow_local_llm: bool = False,
+    ) -> None:
+        self.app = LocalPortalApp(
+            workspace,
+            provider=provider,
+            allow_local_llm=allow_local_llm,
+        )
         super().__init__((_HOST, port), make_handler(self.app))
 
     def server_close(self) -> None:
@@ -836,8 +862,15 @@ def serve_local_portal(
     port: int = 8765,
     *,
     open_browser: bool = False,
+    provider: OpenAICompatibleProvider | None = None,
+    allow_local_llm: bool = False,
 ) -> None:
-    server = LocalPortalServer(workspace, port=port)
+    server = LocalPortalServer(
+        workspace,
+        port=port,
+        provider=provider,
+        allow_local_llm=allow_local_llm,
+    )
     actual_port = int(server.server_address[1])
     url = f"http://{_HOST}:{actual_port}"
     print(f"MemoryForge local Wiki: {url} (Ctrl+C to stop)", flush=True)

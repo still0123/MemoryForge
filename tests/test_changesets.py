@@ -9,6 +9,7 @@ import pytest
 
 from memoryforge.changesets import ChangeSetStore
 from memoryforge.errors import ChangeSetStoreError
+from memoryforge.lifecycle import reject_changeset
 from memoryforge.models import ChangeOperation, ChangeOperationType, ChangeSet, ChangeSetStatus
 from memoryforge.platform_lock import try_lock_descriptor
 from memoryforge.workspace import Workspace, WorkspaceSecurityError
@@ -56,6 +57,25 @@ def test_changeset_load_and_listing_reject_stale_proposals(tmp_path: Path) -> No
         store.get("chg_cache_key_v1")
     with pytest.raises(ChangeSetStoreError, match="base_commit"):
         store.list_all()
+
+
+def test_reject_archives_stale_proposal_without_changing_head(tmp_path: Path) -> None:
+    workspace = Workspace.initialize(tmp_path / "wiki")
+    ChangeSetStore(workspace).create(
+        _page_changeset(workspace),
+        {"wiki/adrs/cache-key.md": "# Cache key\n"},
+    )
+    (workspace.root / "wiki/INDEX.md").write_text("# Advanced\n", encoding="utf-8")
+    _git(workspace.root, "add", "wiki/INDEX.md")
+    _git(workspace.root, "commit", "-m", "test: advance head")
+    advanced_head = workspace.current_commit()
+
+    assert reject_changeset(workspace.root, "chg_cache_key_v1") == {
+        "changeset_id": "chg_cache_key_v1",
+        "status": "REJECTED",
+    }
+    assert Workspace.open(workspace.root).current_commit() == advanced_head
+    assert (workspace.staging_dir / "rejected/chg_cache_key_v1").is_dir()
 
 
 def test_changeset_store_detects_candidate_tampering(tmp_path: Path) -> None:

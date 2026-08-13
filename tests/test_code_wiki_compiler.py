@@ -29,6 +29,7 @@ from memoryforge.workspace import (
     register_git_checkout,
     register_git_code_module,
     sync_git_checkout,
+    validate_candidate_page_evidence,
 )
 from tests.cli_helpers import review_approve_apply
 
@@ -39,6 +40,10 @@ SERVICE_SOURCE = """def helper(name: str) -> str:
 class Service:
     def greet(self, name: str) -> str:
         return helper(name)
+
+
+def test_greet() -> str:
+    return Service().greet("test")
 """
 
 NESTED_SOURCES = {
@@ -116,6 +121,10 @@ def test_code_wiki_compiles_reviews_applies_and_lints_nested_pages(
     assert "sources:" not in parent
     assert "[Service](src/service.md)" in parent
     assert "generated: code_wiki" in leaf
+    assert "## 快速阅读" in leaf
+    assert leaf.index("## 快速阅读") < leaf.index("## Module")
+    assert "这是叶子模块" in leaf
+    assert "src.service.test_greet" not in leaf.split("## Module", maxsplit=1)[0]
     assert "## Verified symbols" in leaf
     assert "src.service.Service.greet" in leaf
     assert "revision `" in leaf
@@ -171,6 +180,49 @@ def test_code_wiki_compiles_reviews_applies_and_lints_nested_pages(
     assert compile_code_wiki(workspace, snapshot, plan, graph) is None
 
 
+def test_code_wiki_redacts_sensitive_literals_from_pages_and_model_input(
+    tmp_path: Path,
+) -> None:
+    _checkout, workspace, repository_id = _synced_repository(
+        tmp_path,
+        {
+            "src/client.py": (
+                'class Client:\n'
+                '    def __init__(self, AccountDesc="Admin@1234", password="Password123!"):\n'
+                "        self.password = password\n"
+            ),
+            "src/service.py": (
+                "from src.client import Client\n\n"
+                "def build():\n"
+                '    return Client("Admin@1234")\n'
+            ),
+        },
+    )
+    snapshot = build_code_index(workspace, repository_id)
+    provider = _NarrativeProvider()
+
+    compilation = compile_code_wiki(
+        workspace,
+        snapshot,
+        build_module_plan(snapshot),
+        provider=provider,
+        allow_local=True,
+    )
+
+    assert compilation is not None
+    rendered = "\n".join(compilation.candidate_files.values())
+    model_input = json.dumps(provider.calls, ensure_ascii=False)
+    assert "Password123!" not in rendered
+    assert "Admin@1234" not in rendered
+    assert "Password123!" not in model_input
+    assert "Admin@1234" not in model_input
+    assert "<redacted>" in rendered
+    validate_candidate_page_evidence(
+        Workspace.open(workspace),
+        compilation.candidate_files,
+    )
+
+
 def test_code_module_synthesis_requires_explicit_local_authorization(
     tmp_path: Path,
 ) -> None:
@@ -219,13 +271,15 @@ def test_code_module_synthesis_renders_grounded_parent_pages_only(
     assert "## 核心流程" in parent
     assert "## 依赖关系" in parent
     assert "## 依据来源" in parent
+    assert parent.index("## 模块职责") < parent.index("## 快速阅读")
     assert "synthesis_status:" not in leaf
     assert "## 模块职责" not in leaf
+    assert "## 快速阅读" in leaf
     assert provider.calls[0]["module"] == {
         "title": "Src",
         "path": "src",
         "summary": "Code symbols from `src`.",
-        "is_repository_root": True,
+        "is_top_level_module": True,
     }
     citations = provider.calls[0]["citations"]
     assert isinstance(citations, list)
@@ -273,9 +327,11 @@ def test_code_module_synthesis_falls_back_without_model_claims(
     assert compilation is not None
     parent = compilation.candidate_files[make_code_wiki_path(repository_id, "src")]
     assert "synthesis_status: fallback" in parent
+    assert "synthesis_reason:" in parent
+    assert "自动概览" in parent
     assert "## 模块职责" not in parent
     assert "负责协调子模块" not in parent
-    assert len(provider.calls) == 1
+    assert len(provider.calls) == (2 if provider.error is not None else 1)
 
 
 def test_code_module_synthesis_retries_an_applied_fallback(tmp_path: Path) -> None:
@@ -531,6 +587,25 @@ def test_code_wiki_dependencies_are_queryable_and_grounded(tmp_path: Path) -> No
 
     assert result["memoryforge"]["answer_accuracy"] == 100.0
     assert result["memoryforge"]["citation_grounding_accuracy"] == 100.0
+
+
+def test_code_wiki_uses_wider_markdown_delimiters_for_struct_tags(tmp_path: Path) -> None:
+    _checkout, workspace, repository_id = _synced_repository(
+        tmp_path,
+        {
+            "src/model.go": (
+                'package model\n\n'
+                'type Page struct { Offset int `json:"Offset,omitempty"` }\n'
+            )
+        },
+    )
+
+    snapshot = build_code_index(workspace, repository_id)
+    compilation = compile_code_wiki(workspace, snapshot, build_module_plan(snapshot))
+
+    assert compilation is not None
+    page = compilation.candidate_files[make_code_wiki_path(repository_id, "src")]
+    assert '``Page struct { Offset int `json:"Offset,omitempty"` }``' in page
 
 
 def test_code_wiki_archives_modules_removed_from_the_current_snapshot(

@@ -38,16 +38,11 @@ INDEX_HTML = """<!doctype html>
 """
 
 APP_CSS = """
-:root{color-scheme:light;--bg:#f4f7f5;--panel:#fff;--soft:#f0f5f2;--text:#17221e;
---muted:#66736d;--line:#dbe5df;--accent:#11745d;--accent-strong:#075c49;
---accent-soft:#dcf3eb;--link:#2457a7;--warn:#956200;--danger:#b42318;--code:#f2f5f3;
---shadow:0 1px 2px rgba(18,42,33,.04),0 10px 34px rgba(18,42,33,.055);
---shadow-hover:0 2px 5px rgba(18,42,33,.06),0 18px 42px rgba(18,42,33,.1)}
-@media(prefers-color-scheme:dark){:root{color-scheme:dark;--bg:#0d1210;--panel:#151b18;
---soft:#1c2621;--text:#e9f0ec;--muted:#9ba9a2;--line:#2c3933;--accent:#6bd0b5;
---accent-strong:#8cdec8;--accent-soft:#163c31;--link:#9cbcff;--warn:#e3b341;
---danger:#ff9b92;--code:#0b100e;--shadow:0 12px 34px rgba(0,0,0,.18);
---shadow-hover:0 20px 48px rgba(0,0,0,.28)}}
+:root{color-scheme:light;--bg:#f5f8ff;--panel:#fff;--soft:#edf4ff;--text:#1f2329;
+--muted:#69758c;--line:#d9e4f5;--accent:#1664ff;--accent-strong:#0b55e8;
+--accent-soft:#e8f1ff;--link:#1664ff;--warn:#a65f00;--danger:#d93026;--code:#f5f8ff;
+--shadow:0 1px 2px rgba(22,100,255,.04),0 10px 34px rgba(22,100,255,.07);
+--shadow-hover:0 2px 5px rgba(22,100,255,.08),0 18px 42px rgba(22,100,255,.13)}
 *{box-sizing:border-box}[hidden]{display:none!important}html{scroll-behavior:smooth}body{margin:0;
 background:radial-gradient(circle at 78% -10%,color-mix(in srgb,var(--accent-soft) 55%,transparent),transparent 31rem),var(--bg);
 color:var(--text);font:15px/1.65 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
@@ -97,7 +92,7 @@ font-size:122px;font-weight:900;letter-spacing:-.09em;line-height:1}.hero .page-
 .hero .page-head h1{font-size:40px}.hero .actions-row{position:relative;z-index:1;margin:0}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}
 .card{min-width:0;padding:18px;background:color-mix(in srgb,var(--panel) 96%,transparent);
-border:1px solid var(--line);border-radius:13px;box-shadow:0 1px 2px rgba(18,42,33,.025)}
+border:1px solid var(--line);border-radius:13px;box-shadow:0 1px 2px rgba(22,100,255,.03)}
 a.card{display:block;color:var(--text);text-decoration:none}a.card:hover{border-color:color-mix(in srgb,var(--accent) 48%,var(--line));
 box-shadow:var(--shadow-hover);transform:translateY(-2px)}.card h2,.card h3{margin:0 0 6px;
 font-size:16px;letter-spacing:-.015em}.card p{margin:5px 0;color:var(--muted)}.metric-card{position:relative;
@@ -138,12 +133,15 @@ border-radius:4px;font-size:.88em}code,pre{font-family:ui-monospace,SFMono-Regul
 color:var(--muted);font-size:11px;letter-spacing:.06em}.rail a{display:block;margin:6px 0;
 color:var(--muted);font-size:12px;line-height:1.4;text-decoration:none}.rail a:hover{color:var(--accent)}
 .rail .depth-3{padding-left:10px}details{margin-top:12px;background:var(--panel);
-border:1px solid var(--line);border-radius:11px;box-shadow:0 1px 2px rgba(18,42,33,.025)}
+border:1px solid var(--line);border-radius:11px;box-shadow:0 1px 2px rgba(22,100,255,.03)}
 details[open]{border-color:color-mix(in srgb,var(--accent) 22%,var(--line));box-shadow:var(--shadow)}
 summary{padding:12px 14px;cursor:pointer;font-weight:620}summary:hover{color:var(--accent)}
 .detail-body{padding:0 14px 14px}.relation{display:block;margin:6px 0;padding:9px 10px;
 color:var(--text);background:var(--soft);border-radius:7px;text-decoration:none}.relation small{display:block;
-color:var(--muted)}.pagination{display:flex;gap:8px;margin-top:18px}.pagination button{padding:8px 12px;
+color:var(--muted)}.related-groups{display:grid;gap:12px}.relation-group{padding:14px;
+background:var(--panel);border:1px solid var(--line);border-radius:11px}.relation-group h3{margin:0 0 2px;
+font-size:14px}.relation-group p{margin:0}.relation-list{display:grid;gap:6px;margin-top:10px}
+.pagination{display:flex;gap:8px;margin-top:18px}.pagination button{padding:8px 12px;
 background:var(--panel);border:1px solid var(--line);border-radius:7px}.pagination button:disabled{opacity:.45;
 cursor:default}.source-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;
 padding:12px 0;border-bottom:1px solid var(--line)}.source-row:last-child{border:0}
@@ -555,6 +553,7 @@ function updateNav(){
         hash.startsWith("#projects")||hash.startsWith("#sources=")||hash.startsWith("#page="):
       target==="#updates"?hash==="#updates"||hash.startsWith("#update="):
       target==="#jobs"?hash==="#jobs"||hash.startsWith("#job="):
+      target==="#system"?hash===target||hash.startsWith("#source-manager="):
       hash===target;
     if(active)link.setAttribute("aria-current","page");else link.removeAttribute("aria-current")
   })
@@ -570,18 +569,43 @@ function metric(label,value,route){
   return route?element("a",{class:"card metric-card",href:route},content):
     element("article",{class:"card metric-card"},content)
 }
+const pageTypeNames={
+  project:"项目概览",code_module:"代码模块",code_file:"代码文件",
+  conversation:"AI 会话",feishu:"飞书资料",note:"文件、网页和笔记"
+};
+const knowledgeTypes={
+  conversation:{title:"AI 会话",description:"从对话中沉淀的结论、方案和排查记录。"},
+  feishu:{title:"飞书资料",description:"从飞书文档整理出的可追溯知识。"},
+  note:{title:"文件、网页和笔记",description:"导入的本地资料和网页笔记。"}
+};
+function displayPageTitle(page){
+  if(page.relative_path)return page.relative_path;
+  if(page.module_path)return page.module_path;
+  return String(page.title||"未命名页面").replace(/^Code(?: module)?:\s*/i,"")
+}
+function pageMeta(page){
+  const label=pageTypeNames[page.template]||pageTypeNames[page.kind]||"知识页面";
+  return [label,page.project?.name,page.status==="未验证会话记忆"?"未验证":null]
+    .filter(Boolean).join(" · ")
+}
 function pageCard(page){
-  const meta=[page.kind,page.updated,page.status].filter(Boolean).join(" · ");
   return element("a",{class:"card page-card",href:"#page="+encodeURIComponent(page.path)},[
     element("div",{class:"card-top"},[
-      element("h3",{text:page.title}),
-      element("span",{class:"kind-chip",text:"Wiki"})
+      element("h3",{text:displayPageTitle(page)}),
+      element("span",{class:"kind-chip",text:pageTypeNames[page.template]||pageTypeNames[page.kind]||"Wiki"})
     ]),
     element("p",{text:page.summary||"暂无摘要"}),
     element("div",{class:"card-footer"},[
-      element("small",{class:"meta",text:meta}),
+      element("small",{class:"meta",text:pageMeta(page)}),
       element("span",{class:"open-page",text:"打开完整正文 →"})
     ])
+  ])
+}
+function knowledgeCard(title,count,description,route){
+  return element("a",{class:"card page-card",href:route},[
+    element("h3",{text:title}),
+    element("p",{text:description}),
+    element("small",{class:"meta",text:`${count} 页可阅读知识`})
   ])
 }
 function section(title,description,content){
@@ -610,7 +634,7 @@ function recentGrid(){
   return element("div",{class:"grid"},paths.map(path=>
     element("a",{class:"card",href:"#page="+encodeURIComponent(path)},[
       element("h3",{text:path.split("/").pop().replace(/\.md$/,"")}),
-      element("small",{class:"meta",text:path})
+      element("small",{class:"meta",text:"继续阅读"})
     ])
   ))
 }
@@ -652,16 +676,17 @@ async function renderHome(){
     summary.failed_jobs?metric("失败任务",summary.failed_jobs,"#jobs"):null
   ].filter(Boolean);
   const hero=element("section",{class:"hero"},[
-    heading("知识入口","你的本地知识库","查看知识、添加来源、审核更新或直接提问。"),
+    heading("知识入口","你的本地知识库","从项目、AI 会话和资料中找到已经沉淀的知识。"),
     element("div",{class:"actions-row"},[
-      element("a",{class:"button primary",href:"#add-source",text:"添加来源"}),
+      element("a",{class:"button primary",href:"#knowledge",text:"浏览我的知识"}),
+      element("a",{class:"button",href:"#add-source",text:"添加来源"}),
       element("a",{class:"button",href:"#ask",text:"提问"})
     ])
   ]);
   const nodes=[
     hero,
     element("div",{class:"grid"},metrics),
-    section("最近打开","仅保存页面路径",recentGrid())
+    section("最近阅读","浏览记录只保存在本机浏览器",recentGrid())
   ];
   if(projects.items.length){
     nodes.push(section("项目","按 Git repository 整理",
@@ -672,15 +697,15 @@ async function renderHome(){
 async function renderKnowledge(){
   const [summary,projects]=await Promise.all([api("/api/summary"),api("/api/projects")]);
   const categories=[
-    summary.code_pages?metric("代码知识",summary.code_pages,"#sources=code"):null,
-    summary.conversation_pages?metric("AI 会话",summary.conversation_pages,"#sources=conversation"):null,
-    summary.feishu_pages?metric("飞书资料",summary.feishu_pages,"#sources=feishu"):null,
-    summary.note_pages?metric("文件、网页和笔记",summary.note_pages,"#sources=note"):null
+    summary.code_pages?knowledgeCard("项目与代码",summary.code_pages,"先读项目概览和模块；再用搜索定位具体文件。","#projects"):null,
+    summary.conversation_pages?knowledgeCard("AI 会话",summary.conversation_pages,knowledgeTypes.conversation.description,"#sources=conversation"):null,
+    summary.feishu_pages?knowledgeCard("飞书资料",summary.feishu_pages,knowledgeTypes.feishu.description,"#sources=feishu"):null,
+    summary.note_pages?knowledgeCard("文件、网页和笔记",summary.note_pages,knowledgeTypes.note.description,"#sources=note"):null
   ].filter(Boolean);
   show([
-    heading("我的知识","知识总览","按用户可识别的项目和来源类型浏览。"),
+    heading("我的知识","从哪里开始","先按用途选知识类型，再打开页面查看结论、依据和关联。"),
     element("div",{class:"grid"},categories),
-    section("代码仓库",`${projects.items.length} 个`,
+    section("项目",`${projects.items.length} 个已应用代码仓库`,
       projects.items.length?element("div",{class:"grid"},projects.items.map(projectCard)):
         empty("还没有已应用的代码仓库。"))
   ])
@@ -705,10 +730,15 @@ async function renderProject(id){
       metric("语言",data.languages.join(" / ")||"未识别",null)
     ])
   ];
-  nodes.push(section("项目概览","项目入口与同步信息",pageGrid(data.overview,"还没有项目概览。")));
-  nodes.push(section("模块","确定性代码模块",pageGrid(data.modules,"还没有模块页。")));
-  nodes.push(section("代码文件","固定 Commit 的代码知识",pageGrid(data.files,"还没有代码文件页。")));
-  nodes.push(section("相关资料","确定性相关知识",pageGrid(data.related,"还没有相关资料。")));
+  if(data.overview.length)nodes.push(section("先读这里","项目是什么、入口在哪里、模块如何协作",pageGrid(data.overview,"还没有项目概览。")));
+  nodes.push(section("顶层模块","先从这里理解项目分层；进入模块页再继续下钻。",pageGrid(data.modules,"还没有模块页。")));
+  nodes.push(section("相关资料","会话、飞书资料和笔记如何关联到这个项目",pageGrid(data.related,"还没有相关资料。")));
+  if(data.file_count){
+    nodes.push(section("代码文件","建议先通过顶部搜索按文件名或符号定位。",element("details",{},[
+      element("summary",{text:`查看 ${Math.min(data.files.length,data.file_count)} 个代码文件示例（共 ${data.file_count} 个）`} ),
+      element("div",{class:"detail-body"},pageGrid(data.files,"还没有代码文件页。"))
+    ])));
+  }
   show(nodes)
 }
 const sourceNames={code:"代码知识",conversation:"AI 会话",feishu:"飞书资料",note:"文件、网页和笔记"};
@@ -747,21 +777,26 @@ function sourceRow(item){
   return details
 }
 async function renderSources(kind,offset=0){
+  if(kind==="code"){await renderProjects();return}
   const limit=50;
-  const [sources,pages]=await Promise.all([
-    api(`/api/sources?kind=${encodeURIComponent(kind)}&offset=${offset}&limit=${limit}`),
-    api(`/api/pages?kind=${encodeURIComponent(kind)}&offset=${offset}&limit=${limit}`)
-  ]);
+  const pages=await api(`/api/pages?kind=${encodeURIComponent(kind)}&offset=${offset}&limit=${limit}`);
+  const type=knowledgeTypes[kind]||{title:sourceNames[kind]||"知识",description:"打开页面查看内容和关联。"};
+  show([
+    heading("我的知识",type.title,type.description+" 打开一页后可继续查看关联知识。"),
+    section("可阅读知识",`${pages.total} 页`,pageGrid(pages.items,`还没有${type.title}页面。`)),
+    pagination(offset,limit,pages.total,next=>renderSources(kind,next))
+  ])
+}
+async function renderSourceManager(kind,offset=0){
+  const limit=50;
+  const sources=await api(`/api/sources?kind=${encodeURIComponent(kind)}&offset=${offset}&limit=${limit}`);
   const sourceList=sources.items.length?
     element("div",{class:"card"},sources.items.map(sourceRow)):
     empty(`还没有${sourceNames[kind]||"此类"}来源。`);
   show([
-    heading("我的知识",sourceNames[kind]||"知识来源",
-      "上方查看来源状态，下方点击 Wiki 卡片阅读完整正文。"),
-    section("当前来源",`${sources.total} 个`,sourceList),
-    section("已应用 Wiki 页面",`${pages.total} 页 · 点击卡片阅读全文`,
-      pageGrid(pages.items,"还没有已应用页面。")),
-    pagination(offset,limit,Math.max(sources.total,pages.total),next=>renderSources(kind,next))
+    heading("来源管理",sourceNames[kind]||"知识来源","这里用于刷新来源、查看版本或复制内部 ID；阅读知识请回到“我的知识”。"),
+    section("已登记来源",`${sources.total} 个`,sourceList),
+    pagination(offset,limit,sources.total,next=>renderSourceManager(kind,next))
   ])
 }
 function sourcePayload(kind,value,selectionId){
@@ -973,17 +1008,26 @@ function breadcrumbs(items){
       "#page="+encodeURIComponent(item.route.slice(6)):item.route,text:item.label})
   ))
 }
-function relationGroup(title,items){
+function relationGroup(title,description,items){
   if(!items.length)return null;
-  return element("details",{},[
-    element("summary",{text:`${title} · ${items.length}`}),
-    element("div",{class:"detail-body"},items.map(item=>
+  return element("div",{class:"relation-group"},[
+    element("h3",{text:title}),
+    element("p",{class:"meta",text:description}),
+    element("div",{class:"relation-list"},items.slice(0,6).map(item=>
       element("a",{class:"relation",href:"#page="+encodeURIComponent(item.path)},[
-        element("strong",{text:item.title}),
-        element("small",{text:`${item.relationship} · ${item.detail}`})
+        element("strong",{text:displayPageTitle(item)}),
+        element("small",{text:item.relationship==="精确提及"?"这页明确提到了它":item.relationship==="同项目"?"同一个项目中的知识":"页面之间有明确链接"})
       ])
     ))
   ])
+}
+function relatedKnowledge(related){
+  const groups=[
+    relationGroup("直接关联","页面通过链接相连。",related.direct),
+    relationGroup("提到的代码或模块","页面文本中明确提到。",related.exact_mentions),
+    relationGroup("同一项目","来自同一个代码项目。",related.same_project)
+  ].filter(Boolean);
+  return groups.length?section("继续探索","这些页面与当前内容有确定性关联。",element("div",{class:"related-groups"},groups)):null
 }
 function sourceDetails(items){
   if(!items.length)return null;
@@ -1004,18 +1048,14 @@ async function renderPage(path){
   const content=element("article",{},[
     breadcrumbs(data.breadcrumbs),
     element("span",{class:data.status==="未验证会话记忆"?"badge warn":"badge",text:data.status}),
-    element("h1",{class:"reader-title",text:data.title}),
-    element("code",{class:"page-path",text:data.path}),
+    element("h1",{class:"reader-title",text:displayPageTitle(data)}),
     data.summary?element("p",{class:"summary",text:data.summary}):null,
-    body,sourceDetails(data.sources)
+    body,relatedKnowledge(data.related),sourceDetails(data.sources)
   ].filter(Boolean));
   const railItems=[
     element("h2",{text:"本页目录"}),
     ...data.structure.filter(item=>item.level<=3).map((item,index)=>
-      element("a",{href:"#section-"+index,text:item.title,class:item.level===3?"depth-3":""})),
-    relationGroup("直接关联",data.related.direct),
-    relationGroup("精确提及",data.related.exact_mentions),
-    relationGroup("同项目",data.related.same_project)
+      element("a",{href:"#section-"+index,text:item.title,class:item.level===3?"depth-3":""}))
   ].filter(Boolean);
   show(element("div",{class:"reader-layout"},[content,element("aside",{class:"rail"},railItems)]));
   [...body.querySelectorAll("h2,h3")].forEach((item,index)=>item.id="section-"+index)
@@ -1056,6 +1096,12 @@ async function renderSystem(){
     ]),
     section("Workspace Commit","固定 Commit 阅读",
       element("pre",{class:"card",text:data.workspace_commit})),
+    section("来源管理","查看来源版本、刷新或复制内部 ID。",element("div",{class:"actions-row"},[
+      element("a",{class:"button",href:"#source-manager=code",text:"代码来源"}),
+      element("a",{class:"button",href:"#source-manager=conversation",text:"AI 会话来源"}),
+      element("a",{class:"button",href:"#source-manager=feishu",text:"飞书来源"}),
+      element("a",{class:"button",href:"#source-manager=note",text:"其他来源"})
+    ])),
     section("自动更新",
       automation.supported?
         `${automation.enabled?"已开启":"已关闭"} · 下次 ${automation.next_run||"尚未运行"}`:
@@ -1095,6 +1141,7 @@ async function route(){
     else if(hash==="#projects")await renderProjects();
     else if(hash.startsWith("#project="))await renderProject(decodeURIComponent(hash.slice(9)));
     else if(hash.startsWith("#sources="))await renderSources(decodeURIComponent(hash.slice(9)));
+    else if(hash.startsWith("#source-manager="))await renderSourceManager(decodeURIComponent(hash.slice(16)));
     else if(hash==="#add-source")await renderAddSource();
     else if(hash==="#updates")await renderUpdates();
     else if(hash.startsWith("#update="))await renderUpdate(decodeURIComponent(hash.slice(8)));

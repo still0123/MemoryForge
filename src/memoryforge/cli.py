@@ -224,10 +224,30 @@ def start(
         bool,
         typer.Option("--no-open", help="Do not open the browser automatically."),
     ] = False,
+    llm: Annotated[
+        bool,
+        typer.Option("--llm", help="Answer portal questions with the configured model."),
+    ] = False,
+    allow_local_llm: Annotated[
+        bool,
+        typer.Option(
+            "--allow-local-llm",
+            help="Allow the configured model to receive matched local-only evidence.",
+        ),
+    ] = False,
 ) -> None:
     """Start the local knowledge portal."""
     try:
-        serve_local_portal(workspace, port=port, open_browser=not no_open)
+        if allow_local_llm and not llm:
+            raise ValueError("--allow-local-llm requires --llm")
+        provider = OpenAICompatibleProvider(ProviderConfig.from_environment()) if llm else None
+        serve_local_portal(
+            workspace,
+            port=port,
+            open_browser=not no_open,
+            provider=provider,
+            allow_local_llm=allow_local_llm,
+        )
     except (
         MemoryForgeError,
         WorkspaceIntegrityError,

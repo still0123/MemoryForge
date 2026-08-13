@@ -6,6 +6,7 @@ import pytest
 
 from memoryforge import query as query_module
 from memoryforge.wiki_facts import (
+    citation_quote_matches_excerpt,
     conversation_conclusion_text,
     is_conversation_process_note,
     parse_page_citations,
@@ -49,6 +50,18 @@ def test_page_facts_preserve_grounded_text_and_code_metadata() -> None:
     assert all(fact.section_path == "Code: pkg/service.py" for fact in facts)
     assert all(fact.source_version == 3 for fact in facts)
     assert len({fact.fact_id for fact in facts}) == 2
+
+
+def test_code_fact_grounding_handles_markdown_backticks_without_relaxing_evidence() -> None:
+    excerpt = 'Page struct { Offset int `json:"Offset,omitempty"` }'
+    assert citation_quote_matches_excerpt(
+        '`common.Page` (struct): ``Page struct { Offset int `json:"Offset,omitempty"` }``',
+        excerpt,
+    )
+    assert citation_quote_matches_excerpt(
+        '`common.Page` (struct): `Page struct { Offset int \\`json:"Offset,omitempty"\\` }`',
+        excerpt,
+    )
 
 
 def test_page_fact_identity_is_deterministic() -> None:

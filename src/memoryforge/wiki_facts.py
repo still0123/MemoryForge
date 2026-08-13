@@ -19,8 +19,12 @@ _RELATION_FACT = re.compile(
     r'(?P<evidence>"(?:\\.|[^"\\])*")$'
 )
 _RELATION_ROUTE = re.compile(r"^`[^`]+` \((?P<relation_type>[a-z_]+)\)$")
-_SYMBOL_FACT = re.compile(r"^`(?P<symbol>[^`]+)` \([^)]+\): `.*`$")
-_CODE_WIKI_FACT = re.compile(r"^`[^`]+` \((?P<kind>[^)]+)\): `(?P<code>.*)`$")
+_SYMBOL_FACT = re.compile(
+    r"^`(?P<symbol>[^`]+)` \([^)]+\): (?P<delimiter>`+)(?P<code>.*)(?P=delimiter)$"
+)
+_CODE_WIKI_FACT = re.compile(
+    r"^`[^`]+` \((?P<kind>[^)]+)\): (?P<delimiter>`+)(?P<code>.*)(?P=delimiter)$"
+)
 _FOOTNOTE = re.compile(
     r"^\[\^(?P<footnote>[^\]]+)\]: source "
     r"`(?P<source_id>[a-f0-9]{64})` · "
@@ -190,9 +194,13 @@ def citation_quote_matches_excerpt(quote: str, excerpt: str) -> bool:
     code_fact = _CODE_WIKI_FACT.fullmatch(normalized_quote)
     if code_fact is not None and code_fact.group("kind") == "module":
         return bool(normalized_excerpt)
-    return bool(
-        code_fact and _normalized_grounding_text(code_fact.group("code")) in normalized_excerpt
-    )
+    return bool(code_fact and _code_fact_text(code_fact) in normalized_excerpt)
+
+
+def _code_fact_text(match: re.Match[str]) -> str:
+    # Old pages escaped a backtick inside a one-backtick code span. New pages
+    # choose a wider Markdown delimiter. Both represent the same source text.
+    return _normalized_grounding_text(match.group("code").replace("\\`", "`"))
 
 
 def _normalized_grounding_text(text: str) -> str:

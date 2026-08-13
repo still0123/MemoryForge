@@ -4,8 +4,6 @@ import hashlib
 import subprocess
 from pathlib import Path
 
-import pytest
-
 from memoryforge.code_index import build_code_index
 from memoryforge.code_models import (
     CodeIndexSnapshot,
@@ -168,16 +166,29 @@ func second() {
     assert "internal.meter.key" not in qualified_names
 
 
-def test_go_index_rejects_syntax_errors_in_synced_evidence(tmp_path: Path) -> None:
+def test_go_index_keeps_complete_declarations_when_a_function_body_is_invalid(
+    tmp_path: Path,
+) -> None:
     _checkout, workspace, repository_id = _synced_go_repository(
         tmp_path,
-        model_source="package meter\n\nfunc broken( {\n",
+        model_source="""package meter
+
+func Before() {}
+
+func Broken() {
+    _ = new(call())
+}
+
+func After() {}
+""",
         service_source=SERVICE_SOURCE,
     )
 
-    with pytest.raises(ValueError, match="syntax errors"):
-        build_code_index(workspace, repository_id)
+    snapshot = build_code_index(workspace, repository_id)
 
+    names = {symbol.qualified_name for symbol in snapshot.symbols}
+    assert "internal.meter.Before" in names
+    assert "internal.meter.After" in names
 
 def _synced_go_repository(
     tmp_path: Path,

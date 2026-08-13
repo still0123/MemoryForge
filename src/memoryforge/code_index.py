@@ -155,17 +155,26 @@ def _build_python_code_index(
             raise CodeIndexError("verified SourceVersion text does not match Git source metadata")
         if not text.strip():
             continue
+        module_name = _python_module_name(record.relative_path)
+        if any(
+            part != part.strip() or "\n" in part or "\r" in part
+            for part in module_name.split(".")
+        ):
+            continue
         source = _PythonSource(
             record=record,
             text=text,
             content=text.encode(),
-            module_name=_python_module_name(record.relative_path),
+            module_name=module_name,
         )
-        analysis, parsed_relations = _parse_python_source(
+        parsed = _parse_python_source(
             repository_id,
             repository.last_synced_commit,
             source,
         )
+        if parsed is None:
+            continue
+        analysis, parsed_relations = parsed
         analyses.append(analysis)
         canonical_symbols = {
             definition.symbol.symbol_id: definition.symbol for definition in analysis.definitions
@@ -211,11 +220,11 @@ def _parse_python_source(
 ) -> tuple[
     _PythonAnalysis,
     RelationEvidence,
-]:
+] | None:
     parser = Parser(_PYTHON_LANGUAGE)
     tree = parser.parse(source.content)
     if tree.root_node.has_error:
-        raise CodeIndexError(f"Python source contains syntax errors: {source.record.relative_path}")
+        return None
 
     module_symbol = _module_symbol(repository_id, commit_sha, source)
     definitions: list[_ParsedDefinition] = []
@@ -679,10 +688,53 @@ def _definition_signature(source: _PythonSource, node: Node) -> str:
     extent = _definition_extent(node)
     body = node.child_by_field_name("body")
     end_byte = body.start_byte if body is not None else node.end_byte
-    signature = source.content[extent.start_byte : end_byte].decode("utf-8").strip()
+    signature_bytes = source.content[extent.start_byte : end_byte]
+    parameters = node.child_by_field_name("parameters")
+    if parameters is not None:
+        replacements: list[tuple[int, int]] = []
+        for parameter in parameters.named_children:
+            name = parameter.child_by_field_name("name")
+            value = parameter.child_by_field_name("value")
+            if (
+                name is not None
+                and value is not None
+                and value.type == "string"
+                and node_text(source, value) not in {'""', "''"}
+                and _is_sensitive_parameter_name(node_text(source, name))
+            ):
+                replacements.append(
+                    (
+                        value.start_byte - extent.start_byte,
+                        value.end_byte - extent.start_byte,
+                    )
+                )
+        for start, end in reversed(replacements):
+            signature_bytes = signature_bytes[:start] + b'"<redacted>"' + signature_bytes[end:]
+    signature = signature_bytes.decode("utf-8").strip()
     if not signature:
         raise CodeIndexError(f"Python definition has no signature: {source.record.relative_path}")
     return signature
+
+
+def _is_sensitive_parameter_name(name: str) -> bool:
+    compact = "".join(character for character in name.lower() if character.isalnum())
+    parts = name.lower().split("_")
+    return (
+        any(
+            marker in compact
+            for marker in (
+                "password",
+                "passwd",
+                "token",
+                "secret",
+                "accesskey",
+                "credential",
+                "authorization",
+            )
+        )
+        or "ak" in parts
+        or "sk" in parts
+    )
 
 
 def _definition_extent(node: Node) -> Node:

@@ -1360,6 +1360,47 @@ def test_candidate_pages_prioritize_explicit_terms_over_generic_cjk_terms(
     assert selected == [pages / "engine.md"]
 
 
+def test_candidate_pages_definition_question_prefers_explanatory_page(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workspace = tmp_path / "workspace"
+    pages = workspace / "wiki" / "pages"
+    pages.mkdir(parents=True)
+    code_page = pages / "code.md"
+    definition_page = pages / "definition.md"
+    official_page = pages / "official.md"
+    (workspace / "wiki" / "INDEX.md").write_text(
+        "# Knowledge Index\n\n"
+        "- [Code: testcases/EFS/fixture.py](pages/code.md) — Test helpers for EFS\n"
+        "- [学习手册 / EFS 代码结构](pages/guide.md) — EFS 代码如何组织\n"
+        "- [EFS 弹性文件存储](pages/definition.md) — EFS 是全托管共享文件存储\n"
+        "- [EFS 官方定义](pages/official.md) — EFS 是共享文件存储\n",
+        encoding="utf-8",
+    )
+    code_page.write_text(
+        '---\ntitle: "Code: testcases/EFS/fixture.py"\ngenerated: code_wiki\n---\n\n'
+        "# Code: testcases/EFS/fixture.py\n",
+        encoding="utf-8",
+    )
+    (pages / "guide.md").write_text("# 学习手册 / EFS 代码结构\n", encoding="utf-8")
+    definition_page.write_text("# EFS 弹性文件存储\n", encoding="utf-8")
+    official_page.write_text("# EFS 官方定义\n", encoding="utf-8")
+    monkeypatch.setattr(query_module, "_exact_code_pages", lambda *_args, **_kwargs: (code_page,))
+
+    selected = query_module._candidate_pages(
+        workspace,
+        "EFS是什么？",
+        query_module._terms("EFS是什么？"),
+        max_pages=1,
+        trace=[],
+        repository_id=None,
+        prefer_index_routes=True,
+    )
+
+    assert selected == [official_page]
+
+
 def test_candidate_pages_fill_the_remaining_budget_with_relaxed_fts_matches(
     tmp_path: Path,
     monkeypatch,

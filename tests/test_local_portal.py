@@ -13,7 +13,13 @@ import pytest
 
 from memoryforge.importer import import_local_file
 from memoryforge.local_portal import LocalPortalApp, LocalPortalServer, make_handler
+from memoryforge.portal_catalog import _page_subtype
 from memoryforge.workspace import Workspace
+
+
+def test_portal_classifies_new_code_wiki_modules_before_source_files() -> None:
+    assert _page_subtype("code", "code_wiki", "src/store.py", "module-1") == "code_module"
+    assert _page_subtype("code", "code_wiki", "src/store.py", None) == "code_file"
 
 
 def test_local_portal_summary_pagination_search_and_page_read(tmp_path: Path) -> None:
@@ -79,6 +85,43 @@ def test_local_portal_lists_navigation_pages_without_source_ownership(tmp_path: 
     assert any(item["path"] == page_path for item in listing["items"])
 
 
+def test_local_portal_ask_forwards_explicit_local_model(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace = _workspace_with_pages(tmp_path, count=1)
+    provider = object()
+    portal = LocalPortalApp(workspace, provider=provider, allow_local_llm=True)  # type: ignore[arg-type]
+    captured = {}
+
+    def fake_answer(root: Path, question: str, **kwargs: object) -> dict[str, object]:
+        captured.update(root=root, question=question, **kwargs)
+        return {
+            "status": "answered",
+            "answer": "EFS 是弹性文件存储。",
+            "citations": [
+                {
+                    "quote": "EFS 是弹性文件存储。",
+                    "section_path": "概览",
+                }
+            ],
+        }
+
+    monkeypatch.setattr("memoryforge.local_portal.answer_question", fake_answer)
+
+    status, _, body = portal.dispatch_post("/api/ask", {"question": "EFS是什么"})
+
+    assert status == 200
+    assert json.loads(body)["answer"] == "EFS 是弹性文件存储。"
+    assert captured == {
+        "root": workspace,
+        "question": "EFS是什么",
+        "max_citations": 3,
+        "provider": provider,
+        "allow_local": True,
+    }
+
+
 def test_local_portal_index_shell_is_small_and_self_contained(tmp_path: Path) -> None:
     workspace = _workspace_with_pages(tmp_path, count=2)
     portal = LocalPortalApp(workspace)
@@ -116,7 +159,9 @@ def test_local_portal_index_shell_is_small_and_self_contained(tmp_path: Path) ->
     assert 'setAttribute("aria-current","page")' in script
     assert 'class:"hero"' in script
     assert "打开完整正文" in script
-    assert "已应用 Wiki 页面" in script
+    assert 'heading("来源管理"' in script
+    assert 'section("可阅读知识"' in script
+    assert 'section("继续探索"' in script
 
 
 def test_local_portal_classifies_projects_sources_templates_and_relations(
@@ -171,6 +216,17 @@ def test_local_portal_classifies_projects_sources_templates_and_relations(
     )
     assert filtered["total"] == 2
     assert {item["kind"] for item in filtered["items"]} == {"code"}
+    code_item = next(item for item in filtered["items"] if item["path"] == paths["code"])
+    assert code_item["template"] == "code_file"
+    assert code_item["relative_path"] == "src/store.py"
+
+    alpha_project = json.loads(
+        portal.dispatch(f"/api/project?id={repositories['alpha']}")[2]
+    )
+    assert alpha_project["overview"] == []
+    assert [item["path"] for item in alpha_project["modules"]] == [paths["module"]]
+    assert alpha_project["file_count"] == 1
+    assert len(alpha_project["files"]) == 1
 
     expected_templates = {
         paths["project"]: "project",

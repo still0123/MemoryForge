@@ -94,8 +94,10 @@ def _build_go_code_index(
             continue
         content = text.encode()
         tree = Parser(_GO_LANGUAGE).parse(content)
-        if tree.root_node.has_error:
-            raise CodeIndexError(f"Go source contains syntax errors: {record.relative_path}")
+        # A broken expression should not hide every complete package, type, and
+        # function declaration in the repository. Tree-sitter recovers around
+        # local syntax errors; the collectors below only use complete top-level
+        # declaration nodes and their source locations.
         package_name = _package_name(tree.root_node, content, record.relative_path)
         source = _GoSource(
             record=record,

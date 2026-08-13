@@ -32,7 +32,7 @@ from memoryforge.models import (
     ChangeSetValidation,
 )
 from memoryforge.module_planner import build_architecture_graph, build_module_plan
-from memoryforge.provider import OpenAICompatibleProvider
+from memoryforge.provider import OpenAICompatibleProvider, ProviderUnavailableError
 from memoryforge.workspace import (
     Workspace,
     candidate_page_sources,
@@ -42,11 +42,22 @@ from memoryforge.workspace import (
 )
 
 _LOCATOR = re.compile(r"^chars:(?P<start>\d+)-(?P<end>\d+)$")
-_NARRATIVE_SCHEMA_VERSION = 2
+_NARRATIVE_SCHEMA_VERSION = 3
 _MAX_NARRATIVE_CITATIONS = 64
 _MAX_NARRATIVE_SYMBOLS = 24
 _MAX_NARRATIVE_EDGES = 24
 _MAX_SOURCE_EXCERPT_CHARS = 600
+_MAX_READING_ENTRY_POINTS = 6
+_TEST_FILE_SUFFIXES = ("_test.go", "_test.py", ".test.ts", ".test.tsx", ".spec.ts", ".spec.tsx")
+_STRING_LITERAL = re.compile(
+    r"(?P<quote>['\"])(?P<value>(?:\\.|(?!(?P=quote)).)*)(?P=quote)",
+    re.DOTALL,
+)
+_SENSITIVE_LITERAL_CONTEXT = re.compile(
+    r"(?:password|passwd|token|secret|access[a-z0-9_]*key[a-z0-9_]*"
+    r"|(?:^|[^a-z0-9])(?:ak|sk))\s*=\s*$",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -304,6 +315,7 @@ def _synthesize_module_narratives(
                 status="fallback",
                 input_hash=input_hash,
                 snapshot=snapshot,
+                reason="no_owned_evidence",
             )
             continue
 
@@ -317,13 +329,23 @@ def _synthesize_module_narratives(
             narratives,
         )
         try:
-            narrative = provider.summarize_code_module(messages)
+            narrative = _summarize_module_narrative(provider, messages)
+        except ProviderUnavailableError:
+            all_candidates[module.wiki_path] = _with_synthesis_metadata(
+                base,
+                status="fallback",
+                input_hash=input_hash,
+                snapshot=snapshot,
+                reason="provider_unavailable",
+            )
+            continue
         except ValueError:
             all_candidates[module.wiki_path] = _with_synthesis_metadata(
                 base,
                 status="fallback",
                 input_hash=input_hash,
                 snapshot=snapshot,
+                reason="provider_output_invalid",
             )
             continue
         if not _narrative_citations_are_owned(narrative, citations, subtree_ids):
@@ -332,6 +354,7 @@ def _synthesize_module_narratives(
                 status="fallback",
                 input_hash=input_hash,
                 snapshot=snapshot,
+                reason="citation_ownership_invalid",
             )
             continue
 
@@ -354,6 +377,17 @@ def _synthesize_module_narratives(
             citations=used_citations,
             narrative=narrative,
         )
+
+
+def _summarize_module_narrative(
+    provider: OpenAICompatibleProvider,
+    messages: list[dict[str, str]],
+) -> ModuleNarrative:
+    """Retry one malformed or transient local model response before fallback."""
+    try:
+        return provider.summarize_code_module(messages)
+    except (ProviderUnavailableError, ValueError):
+        return provider.summarize_code_module(messages)
 
 
 def _module_narrative_input_hash(
@@ -457,7 +491,7 @@ def _module_narrative_citations(
                 location=symbol.location,
                 fact=(
                     f"symbol {symbol.qualified_name} ({symbol.kind.value}): "
-                    f"{' '.join(symbol.signature.split())}"
+                    f"{_display_signature(symbol)}"
                 ),
                 excerpt=_bounded_excerpt(source_texts, symbol.location),
                 symbol_id=symbol.symbol_id,
@@ -529,7 +563,7 @@ def _module_narrative_citations(
 
 def _module_narrative_messages(
     module: ModuleNode,
-    is_repository_root: bool,
+    is_top_level_module: bool,
     edges: tuple[ArchitectureEdge, ...],
     citations: tuple[_NarrativeCitation, ...],
     modules_by_id: dict[str, ModuleNode],
@@ -546,7 +580,7 @@ def _module_narrative_messages(
             "title": module.title,
             "path": module.path,
             "summary": module.summary,
-            "is_repository_root": is_repository_root,
+            "is_top_level_module": is_top_level_module,
         },
         "children": [
             {
@@ -575,7 +609,7 @@ def _module_narrative_messages(
             {
                 "qualified_name": symbol.qualified_name,
                 "kind": symbol.kind.value,
-                "signature": " ".join(symbol.signature.split()),
+                "signature": _display_signature(symbol),
             }
             for symbol in selected_symbols
         ],
@@ -610,9 +644,9 @@ def _module_narrative_messages(
                 "provided citations. Do not invent symbols, relations, module paths, or behavior. "
                 "Use direct child narratives when present to synthesize the parent level, while "
                 "grounding every new statement in the current citation table. Do not emit "
-                "Markdown. Reply in concise Chinese. For a repository root, purpose describes "
-                "repository use, responsibilities cover architecture and core modules, and "
-                "key_flows cover major data flow."
+                "Markdown. Reply in concise Chinese. For a top-level module, purpose describes "
+                "module scope, responsibilities cover its main children, and key_flows cover "
+                "major data flow."
             ),
         },
         {
@@ -642,7 +676,7 @@ def _narrative_citations_are_owned(
 def _render_module_narrative(
     base: str,
     module: ModuleNode,
-    is_repository_root: bool,
+    is_top_level_module: bool,
     narrative: ModuleNarrative,
     edges: tuple[ArchitectureEdge, ...],
     citations: tuple[_NarrativeCitation, ...],
@@ -651,11 +685,11 @@ def _render_module_narrative(
 ) -> tuple[str, tuple[_NarrativeCitation, ...]]:
     lines = ["## 模块职责", ""]
     used_indexes: set[int] = set()
-    if is_repository_root:
-        lines.extend(["### 仓库用途", ""])
+    if is_top_level_module:
+        lines.extend(["### 模块概览", ""])
     _append_narrative_statement(lines, narrative.purpose, citations, used_indexes)
-    if is_repository_root:
-        lines.extend(["", "### 整体架构与核心模块", ""])
+    if is_top_level_module:
+        lines.extend(["", "### 主要子模块", ""])
     for statement in narrative.responsibilities:
         _append_narrative_statement(lines, statement, citations, used_indexes)
 
@@ -679,7 +713,7 @@ def _render_module_narrative(
             used_indexes.add(citation.index)
             lines.append(
                 f"- `{symbol.qualified_name}`: "
-                f"`{_escape_inline_code(' '.join(symbol.signature.split()))}` "
+                f"{_inline_code(_display_signature(symbol))} "
                 f"{_narrative_reference(citation)}"
             )
 
@@ -699,8 +733,8 @@ def _render_module_narrative(
         )
 
     lines.extend(["", "## 核心流程", ""])
-    if is_repository_root:
-        lines.extend(["### 主要数据流", ""])
+    if is_top_level_module:
+        lines.extend(["### 主要流程", ""])
     for statement in narrative.key_flows:
         _append_narrative_statement(lines, statement, citations, used_indexes)
 
@@ -736,7 +770,7 @@ def _render_module_narrative(
             f"revision `{citation.location.source_version}` · "
             f"`{citation.location.locator}`"
         )
-    return base.rstrip() + "\n\n" + "\n".join(lines) + "\n", used_citations
+    return _insert_before_first_section(base, "\n".join(lines)), used_citations
 
 
 def _append_narrative_statement(
@@ -759,6 +793,7 @@ def _with_synthesis_metadata(
     snapshot: CodeIndexSnapshot,
     citations: tuple[_NarrativeCitation, ...] = (),
     narrative: ModuleNarrative | None = None,
+    reason: str | None = None,
 ) -> str:
     updates = {
         "synthesis_status": status,
@@ -775,26 +810,65 @@ def _with_synthesis_metadata(
             sort_keys=True,
         )
         updates["synthesis_narrative"] = narrative.model_dump_json()
-    return _update_frontmatter(content, updates)
+        return _update_frontmatter(content, updates, remove=("synthesis_reason",))
+    if reason is None:
+        raise CodeWikiCompilationError("fallback module page is missing its reason")
+    updates["synthesis_reason"] = reason
+    return _update_frontmatter(
+        _insert_before_first_section(content, _fallback_notice(reason)),
+        updates,
+        remove=("citation_sources", "citation_source_versions", "synthesis_narrative"),
+    )
 
 
-def _update_frontmatter(content: str, updates: dict[str, str]) -> str:
+def _update_frontmatter(
+    content: str,
+    updates: dict[str, str],
+    *,
+    remove: tuple[str, ...] = (),
+) -> str:
     if not content.startswith("---\n"):
         raise CodeWikiCompilationError("code module page is missing frontmatter")
     closing = content.find("\n---\n", 4)
     if closing < 0:
         raise CodeWikiCompilationError("code module page frontmatter is not closed")
     remaining = dict(updates)
+    removed = set(remove)
     lines = []
     for line in content[4:closing].splitlines():
         key, separator, _value = line.partition(":")
+        name = key.strip()
+        if separator and name in removed:
+            continue
         if separator and key.strip() in remaining:
-            name = key.strip()
             lines.append(f"{name}: {remaining.pop(name)}")
         else:
             lines.append(line)
     lines.extend(f"{key}: {value}" for key, value in remaining.items())
     return "---\n" + "\n".join(lines) + content[closing:]
+
+
+def _insert_before_first_section(content: str, addition: str) -> str:
+    first_section = content.find("\n## ")
+    if first_section < 0:
+        raise CodeWikiCompilationError("code module page is missing its reading sections")
+    return (
+        content[:first_section].rstrip()
+        + "\n\n"
+        + addition
+        + "\n\n"
+        + content[first_section + 1 :]
+    )
+
+
+def _fallback_notice(reason: str) -> str:
+    messages = {
+        "no_owned_evidence": "自动概览缺少本模块的可引用证据；本页保留确定性导航与代码事实。",
+        "provider_unavailable": "自动概览暂未生成：模型服务不可用；下次编译会自动重试。",
+        "provider_output_invalid": "自动概览未通过结构校验；下次编译会自动重试。",
+        "citation_ownership_invalid": "自动概览未通过证据归属校验；下次编译会自动重试。",
+    }
+    return f"> {messages[reason]}"
 
 
 def _postorder_modules(modules: tuple[ModuleNode, ...]) -> tuple[ModuleNode, ...]:
@@ -815,7 +889,85 @@ def _subtree_module_ids(module: ModuleNode) -> set[str]:
 
 
 def _bounded_excerpt(texts: dict[str, str], location: CodeLocation) -> str:
-    return " ".join(_excerpt(texts, location).split())[:_MAX_SOURCE_EXCERPT_CHARS]
+    excerpt = _redact_sensitive_literals(_excerpt(texts, location))
+    return " ".join(excerpt.split())[:_MAX_SOURCE_EXCERPT_CHARS]
+
+
+def _redact_sensitive_literals(value: str) -> str:
+    def replace(match: re.Match[str]) -> str:
+        literal = match["value"]
+        context = value[max(0, match.start() - 96) : match.start()]
+        if _SENSITIVE_LITERAL_CONTEXT.search(context) or _looks_sensitive_literal(literal):
+            quote = match["quote"]
+            return f"{quote}<redacted>{quote}"
+        return match.group(0)
+
+    return _STRING_LITERAL.sub(replace, value)
+
+
+def _looks_sensitive_literal(value: str) -> bool:
+    if value.upper().startswith(("AKLT", "LTAI")):
+        return True
+    return (
+        len(value) >= 8
+        and any(character.islower() for character in value)
+        and any(character.isupper() for character in value)
+        and any(character.isdigit() for character in value)
+        and any(character in "!@#$%^&*+=" for character in value)
+    )
+
+
+def _display_signature(symbol: CodeSymbol) -> str:
+    return _redact_sensitive_literals(" ".join(symbol.signature.split()))
+
+
+def _display_symbol_evidence(
+    symbol: CodeSymbol,
+    source_texts: dict[str, str],
+) -> tuple[str, CodeLocation]:
+    signature = _display_signature(symbol)
+    if "<redacted>" not in signature:
+        return signature, symbol.location
+    excerpt = _excerpt(source_texts, symbol.location)
+    if symbol.kind in {CodeSymbolKind.FUNCTION, CodeSymbolKind.METHOD}:
+        pattern = re.compile(rf"(?:async\s+)?def\s+{re.escape(symbol.display_name)}\b")
+    elif symbol.kind is CodeSymbolKind.CLASS:
+        pattern = re.compile(rf"class\s+{re.escape(symbol.display_name)}\b")
+    else:
+        pattern = re.compile(rf"\b{re.escape(symbol.display_name)}\b")
+    match = pattern.search(excerpt)
+    if match is None:
+        raise CodeWikiCompilationError(
+            f"sensitive code symbol lacks a safe evidence fragment: {symbol.qualified_name}"
+        )
+    return match.group(0), _narrow_location(
+        symbol.location,
+        excerpt,
+        match.start(),
+        match.end(),
+    )
+
+
+def _narrow_location(
+    location: CodeLocation,
+    excerpt: str,
+    relative_start: int,
+    relative_end: int,
+) -> CodeLocation:
+    locator = _LOCATOR.fullmatch(location.locator)
+    if locator is None:
+        raise CodeWikiCompilationError("code evidence locator is invalid")
+    absolute_start = int(locator["start"]) + relative_start
+    absolute_end = int(locator["start"]) + relative_end
+    line_offset = excerpt[:relative_start].count("\n")
+    end_line_offset = excerpt[:relative_end].count("\n")
+    return location.model_copy(
+        update={
+            "locator": f"chars:{absolute_start}-{absolute_end}",
+            "start_line": location.start_line + line_offset,
+            "end_line": location.start_line + end_line_offset,
+        }
+    )
 
 
 def _narrative_label(citation: _NarrativeCitation) -> str:
@@ -928,13 +1080,25 @@ def _render_source_module_page(
         "",
         f"# {module.title}",
         "",
-        "## Module",
-        "",
-        f"- Path: `{module.path}`",
-        f"- Languages: {', '.join(languages)}",
-        f"- Verified symbols: {len(symbols)}",
-        "",
     ]
+    footnotes = {
+        symbol.symbol_id: f"code-{index}-{symbol.location.source_id[:8]}"
+        for index, symbol in enumerate(symbols, start=1)
+    }
+    symbol_evidence = {
+        symbol.symbol_id: _display_symbol_evidence(symbol, source_texts) for symbol in symbols
+    }
+    _append_source_reading_guide(lines, module, symbols, footnotes)
+    lines.extend(
+        [
+            "## Module",
+            "",
+            f"- Path: `{module.path}`",
+            f"- Languages: {', '.join(languages)}",
+            f"- Verified symbols: {len(symbols)}",
+            "",
+        ]
+    )
     _append_child_modules(lines, module)
     dependency_citations = _append_source_architecture(
         lines,
@@ -947,19 +1111,20 @@ def _render_source_module_page(
         source_texts,
     )
     lines.extend(["## Verified symbols", ""])
-    for index, symbol in enumerate(symbols, start=1):
-        footnote = f"code-{index}-{symbol.location.source_id[:8]}"
-        signature = " ".join(symbol.signature.split())
+    for symbol in symbols:
+        footnote = footnotes[symbol.symbol_id]
+        signature, _location = symbol_evidence[symbol.symbol_id]
         lines.append(
             f"- `{symbol.qualified_name}` ({symbol.kind.value}): "
-            f"`{_escape_inline_code(signature)}` [^{footnote}]"
+            f"{_inline_code(signature)} [^{footnote}]"
         )
     lines.extend(["", "## Sources", ""])
-    for index, symbol in enumerate(symbols, start=1):
-        footnote = f"code-{index}-{symbol.location.source_id[:8]}"
+    for symbol in symbols:
+        footnote = footnotes[symbol.symbol_id]
+        _signature, location = symbol_evidence[symbol.symbol_id]
         lines.append(
-            f"[^{footnote}]: source `{symbol.location.source_id}` · revision "
-            f"`{symbol.location.source_version}` · `{symbol.location.locator}`"
+            f"[^{footnote}]: source `{location.source_id}` · revision "
+            f"`{location.source_version}` · `{location.locator}`"
         )
     for label, location in dependency_citations:
         lines.append(
@@ -988,6 +1153,11 @@ def _render_navigation_module_page(
         "",
         f"# {module.title}",
         "",
+        "## 快速阅读",
+        "",
+        "- 这是代码目录页；本页不直接承载代码符号。",
+        "- 先从下方子模块进入，再按需要回到本页查看层级关系。",
+        "",
         "## Module",
         "",
         f"- Path: `{module.path}`",
@@ -997,6 +1167,70 @@ def _render_navigation_module_page(
     _append_navigation_architecture(lines, module)
     _append_child_modules(lines, module)
     return "\n".join(lines) + "\n"
+
+
+def _append_source_reading_guide(
+    lines: list[str],
+    module: ModuleNode,
+    symbols: list[CodeSymbol],
+    footnotes: dict[str, str],
+) -> None:
+    """Put deterministic orientation ahead of the exhaustive symbol ledger."""
+    lines.extend(["## 快速阅读", ""])
+    if module.children:
+        children = list(module.children)
+        child_links = ", ".join(
+            f"[{child.title}]({_relative_link(module.wiki_path, child.wiki_path)})"
+            for child in children[:_MAX_READING_ENTRY_POINTS]
+        )
+        more = f" 等 {len(children)} 个" if len(children) > _MAX_READING_ENTRY_POINTS else ""
+        lines.append(
+            f"- 本模块有 {len(symbols)} 个直接代码符号和 {len(children)} 个子模块；"
+            f"可先进入 {child_links}{more}。"
+        )
+    else:
+        lines.append("- 这是叶子模块；先看下方优先入口，再按需展开完整符号清单。")
+
+    candidates = [
+        symbol
+        for symbol in symbols
+        if symbol.visibility.value == "public"
+        and symbol.kind
+        in {
+            CodeSymbolKind.CLASS,
+            CodeSymbolKind.FUNCTION,
+            CodeSymbolKind.INTERFACE,
+            CodeSymbolKind.METHOD,
+            CodeSymbolKind.STRUCT,
+        }
+    ]
+    if not candidates:
+        candidates = [
+            symbol
+            for symbol in symbols
+            if symbol.kind
+            in {
+                CodeSymbolKind.CLASS,
+                CodeSymbolKind.FUNCTION,
+                CodeSymbolKind.INTERFACE,
+                CodeSymbolKind.METHOD,
+                CodeSymbolKind.STRUCT,
+            }
+        ]
+    preferred = [symbol for symbol in candidates if not _is_test_symbol(symbol)] or candidates
+    if preferred:
+        entry_points = ", ".join(
+            f"`{symbol.qualified_name}` [^{footnotes[symbol.symbol_id]}]"
+            for symbol in preferred[:_MAX_READING_ENTRY_POINTS]
+        )
+        lines.append(f"- 优先入口：{entry_points}。")
+    lines.append("- 完整符号、依赖关系和源码定位保留在本页后半部分。")
+    lines.append("")
+
+
+def _is_test_symbol(symbol: CodeSymbol) -> bool:
+    is_test_file = symbol.location.relative_path.endswith(_TEST_FILE_SUFFIXES)
+    return is_test_file or symbol.display_name.startswith(("Test", "test_"))
 
 
 def _append_child_modules(lines: list[str], module: ModuleNode) -> None:
@@ -1047,10 +1281,25 @@ def _append_source_architecture(
                     f"architecture evidence is not owned by its source module: {relation_id}"
                 )
             label = f"relation-{relation_id}"
-            citations.append((label, evidence))
             source_symbol = symbols_by_id[relation.source_symbol_id]
             target_symbol = symbols_by_id[relation.target_symbol_id]
-            evidence_quote = _excerpt(source_texts, evidence)
+            raw_quote = _excerpt(source_texts, evidence)
+            evidence_quote = _redact_sensitive_literals(raw_quote)
+            display_evidence = evidence
+            if evidence_quote != raw_quote:
+                start = raw_quote.find(target_symbol.display_name)
+                if start < 0:
+                    raise CodeWikiCompilationError(
+                        f"sensitive code relation lacks a safe evidence fragment: {relation_id}"
+                    )
+                evidence_quote = target_symbol.display_name
+                display_evidence = _narrow_location(
+                    evidence,
+                    raw_quote,
+                    start,
+                    start + len(evidence_quote),
+                )
+            citations.append((label, display_evidence))
             lines.append(
                 f"- `{source_symbol.qualified_name} -> {target_symbol.qualified_name}` "
                 f"({relation.type.value}): "
@@ -1181,5 +1430,7 @@ def _stable_text(path: Path) -> str | None:
     return path.read_text(encoding="utf-8")
 
 
-def _escape_inline_code(value: str) -> str:
-    return value.replace("`", "\\`")
+def _inline_code(value: str) -> str:
+    """Use a Markdown delimiter that cannot collide with code contents."""
+    delimiter = "`" * (max((len(item) for item in re.findall(r"`+", value)), default=0) + 1)
+    return f"{delimiter}{value}{delimiter}"
