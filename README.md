@@ -8,10 +8,9 @@ MemoryForge 是一个本地优先的知识编译器。它不把所有资料直�
 可版本化的 Markdown Wiki；每次更新都经过 `review → approve → apply`，查询结果可以回到固定
 SourceVersion 和原文位置。
 
-**正式版本：[`v0.4.0`](https://github.com/still0123/MemoryForge/releases/tag/v0.4.0)。**
-该版本在 macOS 完成 `656 passed` 发布门禁；Linux 未在本版本重跑，Windows 尚未验证。
-当前 `main` 另含未发布的本地 Portal 控制面和冻结期加固，最近一次完整本地门禁为
-`731 passed`。
+**正式版本：[`v0.4.0`](https://github.com/still0123/MemoryForge/releases/tag/v0.4.0)**：
+macOS 完成 `656 passed` 发布门禁，Windows 尚未验证。当前 `main` 另含未发布的后续功能，
+验证数字见下方[公开证据](#公开证据)。
 
 [5 分钟跑通](#5-分钟跑通) · [60 秒演示](#60-秒公开演示) ·
 [公开证据](#公开证据) · [演示讲稿](docs/PORTFOLIO_DEMO.md) ·
@@ -164,7 +163,7 @@ import → Code Index → ChangeSet → review → approve → apply → query �
 页面展示来源版本、Wiki 树、Diff、Citation Trace、正确拒答、已知失败和 Mermaid 架构图；生成文件不包含远程脚本、模型调用、绝对 Workspace 路径或凭据。
 
 完整的 3 分钟讲解顺序和常见追问见
-[秋招演示与面试说明](docs/PORTFOLIO_DEMO.md)。
+[演示讲稿](docs/PORTFOLIO_DEMO.md)。
 
 ## 公开证据
 
@@ -204,8 +203,6 @@ import → Code Index → ChangeSet → review → approve → apply → query �
 | [本地 Portal](docs/LOCAL_DYNAMIC_PORTAL_SPEC.md) | 阅读、任务、审核和控制面 |
 | [公开 Benchmark](docs/BENCHMARK.md) | 方法、结果、负案例和复现命令 |
 | [Evidence Claims](docs/EVIDENCE_CLAIMS.md) | 主张、证据和不能外推的边界 |
-| [秋招演示](docs/PORTFOLIO_DEMO.md) | 3 分钟讲解、命令和常见追问 |
-| [简历表述](docs/RESUME.md) | 可直接使用的项目描述和指标解释 |
 | [研究归档](docs/research/README.md) | Candidate、负结果和历史 Evidence |
 | [CHANGELOG](CHANGELOG.md) | 版本范围和验证状态 |
 
@@ -219,5 +216,3 @@ import → Code Index → ChangeSet → review → approve → apply → query �
 向量数据库、知识图谱、通用编码 Agent 或多 Agent 编排。
 
 <!-- memoryforge-release-claim: version=0.3.0; status=released; supported_platforms=macos+linux; active_candidate=19; platform_gate_candidate=19; platform_gate_status=accepted; review_status=accepted; macos_passed=642; linux_passed=639; linux_skipped=3; windows_status=not_verified; release_verification=passed -->
-
-v0.3.0 的 Candidate 与跨平台门禁是历史研究，不代表当前支持范围；其完整记录已下沉到研究文档。
