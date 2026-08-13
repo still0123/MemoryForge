@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "suite_id": "agent-memory-v2-hybrid-retrieval",
+  "suite_revision": 1,
+  "suite_type": "code_wiki_qa",
+  "evaluator": "demo.run_agent_memory_v2_benchmark",
+  "max_wiki_pages": 3,
+  "benchmark_metadata": {
+    "description": "Fixture-based hybrid retrieval v2 evaluation: exact + lexical + semantic + relation lanes fused with RRF.",
+    "lanes": ["exact", "lexical", "semantic", "relation"],
+    "fusion": "reciprocal_rank_fusion_k=60",
+    "dedupe_key": ["page_path", "source_id", "source_version", "locator"],
+    "scope": "repository_id scoped, visible_source filtered"
+  },
+  "qa_case_count": 20,
+  "qa_case_types_present": [
+    "single_hop",
+    "multi_source",
+    "paraphrase",
+    "exact_symbol",
+    "relation_traversal",
+    "unanswerable"
+  ],
+  "qa_case_types_required": [
+    "single_hop",
+    "multi_source",
+    "paraphrase",
+    "exact_symbol",
+    "relation_traversal",
+    "unanswerable"
+  ],
+  "splits": {
+    "development": {
+      "path": "demo/evaluation/agent_memory_v2_development.json",
+      "case_count": 10
+    },
+    "confirmation": {
+      "path": "demo/evaluation/agent_memory_v2_confirmation.json",
+      "case_count": 5,
+      "status": "not_run"
+    },
+    "holdout": {
+      "path": "demo/evaluation/agent_memory_v2_holdout.json",
+      "case_count": 5,
+      "status": "frozen_pending"
+    }
+  },
+  "expected_metrics": {
+    "development": {
+      "source_recall_at_3": 90.0,
+      "page_route_recall_at_3": 90.0,
+      "mean_reciprocal_rank": 0.7,
+      "privacy_leak_count": 0,
+      "deterministic_hash_match": true
+    }
+  },
+  "datasets": [
+    {
+      "dataset_id": "agent-memory-v2-dev",
+      "split": "development",
+      "case_count": 10
+    },
+    {
+      "dataset_id": "agent-memory-v2-confirm",
+      "split": "confirmation",
+      "case_count": 5
+    },
+    {
+      "dataset_id": "agent-memory-v2-holdout",
+      "split": "holdout",
+      "case_count": 5
+    }
+  ],
+  "revision": 1
+}

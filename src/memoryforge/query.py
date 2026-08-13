@@ -3,14 +3,22 @@
 from __future__ import annotations
 
 import json
+import logging
 import math
 import re
+import sqlite3
+import uuid
 from collections import Counter
 from contextlib import suppress
 from pathlib import Path, PurePosixPath
-from typing import Literal, NotRequired, TypedDict
+from typing import TYPE_CHECKING, Any, Literal, NotRequired, TypedDict
 
+from memoryforge.egress_models import EgressRequest
+from memoryforge.egress_policy import decide_egress, filter_visible_sources, record_disclosure
+from memoryforge.egress_policy import rule_sha256 as _egress_rule_sha256
+from memoryforge.freshness import FreshnessState, page_freshness
 from memoryforge.provider import OpenAICompatibleProvider, ProviderUnavailableError
+from memoryforge.redaction import redact_for_model
 from memoryforge.wiki_facts import (
     AppliedCodeSymbolMatch,
     CitationPayload,
@@ -18,6 +26,8 @@ from memoryforge.wiki_facts import (
 )
 from memoryforge.wiki_facts import parse_page_citations as _page_citations
 from memoryforge.workspace import (
+    DATABASE_RELATIVE_PATH,
+    _connect,
     find_applied_code_symbol_facts,
     find_applied_page_paths,
     find_applied_wiki_fact_page_paths,
@@ -26,6 +36,11 @@ from memoryforge.workspace import (
     read_source_excerpt,
     repository_page_paths,
 )
+
+if TYPE_CHECKING:
+    from memoryforge.retrieval_models import RetrievalResult
+    from memoryforge.retrieval_v2 import retrieve_candidates as _retrieve_candidates_fn
+    from memoryforge.semantic_index import SemanticIndex
 
 _INDEX_ENTRY = re.compile(
     r"^- \[(?P<title>(?:\\.|[^\]])+)\]\((?P<path>[^)]+)\) — (?P<summary>.+)$",
@@ -135,6 +150,7 @@ class AskPayload(TypedDict):
     trace: NotRequired[list[TraceStep]]
     evidence: NotRequired[list[EvidencePayload]]
     support: NotRequired[SupportPayload]
+    _retrieval_debug: NotRequired[dict[str, Any]]
 
 
 class TraceStep(TypedDict):
@@ -235,6 +251,64 @@ def answer_question(
                 ),
             }
         )
+
+    retrieval_debug: dict[str, Any] = {}
+    egress_request: EgressRequest | None = None
+    try:
+        safe_repo = repository_id if repository_id else "default"
+        egress_request = EgressRequest(
+            request_id=str(uuid.uuid4()),
+            host_id="local-cli",
+            repository_id=safe_repo,
+            purpose="context",
+            max_characters=32000,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logging.debug("egress request build skipped: %s", exc)
+
+    retrieval_v2_result: "RetrievalResult | None" = None
+    if egress_request is not None and repository_id is not None:
+        try:
+            from memoryforge.retrieval_v2 import retrieve_candidates
+            from memoryforge.retrieval_models import VisibleSource
+
+            def _visible_source(source_id: str, source_version: int) -> bool:
+                if public_only:
+                    return is_public_source_version(
+                        workspace_root, source_id=source_id, source_version=source_version
+                    )
+                if allow_local:
+                    return True
+                return is_public_source_version(
+                    workspace_root, source_id=source_id, source_version=source_version
+                )
+
+            visible: VisibleSource = _visible_source
+            applied_wiki_facts_list: list[dict[str, Any]] = []
+            code_index_snapshot_symbols: list[dict[str, Any]] = []
+            code_index_snapshot_relations: list[dict[str, Any]] = []
+            try:
+                retrieval_v2_result = retrieve_candidates(
+                    workspace_root,
+                    question,
+                    repository_id=repository_id,
+                    visible_source=visible,
+                    max_pages=max_pages,
+                    semantic_index=None,
+                    wiki_facts=applied_wiki_facts_list,
+                    code_symbols=code_index_snapshot_symbols,
+                    code_relations=code_index_snapshot_relations,
+                )
+                retrieval_debug["routes"] = list(retrieval_v2_result.routes)
+                retrieval_debug["semantic_status"] = retrieval_v2_result.semantic_status
+            except Exception as exc:  # noqa: BLE001
+                logging.debug("retrieval_v2 unavailable, fallback to legacy: %s", exc)
+                retrieval_v2_result = None
+        except Exception as exc:  # noqa: BLE001
+            logging.debug("retrieval_v2 import failed: %s", exc)
+            retrieval_v2_result = None
+
+    stale_page_penalty: dict[str, float] = {}
 
     raw_matches: list[tuple[frozenset[str], bool, str, CitationPayload]] = []
     raw_candidate_matches: list[tuple[frozenset[str], bool, str, CitationPayload]] = []
@@ -438,6 +512,7 @@ def answer_question(
                 provider,
                 allow_local=allow_local,
                 conversation_context=conversation_context,
+                egress_request=egress_request,
             )
         except ProviderUnavailableError:
             module_fallbacks = [
@@ -466,6 +541,72 @@ def answer_question(
             answer, selected = generated
             model_status = "used"
 
+    page_freshness_warnings: list[str] = []
+    selected_pages = list(dict.fromkeys(page_path for page_path, _ in selected))
+    applied_map: dict[str, int] = {}
+    current_map: dict[str, int] = {}
+    try:
+        db_path = workspace_root / DATABASE_RELATIVE_PATH
+        if db_path.is_file():
+            with _connect(db_path) as conn:
+                for sid, svid in conn.execute(
+                    "SELECT source_id, source_version_id FROM applied_source_versions"
+                ).fetchall():
+                    applied_map[str(sid)] = int(svid)
+                for row in conn.execute(
+                    "SELECT s.source_id, v.id FROM sources AS s "
+                    "JOIN source_versions AS v ON v.source_id = s.id WHERE v.is_current = 1"
+                ).fetchall():
+                    current_map[str(row[0])] = int(row[1])
+            base_commit = ""
+            cur_commit = ""
+            try:
+                from memoryforge.workspace import Workspace
+                ws = Workspace(workspace_root)
+                try:
+                    cur_commit = ws.current_commit()
+                    base_commit = cur_commit
+                except Exception:
+                    base_commit = cur_commit = ""
+            except Exception:
+                base_commit = cur_commit = ""
+            filtered_selected: list[tuple[str, CitationPayload]] = []
+            for page_path, citation in selected:
+                try:
+                    report = page_freshness(
+                        workspace_root,
+                        page_path,
+                        repository_id=repository_id,
+                        applied_source_versions=applied_map,
+                        current_source_versions=current_map,
+                        workspace_base_commit=base_commit,
+                        workspace_current_commit=cur_commit,
+                        open_conflicts=(),
+                        claims=(),
+                    )
+                    if report.state in (FreshnessState.CONFLICTED, FreshnessState.SUPERSEDED):
+                        stale_page_penalty[page_path] = 1.0
+                        page_freshness_warnings.append(
+                            f"{page_path}:{report.state.value} dropped"
+                        )
+                        continue
+                    if report.state == FreshnessState.STALE:
+                        stale_page_penalty[page_path] = 0.5
+                        page_freshness_warnings.append(
+                            f"{page_path}:stale support_score -0.5"
+                        )
+                except Exception as exc:  # noqa: BLE001
+                    logging.debug("page_freshness skipped for %s: %s", page_path, exc)
+                filtered_selected.append((page_path, citation))
+            selected = filtered_selected or selected
+        if stale_page_penalty:
+            retrieval_debug["freshness_warnings"] = list(page_freshness_warnings)
+    except Exception as exc:  # noqa: BLE001
+        logging.debug("freshness integration skipped: %s", exc)
+
+    if not selected:
+        return _unknown_payload(debug, trace)
+
     support = _support_score(
         workspace_root,
         question,
@@ -477,6 +618,12 @@ def answer_question(
         code_page_paths=code_page_paths,
         code_page_identifiers=code_page_identifiers,
     )
+    if stale_page_penalty:
+        total_penalty = min(sum(stale_page_penalty.values()), support["score"])
+        support["score"] = max(0.0, support["score"] - total_penalty)
+        support["sufficient"] = support["score"] >= support["threshold"]
+        if "stale_sources" not in support["failed_hard_gates"] and total_penalty > 0:
+            support["failed_hard_gates"].append("stale_sources")
     if not support["sufficient"]:
         return _unknown_payload(debug, trace, support=support)
 
@@ -524,6 +671,8 @@ def answer_question(
         result["evidence"] = evidence
     if debug:
         result["trace"] = trace
+        if retrieval_debug:
+            result["_retrieval_debug"] = retrieval_debug
     return result
 
 
@@ -535,6 +684,7 @@ def _model_answer(
     *,
     allow_local: bool,
     conversation_context: str,
+    egress_request: EgressRequest | None = None,
 ) -> tuple[str, list[tuple[str, CitationPayload]]] | None:
     usable_matches = [
         (page_path, citation)
@@ -545,15 +695,77 @@ def _model_answer(
     if not usable_matches:
         raise ValueError("LLM answers require public source evidence")
 
+    redacted_matches: list[tuple[str, CitationPayload]] = []
+    last_redaction = None
+    source_refs: list[tuple[str, int]] = []
+    for page_path, citation in usable_matches:
+        redacted_citation = dict(citation)
+        try:
+            redaction_result = redact_for_model(citation["quote"])
+            last_redaction = redaction_result
+            redacted_citation["quote"] = redaction_result.redacted_text
+        except Exception as exc:  # noqa: BLE001
+            logging.debug("redact_for_model skipped: %s", exc)
+        redacted_matches.append((page_path, redacted_citation))  # type: ignore[arg-type]
+        source_refs.append((str(citation["source_id"]), int(citation["source_version"])))
+
+    try:
+        if egress_request is not None and last_redaction is not None:
+            db_path = workspace_root / DATABASE_RELATIVE_PATH
+            if db_path.is_file():
+                from memoryforge.models import Sensitivity
+                policy_sha = "0" * 64
+                with _connect(db_path) as conn:
+                    all_allowed = True
+                    for source_id, source_version in source_refs:
+                        try:
+                            sensitivity = Sensitivity.PUBLIC
+                            row = conn.execute(
+                                "SELECT sensitivity FROM source_versions WHERE id = ?",
+                                (source_version,),
+                            ).fetchone()
+                            if row is not None:
+                                sensitivity = Sensitivity(str(row[0]))
+                            decision = decide_egress(
+                                conn,
+                                request=egress_request,
+                                source_id=source_id,
+                                source_version=source_version,
+                                sensitivity=sensitivity,
+                            )
+                            if not decision.allowed:
+                                all_allowed = False
+                                break
+                        except Exception:
+                            continue
+                    if all_allowed and egress_request.purpose in ("context", "evidence"):
+                        try:
+                            combined_text = "\n".join(
+                                q for _, c in redacted_matches for q in [str(c.get("quote", ""))]
+                            )
+                            policy_sha = _egress_policy_digest(conn)
+                            record_disclosure(
+                                conn,
+                                request=egress_request,
+                                text=combined_text,
+                                source_refs=tuple(source_refs),
+                                redaction=last_redaction,
+                                policy_sha256=policy_sha,
+                            )
+                        except Exception as exc:  # noqa: BLE001
+                            logging.debug("record_disclosure skipped: %s", exc)
+    except Exception as exc:  # noqa: BLE001
+        logging.debug("egress integration in _model_answer skipped: %s", exc)
+
     answer, indexes = provider.answer_with_evidence(
-        _answer_messages(question, usable_matches, conversation_context)
+        _answer_messages(question, redacted_matches, conversation_context)
     )
     selected: list[tuple[str, CitationPayload]] = []
     seen: set[tuple[str, int, str]] = set()
     for index in indexes:
-        if isinstance(index, bool) or not 0 <= index < len(usable_matches):
+        if isinstance(index, bool) or not 0 <= index < len(redacted_matches):
             continue
-        page_path, citation = usable_matches[index]
+        page_path, citation = redacted_matches[index]
         key = (citation["source_id"], citation["source_version"], citation["locator"])
         if key not in seen:
             seen.add(key)
@@ -561,6 +773,21 @@ def _model_answer(
     if not answer.strip() or answer.strip() == "不知道" or not selected:
         return None
     return answer.strip(), selected
+
+
+def _egress_policy_digest(connection: sqlite3.Connection) -> str:
+    try:
+        rows = connection.execute(
+            "SELECT source_id, egress_class, allowed_hosts FROM source_egress_rules ORDER BY source_id"
+        ).fetchall()
+        payload = json.dumps(
+            [list(r) for r in rows], sort_keys=True, separators=(",", ":"), ensure_ascii=True
+        )
+        import hashlib
+
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    except Exception:
+        return "0" * 64
 
 
 def _usable_matches(
@@ -1181,16 +1408,17 @@ def _candidate_pages(
         )
     else:
         ordered_pages = (*module_pages, *fact_pages, *strict_pages)
-    exact_code_pages = (
-        _exact_code_pages(
+    exact_code_pages: tuple[WikiPage, ...] = ()
+    if (
+        (not definition_question or not has_explanatory_definition)
+        and (ranked_index or exact_symbol_page_paths or relaxed_fts_paths)
+    ):
+        exact_code_pages = _exact_code_pages(
             workspace_root,
             question,
             max_pages=max_pages,
             repository_id=repository_id,
         )
-        if not definition_question or not has_explanatory_definition
-        else ()
-    )
     ordered_pages = (*exact_symbol_pages, *exact_code_pages, *ordered_pages)
     if (exact_symbol_pages or exact_code_pages) and (
         not _is_code_relation_question(question)

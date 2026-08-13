@@ -1877,12 +1877,30 @@ def mcp(
             help="Allow local_only content in this read-only connection.",
         ),
     ] = False,
+    profile: Annotated[
+        str,
+        typer.Option(
+            "--profile",
+            help="Server profile: micro / analysis / capture (default: legacy, no extra tools).",
+        ),
+    ] = "",
     workspace: WorkspaceOption = Path("."),
 ) -> None:
     """Run the read-only MCP stdio server; stdout carries only the protocol."""
     try:
         opened = Workspace.open_readonly(workspace)
-        server = build_server(opened.root, project_root, allow_local=allow_local_llm)
+        if profile == "":
+            safe_profile = None
+        elif profile in {"micro", "analysis", "capture"}:
+            safe_profile = profile  # type: ignore[assignment]
+        else:
+            raise ValueError(f"unknown profile: {profile}")
+        server = build_server(
+            opened.root,
+            project_root,
+            allow_local=allow_local_llm,
+            profile=safe_profile,  # type: ignore[arg-type]
+        )
     except (
         MemoryForgeError,
         WorkspaceIntegrityError,
@@ -2418,6 +2436,357 @@ def _exit_with_safe_error(exc: Exception) -> None:
         code = 1
     typer.echo(f"Error: {message}", err=True)
     raise typer.Exit(code=code) from None
+
+
+client_app = typer.Typer(no_args_is_help=True, help="Multi-client integration planning.")
+app.add_typer(client_app, name="client")
+capture_app = typer.Typer(no_args_is_help=True, help="Capture inbox and handoff utilities.")
+app.add_typer(capture_app, name="capture")
+conflict_app = typer.Typer(no_args_is_help=True, help="Knowledge conflict inspection and resolution.")
+app.add_typer(conflict_app, name="conflict")
+egress_app = typer.Typer(no_args_is_help=True, help="Source egress policy and audit.")
+app.add_typer(egress_app, name="egress")
+
+
+def _json_out(payload: object) -> None:
+    typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
+
+
+@client_app.command("plan")
+def client_plan(
+    agent: Annotated[str, typer.Argument(help="codex|claude|gemini|cursor")],
+    workspace: Annotated[Path, typer.Option("--workspace", "-w")] = Path("."),
+    project: Annotated[Path, typer.Option("--project", "-p")] = Path("."),
+    capture_enabled: Annotated[bool, typer.Option("--capture")] = False,
+    write_config: Annotated[bool, typer.Option("--write-config")] = False,
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = True,
+) -> None:
+    """薄命令 → 对应 adapter.plan_install / plan_uninstall。"""
+    try:
+        from memoryforge.client_integrations import get_adapter
+        adapter = get_adapter(agent)
+        plan = adapter.plan_install(workspace, project, capture_enabled=capture_enabled)
+        if write_config and not dry_run:
+            import subprocess
+            for step in getattr(plan, "commands", []):
+                subprocess.run(step, shell=True, check=False)
+        _json_out({"status": "ok", "agent": agent, "plan": plan, "applied": write_config and not dry_run})
+    except Exception as exc:  # noqa: BLE001
+        _json_out({"status": "error", "error": str(exc)})
+
+
+@client_app.command("verify")
+def client_verify(
+    agent: Annotated[str, typer.Argument(help="Client adapter to verify.")],
+    workspace: Annotated[Path, typer.Option("--workspace", "-w")] = Path("."),
+    project: Annotated[Path, typer.Option("--project", "-p")] = Path("."),
+) -> None:
+    """薄命令 → adapter.verify_install。"""
+    try:
+        from memoryforge.client_integrations import get_adapter
+        result = get_adapter(agent).verify_install(workspace, project)
+        _json_out({"status": "ok", "agent": agent, "result": result})
+    except Exception as exc:  # noqa: BLE001
+        _json_out({"status": "error", "error": str(exc)})
+
+
+@client_app.command("remove")
+def client_remove(
+    agent: Annotated[str, typer.Argument(help="Client adapter to remove.")],
+    workspace: Annotated[Path, typer.Option("--workspace", "-w")] = Path("."),
+    project: Annotated[Path, typer.Option("--project", "-p")] = Path("."),
+) -> None:
+    """薄命令 → adapter.plan_uninstall。"""
+    try:
+        from memoryforge.client_integrations import get_adapter
+        plan = get_adapter(agent).plan_uninstall(workspace, project)
+        _json_out({"status": "ok", "agent": agent, "plan": plan})
+    except Exception as exc:  # noqa: BLE001
+        _json_out({"status": "error", "error": str(exc)})
+
+
+@capture_app.command("drain")
+def capture_drain(workspace: Annotated[Path, typer.Option("--workspace", "-w")] = Path(".")) -> None:
+    """薄命令 → capture_inbox.drain_capture_spool。"""
+    try:
+        from memoryforge.capture_inbox import drain_capture_spool
+        from memoryforge.workspace import workspace_database, _connect
+        db = workspace_database(workspace)
+        with _connect(db) as conn:
+            result = drain_capture_spool(workspace, conn)
+        _json_out({"status": "ok", "result": result})
+    except Exception as exc:  # noqa: BLE001
+        _json_out({"status": "error", "error": str(exc)})
+
+
+@capture_app.command("handoff")
+def capture_handoff(
+    repo_id: Annotated[str, typer.Option("--repo-id")],
+    before: Annotated[str | None, typer.Option("--before")] = None,
+    max_chars: Annotated[int, typer.Option("--max-chars")] = 20000,
+    workspace: Annotated[Path, typer.Option("--workspace", "-w")] = Path("."),
+) -> None:
+    """薄命令 → handoff.build_handoff。"""
+    try:
+        from memoryforge import handoff
+        result = handoff.build_handoff(workspace, repository_id=repo_id, before_iso=before, max_characters=max_chars)
+        _json_out({"status": "ok", "handoff": result})
+    except Exception as exc:  # noqa: BLE001
+        _json_out({"status": "error", "error": str(exc)})
+
+
+@capture_app.command("proposal")
+def capture_proposal(
+    repo_id: Annotated[str, typer.Option("--repo-id")],
+    session: Annotated[str, typer.Option("--session")],
+    print_output: Annotated[bool, typer.Option("--print")] = False,
+    workspace: Annotated[Path, typer.Option("--workspace", "-w")] = Path("."),
+) -> None:
+    """薄命令 → handoff.show_session_proposal。"""
+    try:
+        from memoryforge import handoff
+        result = handoff.show_session_proposal(workspace, repository_id=repo_id, session_id=session)
+        if print_output:
+            _json_out(result)
+        else:
+            _json_out({"status": "ok", "proposal": result})
+    except Exception as exc:  # noqa: BLE001
+        _json_out({"status": "error", "error": str(exc)})
+
+
+@app.command("freshness")
+def cli_freshness(
+    page_path: Annotated[str, typer.Argument(help="Wiki page relative path.")],
+    repository: Annotated[str | None, typer.Option("--repository", "-R")] = None,
+    workspace: Annotated[Path, typer.Option("--workspace", "-w")] = Path("."),
+) -> None:
+    """薄命令 → freshness.page_freshness。"""
+    try:
+        from memoryforge.freshness import page_freshness
+        from memoryforge.workspace import Workspace, workspace_database, _connect
+        applied: dict[str, int] = {}
+        current: dict[str, int] = {}
+        db = workspace_database(workspace)
+        with _connect(db) as conn:
+            for sid, svid in conn.execute("SELECT source_id, source_version_id FROM applied_source_versions"):
+                applied[str(sid)] = int(svid)
+            for row in conn.execute(
+                "SELECT s.source_id, v.id FROM sources AS s JOIN source_versions AS v ON v.source_id = s.id WHERE v.is_current = 1"
+            ):
+                current[str(row[0])] = int(row[1])
+        ws = Workspace(workspace)
+        commit = ws.current_commit() if ws else ""
+        result = page_freshness(
+            workspace,
+            page_path,
+            repository_id=repository,
+            applied_source_versions=applied,
+            current_source_versions=current,
+            workspace_base_commit=commit,
+            workspace_current_commit=commit,
+        )
+        _json_out(result.model_dump(mode="json"))
+    except Exception as exc:  # noqa: BLE001
+        _json_out({"status": "error", "error": str(exc)})
+
+
+@conflict_app.command("list")
+def conflict_list(
+    page: Annotated[str | None, typer.Option("--page")] = None,
+    open_only: Annotated[bool, typer.Option("--open-only")] = False,
+    workspace: Annotated[Path, typer.Option("--workspace", "-w")] = Path("."),
+) -> None:
+    """薄命令 → knowledge_conflicts 查询。"""
+    try:
+        from memoryforge.workspace import workspace_database, _connect
+        db = workspace_database(workspace)
+        sql = "SELECT conflict_id, page_path, state FROM knowledge_conflicts WHERE 1=1"
+        params: list[object] = []
+        if page:
+            sql += " AND page_path = ?"
+            params.append(page)
+        if open_only:
+            sql += " AND state = 'open'"
+        with _connect(db) as conn:
+            rows = conn.execute(sql, tuple(params)).fetchall()
+        _json_out({"status": "ok", "conflicts": [dict(r) for r in rows]})
+    except Exception as exc:  # noqa: BLE001
+        _json_out({"status": "error", "error": str(exc)})
+
+
+@conflict_app.command("show")
+def conflict_show(
+    conflict_id: Annotated[str, typer.Argument(help="Conflict ID.")],
+    workspace: Annotated[Path, typer.Option("--workspace", "-w")] = Path("."),
+) -> None:
+    """薄命令 → knowledge_conflicts 单条查询。"""
+    try:
+        from memoryforge.workspace import workspace_database, _connect
+        db = workspace_database(workspace)
+        with _connect(db) as conn:
+            row = conn.execute(
+                "SELECT * FROM knowledge_conflicts WHERE conflict_id = ?",
+                (conflict_id,),
+            ).fetchone()
+        _json_out({"status": "ok", "conflict": dict(row) if row else None})
+    except Exception as exc:  # noqa: BLE001
+        _json_out({"status": "error", "error": str(exc)})
+
+
+@conflict_app.command("resolve")
+def conflict_resolve(
+    conflict_id: Annotated[str, typer.Argument(help="Conflict ID.")],
+    resolution: Annotated[str, typer.Option("--resolution", help="supersede_left|supersede_right|reconciled|dismissed")],
+    workspace: Annotated[Path, typer.Option("--workspace", "-w")] = Path("."),
+) -> None:
+    """薄命令 → knowledge_conflicts.resolve_conflict。"""
+    try:
+        from memoryforge.knowledge_conflicts import resolve_conflict, ConflictResolution
+        from memoryforge.workspace import workspace_database, _connect
+        db = workspace_database(workspace)
+        with _connect(db) as conn:
+            row = conn.execute(
+                "SELECT * FROM knowledge_conflicts WHERE conflict_id = ?",
+                (conflict_id,),
+            ).fetchone()
+            if row is None:
+                _json_out({"status": "error", "error": "not found"})
+                return
+        from memoryforge.knowledge_conflicts import KnowledgeConflict
+        conflict = KnowledgeConflict.model_validate(dict(row))
+        proposal = resolve_conflict(conflict, resolution=ConflictResolution(resolution))
+        _json_out({"status": "ok", "proposal": proposal.model_dump(mode="json") if proposal else None})
+    except Exception as exc:  # noqa: BLE001
+        _json_out({"status": "error", "error": str(exc)})
+
+
+@egress_app.command("show")
+def egress_show(
+    source_id: Annotated[str | None, typer.Option("--source-id")] = None,
+    workspace: Annotated[Path, typer.Option("--workspace", "-w")] = Path("."),
+) -> None:
+    """薄命令 → egress_policy 查询。"""
+    try:
+        from memoryforge.workspace import workspace_database, _connect
+        db = workspace_database(workspace)
+        sql = "SELECT source_id, egress_class, allowed_hosts FROM source_egress_rules"
+        params: tuple[object, ...] = ()
+        if source_id:
+            sql += " WHERE source_id = ?"
+            params = (source_id,)
+        with _connect(db) as conn:
+            rows = conn.execute(sql, params).fetchall()
+        _json_out({"status": "ok", "rules": [dict(r) for r in rows]})
+    except Exception as exc:  # noqa: BLE001
+        _json_out({"status": "error", "error": str(exc)})
+
+
+@egress_app.command("set")
+def egress_set(
+    source_id: Annotated[str, typer.Argument(help="Source ID.")],
+    class_: Annotated[str, typer.Option("--class", help="public|host_allowed|never_model")],
+    host: Annotated[str | None, typer.Option("--host")] = None,
+    workspace: Annotated[Path, typer.Option("--workspace", "-w")] = Path("."),
+) -> None:
+    """薄命令 → egress_policy.upsert_rule。"""
+    try:
+        from datetime import UTC, datetime
+        from memoryforge.egress_models import EgressClass, SourceEgressRule
+        from memoryforge.egress_policy import upsert_rule
+        from memoryforge.workspace import workspace_database, _connect
+        hosts = (host,) if host else ()
+        rule = SourceEgressRule(
+            source_id=source_id,
+            egress_class=EgressClass(class_),
+            allowed_hosts=hosts,
+            updated_at=datetime.now(UTC),
+            actor="cli",
+        )
+        db = workspace_database(workspace)
+        with _connect(db) as conn:
+            upsert_rule(conn, rule)
+        _json_out({"status": "ok", "rule": rule.model_dump(mode="json")})
+    except Exception as exc:  # noqa: BLE001
+        _json_out({"status": "error", "error": str(exc)})
+
+
+@egress_app.command("deny")
+def egress_deny(
+    source_id: Annotated[str, typer.Argument(help="Source ID.")],
+    workspace: Annotated[Path, typer.Option("--workspace", "-w")] = Path("."),
+) -> None:
+    """薄命令 → egress set --class never_model。"""
+    try:
+        from datetime import UTC, datetime
+        from memoryforge.egress_models import EgressClass, SourceEgressRule
+        from memoryforge.egress_policy import upsert_rule
+        from memoryforge.workspace import workspace_database, _connect
+        rule = SourceEgressRule(
+            source_id=source_id,
+            egress_class=EgressClass.NEVER_MODEL,
+            allowed_hosts=(),
+            updated_at=datetime.now(UTC),
+            actor="cli",
+        )
+        db = workspace_database(workspace)
+        with _connect(db) as conn:
+            upsert_rule(conn, rule)
+        _json_out({"status": "ok", "rule": rule.model_dump(mode="json")})
+    except Exception as exc:  # noqa: BLE001
+        _json_out({"status": "error", "error": str(exc)})
+
+
+@egress_app.command("preview")
+def egress_preview(
+    host: Annotated[str, typer.Option("--host")],
+    question: Annotated[str, typer.Option("--question")],
+    workspace: Annotated[Path, typer.Option("--workspace", "-w")] = Path("."),
+) -> None:
+    """薄命令 → egress_policy.decide_egress 针对默认上下文的预览。"""
+    try:
+        import uuid
+        from memoryforge.egress_models import EgressRequest
+        from memoryforge.egress_policy import decide_egress
+        from memoryforge.models import Sensitivity
+        from memoryforge.workspace import workspace_database, _connect
+        db = workspace_database(workspace)
+        request = EgressRequest(request_id=str(uuid.uuid4()), host_id=host, repository_id="preview", purpose="context", max_characters=8000)
+        decisions: list[dict[str, object]] = []
+        with _connect(db) as conn:
+            for row in conn.execute(
+                "SELECT s.source_id, v.id, v.sensitivity FROM sources AS s JOIN source_versions AS v ON v.source_id = s.id WHERE v.is_current = 1 LIMIT 50"
+            ):
+                d = decide_egress(conn, request=request, source_id=str(row[0]), source_version=int(row[1]), sensitivity=Sensitivity(str(row[2])))
+                decisions.append({"source_id": row[0], "allowed": d.allowed, "reason_code": d.reason_code, "class": d.egress_class.value})
+        _json_out({"status": "ok", "question": question, "host": host, "preview": decisions})
+    except Exception as exc:  # noqa: BLE001
+        _json_out({"status": "error", "error": str(exc)})
+
+
+@egress_app.command("audit")
+def egress_audit(
+    host: Annotated[str | None, typer.Option("--host")] = None,
+    source: Annotated[str | None, typer.Option("--source")] = None,
+    workspace: Annotated[Path, typer.Option("--workspace", "-w")] = Path("."),
+) -> None:
+    """薄命令 → disclosure_receipts 查询。"""
+    try:
+        from memoryforge.workspace import workspace_database, _connect
+        db = workspace_database(workspace)
+        sql = "SELECT request_id, host_id, repository_id, purpose, disclosed_at FROM disclosure_receipts WHERE 1=1"
+        params: list[object] = []
+        if host:
+            sql += " AND host_id = ?"
+            params.append(host)
+        if source:
+            sql += " AND source_refs LIKE ?"
+            params.append(f"%{source}%")
+        sql += " ORDER BY disclosed_at DESC LIMIT 100"
+        with _connect(db) as conn:
+            rows = conn.execute(sql, tuple(params)).fetchall()
+        _json_out({"status": "ok", "receipts": [dict(r) for r in rows]})
+    except Exception as exc:  # noqa: BLE001
+        _json_out({"status": "error", "error": str(exc)})
 
 
 def main() -> None:

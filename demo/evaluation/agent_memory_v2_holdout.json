@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "suite_id": "agent-memory-v2-hybrid-retrieval",
+  "suite_revision": 1,
+  "split": "holdout",
+  "status": "frozen_pending",
+  "note": "Holdout cases are sealed. Actual question content and expected_sources will be filled once the development split is accepted.",
+  "case_count": 5,
+  "cases": [
+    {
+      "id": "holdout-001",
+      "case_type": "PLACEHOLDER",
+      "question": "[FROZEN PENDING - content redacted]",
+      "expected_status": "PLACEHOLDER",
+      "expected_sources": []
+    },
+    {
+      "id": "holdout-002",
+      "case_type": "PLACEHOLDER",
+      "question": "[FROZEN PENDING - content redacted]",
+      "expected_status": "PLACEHOLDER",
+      "expected_sources": []
+    },
+    {
+      "id": "holdout-003",
+      "case_type": "PLACEHOLDER",
+      "question": "[FROZEN PENDING - content redacted]",
+      "expected_status": "PLACEHOLDER",
+      "expected_sources": []
+    },
+    {
+      "id": "holdout-004",
+      "case_type": "PLACEHOLDER",
+      "question": "[FROZEN PENDING - content redacted]",
+      "expected_status": "PLACEHOLDER",
+      "expected_sources": []
+    },
+    {
+      "id": "holdout-005",
+      "case_type": "PLACEHOLDER",
+      "question": "[FROZEN PENDING - content redacted]",
+      "expected_status": "PLACEHOLDER",
+      "expected_sources": []
+    }
+  ]
+}

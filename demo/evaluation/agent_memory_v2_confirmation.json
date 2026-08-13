@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "suite_id": "agent-memory-v2-hybrid-retrieval",
+  "suite_revision": 1,
+  "split": "confirmation",
+  "cases": [
+    {
+      "id": "confirm-001-password-hash",
+      "case_type": "exact_symbol",
+      "question": "auth.login.LoginService.validate bcrypt password",
+      "expected_status": "answered",
+      "expected_sources": [
+        "wiki/pages/auth/login.md"
+      ]
+    },
+    {
+      "id": "confirm-002-session-redis",
+      "case_type": "single_hop",
+      "question": "Redis blacklist used by SessionManager.revoke for logout",
+      "expected_status": "answered",
+      "expected_sources": [
+        "wiki/pages/auth/session.md"
+      ]
+    },
+    {
+      "id": "confirm-003-order-pdf-charge",
+      "case_type": "multi_source",
+      "question": "InvoiceService order items render PDF then PaymentProcessor Stripe HTTP",
+      "expected_status": "answered",
+      "expected_sources": [
+        "wiki/pages/billing/invoice.md",
+        "wiki/pages/billing/payment.md"
+      ]
+    },
+    {
+      "id": "confirm-004-search-engine",
+      "case_type": "paraphrase",
+      "question": "How does SearchEngine iterate docs and build inverted index?",
+      "expected_status": "answered",
+      "expected_sources": [
+        "wiki/pages/search/index.md"
+      ]
+    },
+    {
+      "id": "confirm-005-unanswerable-vector-database",
+      "case_type": "unanswerable",
+      "question": "What vector database backend is used for semantic embedding similarity?",
+      "expected_status": "unanswerable",
+      "expected_sources": []
+    }
+  ]
+}

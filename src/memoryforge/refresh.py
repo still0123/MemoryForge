@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Mapping
 
 from memoryforge.feishu_adapter import FeishuDocumentSyncResult, refresh_feishu_documents
 from memoryforge.models import GitRepositorySyncResult
@@ -20,6 +21,24 @@ class RefreshResult:
         return any(result.created or result.updated for result in self.git) or any(
             result.created or result.updated or result.deleted for result in self.feishu
         )
+
+
+def route_refresh_impact(
+    changed_sources: tuple[tuple[str, int], ...],
+    *,
+    source_to_pages: Mapping[tuple[str, int], tuple[str, ...]],
+    code_dependents: Mapping[str, tuple[str, ...]] | None = None,
+) -> tuple[str, ...]:
+    """薄钩子 → freshness.impacted_pages_for_refresh；暂不主动调用。"""
+    try:
+        from memoryforge.freshness import impacted_pages_for_refresh
+        return impacted_pages_for_refresh(
+            changed_sources,
+            source_to_pages=source_to_pages,
+            code_dependents=code_dependents,
+        )
+    except Exception:
+        return tuple(sorted({p for pages in source_to_pages.values() for p in pages}))
 
 
 def refresh_workspace(workspace: Path) -> RefreshResult:
