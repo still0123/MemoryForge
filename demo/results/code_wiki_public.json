@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
-  "memoryforge_commit": "ba04bb4e7b91ad8ab0ae8c3f486d33148e3e3960",
-  "memoryforge_worktree_dirty": false,
+  "memoryforge_commit": "08dbc3e0505a7c0ff6a67d91b5b6b45a40047ff5",
+  "memoryforge_worktree_dirty": true,
   "fixture": {
     "path": "demo/fixtures/code_wiki_project",
     "suite_sha256": "e2253d9c66acde8e27e6e13c8f9ac9354a9e84ddc9c5d9266fd9b41040a0c106",
-    "initial_commit": "c7a312631c0f4122e82e08d23d69498b1c2881c4",
-    "updated_commit": "eebf184cd82509b0a1c48901fdf643b63f714828"
+    "initial_commit": "5937c5eb86e842978e791e043ab514eefae2d6f2",
+    "updated_commit": "bb347d982880e74c6cb994ebdfc18efec3f39ebc"
   },
   "workflow": {
     "wiki_file_count": 8,
