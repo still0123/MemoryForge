@@ -473,6 +473,39 @@ memoryforge connect codex /absolute/path/to/project \
 本地敏感内容默认不进入模型上下文；只有显式传入 `--allow-local-llm` 的固定 Server 命令才允许
 返回 `local_only` 内容。
 
+### 其他 AI Host：复制配置（不自动改写）
+
+只有 Codex 有官方、可验证的 CLI，所以只有 Codex 支持自动接入。Claude Code、Claude
+Desktop、Cursor、VS Code 和 ChatGPT Desktop 都使用可复制的配置片段；`mcp-config`
+只输出文本，绝不直接改写这些 Host 的配置文件：
+
+```bash
+memoryforge mcp-config --project-root /absolute/path/to/project \
+  --workspace "$MF_WORKSPACE" --format json
+```
+
+输出标准 `mcpServers` JSON，把整个 `mcpServers` 对象粘贴到：
+
+- **Claude Code**：项目根目录 `.mcp.json`；
+- **Claude Desktop**：`claude_desktop_config.json`（`mcpServers` 键）；
+- **Cursor**：`.cursor/mcp.json`；
+- **VS Code**：`.vscode/mcp.json`。
+
+粘贴后重启对应 Host，确认 Server 出现在 MCP 列表中，再从项目目录提问验证
+`memoryforge_context`。
+
+Codex 的手动后备配置（`~/.codex/config.toml`，ChatGPT Desktop 共用同一份）使用
+TOML 片段：
+
+```bash
+memoryforge mcp-config --project-root /absolute/path/to/project \
+  --workspace "$MF_WORKSPACE" --format toml
+```
+
+把输出的 `[mcp_servers.*]` 块追加到 `~/.codex/config.toml`。仍然优先使用
+`connect codex` 自动注册，手动片段只在 CLI 不可用时作为后备。两种方式生成的
+Server 名与命令完全一致，可以互换，不会产生重复注册。
+
 ### 旧方式：`codex-setup`（兼容保留）
 
 早期版本在项目 `AGENTS.md` 安装“每个新任务先运行 recall”的指令：

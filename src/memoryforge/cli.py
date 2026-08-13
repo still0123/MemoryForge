@@ -17,7 +17,7 @@ import typer
 
 from memoryforge import __version__
 from memoryforge.agent import run_agent
-from memoryforge.agent_access import recall_context
+from memoryforge.agent_access import recall_context, resolve_repository_scope
 from memoryforge.agent_evaluation import run_agent_evaluation
 from memoryforge.automation_apply import evaluate_staged, run_automation_apply
 from memoryforge.automation_policy import (
@@ -62,6 +62,7 @@ from memoryforge.github_thread_adapter import (
     import_github_thread,
     import_github_thread_json,
 )
+from memoryforge.host_config import codex_toml_block, mcp_servers_config
 from memoryforge.importer import MAX_SOURCE_BYTES, SourceValidationError, import_local_file
 from memoryforge.lifecycle import (
     apply_changeset,
@@ -117,6 +118,7 @@ WorkspaceOption = Annotated[
     Path,
     typer.Option("--workspace", "-w", help="Initialized MemoryForge workspace."),
 ]
+
 
 def _version_callback(value: bool) -> None:
     if value:
@@ -1894,6 +1896,57 @@ def mcp(
     ) as exc:
         _exit_with_safe_error(exc)
     asyncio.run(server.run_stdio_async())
+
+
+@app.command("mcp-config")
+def mcp_config(
+    project_root: Annotated[
+        Path,
+        typer.Option(
+            "--project-root",
+            help="Project directory inside one registered Git checkout.",
+        ),
+    ],
+    allow_local_llm: Annotated[
+        bool,
+        typer.Option(
+            "--allow-local-llm",
+            help="Allow local_only content in this read-only connection.",
+        ),
+    ] = False,
+    config_format: Annotated[
+        str,
+        typer.Option(
+            "--format",
+            help="Snippet format: 'json' (mcpServers) or 'toml' (~/.codex/config.toml).",
+        ),
+    ] = "json",
+    workspace: WorkspaceOption = Path("."),
+) -> None:
+    """Print a copyable MCP stdio config snippet; never edits Host files."""
+    try:
+        resolve_repository_scope(workspace, project_root)
+        if config_format == "toml":
+            snippet = codex_toml_block(workspace, project_root, allow_local=allow_local_llm)
+        elif config_format == "json":
+            snippet = json.dumps(
+                mcp_servers_config(workspace, project_root, allow_local=allow_local_llm),
+                ensure_ascii=False,
+                indent=2,
+            )
+        else:
+            raise ValueError(f"unsupported --format '{config_format}'; use 'json' or 'toml'")
+    except (
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(snippet)
 
 
 @app.command()

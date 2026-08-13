@@ -175,6 +175,7 @@ Relation、ModulePlan 和 Mermaid 图。可选模型只补充带 Citation 的父
 
 | 文档 | 内容 |
 | --- | --- |
+| [中文使用指南](docs/USER_GUIDE_CN.md) | 安装、导入、问答与 AI Host MCP 接入 |
 | [SPEC.md](SPEC.md) | 架构、数据模型和安全边界 |
 | [本地 Portal](docs/LOCAL_DYNAMIC_PORTAL_SPEC.md) | 阅读、任务、审核和控制面 |
 | [公开 Benchmark](docs/BENCHMARK.md) | 方法、结果、负案例和复现命令 |
