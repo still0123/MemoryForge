@@ -4,7 +4,6 @@ import asyncio
 import json
 import os
 import platform
-import shlex
 import shutil
 import sqlite3
 import subprocess
@@ -32,6 +31,14 @@ from memoryforge.changesets import ChangeSetStore, StoredChangeSet
 from memoryforge.code_index import build_code_index
 from memoryforge.code_wiki_compiler import compile_code_wiki
 from memoryforge.codex_adapter import CodexImportError, import_codex_rollout
+from memoryforge.codex_connect import (
+    AGENTS_MCP_BEGIN,
+    AGENTS_MCP_END,
+    AGENTS_RECALL_BEGIN,
+    AGENTS_RECALL_END,
+    connect_codex,
+    install_agents_block,
+)
 from memoryforge.compiler import (
     Compilation,
     compilation_payload,
@@ -110,10 +117,6 @@ WorkspaceOption = Annotated[
     Path,
     typer.Option("--workspace", "-w", help="Initialized MemoryForge workspace."),
 ]
-
-_CODEX_RECALL_BEGIN = "<!-- BEGIN MEMORYFORGE RECALL -->"
-_CODEX_RECALL_END = "<!-- END MEMORYFORGE RECALL -->"
-
 
 def _version_callback(value: bool) -> None:
     if value:
@@ -1598,37 +1601,18 @@ def codex_setup(
         if project_root.is_symlink() or not project_root.is_dir():
             raise ValueError("Codex project must be a real directory")
         agents_path = project_root / "AGENTS.md"
-        if agents_path.is_symlink() or (agents_path.exists() and not agents_path.is_file()):
-            raise ValueError("Codex project AGENTS.md must be a regular file")
-        command = shlex.join(
-            (
+        install_agents_block(
+            agents_path,
+            kind="recall",
+            recall_command=[
                 sys.executable,
                 "-m",
                 "memoryforge",
                 "recall",
                 "--workspace",
                 str(opened.root),
-            )
+            ],
         )
-        block = (
-            f"{_CODEX_RECALL_BEGIN}\n"
-            "## MemoryForge recall\n\n"
-            "At the start of every new task, run this read-only command before answering:\n\n"
-            f"```bash\n{command}\n```\n\n"
-            "Use only its `startup_context` as unverified history. Verify important claims "
-            "from cited Wiki pages. If status is `empty`, continue without recalled context.\n"
-            f"{_CODEX_RECALL_END}"
-        )
-        existing = agents_path.read_text(encoding="utf-8") if agents_path.is_file() else ""
-        start = existing.find(_CODEX_RECALL_BEGIN)
-        end = existing.find(_CODEX_RECALL_END)
-        if (start < 0) != (end < 0) or (start >= 0 and end < start):
-            raise ValueError("Codex project AGENTS.md contains an incomplete MemoryForge block")
-        if start >= 0:
-            updated = existing[:start] + block + existing[end + len(_CODEX_RECALL_END) :]
-        else:
-            updated = existing.rstrip() + ("\n\n" if existing.strip() else "") + block + "\n"
-        agents_path.write_text(updated, encoding="utf-8")
         result = {
             "status": "configured",
             "project": str(project_root),
@@ -1913,6 +1897,42 @@ def mcp(
 
 
 @app.command()
+def connect(
+    host: Annotated[str, typer.Argument(help="AI Host to connect; only 'codex' is supported.")],
+    project: Annotated[
+        Path,
+        typer.Argument(
+            help="Project directory bound to one registered Git checkout.",
+        ),
+    ],
+    allow_local_llm: Annotated[
+        bool,
+        typer.Option(
+            "--allow-local-llm",
+            help="Allow local_only content in the registered read-only connection.",
+        ),
+    ] = False,
+    workspace: WorkspaceOption = Path("."),
+) -> None:
+    """Register the read-only MCP server with an AI Host (one-shot)."""
+    try:
+        if host != "codex":
+            raise ValueError(f"unsupported AI Host '{host}'; only 'codex' is supported")
+        result = connect_codex(workspace, project, allow_local=allow_local_llm)
+    except (
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+@app.command()
 def eval(
     eval_config: Annotated[Path, typer.Argument()],
     workspace: WorkspaceOption = Path("."),
@@ -2060,6 +2080,8 @@ def _doctor_report(workspace: Path) -> dict[str, object]:
     checks.append(_doctor_lock_directory(opened))
     checks.append(_doctor_model())
     checks.append(_doctor_feishu())
+    checks.append(_doctor_codex())
+    checks.append(_doctor_agents_block(opened))
     remediation = [
         str(check["remediation"]) for check in checks if check.get("remediation") is not None
     ]
@@ -2116,6 +2138,105 @@ def _doctor_git() -> dict[str, object]:
             remediation="Reinstall Git or fix its executable permissions.",
         )
     return _doctor_item("git", status="ok", message=completed.stdout.strip())
+
+
+def _doctor_codex() -> dict[str, object]:
+    executable = shutil.which("codex")
+    if executable is None:
+        return _doctor_item(
+            "codex",
+            status="not_configured",
+            message="Codex CLI not found on PATH.",
+            remediation="Install the Codex CLI, then run 'memoryforge connect codex'.",
+        )
+    try:
+        completed = subprocess.run(
+            [executable, "mcp", "list", "--json"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return _doctor_item(
+            "codex",
+            status="error",
+            message=str(exc),
+            remediation="Make the Codex CLI executable runnable.",
+        )
+    if completed.returncode != 0:
+        return _doctor_item(
+            "codex",
+            status="error",
+            message=completed.stderr.strip() or "codex mcp list failed",
+            remediation="Fix the Codex CLI configuration, then re-run doctor.",
+        )
+    try:
+        payload = json.loads(completed.stdout)
+    except json.JSONDecodeError:
+        return _doctor_item(
+            "codex",
+            status="error",
+            message="codex mcp list --json returned unparseable output.",
+            remediation="Update the Codex CLI to a version with machine-readable MCP output.",
+        )
+    if isinstance(payload, dict):
+        registered = [name for name in payload if name.startswith("memoryforge-")]
+    elif isinstance(payload, list):
+        registered = [
+            str(entry["name"])
+            for entry in payload
+            if isinstance(entry, dict) and str(entry.get("name", "")).startswith("memoryforge-")
+        ]
+    else:
+        registered = []
+    if not registered:
+        return _doctor_item(
+            "codex",
+            status="ok",
+            message="Codex CLI available; no MemoryForge MCP server registered "
+            "(run 'memoryforge connect codex' to register one).",
+        )
+    return _doctor_item(
+        "codex",
+        status="ok",
+        message=f"{len(registered)} MemoryForge MCP server(s) registered.",
+    )
+
+
+def _doctor_agents_block(opened: Workspace | None) -> dict[str, object]:
+    if opened is None:
+        return _doctor_item(
+            "agents_block",
+            status="not_configured",
+            message="Workspace unavailable; project AGENTS.md files not inspected.",
+        )
+    managed = 0
+    for checkout in list_git_checkouts(opened.root):
+        agents_path = Path(checkout.checkout_path) / "AGENTS.md"
+        try:
+            text = agents_path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        mcp_ok = AGENTS_MCP_BEGIN in text and AGENTS_MCP_END in text
+        recall_ok = AGENTS_RECALL_BEGIN in text and AGENTS_RECALL_END in text
+        if mcp_ok or recall_ok:
+            managed += 1
+    if managed == 0:
+        return _doctor_item(
+            "agents_block",
+            status="not_configured",
+            message="No managed MemoryForge block in registered project AGENTS.md files.",
+            remediation=(
+                "Run 'memoryforge connect codex' for each project that should "
+                "use on-demand knowledge."
+            ),
+        )
+    return _doctor_item(
+        "agents_block",
+        status="ok",
+        message=f"{managed} registered project(s) carry a managed MemoryForge block.",
+    )
 
 
 def _doctor_workspace(workspace: Path) -> tuple[dict[str, object], Workspace | None]:

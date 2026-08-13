@@ -452,20 +452,38 @@ memoryforge recall --limit 5 --workspace "$MF_WORKSPACE"
 若状态是 `empty`，说明还没有已应用的会话 Wiki；检查是否只完成了 `codex-import`，却还没有
 完成 `ingest → review → approve → apply`。
 
-### 为某个项目自动加载
+### 为某个项目接入 on-demand MCP（推荐）
 
 对项目执行一次：
+
+```bash
+memoryforge connect codex /absolute/path/to/project \
+  --workspace "$MF_WORKSPACE"
+```
+
+该命令通过 Codex 官方 CLI（`codex mcp get/add`）注册一个只读 MCP Server，并在项目
+`AGENTS.md` 中安装 on-demand knowledge 指令。以后从该项目目录开始 Codex 新任务时，模型按需
+调用 `memoryforge_context` / `memoryforge_read_evidence` 渐进式加载历史记忆，不再在任务开始
+时运行整个 `recall`。
+
+`connect codex` 可重复执行且幂等；已注册的 Server 命令一致时保持不变，不一致时报冲突并拒绝
+覆盖。它不会直接改写 `~/.codex/config.toml`、认证文件或模型配置。连接完成后重启对应 Host，
+并用 `/mcp` 检查。
+
+本地敏感内容默认不进入模型上下文；只有显式传入 `--allow-local-llm` 的固定 Server 命令才允许
+返回 `local_only` 内容。
+
+### 旧方式：`codex-setup`（兼容保留）
+
+早期版本在项目 `AGENTS.md` 安装“每个新任务先运行 recall”的指令：
 
 ```bash
 memoryforge codex-setup /absolute/path/to/project \
   --workspace "$MF_WORKSPACE"
 ```
 
-该命令在项目 `AGENTS.md` 中安装一个有界 recall 指令。以后从该项目目录开始 Codex 新任务时，
-Codex 会先执行只读 `recall`，再根据当前任务决定是否查询具体 Wiki 页面。
-
-`codex-setup` 可重复执行，不会覆盖 `AGENTS.md` 中其他手写内容。它不会修改 Codex 的认证文件、
-模型配置或全局用户配置。
+该命令仍可使用，与新方式共用同一个 managed block 安装器，不会同时安装两个 MemoryForge
+block。新项目请改用 `connect codex`。
 
 若新对话不属于任何项目，没有稳定的项目 `AGENTS.md` 可读取，应手动运行 `recall`。不要为了
 “全局记忆”把整个 Wiki 自动注入每次对话；这会增加无关上下文。
@@ -691,7 +709,7 @@ init
   -> 导入文档和仓库
   -> ingest
   -> review / approve / apply
-  -> codex-setup
+  -> connect codex
   -> showcase serve
 ```
 

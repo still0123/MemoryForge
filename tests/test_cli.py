@@ -448,6 +448,8 @@ def test_cli_doctor_reports_readonly_checks_and_remediation(
         "lock_directory",
         "model",
         "feishu",
+        "codex",
+        "agents_block",
     }
     assert healthy["checks"][-1]["status"] in {"configured", "not_configured"}
 
