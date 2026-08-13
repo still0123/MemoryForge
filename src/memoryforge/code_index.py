@@ -157,8 +157,7 @@ def _build_python_code_index(
             continue
         module_name = _python_module_name(record.relative_path)
         if any(
-            part != part.strip() or "\n" in part or "\r" in part
-            for part in module_name.split(".")
+            part != part.strip() or "\n" in part or "\r" in part for part in module_name.split(".")
         ):
             continue
         source = _PythonSource(
@@ -217,10 +216,13 @@ def _parse_python_source(
     repository_id: str,
     commit_sha: str,
     source: _PythonSource,
-) -> tuple[
-    _PythonAnalysis,
-    RelationEvidence,
-] | None:
+) -> (
+    tuple[
+        _PythonAnalysis,
+        RelationEvidence,
+    ]
+    | None
+):
     parser = Parser(_PYTHON_LANGUAGE)
     tree = parser.parse(source.content)
     if tree.root_node.has_error:

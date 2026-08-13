@@ -188,11 +188,7 @@ class PortalCatalog:
                     and related.kind in {"conversation", "feishu", "note"}
                 ):
                     related_paths.add(related.path)
-        file_pages = [
-            page
-            for page in pages
-            if page.kind == "code" and page.subtype == "code_file"
-        ]
+        file_pages = [page for page in pages if page.kind == "code" and page.subtype == "code_file"]
         return {
             "workspace_commit": self.commit,
             **repository.public(),
@@ -200,7 +196,8 @@ class PortalCatalog:
             "modules": [
                 page.public()
                 for page in pages
-                if page.kind == "code" and page.subtype == "code_module"
+                if page.kind == "code"
+                and page.subtype == "code_module"
                 and page.module_path is not None
                 and "/" not in page.module_path
             ],
@@ -328,9 +325,7 @@ class PortalCatalog:
             **page.public(),
             "workspace_commit": self.commit,
             "breadcrumbs": self._breadcrumbs(page),
-            "structure": [
-                {"level": level, "title": title} for level, title in page.headings
-            ],
+            "structure": [{"level": level, "title": title} for level, title in page.headings],
             "sources": [
                 self.sources[source_id].public()
                 for source_id in page.source_ids
@@ -492,9 +487,7 @@ class PortalCatalog:
             kind = _page_kind(tags, generated, source_kinds, page_repository_id)
             relative_paths = page_relative_paths[page_path]
             relative_path = relative_paths[0] if len(relative_paths) == 1 else None
-            module_path = (
-                _module_path(page_path, page_repository_id) if kind == "code" else None
-            )
+            module_path = _module_path(page_path, page_repository_id) if kind == "code" else None
             subtype = _page_subtype(
                 kind,
                 generated,
@@ -538,9 +531,7 @@ class PortalCatalog:
 
         for repository in self.repositories.values():
             current_code_pages = [
-                path
-                for path in repository.page_paths
-                if self.pages[path].module_path is not None
+                path for path in repository.page_paths if self.pages[path].module_path is not None
             ]
             if current_code_pages:
                 # New CodeWiki pages use repository-scoped paths. Keep this

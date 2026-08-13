@@ -319,6 +319,7 @@ def test_workspace_release_drill_runs_real_public_workflow(
         evidence,
         commit,
         evidence_revision=14,
+        expected_workspace_commit=summary_builder.validator.CURRENT_RELEASE_DRILL_WORKSPACE_COMMIT,
     )
     assert set(evidence["checks"]) == {
         "refresh",

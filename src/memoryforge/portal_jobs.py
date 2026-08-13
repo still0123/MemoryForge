@@ -415,10 +415,7 @@ def _execute_import(
             if has_code:
                 register_git_code_module(workspace, repository.repository_id, ".")
             synced = sync_git_checkout(workspace, repository.repository_id)
-            source_ids.extend(
-                document.source_id
-                for document in synced.documents
-            )
+            source_ids.extend(document.source_id for document in synced.documents)
             changed = any(
                 document.status in {"created", "updated"} for document in synced.documents
             )
@@ -432,10 +429,7 @@ def _execute_import(
             Path(_required_string(payload, "path")),
             sensitivity=sensitivity,
         )
-        source_ids.extend(
-            document.source_id
-            for document in folder_sync.documents
-        )
+        source_ids.extend(document.source_id for document in folder_sync.documents)
         changed = any(
             document.status in {"created", "updated"} for document in folder_sync.documents
         ) or bool(folder_sync.deleted)
@@ -545,12 +539,8 @@ def _execute_refresh(
     opened = Workspace.open(workspace)
     with opened.exclusive_lock():
         synced = sync_git_checkout(workspace, repository_id)
-        changed_ids = tuple(
-            document.source_id for document in synced.documents
-        )
-        changed = any(
-            document.status in {"created", "updated"} for document in synced.documents
-        )
+        changed_ids = tuple(document.source_id for document in synced.documents)
+        changed = any(document.status in {"created", "updated"} for document in synced.documents)
         progress("生成知识更新", 65, "正在生成可审核 ChangeSet。")
         changesets = _stage_pending(opened, changed_ids)
     return _job_result(changed, changesets)
@@ -683,9 +673,7 @@ def _count_supported_files(root: Path) -> int:
     count = 0
     for current, directories, files in os.walk(root, topdown=True, followlinks=False):
         current_path = Path(current)
-        directories[:] = [
-            name for name in directories if not (current_path / name).is_symlink()
-        ]
+        directories[:] = [name for name in directories if not (current_path / name).is_symlink()]
         count += sum(
             (current_path / name).suffix.lower() in _SUPPORTED_FILES
             and not (current_path / name).is_symlink()
@@ -786,9 +774,7 @@ def _public_job(job: dict[str, Any], *, detail: bool = False) -> dict[str, Any]:
 
 def _public_result(result: dict[str, Any]) -> dict[str, Any]:
     return {
-        key: value
-        for key, value in result.items()
-        if key in {"message", "changeset_ids", "commit"}
+        key: value for key, value in result.items() if key in {"message", "changeset_ids", "commit"}
     }
 
 
@@ -970,8 +956,7 @@ def run_automation(workspace: Path) -> dict[str, Any]:
             for repository in list_git_checkouts(workspace):
                 synced = sync_git_checkout(workspace, repository.repository_id)
                 changed = changed or any(
-                    document.status in {"created", "updated"}
-                    for document in synced.documents
+                    document.status in {"created", "updated"} for document in synced.documents
                 )
         if "codex" in types:
             imported_threads = _imported_codex_threads(opened)
@@ -986,11 +971,7 @@ def run_automation(workspace: Path) -> dict[str, Any]:
         if "feishu" in types:
             feishu = refresh_feishu_documents(workspace)
             changed = changed or any(item.created or item.updated for item in feishu)
-        changesets = (
-            _stage_all_pending(opened)
-            if changed
-            else []
-        )
+        changesets = _stage_all_pending(opened) if changed else []
     config_path = opened.internal_dir / "traces" / "portal" / "automation.json"
     config = json.loads(config_path.read_text(encoding="utf-8"))
     config.update(last_run=_now(), last_status="proposed" if changesets else "unchanged")

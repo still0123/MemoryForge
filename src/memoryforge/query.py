@@ -1135,8 +1135,7 @@ def _candidate_pages(
         page for score, code_title, page in ranked_index if not score[0] and not code_title
     ]
     has_explanatory_definition = any(
-        not code_title and (score[1] or score[2])
-        for score, code_title, _ in ranked_index
+        not code_title and (score[1] or score[2]) for score, code_title, _ in ranked_index
     )
     code_index_pages = [
         page for score, code_title, page in ranked_index if not score[0] and code_title
