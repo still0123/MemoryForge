@@ -1626,6 +1626,13 @@ def test_terms_match_camel_case_identifier_suffixes() -> None:
     assert "runneradapter" in question_terms & fact_terms
 
 
+def test_business_acronyms_do_not_force_a_code_route() -> None:
+    assert not query_module._is_explicit_code_question(
+        "EFS 数据流动如何实现冷热数据分层并降低 TCO？"
+    )
+    assert query_module._is_explicit_code_question("EFS 模块代码在哪个文件？")
+
+
 def test_ask_prefers_a_camel_case_identifier_over_project_background(
     tmp_path: Path,
     monkeypatch,

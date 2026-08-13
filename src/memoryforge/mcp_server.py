@@ -65,7 +65,7 @@ _INSTRUCTIONS = (
     "Search the checkout first for exact code mechanics. Use memoryforge_context "
     "for project facts and how-to questions, including runbooks, login, configuration, "
     "history, rationale and cross-repository context. It returns project_answer, "
-    "evidence_status, verification_status and citations. When grounded, answer from "
+    "evidence_status, verification_status and citations. When grounded, synthesize "
     "project_answer and never claim the Wiki lacked evidence. Partial means state the "
     "supported facts and verify only unsupported aspects. Use memoryforge_recall only "
     "for latest-session summaries, never as the primary source for a factual how-to. "
@@ -82,8 +82,10 @@ _INSTRUCTIONS = (
 _ROUTER_INSTRUCTIONS = (
     "MemoryForge exposes the whole applied, cited Wiki. Search the current checkout "
     "first for exact code mechanics. Use memoryforge_context for project facts and how-to, "
-    "including operations, login, configuration, history and cross-repository context. "
-    "When grounded, answer from project_answer and never say the Wiki lacked evidence. "
+    "including imported documents, operations, login, configuration, history and "
+    "cross-repository context. Use it before company-wide or external knowledge search; "
+    "only no_local_evidence permits fallback. "
+    "When grounded, synthesize project_answer and never say the Wiki lacked evidence. "
     "Use memoryforge_recall only for latest-session summaries, not factual how-to. Do not "
     "equate a work machine, jump host, bastion or target host without cited evidence. "
     "MCP Roots prioritize pages and "
@@ -156,7 +158,7 @@ def build_server(
         max_pages: int = 3,
         max_citations: int = 6,
     ) -> dict[str, object]:
-        """Answer a project fact/how-to; exact current code uses checkout search first."""
+        """Answer from imported documents/Wiki before external search; exact code uses checkout."""
         if not question.strip():
             raise ValueError("question must not be empty")
         return query_context(
@@ -414,7 +416,7 @@ def build_router_server(
         max_citations: int = 6,
         ctx: Context = None,  # type: ignore[assignment]
     ) -> dict[str, object]:
-        """Answer project facts/how-to across repositories; exact code uses checkout first."""
+        """Answer from imported documents/Wiki before external search across repositories."""
         if not question.strip():
             raise ValueError("question must not be empty")
         preferred_root = await _router_project_from_context(bindings.workspace, ctx, project_root)

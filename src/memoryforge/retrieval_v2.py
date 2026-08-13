@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 _TOKEN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*|\w+", re.UNICODE)
 _IDENT_TOKEN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*")
 _WORD = re.compile(r"[a-z0-9]+|[\u4e00-\u9fff]+", re.IGNORECASE)
+_CJK = re.compile(r"^[\u4e00-\u9fff]+$")
 _HYPHENATED_NAME = re.compile(r"(?<![A-Za-z0-9])([A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)+)")
 
 
@@ -276,7 +277,11 @@ def _exact_lane(
 def _tokenize(text: str) -> list[str]:
     tokens: list[str] = []
     for m in _WORD.finditer(text.lower()):
-        tokens.append(m.group(0))
+        token = m.group(0)
+        if _CJK.fullmatch(token) and len(token) > 1:
+            tokens.extend(token[index : index + 2] for index in range(len(token) - 1))
+        else:
+            tokens.append(token)
     return tokens
 
 

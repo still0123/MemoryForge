@@ -214,6 +214,45 @@ def test_workspace_route_prioritizes_fact_linking_two_named_repositories() -> No
     assert result.candidates[0].page_path == "wiki/pages/alpha/client.md"
 
 
+def test_lexical_lane_ranks_relevant_chinese_fact_above_shared_acronyms() -> None:
+    facts = [
+        {
+            "page_path": "wiki/pages/code.md",
+            "source_id": SRC_A,
+            "source_version": 1,
+            "locator": "chars:0-30",
+            "section_path": "Code",
+            "quote": "EFS TCO generic code reference",
+            "routing_text": "EFS TCO",
+            "symbol": None,
+            "relation_type": None,
+            "repository_id": REPO_ID,
+        },
+        {
+            "page_path": "wiki/pages/data-flow.md",
+            "source_id": SRC_B,
+            "source_version": 1,
+            "locator": "chars:0-100",
+            "section_path": "数据流动",
+            "quote": "EFS 通过冷热数据分层降低客户的 TCO。",
+            "routing_text": "数据流动 冷热分层 客户成本",
+            "symbol": None,
+            "relation_type": None,
+            "repository_id": REPO_ID,
+        },
+    ]
+
+    result = retrieve_candidates(
+        Path("/tmp"),
+        "EFS 数据流动如何实现冷热数据分层？为什么它能够降低客户的 TCO？",
+        repository_id=REPO_ID,
+        visible_source=_all_visible,
+        wiki_facts=facts,
+    )
+
+    assert result.candidates[0].page_path == "wiki/pages/data-flow.md"
+
+
 def test_rrf_dedupe_and_tiebreak_stable() -> None:
     facts = [
         {

@@ -1112,6 +1112,29 @@ def _is_code_relation_question(question: str) -> bool:
     ) or any(marker in question for marker in ("依赖", "导入", "调用", "继承", "实现"))
 
 
+def _is_explicit_code_question(question: str) -> bool:
+    lowered = question.lower()
+    english_terms = set(re.findall(r"[a-z_]+", lowered))
+    return bool(
+        english_terms
+        & {
+            "call",
+            "class",
+            "code",
+            "depend",
+            "function",
+            "import",
+            "interface",
+            "method",
+            "module",
+            "struct",
+        }
+    ) or any(
+        marker in question
+        for marker in ("代码", "函数", "方法", "字段", "属性", "模块", "文件", "调用", "依赖", "导入", "继承")
+    )
+
+
 def _citation_fact_key(
     page_path: str,
     citation: CitationPayload | AppliedCodeSymbolMatch,
@@ -1530,8 +1553,10 @@ def _candidate_pages(
             *module_pages,
             *code_index_pages,
         )
-    else:
+    elif _is_explicit_code_question(question):
         ordered_pages = (*module_pages, *fact_pages, *strict_pages)
+    else:
+        ordered_pages = (*fact_pages, *strict_pages, *module_pages)
     exact_code_pages: tuple[WikiPage, ...] = ()
     if (
         (not definition_question or not has_explanatory_definition)
@@ -1543,7 +1568,10 @@ def _candidate_pages(
             max_pages=candidate_limit,
             repository_id=repository_id,
         )
-    ordered_pages = (*exact_symbol_pages, *exact_code_pages, *preferred_pages, *ordered_pages)
+    if fact_pages:
+        ordered_pages = (*exact_symbol_pages, *exact_code_pages, *ordered_pages, *preferred_pages)
+    else:
+        ordered_pages = (*exact_symbol_pages, *exact_code_pages, *preferred_pages, *ordered_pages)
     if (exact_symbol_pages or exact_code_pages) and (
         not _is_code_relation_question(question)
         or any(marker in question for marker in ("方法", "字段", "属性", "函数"))
@@ -1617,11 +1645,15 @@ def _exact_code_pages(
     """Route explicit CamelCase symbols and code paths to code pages first."""
     if not (workspace_root / ".memoryforge" / "index.sqlite").is_file():
         return ()
+    explicit_code_request = _is_explicit_code_question(question)
     identifiers = tuple(
         dict.fromkeys(
             match.group()
             for match in re.finditer(r"[A-Za-z_][A-Za-z0-9_./-]*", question)
-            if any(character.isupper() for character in match.group())
+            if (
+                any(character.isupper() for character in match.group())
+                and (explicit_code_request or not match.group().isupper())
+            )
             or "/" in match.group()
             or "_" in match.group()
             or ".go" in match.group()

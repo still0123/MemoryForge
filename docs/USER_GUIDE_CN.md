@@ -1,325 +1,307 @@
-# MemoryForge 中文使用指南
+# MemoryForge 中文用户指南
 
-这份文档面向第一次使用 MemoryForge 的个人开发者。它说明如何建立本地技术 Wiki、导入不同
-来源、编译和审核知识、保存 AI 会话，以及在新 Codex 对话中按需加载历史记忆。
+这份指南按普通用户的实际使用顺序编写：先打开本地界面，再添加资料、审核更新、浏览知识，最后才介绍命令行和 AI 客户端接入。
 
-MemoryForge 的基本原则：**来源先保存，Wiki 再编译，变更先审核，回答必须能回到证据。**
-
-## 1. 先理解三个对象
-
-### Source
-
-Source 是一次不可变的来源快照，例如一份 Markdown、一个 Git Commit 下的代码文件、一篇飞书
-文档或一段 Codex 会话。来源更新时，MemoryForge 新增 SourceVersion，不覆盖历史版本。
-
-### ChangeSet
-
-ChangeSet 是待审核的 Wiki 变更。导入资料不会直接修改正式 Wiki；编译器先生成 ChangeSet，用户
-查看内容后再批准。
-
-### Wiki
-
-Wiki 是已经应用的 Markdown 知识。CLI、飞书机器人、Agent、本地 Portal 和 `recall` 只把正式
-Wiki 当成可信查询入口；待审核草稿不会悄悄进入回答。
+MemoryForge 是一个本地优先的知识库。它不会把来源直接覆盖进 Wiki，而是固定保存来源快照，生成可审核的知识更新；只有你批准并应用后，页面才会进入正式 Wiki，搜索和 AI 才会把它当成已确认知识。
 
 ```mermaid
 flowchart LR
-    A["代码 / 文档 / 飞书 / AI 会话"] --> B["SourceVersion"]
-    B --> C["ingest：生成 ChangeSet"]
-    C --> D["review"]
-    D --> E["approve"]
-    E --> F["apply：正式 Wiki + Git Commit"]
-    F --> G["搜索 / 问答 / Portal / recall"]
+    A[打开桌面端或本地网页] --> B[添加来源]
+    B --> C[后台处理]
+    C --> D[知识更新]
+    D --> E[审核并应用]
+    E --> F[浏览 / 搜索 / 提问]
+    F --> G[可选：连接 Codex]
 ```
 
-## 2. 安装
+## 1. 先选一个入口
 
-要求：Python 3.11+。v0.4.0 已验证 macOS；Linux 本版本未重跑，Windows 尚未验证。
+### 推荐：macOS 桌面端
+
+桌面端把本地知识门户放进原生 macOS 窗口。日常使用时双击应用即可，不需要打开浏览器，也不会访问远程网页；关闭窗口后，本地 Portal 服务会自动停止。
+
+当前仓库提供源码构建的桌面端。它的界面和网页端完全相同，使用同一个 Workspace：
+
+![MemoryForge 桌面端：首页与知识更新审核](../assets/07-memoryforge-desktop-workflow.jpg)
+
+### 备选：本地网页端
+
+网页端适合不使用 macOS、临时查看知识库，或希望在浏览器中调试。它只监听 `127.0.0.1`，不是公网服务。
+
+```bash
+memoryforge start --workspace /absolute/path/to/my-wiki
+```
+
+命令会启动本地 Portal 并尝试打开浏览器。若浏览器没有自动打开，访问终端输出的 `http://127.0.0.1:<port>` 地址即可。按 `Ctrl+C` 停止服务。
+
+### 高级：命令行
+
+CLI 适合批量导入、自动化、CI、故障排查和没有图形界面的机器。它不是日常入门的必经路径；界面能完成的操作，优先在桌面端或网页端完成。
+
+## 2. 第一次安装和创建知识库
+
+### 2.1 从源码安装（桌面端和网页端都适用）
+
+要求 Python 3.11 或更高版本。当前桌面端需要在 macOS 上构建。
 
 ```bash
 git clone https://github.com/still0123/MemoryForge.git
 cd MemoryForge
 
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install -e '.[dev]'
+python3.11 -m venv .venv
 
-memoryforge --version
+# 只使用本地网页端：
+.venv/bin/python -m pip install .
+
+# 需要构建 macOS 桌面端：
+.venv/bin/python -m pip install -e '.[desktop]'
 ```
 
-若终端提示 `command not found: memoryforge`，通常是虚拟环境未激活。可重新执行：
+如果只安装已经发布的 CLI，也可以使用：
 
 ```bash
-source /absolute/path/to/MemoryForge/.venv/bin/activate
+python3.11 -m pip install memoryforge-wiki
 ```
 
-或直接使用绝对路径：
+发布包默认提供命令行能力；桌面端依赖和可双击应用目前按源码构建。
+
+### 2.2 创建一次 Workspace
+
+Workspace 就是你的本地知识库目录。首次启动桌面端之前，先创建它：
 
 ```bash
-/absolute/path/to/MemoryForge/.venv/bin/memoryforge --version
+.venv/bin/memoryforge init /absolute/path/to/my-wiki
 ```
 
-下文统一使用 `memoryforge`。
-
-## 3. 创建第一个 Workspace
-
-Workspace 是你的本地知识库。它可以放在任何不与原项目重叠的目录：
+例如：
 
 ```bash
-memoryforge init /absolute/path/to/my-wiki
+.venv/bin/memoryforge init ~/Documents/MemoryForge/my-wiki
 ```
 
-后续命令都明确传入同一个 Workspace，避免把资料导进错误目录：
+当前桌面端首次打开时会让你选择一个**已经初始化的 Workspace**，不会在文件夹选择器里自动新建知识库。不要选择 MemoryForge 源码目录；如果看到“不是已初始化的 Workspace”，回到这里执行一次 `init`。
 
-```bash
-export MF_WORKSPACE=/absolute/path/to/my-wiki
-memoryforge status --workspace "$MF_WORKSPACE"
-```
-
-生成结构：
+Workspace 的主要结构如下：
 
 ```text
 my-wiki/
-├── raw/                 # 不可变来源内容
+├── raw/                 # 不可变来源快照
 ├── wiki/
 │   ├── INDEX.md         # Wiki 总目录
-│   └── pages/           # 已应用 Markdown 页面
-├── .memoryforge/        # SQLite、清单、草稿和本地状态
-└── .git/                # Wiki 版本历史
+│   └── pages/           # 已应用的 Markdown 知识页
+├── .memoryforge/        # SQLite 索引、任务、来源和待审核 ChangeSet
+└── .git/                # Wiki 的本地版本历史
 ```
 
-不要把含私有来源的 Workspace 推送到公开仓库。
+### 2.3 打开桌面端
 
-## 4. 最小完整流程
-
-先导入一份 Markdown 或文本：
+构建可双击的应用：
 
 ```bash
-memoryforge import /absolute/path/to/note.md \
-  --category notes \
-  --local-only \
-  --workspace "$MF_WORKSPACE"
+./scripts/build_macos_app.sh
+open dist/MemoryForge.app
 ```
 
-再编译、审核、批准、应用：
+之后直接双击 `dist/MemoryForge.app` 即可。首次启动选择刚才的 `my-wiki`；应用会记住最近一次选择，下次自动打开。
+
+开发时也可以不打包：
 
 ```bash
-memoryforge ingest --pending --workspace "$MF_WORKSPACE"
-memoryforge changeset-list --workspace "$MF_WORKSPACE"
+.venv/bin/memoryforge desktop --workspace ~/Documents/MemoryForge/my-wiki
+```
 
+需要重新选择 Workspace 时：
+
+```bash
+.venv/bin/memoryforge desktop --choose-workspace
+```
+
+桌面端构建和签名细节见 [macOS 桌面端指南](DESKTOP_APP_CN.md)。
+
+## 3. 用界面完成第一份知识入库
+
+打开桌面端或网页端后，左侧导航通常按下面的顺序使用：
+
+| 页面 | 用途 |
+| --- | --- |
+| **首页** | 查看已应用页面、项目、待审核更新和运行中任务 |
+| **我的知识** | 按项目、AI 会话、飞书资料、文件和网页浏览正式知识 |
+| **添加来源** | 选择代码、文件、网页、飞书或 AI 会话 |
+| **知识更新** | 查看并处理待审核 ChangeSet |
+| **后台任务** | 查看导入、编译、刷新和应用的进度与错误 |
+| **系统状态** | 查看 Workspace、来源、索引和诊断状态 |
+
+### 第一步：添加来源
+
+进入 **添加来源**，选择来源类型。当前界面支持：
+
+- 本地 Git 仓库；
+- HTTPS Git 仓库链接；
+- Codex AI 会话；
+- 飞书文档或 Wiki 链接；
+- Markdown、TXT 等本地文件；
+- 本地文件夹；
+- 公开网页；
+- GitHub Issue 或 Pull Request 讨论。
+
+输入路径或 URL 后先点击 **预览来源**。预览会显示标题、版本、分支、语言、来源类型和隐私边界；确认无误后点击 **开始处理**。
+
+小型 Markdown/TXT 文件和 Codex JSONL 会话也可以直接通过文件选择器上传。Codex 会话始终按本地、未验证材料处理。
+
+### 第二步：确认隐私
+
+来源默认按 `local_only` 处理。只有明确允许发送到已配置模型的公开资料，才勾选“这是可公开资料”并完成二次确认。
+
+建议遵守下面的默认策略：
+
+| 来源 | 建议边界 |
+| --- | --- |
+| 公司代码、飞书、AI 会话、个人文件 | 保持本地 |
+| 公开 GitHub 仓库、公开网页 | 确认无敏感内容后才标记为公开 |
+| 不确定的资料 | 保持本地，后续仍可使用确定性编译 |
+
+导入本身不会把资料发送给模型。只有显式启用模型整理，并且授权了本地来源时，命中的 `local_only` 内容才可能进入模型请求。
+
+### 第三步：等待后台任务
+
+提交后会进入 **后台任务**。任务可能依次经历：导入来源、扫描仓库、生成知识更新、生成代码 Wiki、校验结果等阶段。
+
+常见状态：
+
+- **等待**：任务已排队；
+- **运行中**：正在导入、编译或刷新；
+- **等待审核**：已经生成 ChangeSet，等待你处理；
+- **完成**：任务结束且没有新的待审核更新；
+- **失败**：点击任务查看错误信息；
+- **已取消**：排队中的任务被取消。
+
+任务完成后，点击 **查看知识更新** 进入审核页面。
+
+## 4. 审核并应用知识更新
+
+进入 **知识更新** 后，你会看到每次来源变化生成的待审核卡片。卡片会显示新增、修改、删除数量，以及涉及的来源数量。
+
+打开卡片后：
+
+1. 展开“涉及来源”，确认来源名称、版本和隐私边界；
+2. 展开“知识页改动”，按页面查看 Diff 和 Citation 数量；
+3. 确认内容后点击 **批准并应用**；
+4. 如果内容不应进入正式 Wiki，点击 **拒绝**。
+
+![审核知识更新：查看 Diff 后批准并应用](../assets/usage/05-review-and-apply.png)
+
+大批量更新默认只先加载摘要；展开具体来源或知识页时才加载详情，这样审核大量代码页时不会一次性卡住界面。
+
+### 界面按钮和 CLI 的对应关系
+
+在 Portal 中，**批准并应用**是一个连续操作：记录审核、批准 ChangeSet、写入正式 Wiki 并生成新的本地 Git Commit。使用 CLI 时则必须分开执行：
+
+```bash
 memoryforge review <changeset-id> --workspace "$MF_WORKSPACE"
 memoryforge approve <changeset-id> --workspace "$MF_WORKSPACE"
 memoryforge apply <changeset-id> --workspace "$MF_WORKSPACE"
-
-memoryforge lint --workspace "$MF_WORKSPACE"
 ```
 
-最后查询：
+任何来源更新都不会自动进入正式 Wiki；自动刷新也只会生成新的待审核更新。
 
-```bash
-memoryforge search '关键词' --workspace "$MF_WORKSPACE"
-memoryforge ask '这份资料的核心结论是什么？' --workspace "$MF_WORKSPACE"
-```
+## 5. 浏览、搜索和提问
 
-`review`、`approve`、`apply` 应分开执行。不要在日常流程使用遗留的
-`apply --approve` 快捷方式。
+### 浏览“我的知识”
 
-## 5. 导入本地文件和文件夹
+进入 **我的知识** 后，可以从这些入口开始：
 
-### 单个 Markdown 或 TXT
+- **项目与代码**：项目概览、模块、文件、符号和关系；
+- **AI 会话**：已审核的会话结论、决策和排查记录；
+- **飞书资料**：从飞书文档整理的页面；
+- **文件、网页和笔记**：本地资料与网页来源。
 
-```bash
-memoryforge import /absolute/path/to/design.md \
-  --category design \
-  --tag architecture \
-  --local-only \
-  --workspace "$MF_WORKSPACE"
-```
+打开知识页后，可以阅读正文、页面摘要、来源 Citation 和关联知识。页面只展示已经应用的正式 Wiki，不会把待审核草稿混进查询结果。
 
-`--tag` 可以重复。敏感或个人资料建议显式使用 `--local-only`。
+### 全局搜索
 
-### 整个资料目录
+顶栏搜索会查标题、路径和正文。按 `⌘K`（Windows/Linux 可用 `Ctrl+K`）聚焦搜索框，输入后按回车查看结果。
 
-```bash
-memoryforge folder-import /absolute/path/to/project-docs \
-  --category refs \
-  --tag project-docs \
-  --workspace "$MF_WORKSPACE"
-```
+### 从 Wiki 提问
 
-`folder-import` 递归导入支持的 Markdown、TXT 和 HTML，不跟随符号链接。文件夹默认保留在本地
-边界；只有资料明确允许发送给已配置模型时才传 `--public`。
+进入首页的 **提问**，或导航到 `#ask` 页面，在输入框中直接提问。Portal 的提问只读取已应用知识，并在结果下方展示对应 Citation。
 
-导入后统一执行：
+回答证据状态遵循三种情况：
 
-```bash
-memoryforge ingest --pending --workspace "$MF_WORKSPACE"
-```
+| 状态 | 含义 | AI 应该怎么说 |
+| --- | --- | --- |
+| `grounded` | 本地证据足以支持结论 | 可以作为项目事实回答，并附引用 |
+| `partial` | 找到部分证据，但不能证明完整结论 | 只陈述已支持部分，明确未证实边界 |
+| `no_local_evidence` | 本地 Wiki 没有证明该项目事实的证据 | 可以给通用分析，但不能伪装成项目事实或编造引用 |
+
+这意味着“没有充分项目证据”不再等于“大模型什么都不能回答”。MemoryForge 负责证据边界，AI 负责组织答案；两者职责不同。
 
 ## 6. 导入代码仓库并生成 Code Wiki
 
-MemoryForge 不负责 clone 或 fetch。先在本机准备一个 Git checkout，并提交需要收录的代码。
+这是使用 MemoryForge 管理项目知识的主要场景。优先在 Portal 中操作：
 
-### 第一步：登记仓库
+1. 进入 **添加来源**；
+2. 选择 **本地 Git 仓库** 或 **Git 仓库链接（HTTPS）**；
+3. 预览仓库后确认隐私；
+4. 点击 **开始处理**，等待后台任务生成代码 Wiki；
+5. 在 **知识更新** 中查看项目、模块、文件、符号和关系页面；
+6. 点击 **批准并应用**。
+
+建议第一次只导入一个较小的业务模块。当前动态 Portal 的代码索引支持 Go、Python、TypeScript 和 TSX；仓库最好先提交需要收录的代码，便于把知识绑定到固定 Commit。
+
+### CLI 等价流程
+
+当需要批量处理或脚本化时：
 
 ```bash
-memoryforge git-add /absolute/path/to/local-repository \
-  --workspace "$MF_WORKSPACE"
-```
+export MF_WORKSPACE=/absolute/path/to/my-wiki
 
-命令返回稳定的 `repository_id`。也可随时查看：
-
-```bash
+memoryforge git-add /absolute/path/to/local-repository --workspace "$MF_WORKSPACE"
 memoryforge git-list --workspace "$MF_WORKSPACE"
-```
-
-Git 仓库默认 `local_only`。只有公开仓库且允许模型读取时才使用 `git-add --public`。
-
-### 第二步：选择需要编译的代码范围
-
-选择整个仓库：
-
-```bash
 memoryforge code-add <repository-id> . --workspace "$MF_WORKSPACE"
-```
-
-或只选一个目录：
-
-```bash
-memoryforge code-add <repository-id> src/service --workspace "$MF_WORKSPACE"
-```
-
-当前 Code Wiki 支持已提交的 Go、Python、TypeScript 和 TSX 文件。选择较小的业务模块通常比
-第一次直接编译超大仓库更容易审核。
-
-### 第三步：同步固定 Commit
-
-```bash
 memoryforge git-sync <repository-id> --workspace "$MF_WORKSPACE"
-```
-
-`git-sync` 读取已提交内容，不把未提交工作树当成正式来源。
-
-### 第四步：编译 Code Wiki
-
-默认使用确定性编译器：
-
-```bash
-memoryforge ingest --code-wiki <repository-id> \
-  --workspace "$MF_WORKSPACE"
-```
-
-它生成项目、模块、文件、符号、依赖和 Citation 草稿。随后仍须：
-
-```bash
+memoryforge ingest --code-wiki <repository-id> --workspace "$MF_WORKSPACE"
+memoryforge changeset-list --workspace "$MF_WORKSPACE"
 memoryforge review <changeset-id> --workspace "$MF_WORKSPACE"
 memoryforge approve <changeset-id> --workspace "$MF_WORKSPACE"
 memoryforge apply <changeset-id> --workspace "$MF_WORKSPACE"
 memoryforge lint --workspace "$MF_WORKSPACE"
 ```
 
-可选的模型叙事只用于补充模块说明：
+`git-sync` 读取已提交快照；未提交工作树不会成为正式 Code Wiki 来源。公开仓库只有在确认模型可以读取时才标记为公开，私有仓库保持本地。
+
+## 7. 导入文件、网页、飞书和 GitHub 讨论
+
+日常使用直接从 **添加来源** 页面选择类型。下面是每种来源的注意事项：
+
+| 来源 | 在界面中填写 | 备注 |
+| --- | --- | --- |
+| 本地文件 | 文件路径或上传文件 | 支持 Markdown、Markdown 扩展名和 TXT |
+| 文件夹 | 文件夹路径 | 递归处理支持的文本文件，不跟随符号链接 |
+| 网页 | 公开 HTTP(S) URL | 只读取指定页面，不抓取整个站点 |
+| GitHub 讨论 | Issue/PR URL | 导入公开讨论、Review 和 inline comments |
+| 飞书文档 | 文档 URL 或 token | 需要先完成本机飞书授权 |
+
+命令行入口仅在需要自动化时使用：
 
 ```bash
-memoryforge ingest --code-wiki <repository-id> \
-  --llm --allow-local-llm \
-  --workspace "$MF_WORKSPACE"
+memoryforge import /absolute/path/to/note.md --workspace "$MF_WORKSPACE"
+memoryforge folder-import /absolute/path/to/docs --workspace "$MF_WORKSPACE"
+memoryforge web-import 'https://example.com/article' --workspace "$MF_WORKSPACE"
+memoryforge github-thread-import 'https://github.com/owner/repo/issues/123' --workspace "$MF_WORKSPACE"
+memoryforge feishu-import 'https://example.feishu.cn/wiki/<token>' --workspace "$MF_WORKSPACE"
 ```
 
-这会把当前任务命中的 `local_only` 内容发送给已配置模型。只有你确认 Provider、网络边界和资料
-授权后才运行；否则使用默认确定性编译。
+这些命令只写入来源快照，之后仍要通过界面或 CLI 完成知识更新审核。
 
-## 7. 导入飞书文档
+## 8. 收录 Codex AI 会话
 
-先安装并授权 `lark-cli`，确保当前账号能读取目标 Docx 或 Wiki。App Secret 和登录信息只保存在
-本机配置，不写进 MemoryForge 仓库。
+### 在 Portal 中选择会话
 
-导入一个文档 URL 或 token：
+进入 **添加来源**，选择 **AI 会话**，点击 **扫描未收录 Codex 会话**，从列表中选择需要保存的会话，预览后开始处理。
 
-```bash
-memoryforge feishu-import \
-  'https://example.feishu.cn/wiki/<token>' \
-  --category notes \
-  --tag feishu \
-  --workspace "$MF_WORKSPACE"
-```
+会话会被过滤为用户和 Assistant 的可读文本；system prompt、内部推理和工具输出不会作为普通知识正文导入。它始终是 `local_only`、未验证的记忆草稿，重要结论仍应回到代码或 Citation 核验。
 
-MemoryForge 只导入你明确指定的单份文档，不会遍历整个飞书空间。长文档会按章节形成可检索来源。
-
-然后执行正式编译流程：
-
-```bash
-memoryforge ingest --pending --workspace "$MF_WORKSPACE"
-memoryforge review <changeset-id> --workspace "$MF_WORKSPACE"
-memoryforge approve <changeset-id> --workspace "$MF_WORKSPACE"
-memoryforge apply <changeset-id> --workspace "$MF_WORKSPACE"
-```
-
-已登记的飞书文档以后可统一刷新：
-
-```bash
-memoryforge refresh --workspace "$MF_WORKSPACE"
-```
-
-刷新只产生新 SourceVersion 或待编译资料，不自动批准 Wiki 变更。
-
-## 8. 导入网页、保存的 HTML 和 GitHub 讨论
-
-### 单篇公开网页
-
-```bash
-memoryforge web-import 'https://example.com/article' \
-  --tag article \
-  --workspace "$MF_WORKSPACE"
-```
-
-该命令读取一篇公开 HTTP(S) 页面，不登录、不抓取整个站点。
-
-### 浏览器保存的 HTML
-
-```bash
-memoryforge html-import /absolute/path/to/article.html \
-  --url 'https://example.com/article' \
-  --local-only \
-  --workspace "$MF_WORKSPACE"
-```
-
-它只读取指定 HTML 文件，不读取浏览器 Profile、Cookie 或历史记录。
-
-### GitHub Issue 或 Pull Request
-
-```bash
-memoryforge github-thread-import \
-  'https://github.com/owner/repository/issues/123' \
-  --workspace "$MF_WORKSPACE"
-```
-
-PR 会包含公开讨论、review body 和 inline review comments。需要离线重放时，可先保存规范化 JSON：
-
-```bash
-memoryforge github-thread-import \
-  'https://github.com/owner/repository/pull/123' \
-  --save-json /absolute/path/to/thread.json \
-  --workspace "$MF_WORKSPACE"
-
-memoryforge github-thread-import-json /absolute/path/to/thread.json \
-  --workspace "$MF_WORKSPACE"
-```
-
-这些来源导入后同样执行 `ingest → review → approve → apply`。
-
-## 9. 收录 Codex AI 会话
-
-Codex 本地任务通常已经保存为 rollout JSONL，不需要先把对话复制成 Wiki。MemoryForge 一次导入
-一个会话文件，并过滤 system prompt、内部推理和工具输出，只保留用户与 Assistant 文本。
-
-先定位本地会话：
-
-```bash
-find ~/.codex/sessions -name 'rollout-*.jsonl' -print
-```
-
-选择其中一个文件：
+### CLI 入口
 
 ```bash
 memoryforge codex-import \
@@ -328,460 +310,217 @@ memoryforge codex-import \
   --workspace "$MF_WORKSPACE"
 ```
 
-Codex 会话始终作为 `local_only`、未验证的记忆草稿。重复导入同一 rollout 会更新同一来源，不会
-制造一批重复会话。
+重复导入同一个 rollout 会更新同一来源，不会不断产生重复会话。不要让 MemoryForge 扫描浏览器 Profile、Cookie、账号缓存或应用私有数据库。
 
-让会话进入正式记忆：
+## 9. 刷新和自动更新
 
-```bash
-memoryforge ingest --pending --workspace "$MF_WORKSPACE"
-memoryforge review <changeset-id> --workspace "$MF_WORKSPACE"
-memoryforge approve <changeset-id> --workspace "$MF_WORKSPACE"
-memoryforge apply <changeset-id> --workspace "$MF_WORKSPACE"
-```
+### 在界面中刷新
 
-会话 Wiki 主要保留：
+进入 **我的知识** 的来源管理页面，打开某个来源后点击刷新。刷新会创建后台任务；任务完成后到 **知识更新** 审核，不会静默修改正式 Wiki。
 
-- Assistant 结论；
-- 决策和修复建议；
-- 未完成事项；
-- 用户问题线索；
-- 可回放的原始会话引用。
-
-历史 AI 回复仍是未验证材料。重要结论应回到引用页面、代码或原文再次核验。
-
-## 10. 收录 Claude、Trae 或其他 AI 会话
-
-当前没有通用的私有聊天客户端读取接口。最稳路径是从对应产品导出 Markdown 或 TXT，再导入：
+### CLI 或自动化
 
 ```bash
-memoryforge import /absolute/path/to/ai-session.md \
-  --category notes \
-  --tag conversation \
-  --tag platform:other \
-  --local-only \
-  --workspace "$MF_WORKSPACE"
+memoryforge refresh --workspace "$MF_WORKSPACE"
+memoryforge watch --once --workspace "$MF_WORKSPACE"
+memoryforge watch --interval 60 --workspace "$MF_WORKSPACE"
 ```
 
-不要让 MemoryForge扫描浏览器 Profile、账号缓存或应用私有数据库。若某个平台能提供明确、稳定的
-JSON 导出，再单独增加适配器。
-
-## 11. 自动收录 Botmux 托管的 AI 会话
-
-Botmux 可以在会话生命周期事件发生时调用 MemoryForge。把以下配置加入
-`~/.botmux/data/hooks.json`，并替换绝对路径：
-
-```json
-[
-  {
-    "event": "topic.new",
-    "command": "/absolute/MemoryForge/.venv/bin/memoryforge botmux-hook --workspace /absolute/my-wiki",
-    "redact": { "fullContentEvents": ["topic.new"] }
-  },
-  {
-    "event": "thread.reply",
-    "command": "/absolute/MemoryForge/.venv/bin/memoryforge botmux-hook --workspace /absolute/my-wiki",
-    "redact": { "fullContentEvents": ["thread.reply"] }
-  },
-  {
-    "event": "outbound.send",
-    "command": "/absolute/MemoryForge/.venv/bin/memoryforge botmux-hook --workspace /absolute/my-wiki",
-    "redact": { "fullContentEvents": ["outbound.send"] }
-  },
-  {
-    "event": "outbound.reply",
-    "command": "/absolute/MemoryForge/.venv/bin/memoryforge botmux-hook --workspace /absolute/my-wiki",
-    "redact": { "fullContentEvents": ["outbound.reply"] }
-  },
-  {
-    "event": "session.exit",
-    "command": "/absolute/MemoryForge/.venv/bin/memoryforge botmux-hook --workspace /absolute/my-wiki"
-  }
-]
-```
-
-执行：
-
-```bash
-botmux restart
-```
-
-Hook 只生成或更新本地会话来源，不自动执行 `approve` 或 `apply`。用户仍须定期查看待审核
-ChangeSet。
-
-## 12. 在飞书对话中收录记忆
-
-启动 MemoryForge 飞书机器人后，可在私聊中使用：
+推荐维护节奏：
 
 ```text
-/wiki 收录
-/wiki auto on
-/wiki auto off
+来源更新
+  → 刷新 / watch
+  → 后台任务
+  → 知识更新
+  → 审核并应用
+  → 搜索和提问
 ```
 
-- `/wiki 收录`：把当前会话最近 3 轮生成一个本地记忆草稿；
-- `/wiki auto on`：后续每轮持续更新该草稿；
-- `/wiki auto off`：停止更新，保留已有草稿。
+`watch` 只产生待审核 ChangeSet。它不会自动批准、自动应用或把未审核内容暴露给 AI。
 
-这些命令不会自动批准知识。之后仍需在终端执行：
+## 10. 连接 Codex，让它按需查询知识库
 
-```bash
-memoryforge ingest --pending --workspace "$MF_WORKSPACE"
-memoryforge changeset-list --workspace "$MF_WORKSPACE"
-```
-
-## 13. 在新 Codex 对话中按需加载旧记忆
-
-MemoryForge 不会把整个 Wiki 或历史聊天自动塞进新对话。推荐一次注册一个全局 MCP Router：它在
-问题相关时返回少量页面与 Citation，并在需要时才展开 Evidence。
-
-### 推荐：一个 Workspace 只连接一次
-
-先确保想让 AI 使用的资料已经完成 `ingest → review → approve → apply`，再运行：
+如果你主要在 Codex 中工作，可以把一个 Workspace 注册成全局只读 MCP Router。连接一次即可：
 
 ```bash
 memoryforge connect codex --workspace "$MF_WORKSPACE"
 ```
 
-该命令通过 Codex CLI 注册一个名为 `memoryforge` 的本地只读 MCP Server。它不为每个仓库重复
-注册，也不会改写任何项目的 `AGENTS.md`；同时安装一个可隐式触发的 `memoryforge-knowledge` Skill。
-Skill 只提供触发和回答规则，不携带 Wiki 正文。完成后重启 Codex（或 ChatGPT Desktop / IDE 扩展），
-并用 `/mcp` 确认 `memoryforge` 已出现。
+完成后重启 Codex（或 ChatGPT Desktop / IDE 扩展），用 `/mcp` 确认 `memoryforge` 已出现。之后正常提问即可；当问题涉及已登记项目、历史决策、飞书资料或 Wiki 时，Codex 会按需调用 `memoryforge_context`。
 
-此后可在任何新对话中正常提问，例如“这个调用为什么这样设计？”或“这两个仓库如何协作？”。
-无需每次先说“请查 MemoryForge”；当问题与项目历史、既有决策或已编译 Wiki 有关时，Codex 可调用
-`memoryforge_context`。若某个回答必须以知识库为准，可以明确说“先查 MemoryForge，再回答”。
+它不会把整个 Wiki 预先塞进每个对话，而是先返回少量页面和 Citation，需要时再读取一条原文 Evidence。当前 MCP 返回的主要字段包括：
 
-查询按下面的顺序渐进展开：
+- `project_answer`：来自本地证据的项目答案提示；
+- `evidence_status`：`grounded`、`partial` 或 `no_local_evidence`；
+- `verification_status`：区分已审核项目证据和未验证会话历史；
+- `supported_claims` / `unsupported_aspects`：已支持和未支持的范围；
+- `answer_strategy`：建议直接回答、验证当前代码，还是仅提供通用指导；
+- `citations`：对应的 Wiki 页面、SourceVersion 和原文位置。
 
-```text
-问题 → memoryforge_context（最多 3 页、6 个 Citation）
-     → 必要时 memoryforge_read_evidence（单条原文片段）
-     → grounded：作为项目事实回答并引用
-       partial：回答已证实部分，模型分析单独标注
-       no_local_evidence：说明 Wiki 未证实，仍可给通用建议
-```
+全局 Router 搜索整个已应用 Workspace。当前项目只影响排序优先级，不会把其他已登记仓库排除，因此跨仓库问题和没有当前项目的新对话也可以检索。
 
-因此它节省 Token，也不会把无关 Wiki 页面污染当前对话。
-
-`status` 只描述调用是否成功：正常查询为 `ok`，Workspace 无法打开时才是
-`workspace_unavailable`。`evidence_status` 独立描述项目证据强度。严格拒答仍保留在证据层；它不会
-阻止宿主 AI 回答通用知识，但宿主 AI 不得把模型推断写成已验证项目事实。
-
-### 客户端如何触发
-
-- Codex：全局连接安装 Skill；项目专属连接也可写入受管理的 `AGENTS.md` 规则。
-- Claude Code：使用其生命周期 Hook 或项目指令调用同一 MCP Evidence Contract。
-- MemoryForge Desktop：可在 Agent Loop 前确定性调用 `memoryforge_context`。
-- 普通 MCP 客户端：依靠工具描述和模型选择；协议不假装存在跨客户端通用 Hook。
-
-### 跨仓库、新对话和未登记项目如何处理
-
-全局 Router 始终搜索整个**已应用的 Workspace**。如果 Codex 当前目录属于一个已登记的 Git checkout，
-该项目的页面只会获得排序优先级；它不是访问控制边界。没有项目目录、未登记项目，或问题涉及多个
-仓库时，MemoryForge 仍可搜索整个 Workspace，只是不偏向任何一个仓库。
-
-“已登记”只决定仓库是否已被收录为知识来源，而不是决定某个对话是否允许查询。真正的边界是来源的
-敏感级别：全局连接默认只返回 `public` 内容。若你确认某个 AI Host 可以接收本地资料，才在连接时显式
-授权：
+默认只向 AI Host 提供公开来源。如果确认 Host 可以接收本地资料，再显式授权：
 
 ```bash
 memoryforge connect codex --workspace "$MF_WORKSPACE" --allow-local-llm
 ```
 
-这会允许该 Workspace 命中的 `local_only` 内容进入 Codex 模型上下文；不要因为“方便”而默认开启。
+这会扩大该 Workspace 的模型可见范围；不要为了省一步操作而默认开启。
 
-### 手动 `recall`：仅作为后备或摘要查看
+## 11. CLI 高级参考
 
-想在终端查看少量已应用的会话摘要、决策和未完成事项时，可运行：
+下面是命令行按功能整理的入口。命令行适合自动化，不是普通用户的第一步。
 
-```bash
-memoryforge recall --workspace "$MF_WORKSPACE"
-memoryforge recall --limit 5 --workspace "$MF_WORKSPACE"
-```
+| 目的 | 命令 |
+| --- | --- |
+| 创建 / 检查知识库 | `init`、`status`、`doctor` |
+| 管理来源 | `source-list`、`import`、`folder-import`、`web-import`、`feishu-import`、`github-thread-import`、`codex-import` |
+| 管理 Git 仓库 | `git-add`、`git-list`、`git-sync`、`code-add` |
+| 编译和审核 | `ingest`、`changeset-list`、`review`、`approve`、`apply`、`reject`、`lint` |
+| 查询 | `search`、`ask`、`recall` |
+| 连接 AI | `connect`、`mcp-config`、`agent` |
+| 自动化 | `refresh`、`watch`、`automation-run` |
+| 其他客户端 | `feishu-serve`、`botmux-hook`、`obsidian-build` |
 
-`recall` 的会话记忆仍是未验证历史，应根据 Citation 回到 Wiki 或原文核验。状态为 `empty` 表示尚未
-应用会话 Wiki，而不是 MCP 连接故障。
-
-### 可选：只绑定一个项目
-
-如果你刻意只想让某一个项目在 Codex 中获得 on-demand 指令，可以使用项目专属连接：
-
-![项目专属 Codex 接入：连接命令、受管理的 AGENTS.md、MCP、按需检索](../assets/usage/02-codex-connection.png)
-
-```bash
-memoryforge connect codex /absolute/path/to/project \
-  --workspace "$MF_WORKSPACE"
-```
-
-它会为该项目注册单独 Server，并写入一个受管理的 `AGENTS.md` 块。这个模式更适合严格项目边界；
-个人维护多个相互引用的仓库时，优先使用上面的全局 Router。
-
-### 其他 AI Host：复制配置（不自动改写）
-
-Claude Code、Claude Desktop 和 VS Code 可使用项目专属 MCP 配置片段。`mcp-config` 只输出文本，
-绝不直接改写这些 Host 的配置文件：
+最小的纯 CLI 流程如下：
 
 ```bash
-memoryforge mcp-config --project-root /absolute/path/to/project \
-  --workspace "$MF_WORKSPACE" --format json
-```
-
-输出标准 `mcpServers` JSON；将其粘贴到对应 Host 的 MCP 配置后重启 Host，再用
-`memoryforge_context` 验证。Codex 的手动后备配置也可生成 TOML：
-
-```bash
-memoryforge mcp-config --project-root /absolute/path/to/project \
-  --workspace "$MF_WORKSPACE" --format toml
-```
-
-早期的 `memoryforge codex-setup` 会强制每个新任务先运行 `recall`，只为兼容保留；新项目不要使用它。
-
-## 14. 自动更新已有来源
-
-手动刷新所有已登记 Git 和飞书来源：
-
-```bash
-memoryforge refresh --workspace "$MF_WORKSPACE"
-```
-
-运行一次刷新并编译：
-
-```bash
-memoryforge watch --once --workspace "$MF_WORKSPACE"
-```
-
-持续监听：
-
-```bash
-memoryforge watch --interval 60 --workspace "$MF_WORKSPACE"
-```
-
-`watch` 只生成待审核 ChangeSet，不自动批准。推荐的维护节奏：
-
-```text
-来源更新
-  -> refresh / watch
-  -> changeset-list
-  -> review
-  -> approve
-  -> apply
-  -> lint
-```
-
-旧 SourceVersion 和旧 Git Commit 会保留，便于历史查询和恢复；当前版本会成为新的查询入口。
-
-## 15. 查看和查询自己的 Wiki
-
-### 查看状态和来源
-
-```bash
-memoryforge status --workspace "$MF_WORKSPACE"
-memoryforge source-list --workspace "$MF_WORKSPACE"
+export MF_WORKSPACE=/absolute/path/to/my-wiki
+memoryforge import /absolute/path/to/note.md --workspace "$MF_WORKSPACE"
+memoryforge ingest --pending --workspace "$MF_WORKSPACE"
 memoryforge changeset-list --workspace "$MF_WORKSPACE"
-memoryforge doctor --workspace "$MF_WORKSPACE"
+memoryforge review <changeset-id> --workspace "$MF_WORKSPACE"
+memoryforge approve <changeset-id> --workspace "$MF_WORKSPACE"
+memoryforge apply <changeset-id> --workspace "$MF_WORKSPACE"
+memoryforge search '关键词' --workspace "$MF_WORKSPACE"
+memoryforge ask '这个项目为什么这样设计？' --workspace "$MF_WORKSPACE"
 ```
 
-### 全文搜索
-
-```bash
-memoryforge search 'CreateDataFlow' --limit 10 --workspace "$MF_WORKSPACE"
-```
-
-限定一个仓库：
-
-```bash
-memoryforge search 'CreateDataFlow' \
-  --repository <repository-id> \
-  --workspace "$MF_WORKSPACE"
-```
-
-### 带引用问答
-
-```bash
-memoryforge ask '这个模块负责什么？' --workspace "$MF_WORKSPACE"
-```
-
-查看检索路径或展开引用原文：
+查看检索路径或展开 Citation 原文：
 
 ```bash
 memoryforge ask '这个模块负责什么？' --debug --workspace "$MF_WORKSPACE"
 memoryforge ask '这个模块负责什么？' --verify --workspace "$MF_WORKSPACE"
 ```
 
-默认问答不需要模型。需要更自然的模型总结时：
+默认问答不需要模型。需要模型整理时，显式添加 `--llm`；如果命中本地来源，还要同时确认 `--allow-local-llm`。
+
+## 12. 本地安全和隐私
+
+- Portal 和桌面端只绑定 `127.0.0.1`，不会自动变成公网服务；
+- 原始来源保存在 Workspace 的 `raw/` 中，正式页面保存在 `wiki/` 中；
+- `local_only` 来源默认不会进入远程模型请求；
+- 待审核 ChangeSet 不会进入搜索、提问或 MCP 正式回答；
+- 重要事实应回到 Citation、SourceVersion 和原文位置核验；
+- 不要把包含公司代码、飞书正文、真实会话、Token 或日志的 Workspace 提交到公开 GitHub；
+- `--include-local` 只适合确认不会分享的静态导出目录。
+
+静态 Showcase 适合公开 Demo 或固定快照，不适合日常管理知识库。日常请使用桌面端或动态 Portal。
+
+## 13. 常见问题
+
+### 双击桌面端后提示不是 Workspace
+
+桌面端只能打开已执行过 `memoryforge init` 的目录。先初始化一个独立目录，再重新打开：
 
 ```bash
-memoryforge ask '这个模块负责什么？' \
-  --llm --allow-local-llm \
-  --workspace "$MF_WORKSPACE"
+.venv/bin/memoryforge init ~/Documents/MemoryForge/my-wiki
+.venv/bin/memoryforge desktop --choose-workspace
 ```
 
-只有显式加入 `--allow-local-llm`，模型才可接收当前命中的 `local_only` Evidence。
+不要选择 MemoryForge 源码目录。
 
-## 16. 在本机网页中浏览
+### 每次都要重新选择目录
 
-大型 Workspace 推荐使用本地动态 Portal：
+正常情况下桌面端会记住最近一次 Workspace。如果需要换库，使用 `--choose-workspace` 重新选择；如果状态文件被清理，首次启动时再选择一次即可。
 
-```bash
-memoryforge showcase serve \
-  --workspace "$MF_WORKSPACE" \
-  --port 8765
-```
+### 添加来源后看不到知识
 
-打开：
+来源进入的是后台任务，不会立即出现在正式 Wiki。依次检查：
 
-```text
-http://127.0.0.1:8765
-```
+1. **后台任务** 是否失败；
+2. 是否已经进入 **知识更新**；
+3. 是否点击了 **批准并应用**；
+4. 回到 **我的知识** 或使用搜索查看已应用页面。
 
-服务只绑定本机、只读、按需加载 Wiki 页面，不上传资料。终端必须保持运行；按 Ctrl+C 停止。
+### 审核卡片点击后没有内容
 
-静态 Showcase 更适合公开 Demo 或固定证据快照：
+审核页面会先加载摘要；“涉及来源”和“知识页改动”展开后才加载详情。等待加载完成后再展开具体页面。若任务仍处于运行中，先到 **后台任务** 查看进度或错误。
 
-```bash
-memoryforge showcase build \
-  --workspace "$MF_WORKSPACE" \
-  --output /absolute/path/to/showcase
-```
+### 搜索有结果，但 AI 说没有证据
 
-默认静态导出不包含 `local_only` 详情。`--include-local` 会把本地私有内容写入导出目录，只能在
-你确认该目录不会分享或提交时使用。
-
-## 17. 用 Obsidian 查看
-
-生成 Obsidian 导航：
-
-```bash
-memoryforge obsidian-build --workspace "$MF_WORKSPACE"
-```
-
-在 Obsidian 中把整个 Workspace 作为 Vault 打开，再进入 `obsidian/Home.md`。该视图将页面分为：
-
-- 私有过程；
-- 稳定知识；
-- 共享业务状态。
-
-它只生成导航，不复制 Wiki 正文，也不改变查询索引。
-
-## 18. 在飞书中提问
-
-先确认 CLI 能回答：
-
-```bash
-memoryforge ask '一个已知问题' --workspace "$MF_WORKSPACE"
-```
-
-配置飞书自建应用和 `lark-cli` 后启动：
-
-```bash
-memoryforge feishu-serve --workspace "$MF_WORKSPACE"
-```
-
-默认走确定性 Wiki 查询。显式启用模型：
-
-```bash
-memoryforge feishu-serve \
-  --llm --allow-local-llm \
-  --workspace "$MF_WORKSPACE"
-```
-
-当前 MVP 处理飞书私聊文本。它不会自动抓取整个飞书空间，也不会因为机器人收到消息就直接修改
-正式 Wiki。
-
-## 19. 隐私边界
-
-| 来源 | 默认边界 |
-| --- | --- |
-| Codex 会话 | `local_only` |
-| Botmux 会话 | `local_only` |
-| 飞书资料 | 本地处理 |
-| Git 仓库 | `local_only`，除非 `git-add --public` |
-| Folder | 本地处理，除非 `folder-import --public` |
-| 单文件 / 网页 | 按命令参数；敏感资料显式传 `--local-only` |
-
-请遵守三条规则：
-
-1. 不把真实 Workspace、公司代码、飞书正文、AI 会话、Token 或日志提交到公开 GitHub。
-2. 只有确认 Provider 和资料授权后，才组合使用 `--llm --allow-local-llm`。
-3. AI 会话是未验证记忆；涉及代码、权限、财务、安全或线上操作时，必须回看 Citation。
-
-## 20. 常见问题
-
-### `memoryforge` 命令不存在
-
-激活安装 MemoryForge 的虚拟环境，或使用 `.venv/bin/memoryforge` 绝对路径。
+先确认搜索结果来自已应用页面，而不是待审核更新；再检查来源是否为 `local_only`。如果 AI Host 未获得本地资料授权，MemoryForge 会保留隐私边界。
 
 ### `recall` 返回 `empty`
 
-会话可能只导入成 Source，还没有应用。执行 `ingest`，再完成
-`review → approve → apply`。
+这表示尚未应用会话 Wiki，不代表 MCP 或桌面端损坏。先在 **知识更新** 完成审核并应用，或者执行对应的 CLI 编译流程。
 
-### 新代码没有进入 Wiki
+### 需要查看诊断信息
 
-确认代码已提交，并依次执行：
-
-```bash
-memoryforge git-sync <repository-id> --workspace "$MF_WORKSPACE"
-memoryforge ingest --code-wiki <repository-id> --workspace "$MF_WORKSPACE"
-```
-
-### Portal 展示的不是我的资料
-
-停止旧进程，重新使用正确的绝对 Workspace 启动：
+优先打开 **系统状态**。命令行可执行：
 
 ```bash
-memoryforge showcase serve --workspace "$MF_WORKSPACE" --port 8765
-```
-
-不要把公开 Demo Workspace 或临时 Showcase 目录当成个人 Workspace。
-
-### 导入后问答仍找不到
-
-依次检查：
-
-```bash
-memoryforge source-list --workspace "$MF_WORKSPACE"
-memoryforge changeset-list --workspace "$MF_WORKSPACE"
+memoryforge status --workspace "$MF_WORKSPACE"
+memoryforge doctor --workspace "$MF_WORKSPACE"
 memoryforge lint --workspace "$MF_WORKSPACE"
-memoryforge search '关键词' --workspace "$MF_WORKSPACE"
 ```
 
-来源存在但未应用时，先完成审核流程。来源已经应用但搜索不到时，再检查问题措辞和来源正文。
+## 14. 三个核心对象
 
-## 21. 推荐日常用法
+### Source
 
-首次建立：
+一次不可变的来源快照，例如一个 Git Commit 下的代码、一份 Markdown、一篇飞书文档或一段 Codex 会话。来源更新时会创建新的 SourceVersion，不覆盖旧版本。
+
+### ChangeSet
+
+待审核的 Wiki 变更。它记录新增、修改、删除页面和对应 Citation。Portal 的 **知识更新** 页面就是 ChangeSet 的可视化审核入口。
+
+### Wiki
+
+已经批准并应用的 Markdown 知识。搜索、提问、MCP 和 `recall` 默认只把正式 Wiki 当成可查询入口。
+
+因此，MemoryForge 的日常原则是：
 
 ```text
-init
-  -> 导入文档和仓库
-  -> ingest
-  -> review / approve / apply
-  -> connect codex
-  -> showcase serve
+来源先保存
+  → Wiki 再编译
+  → 变更先审核
+  → 回答回到证据
 ```
 
-每天或每周维护：
+## 15. 推荐日常用法
+
+### 第一次建立
 
 ```text
-codex-import 或自动会话 Hook
-  -> refresh / watch --once
-  -> changeset-list
-  -> review / approve / apply
-  -> lint
+安装
+  → init 一次 Workspace
+  → 双击桌面端或启动本地网页
+  → 添加来源并确认隐私
+  → 等待后台任务
+  → 知识更新：批准并应用
+  → 我的知识：浏览、搜索、提问
 ```
 
-新任务开始：
+### 每天或每周维护
 
 ```text
-recall
-  -> 根据任务 search / ask
-  -> 核验 Citation
-  -> 完成后再次收录有价值的会话
+刷新来源 / 扫描新会话
+  → 后台任务
+  → 知识更新
+  → 查看 Diff 和 Citation
+  → 批准并应用
+  → 在 Codex 中按需查询
 ```
 
-到这里已经覆盖 MemoryForge 的完整个人使用闭环。更多实现边界见
-[`LOCAL_DYNAMIC_PORTAL_SPEC.md`](LOCAL_DYNAMIC_PORTAL_SPEC.md)、
-[`CODE_WIKI_DATA_CONTRACT.md`](CODE_WIKI_DATA_CONTRACT.md) 和
-[`FEISHU_MVP_SPEC.md`](../FEISHU_MVP_SPEC.md)。
+### 只有在需要时才使用命令行
+
+批量导入、定时刷新、CI、跨客户端配置和诊断再切换到 CLI。这样既保留 MemoryForge 的可审计性，也不会让第一次使用的人先学习一长串命令。
+
+更多专题文档：
+
+- [macOS 桌面端](DESKTOP_APP_CN.md)
+- [全局 Codex MCP Router](GLOBAL_CODEX_MCP_ROUTER.md)
+- [动态本地 Portal 设计](LOCAL_DYNAMIC_PORTAL_SPEC.md)
+- [README 与公开演示](../README.md)

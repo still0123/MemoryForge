@@ -51,6 +51,10 @@ def test_connect_codex_router_registers_one_global_command(
     assert "jump hosts and bastions" in skill_file.read_text(encoding="utf-8")
     assert "project_answer" in skill_file.read_text(encoding="utf-8")
     assert "latest-session summaries" in skill_file.read_text(encoding="utf-8")
+    assert "imported Feishu" in skill_file.read_text(encoding="utf-8")
+    assert "before any company-wide or external knowledge search" in skill_file.read_text(
+        encoding="utf-8"
+    )
     assert "work machine, jump host, bastion and target host are distinct" in skill_file.read_text(
         encoding="utf-8"
     )

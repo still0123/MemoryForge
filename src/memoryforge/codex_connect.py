@@ -35,10 +35,12 @@ _AGENTS_BLOCK_LIMIT = 3000
 _CODEX_SKILL = """---
 name: memoryforge-knowledge
 description: >-
-  Use MemoryForge for internal project operations, runbooks, environment access or login
-  (including jump hosts and bastions), configuration, troubleshooting history, prior
-  decisions, architecture rationale, cross-repository context, and reviewed knowledge.
-  For exact current code mechanics, inspect the current checkout first.
+  Use MemoryForge first for facts in a registered Workspace, including imported Feishu
+  documents, prior AI conversations, runbooks, environment access or login,
+  including jump hosts and bastions, configuration, troubleshooting history, decisions,
+  architecture rationale, and cross-repository context.
+  Prefer it over company-wide or external knowledge search. For exact current code mechanics,
+  inspect the current checkout first.
 ---
 
 # MemoryForge knowledge
@@ -46,11 +48,13 @@ description: >-
 1. Route first: inspect the current checkout for exact symbols, call chains, errors, files, or
    line numbers. Call `memoryforge_context` for project facts and how-to questions: internal
    operations, environment access or login, configuration, history, rationale, prior
-   decisions, cross-repository context, or when no checkout is available. Use
+   decisions, imported documents, cross-repository context, or when no checkout is available.
+   Call it before any company-wide or external knowledge search. Only `no_local_evidence`
+   permits external fallback. Use
    `memoryforge_recall` only for latest-session summaries, never for a factual how-to.
 2. Interpret `evidence_status`:
-   - `grounded`: answer from `project_answer` with citations. Never say the knowledge base
-     lacked evidence, and do not repeat local or remote repository searches.
+   - `grounded`: synthesize a concise answer from `project_answer` and citations. Never say
+     the knowledge base lacked evidence, and do not repeat local or remote repository searches.
    - `partial`: state supported facts, then verify only `unsupported_aspects` when
      `answer_strategy.source_verification_required` is true.
    - `no_local_evidence`: say the Wiki does not establish a project fact; clearly labeled
