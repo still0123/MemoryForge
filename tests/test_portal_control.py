@@ -24,7 +24,16 @@ def test_start_requires_workspace_and_opens_browser_by_default(
     workspace = Workspace.initialize(tmp_path / "workspace").root
     calls = []
 
-    def serve(path: Path, port: int, *, open_browser: bool) -> None:
+    def serve(
+        path: Path,
+        port: int,
+        *,
+        open_browser: bool,
+        provider: object,
+        allow_local_llm: bool,
+    ) -> None:
+        assert provider is None
+        assert allow_local_llm is False
         calls.append((path, port, open_browser))
 
     monkeypatch.setattr(cli_module, "serve_local_portal", serve)

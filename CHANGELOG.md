@@ -3,7 +3,7 @@
 ## Unreleased
 
 - 补齐根目录 MIT LICENSE、`memoryforge-wiki` PyPI 发布元数据和 GitHub 仓库元数据；README 与秋招材料按
-  “核心产品、公开证据、历史研究”重组，当前 macOS 完整门禁为 `722 passed`。
+  “核心产品、公开证据、历史研究”重组，当前 macOS 完整门禁为 `731 passed`。
 - 冻结期可信性收尾：apply 与 lint 在消费端重放 Raw locator，拒绝无法由不可变
   SourceVersion 支撑的精确事实；模型生成的语义叙事继续执行 SourceVersion 与 locator 绑定。
 - 本地 Portal 增加 loopback Host allowlist、CSP、frame、MIME 与 referrer 安全响应头。

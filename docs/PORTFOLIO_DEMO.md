@@ -10,7 +10,7 @@
 | 范围 | 状态 |
 | --- | --- |
 | `v0.4.0` 正式发布 | macOS `656 passed`；Linux 未重跑；Windows 未验证 |
-| 当前 `main` | 增加未发布的本地 Portal 控制面和冻结期加固；macOS `722 passed` |
+| 当前 `main` | 增加未发布的本地 Portal 控制面和冻结期加固；macOS `731 passed` |
 | 功能边界 | 已冻结，只修 Bug、错误回答和文档 |
 
 演示时先说明自己展示的是 `v0.4.0` Release 还是当前 `main`，不要把 `main` 的 Portal 门禁写成

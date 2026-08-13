@@ -11,7 +11,7 @@ SourceVersion 和原文位置。
 **正式版本：[`v0.4.0`](https://github.com/still0123/MemoryForge/releases/tag/v0.4.0)。**
 该版本在 macOS 完成 `656 passed` 发布门禁；Linux 未在本版本重跑，Windows 尚未验证。
 当前 `main` 另含未发布的本地 Portal 控制面和冻结期加固，最近一次完整本地门禁为
-`722 passed`。
+`731 passed`。
 
 [5 分钟跑通](#5-分钟跑通) · [60 秒演示](#60-秒公开演示) ·
 [公开证据](#公开证据) · [演示讲稿](docs/PORTFOLIO_DEMO.md) ·
@@ -148,7 +148,7 @@ Relation、ModulePlan 和 Mermaid 图。可选模型只补充带 Citation 的父
 
 | Evidence | 结果 | 边界 |
 | --- | ---: | --- |
-| 当前 `main` 本地门禁 | macOS **722 passed** | CPython 3.11；Linux/Windows 未重跑 |
+| 当前 `main` 本地门禁 | macOS **731 passed** | CPython 3.11；Linux/Windows 未重跑 |
 | v0.4.0 发布门禁 | macOS **656 passed** | Linux 未重跑，Windows 未验证 |
 | AgentSkill-Eval 文档 Wiki | Answer **96.7%**；Citation **100%**；拒答 **100%** | 单一公开仓库，30 题 |
 | 三语言 Code Wiki | Symbol / Relation / Mermaid / Citation **100%** | 固定公开夹具 |
