@@ -18,7 +18,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from memoryforge.errors import MemoryForgeError
-from memoryforge.lifecycle import get_update, list_updates, reject_changeset
+from memoryforge.lifecycle import get_update, get_update_pages, list_updates, reject_changeset
 from memoryforge.portal_assets import APP_CSS, CONTROL_JS, INDEX_HTML
 from memoryforge.portal_catalog import PortalCatalog
 from memoryforge.portal_jobs import (
@@ -471,9 +471,17 @@ class LocalPortalApp:
                 return _json_response(self._with_commit(self.jobs.get(job_id)))
             if parsed.path == "/api/updates":
                 return _json_response(self._with_commit({"items": list_updates(self.root)}))
+            if parsed.path.startswith("/api/updates/") and parsed.path.endswith("/pages"):
+                changeset_id = parsed.path.removeprefix("/api/updates/").removesuffix("/pages")
+                return _json_response(
+                    self._with_commit({"items": get_update_pages(self.root, changeset_id)})
+                )
             if parsed.path.startswith("/api/updates/"):
                 changeset_id = parsed.path.removeprefix("/api/updates/")
-                return _json_response(get_update(self.root, changeset_id))
+                summary_only = parse_qs(parsed.query).get("view") == ["summary"]
+                return _json_response(
+                    get_update(self.root, changeset_id, include_pages=not summary_only)
+                )
             if parsed.path == "/api/automation":
                 return _json_response(self._with_commit(automation_status(self.root)))
             return self._error_response("not found", status=404)

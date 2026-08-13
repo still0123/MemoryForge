@@ -36,10 +36,21 @@ def list_updates(workspace: Path) -> list[dict[str, Any]]:
     return [_update_summary(opened, stored) for stored in ChangeSetStore(opened).list_all()]
 
 
-def get_update(workspace: Path, changeset_id: str) -> dict[str, Any]:
+def get_update(
+    workspace: Path,
+    changeset_id: str,
+    *,
+    include_pages: bool = True,
+) -> dict[str, Any]:
     opened = Workspace.open_readonly(workspace)
     stored = ChangeSetStore(opened).get(changeset_id)
-    return _update_details(opened, stored)
+    return _update_details(opened, stored, include_pages=include_pages)
+
+
+def get_update_pages(workspace: Path, changeset_id: str) -> list[dict[str, Any]]:
+    opened = Workspace.open_readonly(workspace)
+    stored = ChangeSetStore(opened).get(changeset_id)
+    return _update_pages(opened, stored)
 
 
 def review_changeset(workspace: Path, changeset_id: str) -> dict[str, Any]:
@@ -284,8 +295,34 @@ def _update_summary(opened: Workspace, stored: StoredChangeSet) -> dict[str, Any
     }
 
 
-def _update_details(opened: Workspace, stored: StoredChangeSet) -> dict[str, Any]:
+def _update_details(
+    opened: Workspace,
+    stored: StoredChangeSet,
+    *,
+    include_pages: bool = True,
+) -> dict[str, Any]:
     summary = _update_summary(opened, stored)
+    page_paths = set(operation.path for operation in stored.changeset.operations)
+    page_paths.update(stored.candidate_files)
+    pages = _update_pages(opened, stored) if include_pages else None
+    validation = stored.changeset.validation
+    warnings = []
+    if validation is not None:
+        if validation.unresolved_conflicts:
+            warnings.append(f"{validation.unresolved_conflicts} 个未解决冲突")
+        if validation.schema_errors:
+            warnings.append(f"{validation.schema_errors} 个结构错误")
+    return {
+        **summary,
+        "workspace_commit": opened.current_commit(),
+        "sources": _source_details(opened, stored),
+        "page_count": len(page_paths),
+        **({"pages": pages} if pages is not None else {}),
+        "warnings": warnings,
+    }
+
+
+def _update_pages(opened: Workspace, stored: StoredChangeSet) -> list[dict[str, Any]]:
     operations = {operation.path: operation.type for operation in stored.changeset.operations}
     page_paths = sorted(set(operations) | set(stored.candidate_files))
     pages = []
@@ -317,20 +354,7 @@ def _update_details(opened: Workspace, stored: StoredChangeSet) -> dict[str, Any
                 "citation_count": after.count("[^"),
             }
         )
-    validation = stored.changeset.validation
-    warnings = []
-    if validation is not None:
-        if validation.unresolved_conflicts:
-            warnings.append(f"{validation.unresolved_conflicts} 个未解决冲突")
-        if validation.schema_errors:
-            warnings.append(f"{validation.schema_errors} 个结构错误")
-    return {
-        **summary,
-        "workspace_commit": opened.current_commit(),
-        "sources": _source_details(opened, stored),
-        "pages": pages,
-        "warnings": warnings,
-    }
+    return pages
 
 
 def _source_details(opened: Workspace, stored: StoredChangeSet) -> list[dict[str, Any]]:

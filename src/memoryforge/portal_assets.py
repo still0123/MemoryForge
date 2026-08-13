@@ -94,7 +94,8 @@ font-size:122px;font-weight:900;letter-spacing:-.09em;line-height:1}.hero .page-
 .card{min-width:0;padding:18px;background:color-mix(in srgb,var(--panel) 96%,transparent);
 border:1px solid var(--line);border-radius:13px;box-shadow:0 1px 2px rgba(22,100,255,.03)}
 a.card{display:block;color:var(--text);text-decoration:none}a.card:hover{border-color:color-mix(in srgb,var(--accent) 48%,var(--line));
-box-shadow:var(--shadow-hover);transform:translateY(-2px)}.card h2,.card h3{margin:0 0 6px;
+box-shadow:var(--shadow-hover);transform:translateY(-2px)}.update-card{cursor:pointer}.card-action{display:block;margin-top:12px;
+color:var(--accent);font-weight:700}.card h2,.card h3{margin:0 0 6px;
 font-size:16px;letter-spacing:-.015em}.card p{margin:5px 0;color:var(--muted)}.metric-card{position:relative;
 overflow:hidden;padding:20px 20px 18px}.metric-card::before{content:"";position:absolute;inset:0 auto 0 0;
 width:3px;background:var(--accent)}.metric-label{display:block;color:var(--muted);font-size:11px;font-weight:650}
@@ -145,7 +146,7 @@ font-size:14px}.relation-group p{margin:0}.relation-list{display:grid;gap:6px;ma
 background:var(--panel);border:1px solid var(--line);border-radius:7px}.pagination button:disabled{opacity:.45;
 cursor:default}.source-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;
 padding:12px 0;border-bottom:1px solid var(--line)}.source-row:last-child{border:0}
-.actions-row{display:flex;flex-wrap:wrap;gap:10px;margin:20px 0}.button{display:inline-flex;
+.actions-row{display:flex;flex-wrap:wrap;gap:10px;margin:20px 0}.review-actions{align-items:center;margin-top:0}.review-actions .meta{flex:1 1 100%}.button{display:inline-flex;
 align-items:center;justify-content:center;padding:9px 15px;color:var(--text);background:var(--panel);
 border:1px solid var(--line);border-radius:9px;text-decoration:none;font-weight:650}
 .button:hover{border-color:var(--accent);background:var(--accent-soft);transform:translateY(-1px)}
@@ -956,11 +957,35 @@ async function renderJob(id){
 }
 function updateCard(update){
   const counts=update.counts;
-  return element("a",{class:"card update-card",href:"#update="+encodeURIComponent(update.id)},[
+  const card=element("a",{class:"card update-card",href:"#update="+encodeURIComponent(update.id)},[
     element("h3",{text:update.name}),
     element("p",{text:`新增 ${counts.create} · 修改 ${counts.update} · 删除 ${counts.delete}`}),
-    element("small",{class:"meta",text:update.status})
-  ])
+    element("small",{class:"meta",text:update.status}),
+    element("small",{class:"card-action",text:"查看并审核 →"})
+  ]);
+  card.addEventListener("click",event=>{
+    if(event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;
+    event.preventDefault();openUpdate(update.id)
+  });
+  return card
+}
+function openUpdate(id){
+  const target="#update="+encodeURIComponent(id);
+  if(location.hash!==target)history.pushState(null,"",target);
+  renderUpdate(id).catch(fail)
+}
+function lazyUpdateSection(label,build){
+  const details=element("details",{},[element("summary",{text:label})]);
+  details.addEventListener("toggle",async()=>{
+    if(!details.open||details.dataset.loaded)return;
+    details.dataset.loaded="true";
+    const loading=element("p",{class:"detail-body meta",text:"正在载入…"});
+    details.append(loading);
+    try{loading.replaceWith(await build())}catch(error){loading.replaceWith(
+      element("p",{class:"detail-body error",text:error.message||"载入失败。"})
+    )}
+  });
+  return details
 }
 async function renderUpdates(){
   const data=await api("/api/updates");
@@ -971,14 +996,10 @@ async function renderUpdates(){
   ])
 }
 async function renderUpdate(id){
-  const update=await api("/api/updates/"+encodeURIComponent(id));
-  const pages=update.pages.map(page=>element("details",{class:"update-page"},[
-    element("summary",{text:`${page.action} · ${page.title}`}),
-    element("div",{class:"detail-body"},[
-      element("small",{class:"meta",text:`引用 ${page.citation_count} 条`}),
-      element("pre",{class:"diff",text:page.diff||"无文本差异"})
-    ])
-  ]));
+  show([
+    heading("知识更新","正在打开审核…","正在载入本次变更。")
+  ]);
+  const update=await api("/api/updates/"+encodeURIComponent(id)+"?view=summary");
   const reject=element("button",{class:"button danger",type:"button",text:"拒绝"});
   const approve=element("button",{class:"button primary",type:"button",text:"批准并应用"});
   reject.addEventListener("click",async()=>{
@@ -994,15 +1015,30 @@ async function renderUpdate(id){
   show([
     heading("知识更新",update.name,
       `新增 ${update.counts.create} · 修改 ${update.counts.update} · 删除 ${update.counts.delete}`),
-    element("div",{class:"grid"},update.sources.map(source=>
-      element("article",{class:"card"},[
-        element("h3",{text:source.name}),
-        element("p",{text:`版本 ${source.version} · ${source.privacy}`})
-      ])
-    )),
-    ...pages,
+    element("div",{class:"actions-row review-actions"},[
+      element("span",{class:"meta",text:"确认后才会写入正式 Wiki。"}),reject,approve
+    ]),
+    lazyUpdateSection(`涉及来源 · ${update.sources.length} 个`,()=>
+      element("div",{class:"grid detail-body"},update.sources.map(source=>
+        element("article",{class:"card"},[
+          element("h3",{text:source.name}),
+          element("p",{text:`版本 ${source.version} · ${source.privacy}`})
+        ])
+      ))
+    ),
+    lazyUpdateSection(`知识页改动 · ${update.page_count} 项`,async()=>{
+      const data=await api("/api/updates/"+encodeURIComponent(id)+"/pages");
+      return element("div",{class:"detail-body"},data.items.map(page=>
+        element("details",{class:"update-page"},[
+          element("summary",{text:`${page.action} · ${page.title}`}),
+          element("div",{class:"detail-body"},[
+            element("small",{class:"meta",text:`引用 ${page.citation_count} 条`}),
+            element("pre",{class:"diff",text:page.diff||"无文本差异"})
+          ])
+        ])
+      ))
+    }),
     update.warnings.length?element("p",{class:"warning",text:update.warnings.join("；")}):null,
-    element("div",{class:"actions-row"},[reject,approve])
   ].filter(Boolean))
 }
 function breadcrumbs(items){

@@ -40,6 +40,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+desktop = [
+  "pyinstaller>=6,<7",
+  "pywebview>=5,<7",
+]
 dev = [
   "build>=1.2,<2",
   "hatchling>=1.31,<2",
@@ -51,6 +55,7 @@ dev = [
 
 [project.scripts]
 memoryforge = "memoryforge.cli:main"
+memoryforge-desktop = "memoryforge.desktop:main"
 
 [project.urls]
 Homepage = "https://github.com/still0123/MemoryForge"

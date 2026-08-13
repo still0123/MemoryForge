@@ -46,6 +46,7 @@ from memoryforge.compiler import (
     compile_pending_sources,
     compile_repository_topics,
 )
+from memoryforge.desktop import run_desktop
 from memoryforge.errors import (
     ChangeSetStoreError,
     FeatureUnavailableError,
@@ -241,6 +242,35 @@ def start(
             provider=provider,
             allow_local_llm=allow_local_llm,
         )
+    except (
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+
+
+@app.command()
+def desktop(
+    workspace: Annotated[
+        Path | None,
+        typer.Option("--workspace", "-w", help="MemoryForge workspace to open."),
+    ] = None,
+    choose_workspace: Annotated[
+        bool,
+        typer.Option(
+            "--choose-workspace",
+            help="Choose a workspace instead of reopening the last one.",
+        ),
+    ] = False,
+) -> None:
+    """Open the local knowledge portal in a native macOS window."""
+    try:
+        run_desktop(workspace, choose=choose_workspace)
     except (
         MemoryForgeError,
         WorkspaceIntegrityError,
