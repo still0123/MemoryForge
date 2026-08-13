@@ -96,6 +96,27 @@ Agent 的证据终止约束、增量主题扩展、
 lint、可信 Mermaid 架构图、确定性评测和单文件增量更新。它不调用模型。提交结果见
 [`results/code_wiki_public.json`](results/code_wiki_public.json)。
 
+## Agent Access 冻结题集
+
+```bash
+.venv/bin/python demo/run_agent_access_evaluation.py \
+  --workdir /private/tmp/memoryforge-agent-access \
+  --output /private/tmp/memoryforge-agent-access/evidence.json
+```
+
+脚本从三个合成夹具创建临时 Git 仓库（公开项目 A、同名孪生项目 B、未公开的 local_only
+项目 C），真实执行 `init → git-add → git-sync → ingest --pending → review → approve → apply`，
+然后直接探测 Agent Access 共享函数：`query_context`（L2）、`read_applied_evidence`（L3）、
+`propose_grounded_update`（Phase 4 proposal），并在相同公开题集上运行 `answer_question`
+无模型基线做对比。它不调用模型、不读取 `.env`、不导入任何私有数据。
+
+题集覆盖 12 个场景：精确代码符号、普通概念、历史决策、多来源综合、不可回答、同名多仓隔离、
+未登记项目 fail-closed、local_only 未授权/已授权、过期 Citation 拒绝、grounded proposal 只
+暂存不改写 Wiki，以及无模型基线对比。10 项指标与硬门槛（citation grounding 100%、
+applied-only 100%、repository isolation 100%、local-scope leak 0、abstention 100%、
+proposal safety 100%、准确率不低于基线）见 `tests/test_agent_access_evaluation.py`，任何
+一项不通过即以非零退出并明确报告。
+
 ## Wheel clean-room
 
 ```bash

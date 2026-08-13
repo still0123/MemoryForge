@@ -87,14 +87,20 @@ def test_committed_apply_recovers_projection_and_archive(tmp_path: Path, monkeyp
 
 def test_committed_apply_reuses_matching_projection(tmp_path: Path, monkeypatch) -> None:
     runner, workspace, changeset_id = _staged_changeset(tmp_path, monkeypatch)
-    assert runner.invoke(
-        app,
-        ["review", changeset_id, "--workspace", str(workspace)],
-    ).exit_code == 0
-    assert runner.invoke(
-        app,
-        ["approve", changeset_id, "--workspace", str(workspace)],
-    ).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            ["review", changeset_id, "--workspace", str(workspace)],
+        ).exit_code
+        == 0
+    )
+    assert (
+        runner.invoke(
+            app,
+            ["approve", changeset_id, "--workspace", str(workspace)],
+        ).exit_code
+        == 0
+    )
     opened = Workspace.open(workspace)
     stored = ChangeSetStore(opened).get(changeset_id)
     paths = tuple(sorted(stored.candidate_files))

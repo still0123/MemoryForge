@@ -213,9 +213,10 @@ def _over_limit(
     low_max_changed_pages: int,
     low_max_changed_lines: int,
 ) -> bool:
-    return len(assessments) > low_max_changed_pages or sum(
-        item.changed_lines for item in assessments
-    ) > low_max_changed_lines
+    return (
+        len(assessments) > low_max_changed_pages
+        or sum(item.changed_lines for item in assessments) > low_max_changed_lines
+    )
 
 
 def build_validation_report(

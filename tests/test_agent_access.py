@@ -19,14 +19,18 @@ import pytest
 from typer.testing import CliRunner
 
 from memoryforge.agent_access import (
+    list_changesets,
+    propose_grounded_update,
     query_context,
     read_applied_evidence,
     recall_context,
     resolve_repository_scope,
+    review_changeset,
 )
 from memoryforge.cli import app
 from memoryforge.errors import UnmappedProjectError
 from memoryforge.query import answer_question
+from memoryforge.workspace import Workspace
 from tests.cli_helpers import review_approve_apply
 
 CACHE_POLICY = "# Cache policy\n\nCache entries expire after sixty seconds.\n"
@@ -101,8 +105,7 @@ def _conversation_workspace(
     for title, answer, public in entries:
         path = tmp_path / f"{title}.md"
         path.write_text(
-            f"# {title}\n\n## User\n\nWhat happened?\n\n"
-            f"## Assistant (unverified)\n\n{answer}\n",
+            f"# {title}\n\n## User\n\nWhat happened?\n\n## Assistant (unverified)\n\n{answer}\n",
             encoding="utf-8",
         )
         arguments = [
@@ -166,10 +169,13 @@ def test_resolve_repository_scope_fails_closed_for_unmapped_project(
     runner = CliRunner()
     monkeypatch.chdir(tmp_path)
     assert runner.invoke(app, ["init", str(workspace)]).exit_code == 0
-    assert runner.invoke(
-        app,
-        ["git-add", str(checkout), "--workspace", str(workspace)],
-    ).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            ["git-add", str(checkout), "--workspace", str(workspace)],
+        ).exit_code
+        == 0
+    )
 
     unregistered = tmp_path / "unregistered"
     unregistered.mkdir()
@@ -636,9 +642,7 @@ def test_recall_context_filters_local_only_memories(
 
     public_only = recall_context(workspace, public_only=True)
 
-    assert [note["title"] for note in public_only["recent_memories"]] == [
-        "DataFlow concurrency"
-    ]
+    assert [note["title"] for note in public_only["recent_memories"]] == ["DataFlow concurrency"]
 
 
 def test_recall_context_caps_startup_context(
@@ -673,3 +677,418 @@ def test_recall_context_is_empty_when_no_conversation_memory(
 
     assert result["status"] == "empty"
     assert result["recent_memories"] == []
+
+
+def _applied_citation(workspace: Path) -> dict[str, object]:
+    """Return the first applied Wiki Fact as a citation payload."""
+    with sqlite3.connect(workspace / ".memoryforge" / "index.sqlite") as connection:
+        row = connection.execute(
+            """
+            SELECT source_id, source_version, locator, quote, page_path
+            FROM wiki_facts
+            ORDER BY id
+            LIMIT 1
+            """
+        ).fetchone()
+    assert row is not None
+    return {
+        "source_id": str(row[0]),
+        "source_version": int(row[1]),
+        "locator": str(row[2]),
+        "quote": str(row[3]),
+        "page_path": str(row[4]),
+    }
+
+
+def _wiki_snapshot(workspace: Path) -> dict[str, str]:
+    wiki = workspace / "wiki"
+    return {
+        str(path.relative_to(wiki)): path.read_text(encoding="utf-8")
+        for path in sorted(wiki.rglob("*"))
+        if path.is_file()
+    }
+
+
+def _citation_kwargs(fact: dict[str, object]) -> dict[str, object]:
+    return {
+        "source_id": str(fact["source_id"]),
+        "source_version": int(fact["source_version"]),
+        "locator": str(fact["locator"]),
+    }
+
+
+def test_propose_grounded_update_stages_proposal_from_applied_citation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace, checkout, _ = _bound_workspace(
+        tmp_path,
+        monkeypatch,
+        {"README.md": CACHE_POLICY},
+        public=True,
+    )
+    head_before = Workspace.open_readonly(workspace).current_commit()
+    wiki_before = _wiki_snapshot(workspace)
+    fact = _applied_citation(workspace)
+
+    proposal = propose_grounded_update(
+        workspace,
+        checkout,
+        question="When do cache entries expire?",
+        conclusion=str(fact["quote"]),
+        citations=[_citation_kwargs(fact)],
+        target_page=str(fact["page_path"]),
+    )
+
+    assert proposal["status"] == "proposed"
+    assert proposal["risk"] == "high"
+    assert proposal["next_action"] == "review"
+    assert proposal["target_page"] == fact["page_path"]
+    assert proposal["source_versions"] == {str(fact["source_id"]): int(fact["source_version"])}
+    changeset_id = str(proposal["changeset_id"])
+    assert changeset_id.startswith("chg_")
+
+    listed = list_changesets(workspace)
+    assert listed["status"] == "ok"
+    assert any(
+        entry["changeset_id"] == changeset_id
+        and entry["status"] == "PROPOSED"
+        and entry["risk"] == "high"
+        and entry["name"] == "README"
+        for entry in listed["changesets"]
+    )
+
+    preview = review_changeset(workspace, changeset_id)
+    assert preview["status"] == "ok"
+    assert preview["reviewed_by_mcp"] is False
+    assert preview["state"] == "PROPOSED"
+    page = next((entry for entry in preview["pages"] if entry["path"] == fact["page_path"]), None)
+    assert page is not None
+    assert page["action"] == "updated"
+    assert str(fact["quote"]) in str(page["diff"])
+    assert int(page["citation_count"]) >= 1
+    proposed_dir = workspace / ".memoryforge" / "staging" / "proposed"
+    assert not list(proposed_dir.rglob("review.json"))
+
+    assert _wiki_snapshot(workspace) == wiki_before
+    assert Workspace.open_readonly(workspace).current_commit() == head_before
+
+
+def test_propose_grounded_update_rejects_fabricated_citation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace, checkout, _ = _bound_workspace(
+        tmp_path,
+        monkeypatch,
+        {"README.md": CACHE_POLICY},
+        public=True,
+    )
+
+    result = propose_grounded_update(
+        workspace,
+        checkout,
+        question="Any question",
+        conclusion="Cache entries expire after sixty seconds.",
+        citations=[
+            {
+                "source_id": "f" * 64,
+                "source_version": 1,
+                "locator": "chars:0-5",
+            }
+        ],
+        target_page="wiki/pages/none.md",
+    )
+
+    assert result["status"] == "citation_not_found"
+    assert not (workspace / ".memoryforge" / "staging" / "proposed").exists()
+
+
+def test_propose_grounded_update_rejects_stale_citation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace, checkout, repository_id = _bound_workspace(
+        tmp_path,
+        monkeypatch,
+        {"README.md": CACHE_POLICY},
+        public=True,
+    )
+    fact = _applied_citation(workspace)
+    (checkout / "README.md").write_text(
+        "# Cache policy\n\nCache entries now expire after fifty seconds.\n",
+        encoding="utf-8",
+    )
+    _git(checkout, "add", ".")
+    _git(checkout, "commit", "-m", "Update cache policy")
+    runner = CliRunner()
+    synced = runner.invoke(app, ["git-sync", repository_id, "--workspace", str(workspace)])
+    assert synced.exit_code == 0, synced.output
+
+    result = propose_grounded_update(
+        workspace,
+        checkout,
+        question="When do cache entries expire?",
+        conclusion=str(fact["quote"]),
+        citations=[_citation_kwargs(fact)],
+        target_page=str(fact["page_path"]),
+    )
+
+    assert result["status"] == "stale_citation"
+
+
+def test_propose_grounded_update_rejects_unapplied_citation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace, checkout, _ = _bound_workspace(
+        tmp_path,
+        monkeypatch,
+        {"README.md": CACHE_POLICY},
+        public=True,
+    )
+    runner = CliRunner()
+    updated = tmp_path / "cache.md"
+    updated.write_text(
+        "# Cache policy\n\nCache entries now expire after thirty seconds.\n",
+        encoding="utf-8",
+    )
+    imported = runner.invoke(app, ["import", str(updated), "--workspace", str(workspace)])
+    assert imported.exit_code == 0, imported.output
+    source_id = str(json.loads(imported.stdout)["source_id"])
+    staged = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
+    assert staged.exit_code == 0, staged.output
+    with sqlite3.connect(workspace / ".memoryforge" / "index.sqlite") as connection:
+        version_id = int(
+            connection.execute(
+                """
+                SELECT versions.id
+                FROM source_versions AS versions
+                JOIN sources ON sources.id = versions.source_id
+                WHERE sources.source_id = ?
+                ORDER BY versions.id DESC LIMIT 1
+                """,
+                (source_id,),
+            ).fetchone()[0]
+        )
+        connection.execute(
+            """
+            INSERT INTO wiki_facts (
+                fact_id, page_path, source_id, source_version, locator,
+                section_path, quote, routing_text
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "pending-fact",
+                "wiki/pages/pending.md",
+                source_id,
+                version_id,
+                "chars:0-10",
+                "Verified facts",
+                "pending quote",
+                "",
+            ),
+        )
+
+    result = propose_grounded_update(
+        workspace,
+        checkout,
+        question="Any question",
+        conclusion="pending quote",
+        citations=[
+            {
+                "source_id": source_id,
+                "source_version": version_id,
+                "locator": "chars:0-10",
+            }
+        ],
+        target_page="wiki/pages/pending.md",
+    )
+
+    assert result["status"] == "not_applied"
+
+
+def test_propose_grounded_update_rejects_unsupported_conclusion(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace, checkout, _ = _bound_workspace(
+        tmp_path,
+        monkeypatch,
+        {"README.md": CACHE_POLICY},
+        public=True,
+    )
+    fact = _applied_citation(workspace)
+
+    result = propose_grounded_update(
+        workspace,
+        checkout,
+        question="When do cache entries expire?",
+        conclusion="The moon is made of cheese.",
+        citations=[_citation_kwargs(fact)],
+        target_page=str(fact["page_path"]),
+    )
+
+    assert result["status"] == "insufficient_evidence"
+    assert not (workspace / ".memoryforge" / "staging" / "proposed").exists()
+
+
+def test_propose_grounded_update_denies_local_scope_without_authorization(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace, checkout, _ = _bound_workspace(
+        tmp_path,
+        monkeypatch,
+        {"README.md": CACHE_POLICY},
+        public=False,
+    )
+    fact = _applied_citation(workspace)
+    citations = [_citation_kwargs(fact)]
+
+    denied = propose_grounded_update(
+        workspace,
+        checkout,
+        question="When do cache entries expire?",
+        conclusion=str(fact["quote"]),
+        citations=citations,
+        target_page=str(fact["page_path"]),
+    )
+    assert denied["status"] == "local_scope_denied"
+
+    allowed = propose_grounded_update(
+        workspace,
+        checkout,
+        question="When do cache entries expire?",
+        conclusion=str(fact["quote"]),
+        citations=citations,
+        target_page=str(fact["page_path"]),
+        allow_local=True,
+    )
+    assert allowed["status"] == "proposed"
+
+
+def test_propose_grounded_update_rejects_empty_citations_and_wrong_page(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace, checkout, _ = _bound_workspace(
+        tmp_path,
+        monkeypatch,
+        {"README.md": CACHE_POLICY},
+        public=True,
+    )
+    fact = _applied_citation(workspace)
+
+    empty = propose_grounded_update(
+        workspace,
+        checkout,
+        question="Any question",
+        conclusion="Cache entries expire after sixty seconds.",
+        citations=[],
+        target_page=str(fact["page_path"]),
+    )
+    assert empty["status"] == "insufficient_evidence"
+
+    wrong_page = propose_grounded_update(
+        workspace,
+        checkout,
+        question="When do cache entries expire?",
+        conclusion=str(fact["quote"]),
+        citations=[_citation_kwargs(fact)],
+        target_page="wiki/pages/other.md",
+    )
+    assert wrong_page["status"] == "target_page_not_found"
+
+    missing_page = propose_grounded_update(
+        workspace,
+        checkout,
+        question="When do cache entries expire?",
+        conclusion=str(fact["quote"]),
+        citations=[_citation_kwargs(fact)],
+        target_page=str(fact["page_path"]).removesuffix(".md") + "-absent.md",
+    )
+    assert missing_page["status"] == "target_page_not_found"
+
+
+def test_automation_run_keeps_agent_proposal_pending_under_balanced_policy(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace, checkout, _ = _bound_workspace(
+        tmp_path,
+        monkeypatch,
+        {"README.md": CACHE_POLICY},
+        public=True,
+    )
+    fact = _applied_citation(workspace)
+    proposal = propose_grounded_update(
+        workspace,
+        checkout,
+        question="When do cache entries expire?",
+        conclusion=str(fact["quote"]),
+        citations=[_citation_kwargs(fact)],
+        target_page=str(fact["page_path"]),
+    )
+    changeset_id = str(proposal["changeset_id"])
+    head_before = Workspace.open_readonly(workspace).current_commit()
+    runner = CliRunner()
+    config = workspace / ".memoryforge" / "traces" / "portal" / "automation.json"
+    config.parent.mkdir(parents=True)
+    config.write_text(
+        json.dumps({"enabled": True, "interval_minutes": 60, "types": ["code"]}),
+        encoding="utf-8",
+    )
+
+    result = runner.invoke(app, ["automation-run", "--workspace", str(workspace)])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    decision = next(
+        entry for entry in payload["decisions"] if entry["changeset_id"] == changeset_id
+    )
+    assert decision["decision"] == "review_required"
+    assert decision["risk"] == "high"
+    assert payload["applied"] == []
+    assert Workspace.open_readonly(workspace).current_commit() == head_before
+    assert review_changeset(workspace, changeset_id)["state"] == "PROPOSED"
+
+
+def test_cli_review_approve_apply_makes_agent_proposal_queryable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace, checkout, _ = _bound_workspace(
+        tmp_path,
+        monkeypatch,
+        {"README.md": CACHE_POLICY},
+        public=True,
+    )
+    fact = _applied_citation(workspace)
+    proposal = propose_grounded_update(
+        workspace,
+        checkout,
+        question="When do cache entries expire?",
+        conclusion=str(fact["quote"]),
+        citations=[_citation_kwargs(fact)],
+        target_page=str(fact["page_path"]),
+    )
+    changeset_id = str(proposal["changeset_id"])
+    runner = CliRunner()
+
+    applied = review_approve_apply(runner, changeset_id, workspace)
+    assert applied.exit_code == 0, applied.output
+
+    requery = query_context(workspace, checkout, "When do cache entries expire?")
+    assert requery["status"] == "answered"
+    assert "sixty seconds" in str(requery["answer_hint"])
+
+    again = propose_grounded_update(
+        workspace,
+        checkout,
+        question="When do cache entries expire?",
+        conclusion=str(fact["quote"]),
+        citations=[_citation_kwargs(fact)],
+        target_page=str(fact["page_path"]),
+    )
+    assert again["status"] == "unchanged"

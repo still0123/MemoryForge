@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "memoryforge_commit": "ba04bb4e7b91ad8ab0ae8c3f486d33148e3e3960",
+  "memoryforge_commit": "a985916966c55d256f30370eea78319faee03e3a",
   "memoryforge_worktree_dirty": false,
   "fixture": {
     "path": "demo/fixtures/code_wiki_project",

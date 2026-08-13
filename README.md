@@ -17,7 +17,7 @@ SourceVersion 和原文位置。
 [公开证据](#公开证据) · [演示讲稿](docs/PORTFOLIO_DEMO.md) ·
 [设计文档](SPEC.md)
 
-![MemoryForge 本地知识门户首页](assets/memoryforge-portal-overview.png)
+![MemoryForge：把多来源资料编译成本地技术 Wiki](assets/01-memoryforge-hero.png)
 
 ## 一眼看懂
 
@@ -29,6 +29,10 @@ SourceVersion 和原文位置。
 
 项目适合个人开发者、技术负责人和长期维护多个仓库的人。它不是公网 SaaS、企业权限平台，
 也不是拥有 Shell 和任意写权限的通用编码 Agent。
+
+![MemoryForge 本地知识门户首页示意图](assets/02-memoryforge-portal-home.png)
+
+<sub>上图为依据当前 Portal 信息架构制作的**示例数据高保真模拟图**，不是伪装成真实运行数据的截图。</sub>
 
 ## 核心产品
 
@@ -52,6 +56,10 @@ my-wiki/
 └── .git/                # Wiki 变更历史
 ```
 
+![MemoryForge ChangeSet 审核与 Diff 预览](assets/03-memoryforge-changeset-review.png)
+
+<sub>上图刻意将 `approve` 与 `apply` 画成两个动作：先记录独立授权，再写入 Wiki 与 Git。为示例数据高保真模拟图，非真实运行截图。</sub>
+
 ### 和普通 RAG 的区别
 
 | 普通 RAG | MemoryForge |
@@ -60,6 +68,43 @@ my-wiki/
 | 更新直接替换索引 | 先生成 ChangeSet，再 `review → approve → apply` |
 | 主题相关就尝试回答 | support score 不足时返回 `unknown` |
 | 很难重放一次结论 | Citation 固定到来源版本、locator、Commit 和 SHA256 |
+
+![MemoryForge 与普通 RAG 的区别](assets/06-memoryforge-vs-rag.png)
+
+## 工作原理
+
+### 知识如何进入正式 Wiki？
+
+模型只能提出 ChangeSet；review、approve、apply 三分离，并留下可审计记录：
+
+1. **不可变来源快照**：SourceAdapter 标准化为 SourceVersion + raw blob，只新增版本，不覆盖旧版
+2. **WikiCompiler 生成提案**：CompilationPlan → PageChange → ChangeSet，模型不能越过 staging
+3. **review 查看 Diff**：页面变更 + Citation，本地校验与影响范围，不接受则 reject 保留记录
+4. **approve 独立授权**：批准收据绑定提案哈希，**不等于写入**
+5. **apply 发布**：写入 Markdown Wiki、重建 INDEX/FTS5、产生 Git Commit，可回滚
+
+![MemoryForge 知识发布链](assets/04-memoryforge-publish-pipeline.png)
+
+> 本地硬约束：路径只能位于 `wiki/`；Citation 必须指向存在的 SourceVersion；`raw/` 不可被模型修改；自动更新永不自动批准。
+
+### 提问后，系统如何避免"沾边就回答"？
+
+INDEX/FTS5 负责路由，少量 Wiki 页面提供事实，support score 决定回答或拒答。
+
+```text
+用户问题 → L0 读 INDEX.md + SQLite FTS5（确定候选范围）
+        → L1/L2 展开 ≤3 个相关 Wiki 页面（Frontmatter/摘要版）
+        → Support Score ≥ 75 且硬门禁通过？
+            ├─ NO  → status: unknown，返回"不知道"，不猜不补全
+            └─ YES → 基于已验证事实回答（答案 + Wiki 页面 + Citation）
+                      必要时进入 L3 读取 Evidence 片段（只展开对应 locator，不扫 Raw）
+```
+
+MiniClaude Agent 只有 `search_wiki`、`read_evidence`、`final` 三个工具；没有 Shell、通用写文件、Subagent 或 MCP 权限；`final` 必须先执行 `read_evidence`。
+
+代码 Wiki 使用 Tree-sitter 为显式选择的 Python、Go、TypeScript/TSX 文件构建确定性 Symbol、Relation、ModulePlan 和 Mermaid 图。可选模型只补充带 Citation 的父模块叙事，不生成架构边。
+
+![MemoryForge 渐进式查询与拒答流程](assets/05-memoryforge-query-pipeline.png)
 
 ## 5 分钟跑通
 
@@ -85,17 +130,16 @@ $MF init ./my-wiki
 $MF start --workspace ./my-wiki
 ```
 
-浏览器中按“添加来源 → 后台任务 → 知识更新 → 批准并应用”完成首份资料入库，再从首页搜索或
-提问。Portal 只绑定 `127.0.0.1`；自动更新只生成待审核内容，永不自动批准。
+浏览器中按"添加来源 → 后台任务 → 知识更新 → 批准并应用"完成首份资料入库，再从首页搜索或提问。Portal 只绑定 `127.0.0.1`；自动更新只生成待审核内容，永不自动批准。
 
 CLI 等价流程：
 
 ```bash
 $MF import ./docs --workspace ./my-wiki
 $MF ingest --pending --workspace ./my-wiki
-$MF review <changeset-id> --workspace ./my-wiki
+$MF review  <changeset-id> --workspace ./my-wiki
 $MF approve <changeset-id> --workspace ./my-wiki
-$MF apply <changeset-id> --workspace ./my-wiki
+$MF apply   <changeset-id> --workspace ./my-wiki
 $MF ask '这个项目为什么这样设计？' --workspace ./my-wiki
 ```
 
@@ -117,30 +161,10 @@ Demo 使用仓库内固定的 Python、Go、TypeScript 夹具，真实执行：
 import → Code Index → ChangeSet → review → approve → apply → query → showcase
 ```
 
-页面展示来源版本、Wiki 树、Diff、Citation Trace、正确拒答、已知失败和 Mermaid 架构图；
-生成文件不包含远程脚本、模型调用、绝对 Workspace 路径或凭据。
+页面展示来源版本、Wiki 树、Diff、Citation Trace、正确拒答、已知失败和 Mermaid 架构图；生成文件不包含远程脚本、模型调用、绝对 Workspace 路径或凭据。
 
 完整的 3 分钟讲解顺序和常见追问见
 [秋招演示与面试说明](docs/PORTFOLIO_DEMO.md)。
-
-## 工作原理
-
-```mermaid
-flowchart LR
-    A["代码 / 文档 / 飞书 / AI 对话"] --> B["不可变来源快照"]
-    B --> C["WikiCompiler 生成 ChangeSet"]
-    C --> D["review：查看页面与 Diff"]
-    D --> E["approve：独立授权"]
-    E --> F["apply：写入 Wiki + Git Commit"]
-    D -->|"不接受"| G["reject：保留记录，不改 Wiki"]
-```
-
-查询遵循 `INDEX → 少量 Wiki 页面 → 必要时原文`。MiniClaude Agent 只有
-`search_wiki`、`read_evidence`、`final` 三个工具；没有 Shell、通用写文件、Subagent 或 MCP
-权限。
-
-代码 Wiki 使用 Tree-sitter 为显式选择的 Python、Go、TypeScript/TSX 文件构建确定性 Symbol、
-Relation、ModulePlan 和 Mermaid 图。可选模型只补充带 Citation 的父模块叙事，不生成架构边。
 
 ## 公开证据
 
@@ -175,6 +199,7 @@ Relation、ModulePlan 和 Mermaid 图。可选模型只补充带 Citation 的父
 
 | 文档 | 内容 |
 | --- | --- |
+| [中文使用指南](docs/USER_GUIDE_CN.md) | 安装、导入、问答与 AI Host MCP 接入 |
 | [SPEC.md](SPEC.md) | 架构、数据模型和安全边界 |
 | [本地 Portal](docs/LOCAL_DYNAMIC_PORTAL_SPEC.md) | 阅读、任务、审核和控制面 |
 | [公开 Benchmark](docs/BENCHMARK.md) | 方法、结果、负案例和复现命令 |

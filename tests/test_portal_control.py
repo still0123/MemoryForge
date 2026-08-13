@@ -155,12 +155,15 @@ def test_portal_passes_authorized_provider_to_compiler(
     try:
         assert portal.jobs.provider is provider
         assert portal.jobs.allow_local_llm is True
-        assert portal_jobs._stage_pending(
-            Workspace.open(workspace),
-            ("source",),
-            provider=provider,  # type: ignore[arg-type]
-            allow_local_llm=True,
-        ) == []
+        assert (
+            portal_jobs._stage_pending(
+                Workspace.open(workspace),
+                ("source",),
+                provider=provider,  # type: ignore[arg-type]
+                allow_local_llm=True,
+            )
+            == []
+        )
 
         assert captured["workspace"] == workspace
         assert captured["provider"] is provider
@@ -186,14 +189,17 @@ def test_portal_repository_passes_authorized_provider_to_code_wiki(
 
     monkeypatch.setattr(portal_jobs, "compile_code_wiki", compile_code)
 
-    assert portal_jobs._stage_repository(
-        Workspace.open(workspace),
-        "repository",
-        (),
-        has_code=True,
-        provider=provider,  # type: ignore[arg-type]
-        allow_local_llm=True,
-    ) == []
+    assert (
+        portal_jobs._stage_repository(
+            Workspace.open(workspace),
+            "repository",
+            (),
+            has_code=True,
+            provider=provider,  # type: ignore[arg-type]
+            allow_local_llm=True,
+        )
+        == []
+    )
     assert captured == {
         "workspace": workspace,
         "snapshot": "snapshot",
@@ -317,9 +323,7 @@ def test_portal_git_url_source_clones_then_stages_private_wiki(
     portal = LocalPortalApp(workspace)
     try:
         preview = json.loads(
-            portal.dispatch_post(
-                "/api/sources/preview", {"kind": "repository_url", "url": url}
-            )[2]
+            portal.dispatch_post("/api/sources/preview", {"kind": "repository_url", "url": url})[2]
         )
         assert preview["title"] == "service"
         assert preview["privacy"] == "local_only"
