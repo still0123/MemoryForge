@@ -27,6 +27,7 @@ from memoryforge.codex_connect import (
     AGENTS_RECALL_BEGIN,
     AGENTS_RECALL_END,
     CodexConnectConflictError,
+    _parse_server_json,
     connect_codex,
     install_agents_block,
 )
@@ -36,6 +37,26 @@ from tests.test_agent_access import CACHE_POLICY, _bound_workspace
 _AGENTS_BLOCK_LIMIT = 3000
 _FAKE_CODEX = "/usr/local/bin/codex"
 _REAL_RUN = subprocess.run
+
+
+def test_parse_server_json_accepts_current_codex_transport_shape() -> None:
+    payload = json.dumps(
+        {
+            "name": "memoryforge",
+            "transport": {
+                "type": "stdio",
+                "command": "/usr/bin/python3",
+                "args": ["-m", "memoryforge", "mcp"],
+            },
+        }
+    )
+
+    assert _parse_server_json(payload) == [
+        "/usr/bin/python3",
+        "-m",
+        "memoryforge",
+        "mcp",
+    ]
 
 
 class _FakeCodex:

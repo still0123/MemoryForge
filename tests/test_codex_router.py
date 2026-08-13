@@ -48,6 +48,7 @@ def test_connect_codex_router_registers_one_global_command(
     assert "memoryforge_context" in skill_file.read_text(encoding="utf-8")
     assert "no_local_evidence" in skill_file.read_text(encoding="utf-8")
     assert "inspect the current checkout first" in skill_file.read_text(encoding="utf-8")
+    assert "jump hosts and bastions" in skill_file.read_text(encoding="utf-8")
 
 
 def test_connect_cli_without_project_uses_the_global_router(

@@ -142,7 +142,12 @@ def test_conversation_user_prompts_are_search_clues_not_answers() -> None:
 
 def test_conversation_process_notes_are_not_answers() -> None:
     assert is_conversation_process_note("我顺手查一下当前流水线配置。")
+    assert is_conversation_process_note("收到，继续完成跳板机认证并登录物理机。")
+    assert is_conversation_process_note("现在验证票据并立即开始只读定位。")
     assert not is_conversation_process_note("流水线失败后，后续清理步骤会被跳过。")
+    assert not is_conversation_process_note(
+        "明白，登录链路是本机 Kerberos、跳板机、物理机。"
+    )
     assert not is_conversation_process_note(
         "流水线使用 stop_on_error，中间失败后 delete 会被 skip。现在我继续看其他配置。"
     )

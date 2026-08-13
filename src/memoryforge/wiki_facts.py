@@ -36,14 +36,20 @@ _FRONTMATTER = re.compile(r"\A---\n(?P<fields>.*?)\n---\n", re.DOTALL)
 _FACT_SECTION = re.compile(r"^#{3,6} (?P<section>.+?)\s*$", re.MULTILINE)
 _STABLE_PAGE = re.compile(r"^wiki/pages/(?:[^/]+/)*[^/]+\.md$")
 _CONVERSATION_PROCESS_MARKERS = (
+    "收到。",
+    "收到，继续",
+    "继续。我",
     "我先",
     "我会",
     "我来",
     "我去",
     "我按",
+    "我现在",
     "我用一下",
     "我顺手查一下",
     "接下来我",
+    "现在验证",
+    "现在我验证",
     "现在查看",
     "先看一下",
     "继续看",

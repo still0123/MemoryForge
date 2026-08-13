@@ -35,16 +35,18 @@ _AGENTS_BLOCK_LIMIT = 3000
 _CODEX_SKILL = """---
 name: memoryforge-knowledge
 description: >-
-  Use MemoryForge for project history, prior decisions, architecture rationale,
-  cross-repository context, and reviewed knowledge. For exact current code mechanics,
-  inspect the current checkout first.
+  Use MemoryForge for internal project operations, runbooks, environment access or login
+  (including jump hosts and bastions), configuration, troubleshooting history, prior
+  decisions, architecture rationale, cross-repository context, and reviewed knowledge.
+  For exact current code mechanics, inspect the current checkout first.
 ---
 
 # MemoryForge knowledge
 
 1. Route first: inspect the current checkout for exact symbols, call chains, errors, files, or
-   line numbers. Call `memoryforge_context` for history, rationale, prior decisions,
-   cross-repository context, or when no checkout is available.
+   line numbers. Call `memoryforge_context` for internal operational procedures, environment
+   access or login, configuration, history, rationale, prior decisions, cross-repository
+   context, or when no checkout is available.
 2. Interpret `evidence_status`:
    - `grounded`: answer with citations; do not repeat local or remote repository searches.
    - `partial`: state supported facts, then verify only `unsupported_aspects` when
@@ -343,6 +345,9 @@ def _parse_server_json(stdout: str) -> list[str] | None:
     if not isinstance(payload, dict):
         return None
     candidate = payload
+    transport = payload.get("transport")
+    if "command" not in candidate and isinstance(transport, dict):
+        candidate = transport
     if "command" not in candidate and len(payload) == 1:
         only = next(iter(payload.values()))
         if isinstance(only, dict):
