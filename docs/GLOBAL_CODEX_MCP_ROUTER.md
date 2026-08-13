@@ -11,20 +11,21 @@ project's `AGENTS.md` and does not create one MCP configuration per project.
 
 Each project still needs the normal MemoryForge source lifecycle first: add
 the Git checkout, sync it, compile its proposed Wiki pages, then review and
-apply them. Only registered checkouts can be queried.
+apply them. Registration controls which sources exist in the Wiki; it does not
+limit a question to one project.
 
-When Codex provides MCP Roots, MemoryForge uses the single current registered
-project automatically. For Hosts that do not provide Roots, the agent passes
-its current project directory to the same global server; MemoryForge validates
-that directory against the registered checkout before it reads any Wiki data.
+MemoryForge always searches the whole applied Workspace. When Codex provides
+one registered MCP Root, pages from that checkout are ranked first. No Root,
+an unregistered Root, or multiple Roots still works: MemoryForge searches the
+whole Workspace without a project preference. This supports a brand-new chat
+and questions spanning several repositories.
 
-If the Host exposes more than one registered project Root, MemoryForge returns
-`active_project_ambiguous` rather than mixing their knowledge. If the current
-directory was not registered, it returns `active_project_unavailable`.
+The current project is a ranking hint, never an access-control boundary.
+Source sensitivity remains the boundary: by default the global connection
+exposes only `public` sources.
 
-By default the global connection exposes only `public` sources. Passing
-`--allow-local-llm` is explicit authorization for `local_only` content from
-the selected project:
+Passing `--allow-local-llm` explicitly authorizes `local_only` content from
+the whole registered Workspace:
 
 ```bash
 memoryforge connect codex --workspace /absolute/path/to/wiki-workspace \

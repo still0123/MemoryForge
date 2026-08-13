@@ -22,6 +22,7 @@ from memoryforge.agent_access import (
     list_changesets,
     propose_grounded_update,
     query_context,
+    query_workspace_context,
     read_applied_evidence,
     recall_context,
     resolve_repository_scope,
@@ -284,6 +285,40 @@ def test_query_context_returns_workspace_unavailable_for_broken_workspace(
     assert result["status"] == "workspace_unavailable"
 
 
+def test_query_workspace_context_uses_current_project_only_as_a_preference(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    checkout = _make_checkout(tmp_path, "repository", {"README.md": CACHE_POLICY})
+    workspace = tmp_path / "workspace"
+    runner = CliRunner()
+    monkeypatch.chdir(tmp_path)
+    assert runner.invoke(app, ["init", str(workspace)]).exit_code == 0
+    registered = runner.invoke(
+        app,
+        ["git-add", str(checkout), "--public", "--workspace", str(workspace)],
+    )
+    assert registered.exit_code == 0, registered.output
+    repository_id = json.loads(registered.stdout)["repository_id"]
+    captured: dict[str, object] = {}
+
+    def fake_answer(_workspace: Path, _question: str, **kwargs: object) -> dict[str, object]:
+        captured.update(kwargs)
+        return {"status": "unknown", "answer": "不知道", "wiki_pages": [], "citations": []}
+
+    monkeypatch.setattr("memoryforge.agent_access.answer_question", fake_answer)
+
+    result = query_workspace_context(
+        workspace,
+        "When do retries stop?",
+        preferred_project_root=checkout,
+    )
+
+    assert captured["repository_id"] is None
+    assert captured["preferred_repository_id"] == repository_id
+    assert result["scope"]["preferred_repository"]["repository_id"] == repository_id
+
+
 def test_query_context_filters_local_only_evidence_by_default(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -373,6 +408,20 @@ def test_query_context_isolates_repositories(
     assert scoped_b_own["status"] == "answered"
     assert scoped_a_own["repository"]["repository_id"] == repository_ids[str(checkout_a)]
     assert scoped_b_own["repository"]["repository_id"] == repository_ids[str(checkout_b)]
+
+    global_query = query_workspace_context(
+        workspace,
+        "When do retries stop?",
+        preferred_project_root=checkout_a,
+    )
+
+    assert global_query["status"] == "answered"
+    assert "three attempts" in str(global_query["answer_hint"])
+    scope = global_query["scope"]
+    assert scope["mode"] == "workspace"
+    preferred = scope["preferred_repository"]
+    assert preferred is not None
+    assert preferred["repository_id"] == repository_ids[str(checkout_a)]
 
 
 def test_query_context_truncates_output_to_budget(

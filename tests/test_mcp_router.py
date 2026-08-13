@@ -9,7 +9,6 @@ from types import SimpleNamespace
 import pytest
 
 from memoryforge.mcp_server import (
-    RouterProjectAmbiguousError,
     _router_project_from_context,
     _select_router_project_root,
     build_router_server,
@@ -69,7 +68,7 @@ def test_router_selects_the_registered_checkout_for_one_file_root(
     assert _select_router_project_root(workspace, [checkout_a.resolve().as_uri()]) == checkout_a
 
 
-def test_router_rejects_multiple_registered_projects(
+def test_router_uses_no_preference_for_multiple_registered_projects(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -77,11 +76,13 @@ def test_router_rejects_multiple_registered_projects(
     checkout_b = _make_checkout(tmp_path, "repo-b", {"README.md": "# Repo B\n"})
     _register_second_checkout(workspace, checkout_b)
 
-    with pytest.raises(RouterProjectAmbiguousError):
+    assert (
         _select_router_project_root(
             workspace,
             [checkout_a.resolve().as_uri(), checkout_b.resolve().as_uri()],
         )
+        is None
+    )
 
 
 def test_router_returns_unavailable_for_unregistered_or_missing_roots(
@@ -96,7 +97,7 @@ def test_router_returns_unavailable_for_unregistered_or_missing_roots(
     assert _select_router_project_root(workspace, [unregistered.resolve().as_uri()]) is None
 
 
-def test_router_context_uses_the_host_root_and_fails_closed_without_one(
+def test_router_context_uses_the_host_root_as_preference_and_falls_back_to_workspace(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -114,20 +115,18 @@ def test_router_context_uses_the_host_root_and_fails_closed_without_one(
         async def list_roots(self) -> SimpleNamespace:
             raise RuntimeError("roots unsupported")
 
-    async def resolve(session: object) -> tuple[Path | None, str]:
+    async def resolve(session: object) -> Path | None:
         context = SimpleNamespace(request_context=SimpleNamespace(session=session))
         return await _router_project_from_context(workspace, context)
 
-    selected, status = asyncio.run(resolve(RootsSession()))
-    unavailable, unavailable_status = asyncio.run(resolve(MissingRootsSession()))
+    selected = asyncio.run(resolve(RootsSession()))
+    unavailable = asyncio.run(resolve(MissingRootsSession()))
 
     assert selected == checkout
-    assert status == "ok"
     assert unavailable is None
-    assert unavailable_status == "active_project_unavailable"
 
 
-def test_global_router_exposes_only_root_scoped_read_tools(
+def test_global_router_exposes_workspace_read_tools_without_a_current_project(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -158,9 +157,11 @@ def test_global_router_exposes_only_root_scoped_read_tools(
             assert not result.is_error
             assert result.structured_content is not None
             assert result.structured_content["status"] == "unknown"
-            repository = result.structured_content["repository"]
-            assert repository["name"] == "repository"
-            assert repository["repository_id"]
+            scope = result.structured_content["scope"]
+            assert scope["mode"] == "workspace"
+            preferred = scope["preferred_repository"]
+            assert preferred["name"] == "repository"
+            assert preferred["repository_id"]
 
         async with Client(build_router_server(workspace)) as client:
             result = await client.call_tool(
@@ -170,5 +171,13 @@ def test_global_router_exposes_only_root_scoped_read_tools(
             assert not result.is_error
             assert result.structured_content is not None
             assert result.structured_content["status"] == "unknown"
+            assert result.structured_content["scope"]["preferred_repository"] is not None
+
+        async with Client(build_router_server(workspace)) as client:
+            result = await client.call_tool("memoryforge_context", {"question": "What is this?"})
+            assert not result.is_error
+            assert result.structured_content is not None
+            assert result.structured_content["status"] == "unknown"
+            assert result.structured_content["scope"]["preferred_repository"] is None
 
     asyncio.run(scenario())

@@ -172,6 +172,7 @@ def answer_question(
     allow_local: bool = False,
     public_only: bool = False,
     repository_id: str | None = None,
+    preferred_repository_id: str | None = None,
     conversation_context: str = "",
 ) -> AskPayload:
     """Answer from a bounded set of Wiki pages, expanding raw evidence only on request.
@@ -345,6 +346,7 @@ def answer_question(
             max_pages=max_pages,
             trace=trace,
             repository_id=repository_id,
+            preferred_repository_id=preferred_repository_id,
             prefer_index_routes=max_citations > 1 or _has_many_index_routes(workspace_root),
             exact_symbol_page_paths=exact_symbol_page_paths,
             preferred_page_paths=retrieval_page_paths,
@@ -1327,6 +1329,7 @@ def _candidate_pages(
     max_pages: int,
     trace: list[TraceStep],
     repository_id: str | None,
+    preferred_repository_id: str | None = None,
     prefer_index_routes: bool = False,
     exact_symbol_page_paths: tuple[str, ...] = (),
     preferred_page_paths: tuple[str, ...] = (),
@@ -1340,6 +1343,12 @@ def _candidate_pages(
         if repository_id is not None
         else None
     )
+    preferred_paths = (
+        set(repository_page_paths(workspace_root, preferred_repository_id))
+        if repository_id is None and preferred_repository_id is not None
+        else set()
+    )
+    candidate_limit = max_pages * 3 if preferred_paths else max_pages
     safe_index = _safe_wiki_index(workspace_root, index)
     if safe_index is not None:
         trace.append({"level": "L0", "artifact": "wiki/INDEX.md"})
@@ -1387,20 +1396,20 @@ def _candidate_pages(
             fact_paths = find_applied_wiki_fact_page_paths(
                 workspace_root,
                 cjk_terms,
-                limit=max_pages,
+                limit=candidate_limit,
                 repository_id=repository_id,
             )
         strict_fts_paths = find_applied_page_paths(
             workspace_root,
             question,
-            limit=max_pages,
+            limit=candidate_limit,
             repository_id=repository_id,
         )
-        if len(strict_fts_paths) < max_pages:
+        if len(strict_fts_paths) < candidate_limit:
             relaxed_fts_paths = find_applied_page_paths(
                 workspace_root,
                 question,
-                limit=max_pages,
+                limit=candidate_limit,
                 repository_id=repository_id,
                 require_all_terms=False,
             )
@@ -1476,7 +1485,7 @@ def _candidate_pages(
         exact_code_pages = _exact_code_pages(
             workspace_root,
             question,
-            max_pages=max_pages,
+            max_pages=candidate_limit,
             repository_id=repository_id,
         )
     ordered_pages = (*exact_symbol_pages, *exact_code_pages, *preferred_pages, *ordered_pages)
@@ -1484,13 +1493,18 @@ def _candidate_pages(
         not _is_code_relation_question(question)
         or any(marker in question for marker in ("方法", "字段", "属性", "函数"))
     ):
-        return list(dict.fromkeys((*exact_symbol_pages, *exact_code_pages)))[:max_pages]
+        candidates = list(dict.fromkeys((*exact_symbol_pages, *exact_code_pages)))
+        if preferred_paths:
+            candidates.sort(
+                key=lambda page: (str(page.relative_to(workspace_root)) not in preferred_paths,)
+            )
+        return candidates[:max_pages]
     if prefer_index_routes and not any(_CJK.fullmatch(term) for term in question_terms):
         ordered_pages += tuple(
             _document_frequency_pages(
                 workspace_root,
                 question_terms,
-                max_pages=max_pages,
+                max_pages=candidate_limit,
                 allowed_paths=allowed_paths,
             )
         )
@@ -1501,6 +1515,10 @@ def _candidate_pages(
     for page in ordered_pages:
         if page not in candidates:
             candidates.append(page)
+    if preferred_paths:
+        candidates.sort(
+            key=lambda page: (str(page.relative_to(workspace_root)) not in preferred_paths,)
+        )
     return candidates[:max_pages]
 
 

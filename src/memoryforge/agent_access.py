@@ -189,12 +189,81 @@ def query_context(
     try:
         scope = resolve_repository_scope(workspace, project_root)
         opened = Workspace.open_readonly(workspace)
-        workspace_commit = opened.current_commit()
     except (UnmappedProjectError, ValueError):
         return {"status": "unmapped_project"}
     except _OPEN_FAILURES:
         return {"status": "workspace_unavailable"}
+    return _query_context(
+        opened,
+        question,
+        repository_id=scope.repository_id,
+        preferred_repository_id=None,
+        scope=scope,
+        allow_local=allow_local,
+        max_pages=max_pages,
+        max_citations=max_citations,
+    )
+
+
+def query_workspace_context(
+    workspace: Path,
+    question: str,
+    *,
+    preferred_project_root: Path | None = None,
+    allow_local: bool = False,
+    max_pages: int = 3,
+    max_citations: int = 6,
+) -> dict[str, object]:
+    """Return bounded context from the whole applied Workspace.
+
+    ``preferred_project_root`` is optional ranking context only. It boosts
+    pages from that registered checkout but never excludes other applied
+    repositories, so a new conversation and cross-repository question work
+    without a current project.
+    """
+    max_pages = _clamp_int(max_pages, 1, 3)
+    max_citations = _clamp_int(max_citations, 1, 6)
     try:
+        opened = Workspace.open_readonly(workspace)
+    except _OPEN_FAILURES:
+        return {"status": "workspace_unavailable"}
+    preferred_scope: GitRepositoryRecord | None = None
+    if preferred_project_root is not None:
+        try:
+            preferred_scope = resolve_repository_scope(opened.root, preferred_project_root)
+        except (UnmappedProjectError, ValueError):
+            pass
+        except _OPEN_FAILURES:
+            return {"status": "workspace_unavailable"}
+    return _query_context(
+        opened,
+        question,
+        repository_id=None,
+        preferred_repository_id=(
+            preferred_scope.repository_id if preferred_scope is not None else None
+        ),
+        scope=None,
+        allow_local=allow_local,
+        max_pages=max_pages,
+        max_citations=max_citations,
+        preferred_scope=preferred_scope,
+    )
+
+
+def _query_context(
+    opened: Workspace,
+    question: str,
+    *,
+    repository_id: str | None,
+    preferred_repository_id: str | None,
+    scope: GitRepositoryRecord | None,
+    allow_local: bool,
+    max_pages: int,
+    max_citations: int,
+    preferred_scope: GitRepositoryRecord | None = None,
+) -> dict[str, object]:
+    try:
+        workspace_commit = opened.current_commit()
         result = answer_question(
             opened.root,
             question,
@@ -204,7 +273,8 @@ def query_context(
             max_citations=max_citations,
             allow_local=allow_local,
             public_only=not allow_local,
-            repository_id=scope.repository_id,
+            repository_id=repository_id,
+            preferred_repository_id=preferred_repository_id,
         )
     except _OPEN_FAILURES:
         return {"status": "workspace_unavailable"}
@@ -279,13 +349,9 @@ def query_context(
                 "support": support,
             }
         output_characters = len(json.dumps(content, ensure_ascii=False))
-    return {
+    payload: dict[str, object] = {
         "status": "answered" if result["status"] == "answered" else "unknown",
         "workspace_commit": workspace_commit,
-        "repository": {
-            "repository_id": scope.repository_id,
-            "name": scope.name,
-        },
         "answer_hint": answer_hint,
         "wiki_pages": wiki_pages,
         "citations": citations,
@@ -298,6 +364,24 @@ def query_context(
             "truncated": truncated,
         },
     }
+    if scope is not None:
+        payload["repository"] = {
+            "repository_id": scope.repository_id,
+            "name": scope.name,
+        }
+    else:
+        payload["scope"] = {
+            "mode": "workspace",
+            "preferred_repository": (
+                {
+                    "repository_id": preferred_scope.repository_id,
+                    "name": preferred_scope.name,
+                }
+                if preferred_scope is not None
+                else None
+            ),
+        }
+    return payload
 
 
 def read_applied_evidence(
@@ -320,6 +404,48 @@ def read_applied_evidence(
     max_characters = _clamp_int(max_characters, 1, _EVIDENCE_MAX_CHARACTERS)
     try:
         resolve_repository_scope(workspace, project_root)
+    except (UnmappedProjectError, ValueError):
+        return {"status": "unmapped_project"}
+    return _read_applied_evidence(
+        workspace,
+        source_id=source_id,
+        source_version=source_version,
+        locator=locator,
+        allow_local=allow_local,
+        max_characters=max_characters,
+    )
+
+
+def read_workspace_evidence(
+    workspace: Path,
+    *,
+    source_id: str,
+    source_version: int,
+    locator: str,
+    allow_local: bool = False,
+    max_characters: int = 2000,
+) -> dict[str, object]:
+    """Read one applied citation from any visible Workspace source."""
+    return _read_applied_evidence(
+        workspace,
+        source_id=source_id,
+        source_version=source_version,
+        locator=locator,
+        allow_local=allow_local,
+        max_characters=_clamp_int(max_characters, 1, _EVIDENCE_MAX_CHARACTERS),
+    )
+
+
+def _read_applied_evidence(
+    workspace: Path,
+    *,
+    source_id: str,
+    source_version: int,
+    locator: str,
+    allow_local: bool,
+    max_characters: int,
+) -> dict[str, object]:
+    try:
         if not _is_wiki_fact(workspace, source_id, source_version, locator):
             return {"status": "citation_not_found"}
         if not is_applied_source_version(
@@ -340,8 +466,6 @@ def read_applied_evidence(
             source_version=source_version,
             locator=locator,
         )
-    except (UnmappedProjectError, ValueError):
-        return {"status": "unmapped_project"}
     except _OPEN_FAILURES:
         return {"status": "citation_not_found"}
     truncated = len(text) > max_characters
