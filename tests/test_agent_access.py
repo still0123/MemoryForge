@@ -18,6 +18,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+from memoryforge import agent_access as agent_access_module
 from memoryforge.agent_access import (
     list_changesets,
     propose_grounded_update,
@@ -36,6 +37,72 @@ from tests.cli_helpers import review_approve_apply
 
 CACHE_POLICY = "# Cache policy\n\nCache entries expire after sixty seconds.\n"
 RETRY_POLICY = "# Retry policy\n\nRetries stop after three attempts.\n"
+
+
+def test_mcp_evidence_contract_separates_operation_and_partial_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    citation = {
+        "source_id": "a" * 64,
+        "source_version": 1,
+        "locator": "chars:0-20",
+        "quote": "alpha-mgr imports beta-mgr/api.",
+        "section_path": "Dependencies",
+    }
+    monkeypatch.setattr(
+        agent_access_module,
+        "answer_question",
+        lambda *_args, **_kwargs: {
+            "status": "unknown",
+            "evidence_status": "partial",
+            "answer": "alpha-mgr imports beta-mgr/api.",
+            "supported_claims": ["alpha-mgr imports beta-mgr/api."],
+            "unsupported_aspects": ["runtime_call_not_verified"],
+            "wiki_pages": ["wiki/pages/alpha/client.md"],
+            "citations": [citation],
+            "support": {"sufficient": False},
+        },
+    )
+    monkeypatch.setattr(
+        agent_access_module,
+        "_page_entry",
+        lambda _root, path: {"path": path, "title": "Alpha client"},
+    )
+    monkeypatch.setattr(
+        agent_access_module,
+        "_citation_page_paths",
+        lambda _root, _citations: {
+            (citation["source_id"], citation["source_version"], citation["locator"]): (
+                "wiki/pages/alpha/client.md"
+            )
+        },
+    )
+    monkeypatch.setattr(agent_access_module, "_display_source_label", lambda *_args: "client.go")
+
+    class Opened:
+        root = tmp_path
+
+        @staticmethod
+        def current_commit() -> str:
+            return "b" * 40
+
+    payload = agent_access_module._query_context(
+        Opened(),  # type: ignore[arg-type]
+        "How does alpha-mgr call beta-mgr?",
+        repository_id=None,
+        preferred_repository_id=None,
+        scope=None,
+        allow_local=True,
+        max_pages=3,
+        max_citations=6,
+    )
+
+    assert payload["status"] == "ok"
+    assert payload["evidence_status"] == "partial"
+    assert payload["answer_hint"] == "alpha-mgr imports beta-mgr/api."
+    assert payload["unsupported_aspects"] == ["runtime_call_not_verified"]
+    assert len(payload["citations"]) == 1
 
 
 def _git(repository: Path, *arguments: str) -> None:
@@ -209,7 +276,8 @@ def test_query_context_answers_bounded_context_from_bound_repository(
 
     result = query_context(workspace, checkout, "When do cache entries expire?")
 
-    assert result["status"] == "answered"
+    assert result["status"] == "ok"
+    assert result["evidence_status"] == "grounded"
     assert result["repository"]["repository_id"] == repository_id
     assert result["repository"]["name"] == "repository"
     assert "Cache entries expire after sixty seconds." in str(result["answer_hint"])
@@ -338,10 +406,12 @@ def test_query_context_filters_local_only_evidence_by_default(
         allow_local=True,
     )
 
-    assert denied["status"] == "unknown"
+    assert denied["status"] == "ok"
+    assert denied["evidence_status"] == "no_local_evidence"
     assert denied["answer_hint"] == ""
     assert denied["citations"] == []
-    assert authorized["status"] == "answered"
+    assert authorized["status"] == "ok"
+    assert authorized["evidence_status"] == "grounded"
 
 
 def test_answer_question_public_only_gates_the_non_llm_path(
@@ -403,9 +473,12 @@ def test_query_context_isolates_repositories(
     scoped_a_own = query_context(workspace, checkout_a, "When do cache entries expire?")
     scoped_b_own = query_context(workspace, checkout_b, "When do retries stop?")
 
-    assert scoped_a["status"] == "unknown"
-    assert scoped_a_own["status"] == "answered"
-    assert scoped_b_own["status"] == "answered"
+    assert scoped_a["status"] == "ok"
+    assert scoped_a["evidence_status"] == "no_local_evidence"
+    assert scoped_a_own["status"] == "ok"
+    assert scoped_a_own["evidence_status"] == "grounded"
+    assert scoped_b_own["status"] == "ok"
+    assert scoped_b_own["evidence_status"] == "grounded"
     assert scoped_a_own["repository"]["repository_id"] == repository_ids[str(checkout_a)]
     assert scoped_b_own["repository"]["repository_id"] == repository_ids[str(checkout_b)]
 
@@ -415,7 +488,8 @@ def test_query_context_isolates_repositories(
         preferred_project_root=checkout_a,
     )
 
-    assert global_query["status"] == "answered"
+    assert global_query["status"] == "ok"
+    assert global_query["evidence_status"] == "grounded"
     assert "three attempts" in str(global_query["answer_hint"])
     scope = global_query["scope"]
     assert scope["mode"] == "workspace"
@@ -440,7 +514,7 @@ def test_query_context_truncates_output_to_budget(
 
     assert result["budget"]["truncated"] is True
     assert result["budget"]["output_characters"] <= 8000
-    assert result["status"] == "answered"
+    assert result["status"] == "ok"
 
 
 def test_read_applied_evidence_reads_one_citation(
@@ -1129,7 +1203,7 @@ def test_cli_review_approve_apply_makes_agent_proposal_queryable(
     assert applied.exit_code == 0, applied.output
 
     requery = query_context(workspace, checkout, "When do cache entries expire?")
-    assert requery["status"] == "answered"
+    assert requery["status"] == "ok"
     assert "sixty seconds" in str(requery["answer_hint"])
 
     again = propose_grounded_update(

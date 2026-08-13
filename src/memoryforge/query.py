@@ -140,7 +140,10 @@ class SupportPayload(TypedDict):
 
 class AskPayload(TypedDict):
     status: Literal["answered", "unknown"]
+    evidence_status: Literal["grounded", "partial", "no_local_evidence"]
     answer: str
+    supported_claims: list[str]
+    unsupported_aspects: list[str]
     citations: list[CitationPayload]
     wiki_pages: list[str]
     source_id: str | None
@@ -269,7 +272,7 @@ def answer_question(
         logging.debug("egress request build skipped: %s", exc)
 
     retrieval_v2_result: "RetrievalResult | None" = None
-    if egress_request is not None and repository_id is not None:
+    if egress_request is not None:
         try:
             from memoryforge.retrieval_v2 import retrieve_candidates
             from memoryforge.retrieval_models import VisibleSource
@@ -289,19 +292,20 @@ def answer_question(
             applied_wiki_facts_list = _retrieval_wiki_facts(workspace_root, repository_id)
             code_index_snapshot_symbols: list[dict[str, Any]] = []
             code_index_snapshot_relations: list[dict[str, Any]] = []
-            try:
-                from memoryforge.code_index import build_code_index
+            if repository_id is not None:
+                try:
+                    from memoryforge.code_index import build_code_index
 
-                snapshot = build_code_index(workspace_root, repository_id)
-                code_index_snapshot_symbols = [
-                    symbol.model_dump(mode="json") for symbol in snapshot.symbols
-                ]
-                code_index_snapshot_relations = [
-                    relation.model_dump(mode="json") for relation in snapshot.relations
-                ]
-            except Exception as exc:  # noqa: BLE001
-                # Code indexing is optional: Wiki facts remain a usable fallback.
-                logging.debug("retrieval_v2 code index unavailable: %s", exc)
+                    snapshot = build_code_index(workspace_root, repository_id)
+                    code_index_snapshot_symbols = [
+                        symbol.model_dump(mode="json") for symbol in snapshot.symbols
+                    ]
+                    code_index_snapshot_relations = [
+                        relation.model_dump(mode="json") for relation in snapshot.relations
+                    ]
+                except Exception as exc:  # noqa: BLE001
+                    # Code indexing is optional: Wiki facts remain a usable fallback.
+                    logging.debug("retrieval_v2 code index unavailable: %s", exc)
             try:
                 retrieval_v2_result = retrieve_candidates(
                     workspace_root,
@@ -647,7 +651,13 @@ def answer_question(
         if "stale_sources" not in support["failed_hard_gates"] and total_penalty > 0:
             support["failed_hard_gates"].append("stale_sources")
     if not support["sufficient"]:
-        return _unknown_payload(debug, trace, support=support)
+        return _unknown_payload(
+            debug,
+            trace,
+            support=support,
+            answer=answer,
+            selected=selected,
+        )
 
     citations = [citation for _, citation in selected]
     pages = list(dict.fromkeys(page_path for page_path, _ in selected))
@@ -656,7 +666,10 @@ def answer_question(
     citation = citations[0]
     result: AskPayload = {
         "status": "answered",
+        "evidence_status": "grounded",
         "answer": answer,
+        "supported_claims": [answer],
+        "unsupported_aspects": [],
         "citations": citations,
         "wiki_pages": pages,
         "source_id": citation["source_id"],
@@ -913,16 +926,31 @@ def _unknown_payload(
     trace: list[TraceStep],
     *,
     support: SupportPayload | None = None,
+    answer: str = "",
+    selected: list[tuple[str, CitationPayload]] | None = None,
 ) -> AskPayload:
+    selected = selected or []
+    citations = [citation for _, citation in selected]
+    pages = list(dict.fromkeys(page_path for page_path, _ in selected))
+    partial = bool(citations)
+    unsupported_aspects = (
+        list(support["failed_hard_gates"])
+        if partial and support is not None
+        else ["no_local_evidence"]
+    )
+    citation = citations[0] if citations else None
     result: AskPayload = {
         "status": "unknown",
-        "answer": "不知道",
-        "citations": [],
-        "wiki_pages": [],
-        "source_id": None,
-        "source_version": None,
-        "locator": None,
-        "quote": None,
+        "evidence_status": "partial" if partial else "no_local_evidence",
+        "answer": answer if partial else "不知道",
+        "supported_claims": [answer] if partial and answer else [],
+        "unsupported_aspects": unsupported_aspects,
+        "citations": citations,
+        "wiki_pages": pages,
+        "source_id": citation["source_id"] if citation else None,
+        "source_version": citation["source_version"] if citation else None,
+        "locator": citation["locator"] if citation else None,
+        "quote": citation["quote"] if citation else None,
     }
     if debug:
         result["trace"] = trace
@@ -1293,7 +1321,7 @@ def _code_identifier_tokens(text: str) -> set[str]:
 
 def _retrieval_wiki_facts(
     workspace_root: Path,
-    repository_id: str,
+    repository_id: str | None,
 ) -> list[dict[str, Any]]:
     """Load only applied facts for Retrieval v2's bounded routing lanes."""
     database = workspace_root / DATABASE_RELATIVE_PATH
@@ -1301,20 +1329,24 @@ def _retrieval_wiki_facts(
         return []
     try:
         with _connect_readonly(database) as connection:
-            rows = connection.execute(
-                """
-                SELECT facts.page_path, facts.repository_id, facts.source_id,
+            query = """
+                SELECT facts.page_path, facts.repository_id, repositories.name AS repository_name,
+                       facts.source_id,
                        facts.source_version, facts.locator, facts.section_path,
                        facts.quote, facts.routing_text, facts.symbol, facts.relation_type
                 FROM wiki_facts AS facts
                 JOIN applied_source_versions AS applied
                   ON applied.source_id = facts.source_id
                  AND applied.source_version_id = facts.source_version
-                WHERE facts.repository_id IS NULL OR facts.repository_id = ?
-                ORDER BY facts.page_path, facts.locator
-                """,
-                (repository_id,),
-            ).fetchall()
+                LEFT JOIN git_repositories AS repositories
+                  ON repositories.repository_id = facts.repository_id
+                """
+            parameters: tuple[str, ...] = ()
+            if repository_id is not None:
+                query += " WHERE facts.repository_id IS NULL OR facts.repository_id = ?"
+                parameters = (repository_id,)
+            query += " ORDER BY facts.page_path, facts.locator"
+            rows = connection.execute(query, parameters).fetchall()
     except sqlite3.Error as exc:
         logging.debug("retrieval_v2 fact load unavailable: %s", exc)
         return []

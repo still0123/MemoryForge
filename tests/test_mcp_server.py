@@ -162,7 +162,8 @@ def test_context_answers_bounded_context_from_bound_repository(
             )
 
     payload = _run(scenario)
-    assert payload["status"] == "answered"
+    assert payload["status"] == "ok"
+    assert payload["evidence_status"] == "grounded"
     assert payload["repository"] == {
         "repository_id": repository_id,
         "name": "repository",
@@ -198,7 +199,8 @@ def test_context_returns_unknown_when_evidence_is_insufficient(
             )
 
     payload = _run(scenario)
-    assert payload["status"] == "unknown"
+    assert payload["status"] == "ok"
+    assert payload["evidence_status"] == "no_local_evidence"
     assert payload["answer_hint"] == ""
 
 
@@ -537,7 +539,7 @@ def test_mcp_propose_update_stages_lists_and_previews_without_receipt(
                 "memoryforge_context",
                 {"question": "When do cache entries expire?"},
             )
-            assert context["status"] == "answered"
+            assert context["status"] == "ok"
             citation = dict(context["citations"][0])
             target_page = str(citation["wiki_page"])
 

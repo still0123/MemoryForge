@@ -10,6 +10,39 @@ from memoryforge import query as query_module
 from memoryforge.wiki_facts import AppliedCodeSymbolMatch, CitationPayload
 
 
+def test_partial_evidence_contract_keeps_supported_hint_and_citation() -> None:
+    citation = _citation("alpha-mgr imports beta-mgr/api.")
+    support = {
+        "score": 70.0,
+        "threshold": 75.0,
+        "sufficient": False,
+        "enforced": True,
+        "components": {
+            "exact_identifier_coverage": 1.0,
+            "core_term_coverage": 0.5,
+            "fact_co_location": 1.0,
+            "negation_alignment": 1.0,
+            "multi_source_coverage": 1.0,
+            "current_source_versions": 1.0,
+        },
+        "failed_hard_gates": ["runtime_call_not_verified"],
+    }
+
+    payload = query_module._unknown_payload(
+        False,
+        [],
+        support=support,
+        answer="alpha-mgr imports beta-mgr/api.",
+        selected=[("wiki/pages/alpha/client.md", citation)],
+    )
+
+    assert payload["status"] == "unknown"
+    assert payload["evidence_status"] == "partial"
+    assert payload["supported_claims"] == ["alpha-mgr imports beta-mgr/api."]
+    assert payload["unsupported_aspects"] == ["runtime_call_not_verified"]
+    assert payload["citations"] == [citation]
+
+
 def test_code_support_rejects_topic_only_evidence(tmp_path: Path) -> None:
     citation = _citation("`agent_loop.run_bash` (function): `def run_bash(command: str) -> str:`")
 

@@ -6,7 +6,9 @@ Register MemoryForge with Codex once for one Workspace:
 memoryforge connect codex --workspace /absolute/path/to/wiki-workspace
 ```
 
-The command registers one server named `memoryforge`. It does not edit a
+The command registers one server named `memoryforge` and installs the small
+implicit `memoryforge-knowledge` Codex Skill. The Skill contains trigger and
+evidence-handling rules, not Wiki content. The command does not edit a
 project's `AGENTS.md` and does not create one MCP configuration per project.
 
 Each project still needs the normal MemoryForge source lifecycle first: add
@@ -23,6 +25,12 @@ and questions spanning several repositories.
 The current project is a ranking hint, never an access-control boundary.
 Source sensitivity remains the boundary: by default the global connection
 exposes only `public` sources.
+
+Successful context calls return `status: ok`. `evidence_status` is separate:
+`grounded`, `partial`, or `no_local_evidence`. Partial results retain their
+supported claims and citations. No local evidence means the Wiki does not
+establish a project fact; the host may still provide clearly labeled general
+analysis.
 
 Passing `--allow-local-llm` explicitly authorizes `local_only` content from
 the whole registered Workspace:

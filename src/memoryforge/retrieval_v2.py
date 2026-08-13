@@ -18,13 +18,14 @@ if TYPE_CHECKING:
 _TOKEN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*|\w+", re.UNICODE)
 _IDENT_TOKEN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*")
 _WORD = re.compile(r"[a-z0-9]+|[\u4e00-\u9fff]+", re.IGNORECASE)
+_HYPHENATED_NAME = re.compile(r"(?<![A-Za-z0-9])([A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)+)")
 
 
 def retrieve_candidates(
     workspace: Path,
     question: str,
     *,
-    repository_id: str,
+    repository_id: str | None,
     visible_source: VisibleSource,
     max_pages: int = 3,
     semantic_index: Optional["SemanticIndex"] = None,
@@ -39,7 +40,11 @@ def retrieve_candidates(
     if code_relations is None:
         code_relations = []
 
-    facts = [f for f in wiki_facts if f.get("repository_id") in (None, repository_id)]
+    facts = (
+        list(wiki_facts)
+        if repository_id is None
+        else [f for f in wiki_facts if f.get("repository_id") in (None, repository_id)]
+    )
 
     routes: list[str] = []
 
@@ -79,6 +84,11 @@ def retrieve_candidates(
         code_relations,
         repository_id,
     )
+    if repository_id is None:
+        cross_repository_hits = _cross_repository_lane(question, facts)
+        if cross_repository_hits:
+            relation_hits = cross_repository_hits + relation_hits
+            routes.append("cross_repository")
     if relation_hits:
         routes.append("relation")
 
@@ -226,7 +236,7 @@ def _extract_identifier_tokens(text: str) -> list[str]:
 def _exact_lane(
     question: str,
     facts: list[dict[str, Any]],
-    repository_id: str,
+    repository_id: str | None,
 ) -> list[tuple[dict[str, Any], int]]:
     idents = _extract_identifier_tokens(question)
     if not idents:
@@ -322,7 +332,7 @@ def _relation_lane(
     facts: list[dict[str, Any]],
     code_symbols: list[dict[str, Any]],
     code_relations: list[dict[str, Any]],
-    repository_id: str,
+    repository_id: str | None,
 ) -> list[tuple[dict[str, Any], int]]:
     if not seed_symbol_ids:
         return []
@@ -330,7 +340,8 @@ def _relation_lane(
     sym_by_id = {
         str(symbol.get("symbol_id")): symbol
         for symbol in code_symbols
-        if symbol.get("repository_id") == repository_id and symbol.get("symbol_id")
+        if (repository_id is None or symbol.get("repository_id") == repository_id)
+        and symbol.get("symbol_id")
     }
     symbol_id_by_name = {
         str(symbol.get("qualified_name")): symbol_id
@@ -349,7 +360,7 @@ def _relation_lane(
     }
     related_symbol_ids: set[str] = set()
     for rel in code_relations:
-        if rel.get("repository_id") != repository_id:
+        if repository_id is not None and rel.get("repository_id") != repository_id:
             continue
         src = rel.get("source_symbol_id", "")
         tgt = rel.get("target_symbol_id", "")
@@ -374,3 +385,41 @@ def _relation_lane(
     for rank, (fact, _sid) in enumerate(hits[:20], start=1):
         result.append((fact, rank))
     return result
+
+
+def _cross_repository_lane(
+    question: str,
+    facts: list[dict[str, Any]],
+) -> list[tuple[dict[str, Any], int]]:
+    names = tuple(dict.fromkeys(name.lower() for name in _HYPHENATED_NAME.findall(question)))
+    if len(names) < 2:
+        return []
+    common_parts = set.intersection(*(set(name.split("-")) for name in names))
+    hits: list[tuple[int, dict[str, Any]]] = []
+    for fact in facts:
+        repository_name = str(fact.get("repository_name", "")).lower()
+        text = " ".join(
+            str(fact.get(field, ""))
+            for field in (
+                "routing_text",
+                "quote",
+                "section_path",
+                "page_path",
+            )
+        ).lower()
+        source_names = [name for name in names if repository_name == name]
+        links_named_repositories = any(
+            any(part in text for part in target.split("-") if part not in common_parts)
+            for source in source_names
+            for target in names
+            if target != source
+        )
+        if links_named_repositories:
+            hits.append((0, fact))
+        elif all(name in text for name in names):
+            hits.append((1, fact))
+    hits.sort(key=lambda item: (item[0], item[1]["page_path"], item[1]["locator"]))
+    return [
+        (fact, index + 1 if priority == 0 else index + 20)
+        for index, (priority, fact) in enumerate(hits[:20])
+    ]

@@ -65,7 +65,8 @@ memoryforge connect codex --workspace /absolute/path/to/my-wiki
 ```
 
 重启 Codex（或 ChatGPT Desktop / IDE 扩展）后，用 `/mcp` 确认 `memoryforge` 已出现。此推荐模式
-只注册一个本地只读 MCP Server，**不会为每个仓库重复注册，也不会改写项目的 `AGENTS.md`**。
+只注册一个本地只读 MCP Server，并安装一个小型 `memoryforge-knowledge` Codex Skill；**不会为每个
+仓库重复注册，也不会改写项目的 `AGENTS.md`**。Skill 只描述何时调用 MCP，不会预载 Wiki 内容。
 
 之后直接在任何新对话中正常提问即可。Codex 会在问题涉及项目历史、既有决策或 Wiki 时，调用
 `memoryforge_context`；不必每次先说“请查 MemoryForge”。若某次回答必须以知识库为准，可以明确说
@@ -78,8 +79,9 @@ MemoryForge 搜索整个已应用 Workspace：当前打开的已登记项目只�
 
 ![渐进式加载记忆：先找页面，再读引用，最后核验原文](assets/usage/03-progressive-recall.png)
 
-一次查询先返回少量相关页面和 Citation；只有需要时才读取某条原文 Evidence。这样既避免上下文
-污染，也保留“这句话来自哪里”的核验路径。没有足够证据时，系统会返回 `unknown`，而不是补全猜测。
+一次查询先返回少量相关页面和 Citation；只有需要时才读取某条原文 Evidence。MCP 调用成功统一返回
+`status: ok`，项目证据另分 `grounded`、`partial`、`no_local_evidence`。`partial` 会保留已支持的结论
+和引用；`no_local_evidence` 只表示 Wiki 没有项目证据，AI 仍可提供明确标注的通用分析。
 
 ### 4. AI 的新结论仍需审核
 

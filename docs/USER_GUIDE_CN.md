@@ -444,7 +444,8 @@ memoryforge connect codex --workspace "$MF_WORKSPACE"
 ```
 
 该命令通过 Codex CLI 注册一个名为 `memoryforge` 的本地只读 MCP Server。它不为每个仓库重复
-注册，也不会改写任何项目的 `AGENTS.md`。完成后重启 Codex（或 ChatGPT Desktop / IDE 扩展），
+注册，也不会改写任何项目的 `AGENTS.md`；同时安装一个可隐式触发的 `memoryforge-knowledge` Skill。
+Skill 只提供触发和回答规则，不携带 Wiki 正文。完成后重启 Codex（或 ChatGPT Desktop / IDE 扩展），
 并用 `/mcp` 确认 `memoryforge` 已出现。
 
 此后可在任何新对话中正常提问，例如“这个调用为什么这样设计？”或“这两个仓库如何协作？”。
@@ -456,10 +457,23 @@ memoryforge connect codex --workspace "$MF_WORKSPACE"
 ```text
 问题 → memoryforge_context（最多 3 页、6 个 Citation）
      → 必要时 memoryforge_read_evidence（单条原文片段）
-     → 有足够支持才回答；否则 unknown
+     → grounded：作为项目事实回答并引用
+       partial：回答已证实部分，模型分析单独标注
+       no_local_evidence：说明 Wiki 未证实，仍可给通用建议
 ```
 
 因此它节省 Token，也不会把无关 Wiki 页面污染当前对话。
+
+`status` 只描述调用是否成功：正常查询为 `ok`，Workspace 无法打开时才是
+`workspace_unavailable`。`evidence_status` 独立描述项目证据强度。严格拒答仍保留在证据层；它不会
+阻止宿主 AI 回答通用知识，但宿主 AI 不得把模型推断写成已验证项目事实。
+
+### 客户端如何触发
+
+- Codex：全局连接安装 Skill；项目专属连接也可写入受管理的 `AGENTS.md` 规则。
+- Claude Code：使用其生命周期 Hook 或项目指令调用同一 MCP Evidence Contract。
+- MemoryForge Desktop：可在 Agent Loop 前确定性调用 `memoryforge_context`。
+- 普通 MCP 客户端：依靠工具描述和模型选择；协议不假装存在跨客户端通用 Hook。
 
 ### 跨仓库、新对话和未登记项目如何处理
 

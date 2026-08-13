@@ -29,6 +29,7 @@ def test_connect_codex_router_registers_one_global_command(
 
     monkeypatch.setattr("memoryforge.codex_connect.shutil.which", lambda _name: "/fake/codex")
     monkeypatch.setattr("memoryforge.codex_connect.subprocess.run", fake_run)
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex-home"))
 
     result = connect_codex_router(workspace)
 
@@ -42,6 +43,10 @@ def test_connect_codex_router_registers_one_global_command(
     ]
     assert "--router" in command
     assert "--project-root" not in command
+    skill_file = Path(str(result["skill_file"]))
+    assert skill_file.is_file()
+    assert "memoryforge_context" in skill_file.read_text(encoding="utf-8")
+    assert "no_local_evidence" in skill_file.read_text(encoding="utf-8")
 
 
 def test_connect_cli_without_project_uses_the_global_router(

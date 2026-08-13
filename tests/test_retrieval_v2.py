@@ -172,6 +172,48 @@ def test_four_lanes_contribute_routes() -> None:
     assert "lexical" in result.routes
 
 
+def test_workspace_route_prioritizes_fact_linking_two_named_repositories() -> None:
+    facts = [
+        {
+            "page_path": "wiki/pages/alpha/client.md",
+            "source_id": SRC_A,
+            "source_version": 1,
+            "locator": "chars:0-100",
+            "section_path": "Dependencies",
+            "quote": "The client imports beta-mgr/api.",
+            "routing_text": "Go import dependency",
+            "symbol": None,
+            "relation_type": "imports",
+            "repository_id": REPO_ID,
+            "repository_name": "alpha-mgr",
+        },
+        {
+            "page_path": "wiki/pages/000-general.md",
+            "source_id": SRC_B,
+            "source_version": 1,
+            "locator": "chars:0-100",
+            "section_path": "Overview",
+            "quote": "alpha-mgr and beta-mgr are services.",
+            "routing_text": "service overview",
+            "symbol": None,
+            "relation_type": None,
+            "repository_id": OTHER_REPO_ID,
+            "repository_name": "docs",
+        },
+    ]
+
+    result = retrieve_candidates(
+        Path("/tmp"),
+        "How does alpha-mgr call beta-mgr?",
+        repository_id=None,
+        visible_source=_all_visible,
+        wiki_facts=facts,
+    )
+
+    assert "cross_repository" in result.routes
+    assert result.candidates[0].page_path == "wiki/pages/alpha/client.md"
+
+
 def test_rrf_dedupe_and_tiebreak_stable() -> None:
     facts = [
         {

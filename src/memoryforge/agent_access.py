@@ -278,7 +278,8 @@ def _query_context(
         )
     except _OPEN_FAILURES:
         return {"status": "workspace_unavailable"}
-    answer_hint = "" if result["status"] == "unknown" else str(result["answer"])
+    evidence_status = str(result.get("evidence_status", "no_local_evidence"))
+    answer_hint = "" if evidence_status == "no_local_evidence" else str(result["answer"])
     wiki_pages = [_page_entry(opened.root, page_path) for page_path in result["wiki_pages"]]
     page_paths = _citation_page_paths(opened.root, result["citations"])
     citations = [
@@ -303,6 +304,9 @@ def _query_context(
     support: SupportPayload | dict[str, object] = result.get("support") or {}
     content = {
         "answer_hint": answer_hint,
+        "evidence_status": evidence_status,
+        "supported_claims": result.get("supported_claims", []),
+        "unsupported_aspects": result.get("unsupported_aspects", []),
         "wiki_pages": wiki_pages,
         "citations": citations,
         "support": support,
@@ -320,6 +324,9 @@ def _query_context(
             ]
             content = {
                 "answer_hint": answer_hint,
+                "evidence_status": evidence_status,
+                "supported_claims": result.get("supported_claims", []),
+                "unsupported_aspects": result.get("unsupported_aspects", []),
                 "wiki_pages": wiki_pages,
                 "citations": citations,
                 "support": support,
@@ -334,6 +341,9 @@ def _query_context(
                     json.dumps(
                         {
                             "answer_hint": "",
+                            "evidence_status": evidence_status,
+                            "supported_claims": [],
+                            "unsupported_aspects": result.get("unsupported_aspects", []),
                             "wiki_pages": wiki_pages,
                             "citations": citations,
                             "support": support,
@@ -344,15 +354,21 @@ def _query_context(
             )
             content = {
                 "answer_hint": answer_hint,
+                "evidence_status": evidence_status,
+                "supported_claims": result.get("supported_claims", []),
+                "unsupported_aspects": result.get("unsupported_aspects", []),
                 "wiki_pages": wiki_pages,
                 "citations": citations,
                 "support": support,
             }
         output_characters = len(json.dumps(content, ensure_ascii=False))
     payload: dict[str, object] = {
-        "status": "answered" if result["status"] == "answered" else "unknown",
+        "status": "ok",
+        "evidence_status": evidence_status,
         "workspace_commit": workspace_commit,
         "answer_hint": answer_hint,
+        "supported_claims": result.get("supported_claims", []),
+        "unsupported_aspects": result.get("unsupported_aspects", []),
         "wiki_pages": wiki_pages,
         "citations": citations,
         "support": support,

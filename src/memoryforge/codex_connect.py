@@ -14,6 +14,7 @@ the other kind — the project never carries two MemoryForge blocks (§10.3).
 from __future__ import annotations
 
 import json
+import os
 import shlex
 import shutil
 import subprocess
@@ -30,6 +31,36 @@ AGENTS_RECALL_BEGIN = "<!-- BEGIN MEMORYFORGE RECALL -->"
 AGENTS_RECALL_END = "<!-- END MEMORYFORGE RECALL -->"
 
 _AGENTS_BLOCK_LIMIT = 3000
+
+_CODEX_SKILL = """---
+name: memoryforge-knowledge
+description: >-
+  Use MemoryForge for questions that depend on existing project or repository facts,
+  architecture, cross-repository calls, configuration, prior decisions,
+  troubleshooting history, or implementation rationale. Trigger before searching local
+  checkouts when the answer may already exist in the reviewed Wiki.
+---
+
+# MemoryForge knowledge
+
+1. Call `memoryforge_context` with the user's complete question. Do not require a special phrase.
+2. Interpret `evidence_status`:
+   - `grounded`: answer as verified project fact and cite returned sources.
+   - `partial`: state supported project facts, name unsupported aspects, then label model analysis.
+   - `no_local_evidence`: say the Wiki does not establish a project fact; clearly labeled
+     general guidance is still allowed.
+3. Call `memoryforge_read_evidence` only when exact source text is needed.
+4. For cross-repository questions, keep full repository names in one Workspace query.
+5. Never invent project facts or citations. Skip unrelated general questions.
+"""
+
+_CODEX_SKILL_UI = """interface:
+  display_name: "MemoryForge Knowledge"
+  short_description: "Recall verified project knowledge from MemoryForge"
+  default_prompt: "Use $memoryforge-knowledge to answer this project question with local evidence."
+policy:
+  allow_implicit_invocation: true
+"""
 
 _AGENTS_MCP_LINES = (
     "## MemoryForge on-demand knowledge",
@@ -241,15 +272,37 @@ def connect_codex_router(
         )
     else:
         action = "unchanged"
+    skill_file = install_codex_skill()
     return {
         "status": "connected" if action == "added" else "unchanged",
         "server": name,
         "routing": "mcp_roots",
         "command": command,
+        "skill_file": str(skill_file),
         "restart_hint": (
             "Restart Codex (or the ChatGPT desktop app / IDE extension) and check with /mcp."
         ),
     }
+
+
+def install_codex_skill(codex_home: Path | None = None) -> Path:
+    """Install the global Router's small, implicit Codex trigger skill."""
+    if codex_home is None:
+        configured_home = os.environ.get("CODEX_HOME")
+        codex_home = (
+            Path(configured_home).expanduser()
+            if configured_home
+            else Path.home() / ".codex"
+        )
+    skill_dir = codex_home / "skills" / "memoryforge-knowledge"
+    agents_dir = skill_dir / "agents"
+    if skill_dir.is_symlink() or agents_dir.is_symlink():
+        raise ValueError("MemoryForge Codex skill path must not be a symlink")
+    agents_dir.mkdir(parents=True, exist_ok=True)
+    skill_file = skill_dir / "SKILL.md"
+    skill_file.write_text(_CODEX_SKILL, encoding="utf-8")
+    (agents_dir / "openai.yaml").write_text(_CODEX_SKILL_UI, encoding="utf-8")
+    return skill_file
 
 
 def _existing_command(codex: str, name: str) -> list[str] | None:

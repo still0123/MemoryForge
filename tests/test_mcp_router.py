@@ -156,7 +156,8 @@ def test_global_router_exposes_workspace_read_tools_without_a_current_project(
             result = await client.call_tool("memoryforge_context", {"question": "What is this?"})
             assert not result.is_error
             assert result.structured_content is not None
-            assert result.structured_content["status"] == "unknown"
+            assert result.structured_content["status"] == "ok"
+            assert result.structured_content["evidence_status"] == "no_local_evidence"
             scope = result.structured_content["scope"]
             assert scope["mode"] == "workspace"
             preferred = scope["preferred_repository"]
@@ -170,14 +171,14 @@ def test_global_router_exposes_workspace_read_tools_without_a_current_project(
             )
             assert not result.is_error
             assert result.structured_content is not None
-            assert result.structured_content["status"] == "unknown"
+            assert result.structured_content["status"] == "ok"
             assert result.structured_content["scope"]["preferred_repository"] is not None
 
         async with Client(build_router_server(workspace)) as client:
             result = await client.call_tool("memoryforge_context", {"question": "What is this?"})
             assert not result.is_error
             assert result.structured_content is not None
-            assert result.structured_content["status"] == "unknown"
+            assert result.structured_content["status"] == "ok"
             assert result.structured_content["scope"]["preferred_repository"] is None
 
     asyncio.run(scenario())
