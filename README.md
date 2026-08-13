@@ -65,7 +65,7 @@ my-wiki/
 
 环境要求：Python 3.11+。当前正式支持范围以 v0.4.0 的 macOS 发布证据为准。
 
-只安装 CLI：
+PyPI 发布完成后可只安装 CLI：
 
 ```bash
 python3.11 -m pip install memoryforge-wiki
