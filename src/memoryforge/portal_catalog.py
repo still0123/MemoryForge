@@ -23,7 +23,7 @@ from memoryforge.workspace import (
 _TITLE = re.compile(r"^#\s+(.+?)\s*$", re.MULTILINE)
 _HEADING = re.compile(r"^(#{2,6})\s+(.+?)\s*$", re.MULTILINE)
 _MARKDOWN_LINK = re.compile(r"\[[^\]]+\]\((?P<target>[^)#]+\.md)(?:#[^)]*)?\)")
-_IDENTIFIER_BOUNDARY = r"A-Za-z0-9_./-"
+_IDENTIFIER = re.compile(r"[A-Za-z0-9_./@-]+")
 _CODE_EXTENSIONS = {
     ".go": "Go",
     ".py": "Python",
@@ -575,9 +575,8 @@ class PortalCatalog:
             for symbol in symbols:
                 identifiers[symbol].add(page_path)
         for source_path, body in scan_texts.items():
-            for identifier, targets in identifiers.items():
-                if not identifier or not _mentions(body, identifier):
-                    continue
+            for identifier in set(_IDENTIFIER.findall(body)):
+                targets = identifiers.get(identifier, ())
                 for target in targets:
                     if target != source_path and target in self.pages:
                         _add_pair(mentions, source_path, target, f"完整标识：{identifier}")
@@ -725,17 +724,6 @@ def _feishu_parent_source_path(source_path: str) -> str | None:
     if len(parts) != 3 or parts[0] != "feishu":
         return None
     return f"feishu/{parts[1]}.md"
-
-
-def _mentions(text: str, identifier: str) -> bool:
-    escaped = re.escape(identifier)
-    return (
-        re.search(
-            rf"(?<![{_IDENTIFIER_BOUNDARY}]){escaped}(?![{_IDENTIFIER_BOUNDARY}])",
-            text,
-        )
-        is not None
-    )
 
 
 def _add_pair(

@@ -331,7 +331,11 @@ class LocalPortalApp:
         self.allow_local_llm = allow_local_llm
         self._catalog_cache: PortalCatalog | None = None
         self._catalog_lock = Lock()
-        self.jobs = PortalJobManager(self.root)
+        self.jobs = PortalJobManager(
+            self.root,
+            provider=provider,
+            allow_local_llm=allow_local_llm,
+        )
         self.csrf_token = secrets.token_urlsafe(32)
 
     def summary(self) -> dict[str, Any]:

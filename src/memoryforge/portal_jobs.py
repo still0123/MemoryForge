@@ -23,6 +23,8 @@ from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 from memoryforge.changesets import ChangeSetStore
+from memoryforge.code_index import build_code_index
+from memoryforge.code_wiki_compiler import compile_code_wiki
 from memoryforge.codex_adapter import CodexImportError, import_codex_rollout
 from memoryforge.compiler import Compilation, compile_pending_sources
 from memoryforge.errors import ChangeSetStoreError
@@ -41,11 +43,14 @@ from memoryforge.github_thread_adapter import import_github_thread, parse_github
 from memoryforge.importer import import_local_file, validate_source_path
 from memoryforge.lifecycle import apply_changeset
 from memoryforge.models import ImportResult, Sensitivity
+from memoryforge.module_planner import build_module_plan
+from memoryforge.provider import OpenAICompatibleProvider
 from memoryforge.web_adapter import _normalise_url, import_web_page
 from memoryforge.workspace import (
     Workspace,
     _connect_readonly,
     list_git_checkouts,
+    list_git_code_modules,
     register_git_checkout,
     register_git_code_module,
     sync_git_checkout,
@@ -63,8 +68,16 @@ _GIT_CLONE_TIMEOUT_SECONDS = 120
 class PortalJobManager:
     """One durable queue and one worker for one Workspace."""
 
-    def __init__(self, workspace: Path) -> None:
+    def __init__(
+        self,
+        workspace: Path,
+        *,
+        provider: OpenAICompatibleProvider | None = None,
+        allow_local_llm: bool = False,
+    ) -> None:
         self.workspace = Workspace.open_readonly(workspace).root
+        self.provider = provider
+        self.allow_local_llm = allow_local_llm
         self.state_dir = self.workspace / ".memoryforge" / "traces" / "portal"
         self.jobs_dir = self.state_dir / "jobs"
         self._queue: queue.Queue[str | None] = queue.Queue()
@@ -262,6 +275,8 @@ class PortalJobManager:
                     self.workspace,
                     job,
                     partial(self._record_progress, job_id),
+                    provider=self.provider,
+                    allow_local_llm=self.allow_local_llm,
                 )
             except Exception as exc:
                 with self._state_lock:
@@ -370,6 +385,9 @@ def _execute_job(
     workspace: Path,
     job: dict[str, Any],
     progress: Callable[[str, int, str], None],
+    *,
+    provider: OpenAICompatibleProvider | None = None,
+    allow_local_llm: bool = False,
 ) -> dict[str, Any]:
     kind = str(job["type"])
     payload = job["payload"]
@@ -377,12 +395,24 @@ def _execute_job(
         raise ValueError("invalid job payload")
     if kind == "import":
         try:
-            return _execute_import(workspace, payload, progress)
+            return _execute_import(
+                workspace,
+                payload,
+                progress,
+                provider=provider,
+                allow_local_llm=allow_local_llm,
+            )
         finally:
             if payload.get("uploaded") is True and isinstance(payload.get("path"), str):
                 Path(payload["path"]).unlink(missing_ok=True)
     if kind == "refresh":
-        return _execute_refresh(workspace, _required_string(payload, "source_id"), progress)
+        return _execute_refresh(
+            workspace,
+            _required_string(payload, "source_id"),
+            progress,
+            provider=provider,
+            allow_local_llm=allow_local_llm,
+        )
     if kind == "apply":
         progress("记录审核", 25, "正在记录审核和批准凭据。")
         result = apply_changeset(
@@ -399,6 +429,9 @@ def _execute_import(
     workspace: Path,
     payload: dict[str, Any],
     progress: Callable[[str, int, str], None],
+    *,
+    provider: OpenAICompatibleProvider | None = None,
+    allow_local_llm: bool = False,
 ) -> dict[str, Any]:
     kind = _required_string(payload, "kind")
     sensitivity = Sensitivity.PUBLIC if bool(payload.get("public")) else Sensitivity.LOCAL_ONLY
@@ -414,18 +447,27 @@ def _execute_import(
         )
         opened = Workspace.open(workspace)
         with opened.exclusive_lock():
+            progress("扫描仓库", 30, "正在读取仓库文档和代码索引。")
             repository = register_git_checkout(workspace, checkout, sensitivity=sensitivity)
             snapshot = snapshot_git_repository(checkout)
             has_code = bool(scan_git_snapshot_code(snapshot, (".",), sensitivity=sensitivity))
             if has_code:
                 register_git_code_module(workspace, repository.repository_id, ".")
+            progress("导入仓库内容", 45, "正在写入不可变 SourceVersion。")
             synced = sync_git_checkout(workspace, repository.repository_id)
             source_ids.extend(document.source_id for document in synced.documents)
             changed = any(
                 document.status in {"created", "updated"} for document in synced.documents
             )
-            progress("生成知识更新", 65, "正在生成可审核 ChangeSet。")
-            changesets = _stage_pending(opened, tuple(source_ids))
+            _repository_stage_progress(progress, provider, has_code)
+            changesets = _stage_repository(
+                opened,
+                repository.repository_id,
+                tuple(source_ids),
+                has_code=has_code,
+                provider=provider,
+                allow_local_llm=allow_local_llm,
+            )
         return _job_result(changed, changesets)
 
     if kind == "folder":
@@ -498,10 +540,15 @@ def _execute_import(
             source_ids.extend(item.source_id for item in imported)
             changed = any(item.status != "unchanged" for item in imported)
 
-    progress("生成知识更新", 65, "正在生成可审核 ChangeSet。")
+    _stage_progress(progress, provider)
     opened = Workspace.open(workspace)
     with opened.exclusive_lock():
-        changesets = _stage_pending(opened, tuple(source_ids))
+        changesets = _stage_pending(
+            opened,
+            tuple(source_ids),
+            provider=provider,
+            allow_local_llm=allow_local_llm,
+        )
     return _job_result(changed, changesets)
 
 
@@ -509,6 +556,9 @@ def _execute_refresh(
     workspace: Path,
     source_id: str,
     progress: Callable[[str, int, str], None],
+    *,
+    provider: OpenAICompatibleProvider | None = None,
+    allow_local_llm: bool = False,
 ) -> dict[str, Any]:
     progress("刷新来源", 25, "正在读取来源当前版本。")
     with _connect_readonly(Workspace.open_readonly(workspace).index_path) as connection:
@@ -537,8 +587,13 @@ def _execute_refresh(
                 imported = import_feishu_document(workspace, document_id)
                 changed_ids = tuple(item.source_id for item in imported)
                 changed = any(item.status in {"created", "updated"} for item in imported)
-                progress("生成知识更新", 65, "正在生成可审核 ChangeSet。")
-                changesets = _stage_pending(opened, changed_ids)
+                _stage_progress(progress, provider)
+                changesets = _stage_pending(
+                    opened,
+                    changed_ids,
+                    provider=provider,
+                    allow_local_llm=allow_local_llm,
+                )
             return _job_result(changed, changesets)
         raise ValueError("this source cannot be refreshed without selecting it again")
     opened = Workspace.open(workspace)
@@ -546,16 +601,111 @@ def _execute_refresh(
         synced = sync_git_checkout(workspace, repository_id)
         changed_ids = tuple(document.source_id for document in synced.documents)
         changed = any(document.status in {"created", "updated"} for document in synced.documents)
-        progress("生成知识更新", 65, "正在生成可审核 ChangeSet。")
-        changesets = _stage_pending(opened, changed_ids)
+        has_code = bool(list_git_code_modules(opened, repository_id))
+        _repository_stage_progress(progress, provider, has_code)
+        changesets = _stage_repository(
+            opened,
+            repository_id,
+            changed_ids,
+            has_code=has_code,
+            provider=provider,
+            allow_local_llm=allow_local_llm,
+        )
     return _job_result(changed, changesets)
 
 
-def _stage_pending(opened: Workspace, source_ids: tuple[str, ...]) -> list[str]:
+def _stage_pending(
+    opened: Workspace,
+    source_ids: tuple[str, ...],
+    *,
+    provider: OpenAICompatibleProvider | None = None,
+    allow_local_llm: bool = False,
+) -> list[str]:
     if not source_ids:
         return []
-    compilation = compile_pending_sources(opened, source_ids=source_ids)
+    compilation = compile_pending_sources(
+        opened,
+        source_ids=source_ids,
+        provider=provider,
+        allow_local=allow_local_llm,
+    )
     return [_stage(opened, compilation)] if compilation is not None else []
+
+
+def _stage_repository(
+    opened: Workspace,
+    repository_id: str,
+    source_ids: tuple[str, ...],
+    *,
+    has_code: bool,
+    provider: OpenAICompatibleProvider | None = None,
+    allow_local_llm: bool = False,
+) -> list[str]:
+    changesets: list[str] = []
+    if has_code:
+        snapshot = build_code_index(opened, repository_id)
+        compilation = compile_code_wiki(
+            opened,
+            snapshot,
+            build_module_plan(snapshot),
+            provider=provider,
+            allow_local=allow_local_llm,
+        )
+        if compilation is not None:
+            changesets.append(_stage(opened, compilation))
+    changesets.extend(
+        _stage_pending(
+            opened,
+            _non_code_source_ids(opened, source_ids),
+            provider=provider,
+            allow_local_llm=allow_local_llm,
+        )
+    )
+    return changesets
+
+
+def _non_code_source_ids(opened: Workspace, source_ids: tuple[str, ...]) -> tuple[str, ...]:
+    selected = set(source_ids)
+    if not selected:
+        return ()
+    with _connect_readonly(opened.index_path) as connection:
+        rows = connection.execute(
+            """
+            SELECT sources.source_id, versions.tags_json
+            FROM sources
+            JOIN source_versions AS versions ON versions.source_id = sources.id
+            WHERE versions.is_current = 1
+            """
+        ).fetchall()
+    return tuple(
+        str(row["source_id"])
+        for row in rows
+        if str(row["source_id"]) in selected
+        and not ({"code", "code-module"} & set(json.loads(str(row["tags_json"]))))
+    )
+
+
+def _stage_progress(
+    progress: Callable[[str, int, str], None],
+    provider: OpenAICompatibleProvider | None,
+) -> None:
+    if provider is None:
+        progress("生成知识更新", 65, "正在生成可审核 ChangeSet。")
+    else:
+        progress("模型整理", 65, "模型正在生成可审核 ChangeSet。")
+
+
+def _repository_stage_progress(
+    progress: Callable[[str, int, str], None],
+    provider: OpenAICompatibleProvider | None,
+    has_code: bool,
+) -> None:
+    if not has_code:
+        _stage_progress(progress, provider)
+    elif provider is None:
+        progress("生成代码 Wiki", 65, "正在按代码结构生成可审核 ChangeSet。")
+    else:
+        progress("模型整理代码 Wiki", 65, "正在生成代码 Wiki 和模块叙事。")
 
 
 def _stage_all_pending(opened: Workspace) -> list[str]:

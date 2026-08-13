@@ -134,6 +134,75 @@ def test_portal_same_file_version_is_noop(tmp_path: Path) -> None:
         portal.close()
 
 
+def test_portal_passes_authorized_provider_to_compiler(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace = Workspace.initialize(tmp_path / "workspace").root
+    provider = object()
+    captured: dict[str, object] = {}
+
+    def compile_pending(opened: Workspace, **kwargs: object) -> None:
+        captured.update(workspace=opened.root, **kwargs)
+        return None
+
+    monkeypatch.setattr(portal_jobs, "compile_pending_sources", compile_pending)
+    portal = LocalPortalApp(
+        workspace,
+        provider=provider,  # type: ignore[arg-type]
+        allow_local_llm=True,
+    )
+    try:
+        assert portal.jobs.provider is provider
+        assert portal.jobs.allow_local_llm is True
+        assert portal_jobs._stage_pending(
+            Workspace.open(workspace),
+            ("source",),
+            provider=provider,  # type: ignore[arg-type]
+            allow_local_llm=True,
+        ) == []
+
+        assert captured["workspace"] == workspace
+        assert captured["provider"] is provider
+        assert captured["allow_local"] is True
+    finally:
+        portal.close()
+
+
+def test_portal_repository_passes_authorized_provider_to_code_wiki(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace = Workspace.initialize(tmp_path / "workspace").root
+    provider = object()
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(portal_jobs, "build_code_index", lambda *_args: "snapshot")
+    monkeypatch.setattr(portal_jobs, "build_module_plan", lambda _snapshot: "plan")
+
+    def compile_code(opened: Workspace, snapshot: str, plan: str, **kwargs: object) -> None:
+        captured.update(workspace=opened.root, snapshot=snapshot, plan=plan, **kwargs)
+        return None
+
+    monkeypatch.setattr(portal_jobs, "compile_code_wiki", compile_code)
+
+    assert portal_jobs._stage_repository(
+        Workspace.open(workspace),
+        "repository",
+        (),
+        has_code=True,
+        provider=provider,  # type: ignore[arg-type]
+        allow_local_llm=True,
+    ) == []
+    assert captured == {
+        "workspace": workspace,
+        "snapshot": "snapshot",
+        "plan": "plan",
+        "provider": provider,
+        "allow_local": True,
+    }
+
+
 def test_portal_reject_keeps_raw_source_and_does_not_apply(tmp_path: Path) -> None:
     workspace = Workspace.initialize(tmp_path / "workspace").root
     source = tmp_path / "reject.md"
