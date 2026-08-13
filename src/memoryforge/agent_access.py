@@ -1,4 +1,4 @@
-"""Protocol-agnostic Agent Access functions (Phase 1 of the progressive-recall spec).
+"""Protocol-agnostic Agent Access functions (progressive-recall spec).
 
 These are the shared business functions that both the CLI and the MCP stdio
 Server call. They return structured business statuses (§14) so every AI Host
@@ -14,14 +14,21 @@ gets the same bounded, applied, traceable knowledge access:
 * ``read_applied_evidence`` — L3 one-citation excerpt (≤ 2,000 characters)
   verified against applied Wiki Facts;
 * ``recall_context`` — recent applied conversation memory, extracted from the
-  CLI ``recall`` command so CLI and MCP share one implementation.
+  CLI ``recall`` command so CLI and MCP share one implementation;
+* ``propose_grounded_update`` — stage exactly one page's PROPOSED ChangeSet
+  from an evidence-backed conclusion (origin ``AGENT_PROPOSAL``); it never
+  reviews, approves, applies, or rewrites the stable Wiki;
+* ``list_changesets`` / ``review_changeset`` — read-only ChangeSet previews
+  that never record a human review receipt.
 
 No new query engine is introduced here; ``answer_question`` remains the single
-retrieval/support implementation.
+retrieval/support implementation, and page rendering reuses the compiler's
+existing PageChange pipeline.
 """
 
 from __future__ import annotations
 
+import difflib
 import hashlib
 import json
 import re
@@ -29,9 +36,30 @@ import sqlite3
 from contextlib import suppress
 from pathlib import Path
 
+from memoryforge.automation_validation import classify_risk
+from memoryforge.changesets import ChangeSetStore, StoredChangeSet
+from memoryforge.compiler import (
+    _add_relations_page,
+    _load_current_sources,
+    _parse_page_summary,
+    _read_source_text,
+    _render_index,
+    _render_llm_page,
+)
 from memoryforge.errors import MemoryForgeError, UnmappedProjectError
-from memoryforge.models import GitRepositoryRecord, Sensitivity
-from memoryforge.query import SupportPayload, answer_question
+from memoryforge.models import (
+    ChangeOperation,
+    ChangeOperationType,
+    ChangeOrigin,
+    ChangeSet,
+    ChangeSetStatus,
+    GitRepositoryRecord,
+    PageChange,
+    PageCitation,
+    RiskLevel,
+    Sensitivity,
+)
+from memoryforge.query import SupportPayload, answer_is_supported, answer_question
 from memoryforge.wiki_facts import (
     CitationPayload,
     is_conversation_process_note,
@@ -52,6 +80,10 @@ from memoryforge.workspace import (
 _CONTEXT_MAX_OUTPUT_CHARACTERS = 8000
 _EVIDENCE_MAX_CHARACTERS = 2000
 _STARTUP_CONTEXT_MAX_CHARACTERS = 4000
+
+# Phase 4 bounded review preview (§12.2).
+_REVIEW_MAX_DIFF_CHARACTERS = 4000
+_REVIEW_MAX_CITATIONS = 6
 
 _OPEN_FAILURES = (
     MemoryForgeError,
@@ -128,9 +160,7 @@ def server_name(workspace: Path, project_root: Path) -> str:
     """
     canonical_workspace = str(workspace.resolve(strict=False))
     canonical_project = str(project_root.resolve(strict=False))
-    digest = hashlib.sha256(
-        f"{canonical_workspace}\0{canonical_project}".encode()
-    ).hexdigest()[:8]
+    digest = hashlib.sha256(f"{canonical_workspace}\0{canonical_project}".encode()).hexdigest()[:8]
     slug = re.sub(r"[^a-z0-9]+", "-", Path(canonical_project).name.lower()).strip("-")
     if not slug:
         slug = "project"
@@ -469,6 +499,326 @@ def recall_context(
         "open_items": open_items,
         "startup_context": startup_context,
     }
+
+
+def propose_grounded_update(
+    workspace: Path,
+    project_root: Path,
+    *,
+    question: str,
+    conclusion: str,
+    citations: list[CitationPayload],
+    target_page: str,
+    allow_local: bool = False,
+) -> dict[str, object]:
+    """Stage exactly one page's PROPOSED ChangeSet from a grounded conclusion.
+
+    Rules (§12.1): at least one Citation; every Citation must be an applied,
+    current Wiki Fact under the bound project; ``answer_is_supported`` must
+    pass; ``target_page`` must be the applied page the Citations belong to;
+    origin is fixed to ``AGENT_PROPOSAL``; no review, approve, or apply is
+    ever called, and no ChangeSet is created without sufficient evidence.
+    """
+    if not citations or not conclusion.strip():
+        return {"status": "insufficient_evidence"}
+    if not question.strip():
+        return {"status": "insufficient_evidence"}
+    try:
+        scope = resolve_repository_scope(workspace, project_root)
+        opened = Workspace.open(workspace)
+    except (UnmappedProjectError, ValueError):
+        return {"status": "unmapped_project"}
+    except _OPEN_FAILURES:
+        return {"status": "workspace_unavailable"}
+    try:
+        loaded = _load_citation_quotes(opened.root, citations)
+        if loaded is None:
+            return {"status": "citation_not_found"}
+        quotes, page_paths = loaded
+        if not all(
+            is_applied_source_version(
+                opened.root,
+                source_id=citation["source_id"],
+                source_version=citation["source_version"],
+            )
+            for citation in citations
+        ):
+            return {"status": "not_applied"}
+        if not allow_local and not all(
+            is_public_source_version(
+                opened.root,
+                source_id=citation["source_id"],
+                source_version=citation["source_version"],
+            )
+            for citation in citations
+        ):
+            return {"status": "local_scope_denied"}
+        if not answer_is_supported(conclusion, quotes):
+            return {"status": "insufficient_evidence"}
+        if set(page_paths) != {target_page}:
+            return {"status": "target_page_not_found"}
+        page = opened.root / target_page
+        if not page.is_file() or page.is_symlink():
+            return {"status": "target_page_not_found"}
+        existing_content = page.read_text(encoding="utf-8")
+        summary = _parse_page_summary(target_page, existing_content)
+        if summary is None:
+            return {"status": "target_page_not_found"}
+        source_ids = tuple(dict.fromkeys(citation["source_id"] for citation in citations))
+        sources_by_id = {
+            source.source_id: source for source in _load_current_sources(opened, set(source_ids))
+        }
+        if set(sources_by_id) != set(source_ids):
+            return {"status": "citation_not_found"}
+        for citation in citations:
+            source = sources_by_id[citation["source_id"]]
+            if source.source_version != citation["source_version"]:
+                return {"status": "stale_citation"}
+        change = PageChange(
+            path=target_page,
+            title=summary.title,
+            page_type=summary.page_type,
+            summary=summary.summary,
+            body=conclusion.strip(),
+            source_ids=source_ids,
+            citations=tuple(
+                PageCitation(
+                    source_id=citation["source_id"],
+                    locator=citation["locator"],
+                )
+                for citation in citations
+            ),
+        )
+        sources = tuple(sources_by_id[source_id] for source_id in source_ids)
+        source_texts = {source.source_id: _read_source_text(opened, source) for source in sources}
+        candidate_files = {target_page: _render_llm_page(change, list(sources), source_texts)}
+        if candidate_files[target_page] == existing_content:
+            return {"status": "unchanged"}
+        operations = [
+            ChangeOperation(
+                type=ChangeOperationType.UPDATE_PAGE,
+                path=target_page,
+                details={"origin": "agent-proposal", "question": question},
+                origin=ChangeOrigin.AGENT_PROPOSAL,
+            )
+        ]
+        index_path = "wiki/INDEX.md"
+        candidate_files[index_path] = _render_index(opened, candidate_files)
+        operations.append(
+            ChangeOperation(
+                type=ChangeOperationType.UPDATE_PAGE,
+                path=index_path,
+                origin=ChangeOrigin.DETERMINISTIC_NAVIGATION,
+            )
+        )
+        _add_relations_page(opened, candidate_files, operations)
+        base_commit = opened.current_commit()
+        source_versions = {
+            source_id: sources_by_id[source_id].source_version for source_id in source_ids
+        }
+        identity = "\n".join(
+            [
+                base_commit,
+                "agent-proposal",
+                question,
+                target_page,
+                *(f"{source_id}:{version}" for source_id, version in source_versions.items()),
+                change.body,
+            ]
+        )
+        changeset_id = "chg_" + hashlib.sha256(identity.encode()).hexdigest()[:20]
+        changeset = ChangeSet(
+            changeset_id=changeset_id,
+            base_commit=base_commit,
+            source_ids=source_ids,
+            source_versions=source_versions,
+            status=ChangeSetStatus.PROPOSED,
+            operations=tuple(operations),
+        )
+        risk = classify_risk(
+            origin=ChangeOrigin.AGENT_PROPOSAL,
+            operation_type=ChangeOperationType.UPDATE_PAGE,
+            source_count=len(source_ids),
+        )[0]
+        stored = ChangeSetStore(opened).create(changeset, candidate_files)
+        return {
+            "status": "proposed",
+            "changeset_id": stored.changeset.changeset_id,
+            "risk": risk.value,
+            "next_action": "review",
+            "repository": {
+                "repository_id": scope.repository_id,
+                "name": scope.name,
+            },
+            "target_page": target_page,
+            "source_versions": source_versions,
+        }
+    except UnmappedProjectError:
+        return {"status": "unmapped_project"}
+    except ValueError:
+        # e.g. an empty citation excerpt or an invalid PageChange body.
+        return {"status": "insufficient_evidence"}
+    except _OPEN_FAILURES:
+        return {"status": "workspace_unavailable"}
+
+
+def list_changesets(workspace: Path) -> dict[str, object]:
+    """List staged ChangeSets: ID, name, risk, status only (§12.2)."""
+    try:
+        opened = Workspace.open_readonly(workspace)
+    except _OPEN_FAILURES:
+        return {"status": "workspace_unavailable"}
+    entries = []
+    for stored in ChangeSetStore(opened).list_all():
+        entries.append(
+            {
+                "changeset_id": stored.changeset.changeset_id,
+                "name": _changeset_name(opened, stored),
+                "risk": _changeset_risk(stored).value,
+                "status": stored.changeset.status.value,
+            }
+        )
+    return {"status": "ok", "changesets": entries}
+
+
+def review_changeset(workspace: Path, changeset_id: str) -> dict[str, object]:
+    """Return a bounded, read-only preview of one staged ChangeSet.
+
+    The diff is capped per file and the citation summary is a short list of
+    locators, so the payload stays small. No human review receipt is ever
+    recorded — only the CLI and Portal write real receipts (§12.2).
+    """
+    try:
+        opened = Workspace.open_readonly(workspace)
+        stored = ChangeSetStore(opened).get(changeset_id)
+    except (UnmappedProjectError, ValueError):
+        return {"status": "unmapped_project"}
+    except _OPEN_FAILURES:
+        return {"status": "workspace_unavailable"}
+    operations = {operation.path: operation.type for operation in stored.changeset.operations}
+    page_paths = sorted(set(operations) | set(stored.candidate_files))
+    pages = []
+    for path in page_paths:
+        before = opened.version_store.read_text_at(stored.changeset.base_commit, path) or ""
+        after = stored.candidate_files.get(path, "")
+        operation = operations.get(path)
+        action = (
+            "deleted"
+            if operation is ChangeOperationType.ARCHIVE_PAGE
+            else "created"
+            if operation is ChangeOperationType.CREATE_PAGE
+            else "updated"
+        )
+        diff = "".join(
+            difflib.unified_diff(
+                before.splitlines(keepends=True),
+                after.splitlines(keepends=True),
+                fromfile=path,
+                tofile=f"{path} (proposed)",
+            )
+        )
+        truncated = len(diff) > _REVIEW_MAX_DIFF_CHARACTERS
+        if truncated:
+            diff = diff[:_REVIEW_MAX_DIFF_CHARACTERS] + "\n… (diff truncated)"
+        pages.append(
+            {
+                "path": path,
+                "action": action,
+                "diff": diff,
+                "diff_truncated": truncated,
+                "citation_count": after.count("[^"),
+                "citations": _citation_summary(after),
+            }
+        )
+    return {
+        "status": "ok",
+        "changeset_id": stored.changeset.changeset_id,
+        "name": _changeset_name(opened, stored),
+        "risk": _changeset_risk(stored).value,
+        "state": stored.changeset.status.value,
+        "base_commit": stored.changeset.base_commit[:12],
+        "pages": pages,
+        "reviewed_by_mcp": False,
+    }
+
+
+def _load_citation_quotes(
+    workspace: Path,
+    citations: list[CitationPayload],
+) -> tuple[list[CitationPayload], set[str]] | None:
+    """Fetch each Citation's applied quote and its owning Wiki page (one query)."""
+    opened = Workspace.open_readonly(workspace)
+    quotes: list[CitationPayload] = []
+    page_paths: set[str] = set()
+    with _connect_readonly(opened.index_path) as connection:
+        for citation in citations:
+            row = connection.execute(
+                """
+                SELECT quote, page_path FROM wiki_facts
+                WHERE source_id = ? AND source_version = ? AND locator = ?
+                LIMIT 1
+                """,
+                (
+                    citation["source_id"],
+                    citation["source_version"],
+                    citation["locator"],
+                ),
+            ).fetchone()
+            if row is None:
+                return None
+            quotes.append(
+                {
+                    "source_id": citation["source_id"],
+                    "source_version": citation["source_version"],
+                    "locator": citation["locator"],
+                    "quote": str(row[0]),
+                }
+            )
+            page_paths.add(str(row[1]))
+    return quotes, page_paths
+
+
+def _changeset_name(opened: Workspace, stored: StoredChangeSet) -> str:
+    content_paths = [path for path in stored.candidate_files if path.startswith("wiki/pages/")]
+    for path in content_paths:
+        summary = _parse_page_summary(path, stored.candidate_files[path])
+        if summary is not None:
+            return summary.title
+    return "知识结构更新"
+
+
+_RISK_RANK = {
+    RiskLevel.LOW: 0,
+    RiskLevel.MODERATE: 1,
+    RiskLevel.HIGH: 2,
+    RiskLevel.CRITICAL: 3,
+}
+
+
+def _changeset_risk(stored: StoredChangeSet) -> RiskLevel:
+    risks = (
+        classify_risk(
+            origin=operation.origin,
+            operation_type=operation.type,
+            source_count=len(stored.changeset.source_ids),
+        )[0]
+        for operation in stored.changeset.operations
+    )
+    return max(risks, key=lambda level: _RISK_RANK[level], default=RiskLevel.LOW)
+
+
+def _citation_summary(after: str) -> list[dict[str, str]]:
+    """Parse at most a bounded number of footnote locators from a page."""
+    matches = list(
+        re.finditer(
+            r"source `([a-f0-9]{64})` · revision `(\d+)` · `(chars:\d+-\d+)`",
+            after,
+        )
+    )[:_REVIEW_MAX_CITATIONS]
+    return [
+        {"source_id": match.group(1), "source_version": match.group(2), "locator": match.group(3)}
+        for match in matches
+    ]
 
 
 def _citation_page_paths(

@@ -40,6 +40,9 @@ TOOL_NAMES = {
     "memoryforge_read_evidence",
     "memoryforge_recall",
     "memoryforge_status",
+    "memoryforge_propose_update",
+    "memoryforge_list_changesets",
+    "memoryforge_review_changeset",
 }
 
 
@@ -102,12 +105,17 @@ def test_tool_discovery_contract_is_fixed(
         async with Client(server) as client:
             tools = (await client.list_tools()).tools
             assert {tool.name for tool in tools} == TOOL_NAMES
+            by_name = {tool.name: tool for tool in tools}
             for tool in tools:
                 assert tool.annotations is not None
-                assert tool.annotations.read_only_hint is True
                 assert tool.annotations.destructive_hint is False
                 assert tool.annotations.open_world_hint is False
-            by_name = {tool.name: tool for tool in tools}
+            for name in TOOL_NAMES - {"memoryforge_propose_update"}:
+                assert by_name[name].annotations.read_only_hint is True
+                assert by_name[name].annotations.idempotent_hint is True
+            write_annotations = by_name["memoryforge_propose_update"].annotations
+            assert write_annotations.read_only_hint is False
+            assert write_annotations.idempotent_hint is False
             for name in TOOL_NAMES:
                 properties = by_name[name].input_schema.get("properties", {})
                 assert "project_path" not in properties
@@ -303,10 +311,13 @@ def test_context_isolates_repositories(
         )
         assert registered.exit_code == 0, registered.output
         repository_id = json.loads(registered.stdout)["repository_id"]
-        assert runner.invoke(
-            app,
-            ["git-sync", repository_id, "--workspace", str(workspace)],
-        ).exit_code == 0
+        assert (
+            runner.invoke(
+                app,
+                ["git-sync", repository_id, "--workspace", str(workspace)],
+            ).exit_code
+            == 0
+        )
         proposal = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
         assert proposal.exit_code == 0, proposal.output
         applied = review_approve_apply(
@@ -347,10 +358,13 @@ def test_recall_filters_to_bound_repository_memory(
     checkout.mkdir()
     _git_repo(checkout, {"README.md": "# Service\n"})
     runner = CliRunner()
-    assert runner.invoke(
-        app,
-        ["git-add", str(checkout), "--public", "--workspace", str(workspace)],
-    ).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            ["git-add", str(checkout), "--public", "--workspace", str(workspace)],
+        ).exit_code
+        == 0
+    )
 
     async def scenario() -> dict[str, object]:
         from mcp.client import Client
@@ -496,13 +510,145 @@ def test_cli_mcp_subprocess_stdout_carries_only_protocol(
     ids = [response.get("id") for response in responses]
     assert 1 in ids and 2 in ids
     tools_list = next(response for response in responses if response.get("id") == 2)
-    tool_names = {
-        tool["name"]
-        for tool in tools_list["result"]["tools"]
-    }
+    tool_names = {tool["name"] for tool in tools_list["result"]["tools"]}
     assert tool_names == TOOL_NAMES
     # stderr may carry SDK logging, but stdout must never carry non-protocol text.
     assert "stdout" not in stderr
+
+
+def test_mcp_propose_update_stages_lists_and_previews_without_receipt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace, checkout, _repository_id = _bound_workspace(
+        tmp_path,
+        monkeypatch,
+        {"README.md": CACHE_POLICY},
+        public=True,
+    )
+
+    async def scenario() -> None:
+        from mcp.client import Client
+
+        server = build_server(workspace, checkout)
+        async with Client(server) as client:
+            context = await _call(
+                client,
+                "memoryforge_context",
+                {"question": "When do cache entries expire?"},
+            )
+            assert context["status"] == "answered"
+            citation = dict(context["citations"][0])
+            target_page = str(citation["wiki_page"])
+
+            proposal = await _call(
+                client,
+                "memoryforge_propose_update",
+                {
+                    "question": "When do cache entries expire?",
+                    "conclusion": str(citation["quote"]),
+                    "citations": [
+                        {
+                            "source_id": str(citation["source_id"]),
+                            "source_version": int(citation["source_version"]),
+                            "locator": str(citation["locator"]),
+                        }
+                    ],
+                    "target_page": target_page,
+                },
+            )
+            assert proposal["status"] == "proposed"
+            changeset_id = str(proposal["changeset_id"])
+            assert proposal["risk"] == "high"
+            assert proposal["next_action"] == "review"
+
+            listed = await _call(client, "memoryforge_list_changesets", {})
+            assert listed["status"] == "ok"
+            assert any(
+                entry["changeset_id"] == changeset_id and entry["status"] == "PROPOSED"
+                for entry in listed["changesets"]
+            )
+
+            preview = await _call(
+                client,
+                "memoryforge_review_changeset",
+                {"changeset_id": changeset_id},
+            )
+            assert preview["status"] == "ok"
+            assert preview["reviewed_by_mcp"] is False
+            assert any(
+                entry["path"] == target_page and entry["action"] == "updated"
+                for entry in preview["pages"]
+            )
+            # The MCP preview must never record a human review receipt.
+            proposed_dir = workspace / ".memoryforge" / "staging" / "proposed"
+            assert not list(proposed_dir.rglob("review.json"))
+
+    _run(scenario)
+
+
+def test_mcp_propose_update_rejects_unsupported_and_fabricated_inputs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace, checkout, _repository_id = _bound_workspace(
+        tmp_path,
+        monkeypatch,
+        {"README.md": CACHE_POLICY},
+        public=True,
+    )
+
+    async def scenario() -> None:
+        from mcp.client import Client
+
+        server = build_server(workspace, checkout)
+        async with Client(server) as client:
+            context = await _call(
+                client,
+                "memoryforge_context",
+                {"question": "When do cache entries expire?"},
+            )
+            citation = dict(context["citations"][0])
+            target_page = str(citation["wiki_page"])
+            grounded = {
+                "question": "When do cache entries expire?",
+                "conclusion": str(citation["quote"]),
+                "citations": [
+                    {
+                        "source_id": str(citation["source_id"]),
+                        "source_version": int(citation["source_version"]),
+                        "locator": str(citation["locator"]),
+                    }
+                ],
+                "target_page": target_page,
+            }
+
+            unsupported = await _call(
+                client,
+                "memoryforge_propose_update",
+                {**grounded, "conclusion": "The moon is made of cheese."},
+            )
+            assert unsupported["status"] == "insufficient_evidence"
+
+            fabricated = await _call(
+                client,
+                "memoryforge_propose_update",
+                {
+                    **grounded,
+                    "citations": [
+                        {
+                            "source_id": "f" * 64,
+                            "source_version": 1,
+                            "locator": "chars:0-5",
+                        }
+                    ],
+                },
+            )
+            assert fabricated["status"] == "citation_not_found"
+
+            assert not (workspace / ".memoryforge" / "staging" / "proposed").exists()
+
+    _run(scenario)
 
 
 def _git_repo(root: Path, files: dict[str, str]) -> None:
