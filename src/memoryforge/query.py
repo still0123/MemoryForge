@@ -32,10 +32,10 @@ from memoryforge.workspace import (
     find_applied_code_symbol_facts,
     find_applied_page_paths,
     find_applied_wiki_fact_page_paths,
-    is_applied_source_version,
     is_public_source_version,
     read_source_excerpt,
     repository_page_paths,
+    _wiki_fact_fts_query,
 )
 
 if TYPE_CHECKING:
@@ -289,7 +289,11 @@ def answer_question(
                 )
 
             visible: VisibleSource = _visible_source
-            applied_wiki_facts_list = _retrieval_wiki_facts(workspace_root, repository_id)
+            applied_wiki_facts_list = _retrieval_wiki_facts(
+                workspace_root,
+                repository_id,
+                question,
+            )
             code_index_snapshot_symbols: list[dict[str, Any]] = []
             code_index_snapshot_relations: list[dict[str, Any]] = []
             if repository_id is not None:
@@ -1238,17 +1242,25 @@ def _support_score(
     real_workspace = (workspace_root / "raw").is_dir() and (
         workspace_root / ".memoryforge" / "index.sqlite"
     ).is_file()
-    current_source_versions = float(
-        not real_workspace
-        or all(
-            is_applied_source_version(
-                workspace_root,
-                source_id=citation["source_id"],
-                source_version=citation["source_version"],
-            )
+    current_source_versions = 1.0
+    if real_workspace:
+        database = workspace_root / DATABASE_RELATIVE_PATH
+        source_versions = {
+            (citation["source_id"], citation["source_version"])
             for _, citation in selected
-        )
-    )
+        }
+        with _connect_readonly(database) as connection:
+            current_source_versions = float(
+                all(
+                    connection.execute(
+                        "SELECT 1 FROM applied_source_versions "
+                        "WHERE source_id = ? AND source_version_id = ?",
+                        source_version,
+                    ).fetchone()
+                    is not None
+                    for source_version in source_versions
+                )
+            )
     components: SupportComponents = {
         "exact_identifier_coverage": round(exact_identifier_coverage, 4),
         "core_term_coverage": round(core_coverage, 4),
@@ -1322,8 +1334,9 @@ def _code_identifier_tokens(text: str) -> set[str]:
 def _retrieval_wiki_facts(
     workspace_root: Path,
     repository_id: str | None,
+    question: str,
 ) -> list[dict[str, Any]]:
-    """Load only applied facts for Retrieval v2's bounded routing lanes."""
+    """Use FTS to bound Retrieval v2 before its in-memory reranking lanes."""
     database = workspace_root / DATABASE_RELATIVE_PATH
     if not database.is_file() or database.is_symlink():
         return []
@@ -1334,20 +1347,22 @@ def _retrieval_wiki_facts(
                        facts.source_id,
                        facts.source_version, facts.locator, facts.section_path,
                        facts.quote, facts.routing_text, facts.symbol, facts.relation_type
-                FROM wiki_facts AS facts
+                FROM wiki_fact_fts
+                JOIN wiki_facts AS facts ON facts.id = wiki_fact_fts.rowid
                 JOIN applied_source_versions AS applied
                   ON applied.source_id = facts.source_id
                  AND applied.source_version_id = facts.source_version
                 LEFT JOIN git_repositories AS repositories
                   ON repositories.repository_id = facts.repository_id
+                WHERE wiki_fact_fts MATCH ?
                 """
-            parameters: tuple[str, ...] = ()
+            parameters: list[object] = [_wiki_fact_fts_query(question)]
             if repository_id is not None:
-                query += " WHERE facts.repository_id IS NULL OR facts.repository_id = ?"
-                parameters = (repository_id,)
-            query += " ORDER BY facts.page_path, facts.locator"
-            rows = connection.execute(query, parameters).fetchall()
-    except sqlite3.Error as exc:
+                query += " AND (facts.repository_id IS NULL OR facts.repository_id = ?)"
+                parameters.append(repository_id)
+            query += " ORDER BY bm25(wiki_fact_fts), facts.page_path, facts.locator LIMIT 300"
+            rows = connection.execute(query, tuple(parameters)).fetchall()
+    except (sqlite3.Error, ValueError) as exc:
         logging.debug("retrieval_v2 fact load unavailable: %s", exc)
         return []
     return [dict(row) for row in rows]

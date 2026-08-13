@@ -20,6 +20,7 @@ from typer.testing import CliRunner
 
 from memoryforge import agent_access as agent_access_module
 from memoryforge.agent_access import (
+    classify_query_intent,
     list_changesets,
     propose_grounded_update,
     query_context,
@@ -37,6 +38,12 @@ from tests.cli_helpers import review_approve_apply
 
 CACHE_POLICY = "# Cache policy\n\nCache entries expire after sixty seconds.\n"
 RETRY_POLICY = "# Retry policy\n\nRetries stop after three attempts.\n"
+
+
+def test_query_intent_routes_current_code_memory_and_mixed_questions() -> None:
+    assert classify_query_intent("Which function calls the storage API?") == "current_code"
+    assert classify_query_intent("为什么当时选择异步队列？") == "project_memory"
+    assert classify_query_intent("为什么这段代码调用旧接口？") == "mixed"
 
 
 def test_mcp_evidence_contract_separates_operation_and_partial_evidence(
@@ -71,14 +78,14 @@ def test_mcp_evidence_contract_separates_operation_and_partial_evidence(
     )
     monkeypatch.setattr(
         agent_access_module,
-        "_citation_page_paths",
+        "_citation_metadata",
         lambda _root, _citations: {
             (citation["source_id"], citation["source_version"], citation["locator"]): (
-                "wiki/pages/alpha/client.md"
+                "wiki/pages/alpha/client.md",
+                "client.go",
             )
         },
     )
-    monkeypatch.setattr(agent_access_module, "_display_source_label", lambda *_args: "client.go")
 
     class Opened:
         root = tmp_path
@@ -102,6 +109,11 @@ def test_mcp_evidence_contract_separates_operation_and_partial_evidence(
     assert payload["evidence_status"] == "partial"
     assert payload["answer_hint"] == "alpha-mgr imports beta-mgr/api."
     assert payload["unsupported_aspects"] == ["runtime_call_not_verified"]
+    assert payload["answer_strategy"] == {
+        "query_intent": "current_code",
+        "recommended_action": "verify_unsupported_aspects_only",
+        "source_verification_required": True,
+    }
     assert len(payload["citations"]) == 1
 
 
@@ -278,6 +290,11 @@ def test_query_context_answers_bounded_context_from_bound_repository(
 
     assert result["status"] == "ok"
     assert result["evidence_status"] == "grounded"
+    assert result["answer_strategy"] == {
+        "query_intent": "project_memory",
+        "recommended_action": "answer_from_memory",
+        "source_verification_required": False,
+    }
     assert result["repository"]["repository_id"] == repository_id
     assert result["repository"]["name"] == "repository"
     assert "Cache entries expire after sixty seconds." in str(result["answer_hint"])

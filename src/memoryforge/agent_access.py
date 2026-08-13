@@ -35,6 +35,7 @@ import re
 import sqlite3
 from contextlib import suppress
 from pathlib import Path
+from typing import Literal
 
 from memoryforge.automation_validation import classify_risk
 from memoryforge.changesets import ChangeSetStore, StoredChangeSet
@@ -120,6 +121,77 @@ _RECALL_OPEN_ITEM_MARKERS = (
 )
 
 _RECALL_WARNING = "Conversation memories are unverified; check citations before relying on them."
+
+QueryIntent = Literal["current_code", "project_memory", "mixed"]
+
+_CURRENT_CODE_MARKERS = (
+    "调用",
+    "依赖",
+    "导入",
+    "代码",
+    "报错",
+    "错误",
+    "堆栈",
+    "哪一行",
+    "文件位置",
+    "call",
+    "calls",
+    "dependency",
+    "stack trace",
+)
+_PROJECT_MEMORY_MARKERS = (
+    "为什么",
+    "历史",
+    "之前",
+    "曾经",
+    "当时",
+    "决策",
+    "决定",
+    "原因",
+    "背景",
+    "演进",
+    "踩坑",
+    "约定",
+    "why",
+    "history",
+    "decision",
+    "previously",
+    "rationale",
+)
+
+
+def classify_query_intent(question: str) -> QueryIntent:
+    """Choose the cheapest trustworthy source for a project question."""
+    lowered = question.casefold()
+    current_code = any(marker in lowered for marker in _CURRENT_CODE_MARKERS)
+    project_memory = any(marker in lowered for marker in _PROJECT_MEMORY_MARKERS)
+    if current_code and project_memory:
+        return "mixed"
+    if current_code:
+        return "current_code"
+    return "project_memory"
+
+
+def _answer_strategy(question: str, evidence_status: str) -> dict[str, object]:
+    intent = classify_query_intent(question)
+    if evidence_status == "grounded":
+        action = "answer_from_memory"
+        verification_required = False
+    elif intent in ("current_code", "mixed"):
+        action = (
+            "verify_unsupported_aspects_only"
+            if evidence_status == "partial"
+            else "inspect_current_code"
+        )
+        verification_required = True
+    else:
+        action = "report_evidence_boundary"
+        verification_required = False
+    return {
+        "query_intent": intent,
+        "recommended_action": action,
+        "source_verification_required": verification_required,
+    }
 
 
 def resolve_repository_scope(workspace: Path, project_path: Path) -> GitRepositoryRecord:
@@ -280,24 +352,24 @@ def _query_context(
         return {"status": "workspace_unavailable"}
     evidence_status = str(result.get("evidence_status", "no_local_evidence"))
     answer_hint = "" if evidence_status == "no_local_evidence" else str(result["answer"])
+    answer_strategy = _answer_strategy(question, evidence_status)
     wiki_pages = [_page_entry(opened.root, page_path) for page_path in result["wiki_pages"]]
-    page_paths = _citation_page_paths(opened.root, result["citations"])
+    citation_metadata = _citation_metadata(opened.root, result["citations"])
     citations = [
         {
             "source_id": citation["source_id"],
             "source_version": citation["source_version"],
             "locator": citation["locator"],
             "quote": citation["quote"],
-            "wiki_page": page_paths.get(
+            "wiki_page": citation_metadata.get(
                 (citation["source_id"], citation["source_version"], citation["locator"]),
-                "",
-            ),
+                ("", f"source {citation['source_id'][:12]}"),
+            )[0],
             "section": str(citation.get("section_path", "")),
-            "display_source": _display_source_label(
-                opened.root,
-                citation["source_id"],
-                citation["source_version"],
-            ),
+            "display_source": citation_metadata.get(
+                (citation["source_id"], citation["source_version"], citation["locator"]),
+                ("", f"source {citation['source_id'][:12]}"),
+            )[1],
         }
         for citation in result["citations"]
     ]
@@ -307,6 +379,7 @@ def _query_context(
         "evidence_status": evidence_status,
         "supported_claims": result.get("supported_claims", []),
         "unsupported_aspects": result.get("unsupported_aspects", []),
+        "answer_strategy": answer_strategy,
         "wiki_pages": wiki_pages,
         "citations": citations,
         "support": support,
@@ -327,6 +400,7 @@ def _query_context(
                 "evidence_status": evidence_status,
                 "supported_claims": result.get("supported_claims", []),
                 "unsupported_aspects": result.get("unsupported_aspects", []),
+                "answer_strategy": answer_strategy,
                 "wiki_pages": wiki_pages,
                 "citations": citations,
                 "support": support,
@@ -344,6 +418,7 @@ def _query_context(
                             "evidence_status": evidence_status,
                             "supported_claims": [],
                             "unsupported_aspects": result.get("unsupported_aspects", []),
+                            "answer_strategy": answer_strategy,
                             "wiki_pages": wiki_pages,
                             "citations": citations,
                             "support": support,
@@ -357,6 +432,7 @@ def _query_context(
                 "evidence_status": evidence_status,
                 "supported_claims": result.get("supported_claims", []),
                 "unsupported_aspects": result.get("unsupported_aspects", []),
+                "answer_strategy": answer_strategy,
                 "wiki_pages": wiki_pages,
                 "citations": citations,
                 "support": support,
@@ -369,6 +445,7 @@ def _query_context(
         "answer_hint": answer_hint,
         "supported_claims": result.get("supported_claims", []),
         "unsupported_aspects": result.get("unsupported_aspects", []),
+        "answer_strategy": answer_strategy,
         "wiki_pages": wiki_pages,
         "citations": citations,
         "support": support,
@@ -961,21 +1038,28 @@ def _citation_summary(after: str) -> list[dict[str, str]]:
     ]
 
 
-def _citation_page_paths(
+def _citation_metadata(
     workspace: Path,
     citations: list[CitationPayload],
-) -> dict[tuple[str, int, str], str]:
-    """Map each Citation back to the Wiki page that carries it (one query)."""
+) -> dict[tuple[str, int, str], tuple[str, str]]:
+    """Load Wiki page and friendly source labels for all Citations once."""
     if not citations:
         return {}
     opened = Workspace.open_readonly(workspace)
-    page_paths: dict[tuple[str, int, str], str] = {}
+    metadata: dict[tuple[str, int, str], tuple[str, str]] = {}
     with _connect_readonly(opened.index_path) as connection:
         for citation in citations:
             row = connection.execute(
                 """
-                SELECT page_path FROM wiki_facts
-                WHERE source_id = ? AND source_version = ? AND locator = ?
+                SELECT facts.page_path, versions.title, repositories.last_synced_commit
+                FROM wiki_facts AS facts
+                JOIN sources ON sources.source_id = facts.source_id
+                JOIN source_versions AS versions
+                  ON versions.id = facts.source_version
+                 AND versions.source_id = sources.id
+                LEFT JOIN git_repositories AS repositories
+                  ON repositories.repository_id = facts.repository_id
+                WHERE facts.source_id = ? AND facts.source_version = ? AND facts.locator = ?
                 LIMIT 1
                 """,
                 (
@@ -985,10 +1069,20 @@ def _citation_page_paths(
                 ),
             ).fetchone()
             if row is not None:
-                page_paths[
+                title = str(row["title"])
+                commit = row["last_synced_commit"]
+                label = f"{title} @ {str(commit)[:7]}" if commit else title
+                metadata[
                     (citation["source_id"], citation["source_version"], citation["locator"])
-                ] = str(row[0])
-    return page_paths
+                ] = (str(row["page_path"]), label)
+    return metadata
+
+
+def _citation_page_paths(
+    workspace: Path,
+    citations: list[CitationPayload],
+) -> dict[tuple[str, int, str], str]:
+    return {key: value[0] for key, value in _citation_metadata(workspace, citations).items()}
 
 
 def _is_wiki_fact(
