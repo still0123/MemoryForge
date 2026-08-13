@@ -209,6 +209,10 @@ $MF ask '这个项目为什么这样设计？' --workspace ./my-wiki
 桌面端把本地 Portal 放进原生 macOS 窗口：日常只需双击应用，不打开浏览器，也不会访问远程网页。
 首次使用需选择已初始化的 Workspace；之后会自动重开上次的知识库。
 
+![MemoryForge 桌面端：首页与知识更新审核](assets/07-memoryforge-desktop-workflow.jpg)
+
+<sub>真实运行截图：左为使用公开 MemoryForge 源码构建的 52 页本地知识库；右为一条公开资料的待审核更新。截图不含用户本地数据。</sub>
+
 从源码安装并构建：
 
 ```bash
