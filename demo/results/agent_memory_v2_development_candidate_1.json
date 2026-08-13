@@ -1,0 +1,433 @@
+{
+  "schema_version": 1,
+  "suite_id": "agent-memory-v2-hybrid-retrieval",
+  "suite_revision": 1,
+  "revision": 1,
+  "runtime": {
+    "backend": "pure_memory_fixture",
+    "workspace_used": false,
+    "fixture_fact_count": 6,
+    "fixture_symbol_count": 6,
+    "fixture_relation_count": 3
+  },
+  "splits": {
+    "development": {
+      "summary": {
+        "case_count": 10,
+        "page_recall_at_3_pct": 100.0,
+        "source_recall_at_3_pct": 100.0,
+        "mean_reciprocal_rank": 1.0,
+        "privacy_leak_count": 0
+      },
+      "cases": [
+        {
+          "id": "dev-001-login-validate",
+          "case_type": "exact_symbol",
+          "question": "How does auth.login.LoginService.validate check credentials?",
+          "expected_status": "answered",
+          "expected_sources": [
+            "wiki/pages/auth/login.md"
+          ],
+          "retrieved_pages": [
+            "wiki/pages/auth/login.md",
+            "wiki/pages/auth/login.md",
+            "wiki/pages/auth/session.md"
+          ],
+          "retrieved_sources": [
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|1|chars:0-100",
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|1|chars:100-200",
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|1|chars:0-100"
+          ],
+          "routes_used": [
+            "exact",
+            "lexical"
+          ],
+          "semantic_status": "disabled",
+          "page_recall_at_3": 1.0,
+          "source_recall_at_3": 1.0,
+          "reciprocal_rank": 1.0,
+          "privacy_leak_detected": false
+        },
+        {
+          "id": "dev-002-session-jwt",
+          "case_type": "single_hop",
+          "question": "Explain how session JWT tokens are issued with TTL",
+          "expected_status": "answered",
+          "expected_sources": [
+            "wiki/pages/auth/login.md",
+            "wiki/pages/auth/session.md"
+          ],
+          "retrieved_pages": [
+            "wiki/pages/auth/session.md",
+            "wiki/pages/auth/login.md",
+            "wiki/pages/auth/login.md"
+          ],
+          "retrieved_sources": [
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|1|chars:0-100",
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|1|chars:100-200",
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|1|chars:0-100"
+          ],
+          "routes_used": [
+            "exact",
+            "lexical"
+          ],
+          "semantic_status": "disabled",
+          "page_recall_at_3": 1.0,
+          "source_recall_at_3": 1.0,
+          "reciprocal_rank": 1.0,
+          "privacy_leak_detected": false
+        },
+        {
+          "id": "dev-003-session-revoke",
+          "case_type": "relation_traversal",
+          "question": "If I call LoginService.validate, what other auth components get invoked?",
+          "expected_status": "answered",
+          "expected_sources": [
+            "wiki/pages/auth/login.md",
+            "wiki/pages/auth/session.md"
+          ],
+          "retrieved_pages": [
+            "wiki/pages/auth/login.md",
+            "wiki/pages/auth/login.md",
+            "wiki/pages/auth/session.md"
+          ],
+          "retrieved_sources": [
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|1|chars:0-100",
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|1|chars:100-200",
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|1|chars:0-100"
+          ],
+          "routes_used": [
+            "exact",
+            "lexical"
+          ],
+          "semantic_status": "disabled",
+          "page_recall_at_3": 1.0,
+          "source_recall_at_3": 1.0,
+          "reciprocal_rank": 1.0,
+          "privacy_leak_detected": false
+        },
+        {
+          "id": "dev-004-billing-invoice",
+          "case_type": "paraphrase",
+          "question": "Which service renders a PDF document when the customer asks for a bill?",
+          "expected_status": "answered",
+          "expected_sources": [
+            "wiki/pages/billing/invoice.md"
+          ],
+          "retrieved_pages": [
+            "wiki/pages/billing/invoice.md",
+            "wiki/pages/search/index.md"
+          ],
+          "retrieved_sources": [
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|1|chars:0-100",
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|1|chars:0-100"
+          ],
+          "routes_used": [
+            "lexical"
+          ],
+          "semantic_status": "disabled",
+          "page_recall_at_3": 1.0,
+          "source_recall_at_3": 1.0,
+          "reciprocal_rank": 1.0,
+          "privacy_leak_detected": false
+        },
+        {
+          "id": "dev-005-billing-stripe",
+          "case_type": "multi_source",
+          "question": "Generate invoice PDF then charge through Stripe payment gateway",
+          "expected_status": "answered",
+          "expected_sources": [
+            "wiki/pages/billing/invoice.md",
+            "wiki/pages/billing/payment.md"
+          ],
+          "retrieved_pages": [
+            "wiki/pages/billing/payment.md",
+            "wiki/pages/billing/invoice.md"
+          ],
+          "retrieved_sources": [
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|1|chars:0-100",
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|1|chars:0-100"
+          ],
+          "routes_used": [
+            "exact",
+            "lexical"
+          ],
+          "semantic_status": "disabled",
+          "page_recall_at_3": 1.0,
+          "source_recall_at_3": 1.0,
+          "reciprocal_rank": 1.0,
+          "privacy_leak_detected": false
+        },
+        {
+          "id": "dev-006-search-index",
+          "case_type": "single_hop",
+          "question": "search.engine.SearchEngine.build_index inverted list documents",
+          "expected_status": "answered",
+          "expected_sources": [
+            "wiki/pages/search/index.md"
+          ],
+          "retrieved_pages": [
+            "wiki/pages/search/index.md"
+          ],
+          "retrieved_sources": [
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|1|chars:0-100"
+          ],
+          "routes_used": [
+            "exact",
+            "lexical"
+          ],
+          "semantic_status": "disabled",
+          "page_recall_at_3": 1.0,
+          "source_recall_at_3": 1.0,
+          "reciprocal_rank": 1.0,
+          "privacy_leak_detected": false
+        },
+        {
+          "id": "dev-007-logout-revoke",
+          "case_type": "relation_traversal",
+          "question": "When I logout and SessionManager issues a new token, which revoke path is used?",
+          "expected_status": "answered",
+          "expected_sources": [
+            "wiki/pages/auth/session.md"
+          ],
+          "retrieved_pages": [
+            "wiki/pages/auth/session.md",
+            "wiki/pages/auth/login.md",
+            "wiki/pages/search/index.md"
+          ],
+          "retrieved_sources": [
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|1|chars:0-100",
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|1|chars:100-200",
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|1|chars:0-100"
+          ],
+          "routes_used": [
+            "exact",
+            "lexical"
+          ],
+          "semantic_status": "disabled",
+          "page_recall_at_3": 1.0,
+          "source_recall_at_3": 1.0,
+          "reciprocal_rank": 1.0,
+          "privacy_leak_detected": false
+        },
+        {
+          "id": "dev-008-qualified-name",
+          "case_type": "exact_symbol",
+          "question": "billing.payment.PaymentProcessor.charge implementation details",
+          "expected_status": "answered",
+          "expected_sources": [
+            "wiki/pages/billing/payment.md"
+          ],
+          "retrieved_pages": [
+            "wiki/pages/billing/payment.md",
+            "wiki/pages/billing/invoice.md"
+          ],
+          "retrieved_sources": [
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|1|chars:0-100",
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|1|chars:0-100"
+          ],
+          "routes_used": [
+            "exact",
+            "lexical"
+          ],
+          "semantic_status": "disabled",
+          "page_recall_at_3": 1.0,
+          "source_recall_at_3": 1.0,
+          "reciprocal_rank": 1.0,
+          "privacy_leak_detected": false
+        },
+        {
+          "id": "dev-009-unanswerable-ml-model",
+          "case_type": "unanswerable",
+          "question": "How does the ML recommendation model rank products?",
+          "expected_status": "unanswerable",
+          "expected_sources": [],
+          "retrieved_pages": [],
+          "retrieved_sources": [],
+          "routes_used": [],
+          "semantic_status": "disabled",
+          "page_recall_at_3": 1.0,
+          "source_recall_at_3": 1.0,
+          "reciprocal_rank": 1.0,
+          "privacy_leak_detected": false
+        },
+        {
+          "id": "dev-010-multi-auth-billing",
+          "case_type": "multi_source",
+          "question": "Login with bcrypt then process Stripe payment for invoice PDF generation",
+          "expected_status": "answered",
+          "expected_sources": [
+            "wiki/pages/auth/login.md",
+            "wiki/pages/billing/invoice.md",
+            "wiki/pages/billing/payment.md"
+          ],
+          "retrieved_pages": [
+            "wiki/pages/billing/invoice.md",
+            "wiki/pages/billing/payment.md",
+            "wiki/pages/auth/login.md",
+            "wiki/pages/auth/login.md"
+          ],
+          "retrieved_sources": [
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|1|chars:0-100",
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|1|chars:0-100",
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|1|chars:0-100",
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|1|chars:100-200"
+          ],
+          "routes_used": [
+            "exact",
+            "lexical"
+          ],
+          "semantic_status": "disabled",
+          "page_recall_at_3": 1.0,
+          "source_recall_at_3": 1.0,
+          "reciprocal_rank": 1.0,
+          "privacy_leak_detected": false
+        }
+      ]
+    },
+    "confirmation": {
+      "summary": {
+        "case_count": 5,
+        "page_recall_at_3_pct": 100.0,
+        "source_recall_at_3_pct": 100.0,
+        "mean_reciprocal_rank": 1.0,
+        "privacy_leak_count": 0
+      },
+      "cases": [
+        {
+          "id": "confirm-001-password-hash",
+          "case_type": "exact_symbol",
+          "question": "auth.login.LoginService.validate bcrypt password",
+          "expected_status": "answered",
+          "expected_sources": [
+            "wiki/pages/auth/login.md"
+          ],
+          "retrieved_pages": [
+            "wiki/pages/auth/login.md",
+            "wiki/pages/auth/login.md",
+            "wiki/pages/auth/session.md"
+          ],
+          "retrieved_sources": [
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|1|chars:0-100",
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|1|chars:100-200",
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|1|chars:0-100"
+          ],
+          "routes_used": [
+            "exact",
+            "lexical"
+          ],
+          "semantic_status": "disabled",
+          "page_recall_at_3": 1.0,
+          "source_recall_at_3": 1.0,
+          "reciprocal_rank": 1.0,
+          "privacy_leak_detected": false
+        },
+        {
+          "id": "confirm-002-session-redis",
+          "case_type": "single_hop",
+          "question": "Redis blacklist used by SessionManager.revoke for logout",
+          "expected_status": "answered",
+          "expected_sources": [
+            "wiki/pages/auth/session.md"
+          ],
+          "retrieved_pages": [
+            "wiki/pages/auth/session.md",
+            "wiki/pages/auth/login.md"
+          ],
+          "retrieved_sources": [
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|1|chars:0-100",
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|1|chars:100-200"
+          ],
+          "routes_used": [
+            "exact",
+            "lexical"
+          ],
+          "semantic_status": "disabled",
+          "page_recall_at_3": 1.0,
+          "source_recall_at_3": 1.0,
+          "reciprocal_rank": 1.0,
+          "privacy_leak_detected": false
+        },
+        {
+          "id": "confirm-003-order-pdf-charge",
+          "case_type": "multi_source",
+          "question": "InvoiceService order items render PDF then PaymentProcessor Stripe HTTP",
+          "expected_status": "answered",
+          "expected_sources": [
+            "wiki/pages/billing/invoice.md",
+            "wiki/pages/billing/payment.md"
+          ],
+          "retrieved_pages": [
+            "wiki/pages/billing/invoice.md",
+            "wiki/pages/billing/payment.md"
+          ],
+          "retrieved_sources": [
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|1|chars:0-100",
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|1|chars:0-100"
+          ],
+          "routes_used": [
+            "lexical"
+          ],
+          "semantic_status": "disabled",
+          "page_recall_at_3": 1.0,
+          "source_recall_at_3": 1.0,
+          "reciprocal_rank": 1.0,
+          "privacy_leak_detected": false
+        },
+        {
+          "id": "confirm-004-search-engine",
+          "case_type": "paraphrase",
+          "question": "How does SearchEngine iterate docs and build inverted index?",
+          "expected_status": "answered",
+          "expected_sources": [
+            "wiki/pages/search/index.md"
+          ],
+          "retrieved_pages": [
+            "wiki/pages/search/index.md"
+          ],
+          "retrieved_sources": [
+            "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|1|chars:0-100"
+          ],
+          "routes_used": [
+            "exact",
+            "lexical"
+          ],
+          "semantic_status": "disabled",
+          "page_recall_at_3": 1.0,
+          "source_recall_at_3": 1.0,
+          "reciprocal_rank": 1.0,
+          "privacy_leak_detected": false
+        },
+        {
+          "id": "confirm-005-unanswerable-vector-database",
+          "case_type": "unanswerable",
+          "question": "What vector database backend is used for semantic embedding similarity?",
+          "expected_status": "unanswerable",
+          "expected_sources": [],
+          "retrieved_pages": [],
+          "retrieved_sources": [],
+          "routes_used": [],
+          "semantic_status": "disabled",
+          "page_recall_at_3": 1.0,
+          "source_recall_at_3": 1.0,
+          "reciprocal_rank": 1.0,
+          "privacy_leak_detected": false
+        }
+      ],
+      "status": "ran"
+    },
+    "holdout": {
+      "status": "frozen_pending",
+      "summary": null,
+      "cases": []
+    }
+  },
+  "combined": {
+    "case_count": 15,
+    "page_recall_at_3_pct": 100.0,
+    "source_recall_at_3_pct": 100.0,
+    "mean_reciprocal_rank": 1.0,
+    "privacy_leak_count": 0
+  },
+  "deterministic_hash": "63889c17868a5f58fdfac6eba4f79ecbe8b100ea9fefea331c1eff4cf86a851a"
+}

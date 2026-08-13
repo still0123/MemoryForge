@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import re
 import sqlite3
@@ -14,7 +15,11 @@ from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import Literal, cast
 
+from memoryforge.capture_inbox import SCHEMA_SQL as CAPTURE_SCHEMA
+from memoryforge.capture_inbox import drain_capture_spool
+from memoryforge.egress_policy import SCHEMA_SQL as EGRESS_SCHEMA
 from memoryforge.errors import ChangeSetStoreError, WorkspaceError
+from memoryforge.knowledge_conflicts import SCHEMA_SQL as CONFLICT_SCHEMA
 from memoryforge.manifests import SourceManifestStore
 from memoryforge.models import (
     ChangeSet,
@@ -1672,6 +1677,7 @@ def _initialize_workspace(workspace: Path) -> Path:
         Path(".memoryforge/rejected"),
         Path(".memoryforge/traces"),
         Path(".memoryforge/vectors"),
+        Path(".memoryforge/capture/spool"),
     ]
     for relative in managed_directories:
         _ensure_private_directory(root / relative)
@@ -1710,6 +1716,11 @@ def workspace_database(workspace: Path) -> Path:
         raise WorkspaceSecurityError("workspace database escapes the workspace")
     _migrate_database(database_path)
     database_path.chmod(0o600)
+    try:
+        with _connect(database_path) as connection:
+            drain_capture_spool(root, connection)
+    except Exception as exc:  # noqa: BLE001 - drain failure is non-fatal
+        logging.warning("capture spool drain failed: %s", exc)
     return database_path
 
 
@@ -3101,6 +3112,12 @@ def _apply_schema_without_source_fts(connection: sqlite3.Connection) -> None:
     for statement in _SCHEMA_STATEMENTS:
         if statement != _SOURCE_FTS_SCHEMA_STATEMENT:
             connection.execute(statement)
+    for statement in EGRESS_SCHEMA:
+        connection.execute(statement)
+    for statement in CAPTURE_SCHEMA:
+        connection.execute(statement)
+    for statement in CONFLICT_SCHEMA:
+        connection.execute(statement)
 
 
 def _rebuild_origin_main_fts(connection: sqlite3.Connection, root: Path) -> None:
@@ -3184,6 +3201,12 @@ def _safe_legacy_tags(value: object) -> str:
 
 def _apply_schema(connection: sqlite3.Connection) -> None:
     for statement in _SCHEMA_STATEMENTS:
+        connection.execute(statement)
+    for statement in EGRESS_SCHEMA:
+        connection.execute(statement)
+    for statement in CAPTURE_SCHEMA:
+        connection.execute(statement)
+    for statement in CONFLICT_SCHEMA:
         connection.execute(statement)
 
 

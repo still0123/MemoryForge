@@ -19,9 +19,10 @@ whole-Workspace query. stdout carries only the stdio protocol.
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import Literal, TYPE_CHECKING
 
 from mcp.server import MCPServer
 from mcp.types import ToolAnnotations
@@ -39,7 +40,7 @@ from memoryforge.agent_access import (
 )
 from memoryforge.changesets import ChangeSetStore
 from memoryforge.models import GitRepositoryRecord
-from memoryforge.workspace import Workspace, _connect_readonly
+from memoryforge.workspace import Workspace, _connect, _connect_readonly
 
 if TYPE_CHECKING:
     from memoryforge.wiki_facts import CitationPayload
@@ -91,6 +92,7 @@ def build_server(
     project_root: Path,
     *,
     allow_local: bool = False,
+    profile: Literal["micro", "analysis", "capture"] | None = None,
 ) -> MCPServer:
     """Build the stdio server, verifying the binding before serving (§8.7).
 
@@ -148,16 +150,17 @@ def build_server(
             allow_local=bindings.allow_local,
         )
 
-    @server.tool(name="memoryforge_recall", annotations=_READ_ONLY_ANNOTATIONS)
-    def memoryforge_recall(limit: int = 3) -> dict[str, object]:
-        """Return recent applied conversation memory for the bound project."""
-        return recall_context(
-            bindings.workspace,
-            limit=max(1, min(5, int(limit))),
-            repository_id=bindings.scope.repository_id,
-            public_only=not bindings.allow_local,
-            startup_context_limit=4000,
-        )
+    if profile != "micro":
+        @server.tool(name="memoryforge_recall", annotations=_READ_ONLY_ANNOTATIONS)
+        def memoryforge_recall(limit: int = 3) -> dict[str, object]:
+            """Return recent applied conversation memory for the bound project."""
+            return recall_context(
+                bindings.workspace,
+                limit=max(1, min(5, int(limit))),
+                repository_id=bindings.scope.repository_id,
+                public_only=not bindings.allow_local,
+                startup_context_limit=4000,
+            )
 
     @server.tool(name="memoryforge_status", annotations=_READ_ONLY_ANNOTATIONS)
     def memoryforge_status() -> dict[str, object]:
@@ -196,6 +199,134 @@ def build_server(
     @server.resource("memoryforge://status")
     def status_resource() -> str:
         return json.dumps(_status_payload(bindings), ensure_ascii=False, indent=2)
+
+    if profile == "analysis":
+        try:
+            from memoryforge.code_intelligence import symbol_context
+            from memoryforge.code_impact import impact_analysis, call_paths, analyze_diff
+            from memoryforge.code_history import why_changed
+
+            @server.tool(name="memoryforge_symbol_context", annotations=_READ_ONLY_ANNOTATIONS)
+            def memoryforge_symbol_context(
+                identifier: str,
+                repository_id: str | None = None,
+                max_relations: int = 20,
+            ) -> dict[str, object]:
+                """薄工具 → code_intelligence.symbol_context。"""
+                repo = repository_id or bindings.scope.repository_id
+                try:
+                    return symbol_context(
+                        bindings.workspace,
+                        identifier,
+                        repository_id=repo,
+                        max_relations=max(1, int(max_relations)),
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    return {"status": "error", "error": str(exc)}
+
+            @server.tool(name="memoryforge_impact_analysis", annotations=_READ_ONLY_ANNOTATIONS)
+            def memoryforge_impact_analysis(
+                target_symbol: str,
+                mode: Literal["impact", "call_paths", "diff", "why_changed"] = "impact",
+                repository_id: str | None = None,
+                max_depth: int = 2,
+                start_symbol: str | None = None,
+                end_symbol: str | None = None,
+                changed_paths: list[str] | None = None,
+            ) -> dict[str, object]:
+                """薄工具 → code_impact / code_history 四种模式。"""
+                repo = repository_id or bindings.scope.repository_id
+                paths = tuple(changed_paths or [])
+                try:
+                    if mode == "impact":
+                        return impact_analysis(
+                            bindings.workspace,
+                            target_symbol,
+                            repository_id=repo,
+                            max_depth=max(1, int(max_depth)),
+                        )
+                    if mode == "call_paths":
+                        return call_paths(
+                            bindings.workspace,
+                            target_symbol,
+                            repository_id=repo,
+                            start_symbol=start_symbol,
+                            end_symbol=end_symbol,
+                            max_depth=max(1, int(max_depth)),
+                        )
+                    if mode == "diff":
+                        return analyze_diff(
+                            bindings.workspace,
+                            changed_paths=paths,
+                            repository_id=repo,
+                        )
+                    if mode == "why_changed":
+                        checkout = Path(bindings.scope.checkout_path)
+                        return why_changed(
+                            checkout,
+                            target_symbol=target_symbol,
+                            changed_paths=paths,
+                        )
+                    return {"status": "error", "error": f"unknown mode: {mode}"}
+                except Exception as exc:  # noqa: BLE001
+                    return {"status": "error", "error": str(exc)}
+        except Exception as exc:  # noqa: BLE001
+            logging.debug("analysis profile tools unavailable: %s", exc)
+
+    if profile == "capture":
+        try:
+            from memoryforge.capture_inbox import spool_event
+            from memoryforge import handoff as _handoff_mod
+            from memoryforge.capture_models import CaptureEvent
+
+            @server.tool(name="memoryforge_spool_event")
+            def memoryforge_spool_event(event_json: str) -> dict[str, object]:
+                """接收 CaptureEvent JSON → capture_inbox.spool_event。"""
+                try:
+                    parsed = CaptureEvent.model_validate_json(event_json)
+                    result = spool_event(bindings.workspace, parsed)
+                    return {"status": "ok", "result": result}
+                except Exception as exc:  # noqa: BLE001
+                    return {"status": "error", "error": str(exc)}
+
+            @server.tool(name="memoryforge_handoff", annotations=_READ_ONLY_ANNOTATIONS)
+            def memoryforge_handoff(
+                repo_id: str,
+                before: str | None = None,
+                max_chars: int = 20000,
+            ) -> dict[str, object]:
+                """薄工具 → handoff.build_handoff。"""
+                try:
+                    return _handoff_mod.build_handoff(
+                        bindings.workspace,
+                        repository_id=repo_id,
+                        before_iso=before,
+                        max_characters=max(1, int(max_chars)),
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    return {"status": "error", "error": str(exc)}
+
+            @server.tool(name="memoryforge_capture_proposal_show", annotations=_READ_ONLY_ANNOTATIONS)
+            def memoryforge_capture_proposal_show(
+                repo_id: str,
+                session: str,
+                print_output: bool = False,
+            ) -> dict[str, object]:
+                """薄工具 → capture proposal 展示。"""
+                try:
+                    result = _handoff_mod.show_session_proposal(
+                        bindings.workspace,
+                        repository_id=repo_id,
+                        session_id=session,
+                    )
+                    if print_output:
+                        import json as _json
+                        print(_json.dumps(result, ensure_ascii=False, indent=2))
+                    return {"status": "ok", "proposal": result}
+                except Exception as exc:  # noqa: BLE001
+                    return {"status": "error", "error": str(exc)}
+        except Exception as exc:  # noqa: BLE001
+            logging.debug("capture profile tools unavailable: %s", exc)
 
     return server
 

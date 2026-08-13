@@ -262,6 +262,7 @@ def decide(
     reason_codes: tuple[str, ...] = (),
     source_trust: SourceTrust = SourceTrust.STANDARD,
     block_reasons: tuple[str, ...] = (),
+    open_conflict_ids: tuple[str, ...] = (),
 ) -> PolicyEvaluation:
     """Shared decision engine: hard blocks win, then profile evaluation (§7.3)."""
     if block_reasons:
@@ -269,6 +270,14 @@ def decide(
             AutomationDecision.BLOCKED,
             risk,
             tuple(dict.fromkeys(block_reasons)),
+            profile,
+            policy_sha256(policy),
+        )
+    if open_conflict_ids:
+        return PolicyEvaluation(
+            AutomationDecision.REVIEW_REQUIRED,
+            risk,
+            tuple(dict.fromkeys(("open_conflict_block", *reason_codes))),
             profile,
             policy_sha256(policy),
         )

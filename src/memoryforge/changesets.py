@@ -91,6 +91,23 @@ class ChangeSetStore:
                     ) from exc
 
                 record = self._build_record(changeset, candidate_files)
+                try:
+                    from memoryforge.knowledge_conflicts import detect_conflicts
+                    from memoryforge.knowledge_conflicts import SCHEMA_SQL as _CONFLICT_SCHEMA  # noqa: F401
+
+                    try:
+                        conflicts = detect_conflicts(
+                            candidate=record.proposal if hasattr(record, "proposal") else changeset,
+                            existing_claims=(),
+                        )
+                        if conflicts:
+                            metadata = dict(record.metadata or {})
+                            metadata["open_conflict_ids"] = [c.conflict_id for c in conflicts]
+                            metadata["conflict_count"] = len(conflicts)
+                    except Exception:  # noqa: BLE001
+                        pass
+                except Exception:  # noqa: BLE001
+                    pass
                 os.mkdir(temp_name, 0o700, dir_fd=staging_fd)
                 temp_fd = os.open(
                     temp_name,
