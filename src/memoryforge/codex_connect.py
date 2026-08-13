@@ -114,13 +114,9 @@ def install_agents_block(
         if recall_command is None:
             raise ValueError("recall_command is required for the recall block")
         block_lines = [AGENTS_RECALL_BEGIN, *_AGENTS_RECALL_LINES, AGENTS_RECALL_END]
-        block = "\n".join(
-            line.format(command=shlex.join(recall_command)) for line in block_lines
-        )
+        block = "\n".join(line.format(command=shlex.join(recall_command)) for line in block_lines)
     if kind == "mcp" and len(block) > _AGENTS_BLOCK_LIMIT:
-        raise ValueError(
-            f"managed AGENTS block exceeds the {_AGENTS_BLOCK_LIMIT}-character budget"
-        )
+        raise ValueError(f"managed AGENTS block exceeds the {_AGENTS_BLOCK_LIMIT}-character budget")
     existing = agents_path.read_text(encoding="utf-8") if agents_path.is_file() else ""
     updated = _replace_blocks(existing, block, kind)
     if updated != existing:
@@ -185,8 +181,7 @@ def connect_codex(
         "command": command,
         "agents_file": str(agents_path),
         "restart_hint": (
-            "Restart Codex (or the ChatGPT desktop app / IDE extension) and "
-            "check with /mcp."
+            "Restart Codex (or the ChatGPT desktop app / IDE extension) and check with /mcp."
         ),
     }
 
@@ -239,9 +234,7 @@ def _parse_server_json(stdout: str) -> list[str] | None:
         ):
             return None
         return [raw_command, *arguments]
-    if isinstance(raw_command, list) and all(
-        isinstance(part, str) for part in raw_command
-    ):
+    if isinstance(raw_command, list) and all(isinstance(part, str) for part in raw_command):
         return list(raw_command)
     return None
 
@@ -281,8 +274,7 @@ def _replace_blocks(existing: str, block: str, kind: Literal["mcp", "recall"]) -
         stop = existing.find(end)
         if (start < 0) != (stop < 0) or (start >= 0 and stop < start):
             raise ValueError(
-                f"Codex project AGENTS.md contains an incomplete MemoryForge "
-                f"{pair_kind} block"
+                f"Codex project AGENTS.md contains an incomplete MemoryForge {pair_kind} block"
             )
         if start >= 0:
             spans[pair_kind] = (start, stop + len(end))

@@ -168,9 +168,7 @@ def test_connect_without_codex_cli_returns_copyable_command(
     )
     fake = _FakeCodex()
     fake.install(monkeypatch)
-    monkeypatch.setattr(
-        "memoryforge.codex_connect.shutil.which", lambda name: None
-    )
+    monkeypatch.setattr("memoryforge.codex_connect.shutil.which", lambda name: None)
 
     result = connect_codex(workspace, checkout)
 
@@ -261,10 +259,13 @@ def test_connect_two_projects_in_one_workspace_coexist(
     _git_repo(checkout_b, {"README.md": "# Repo B\n"})
     runner = CliRunner()
     monkeypatch.chdir(tmp_path)
-    assert runner.invoke(
-        app,
-        ["git-add", str(checkout_b), "--public", "--workspace", str(workspace)],
-    ).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            ["git-add", str(checkout_b), "--public", "--workspace", str(workspace)],
+        ).exit_code
+        == 0
+    )
     fake = _FakeCodex()
     fake.install(monkeypatch)
 
@@ -288,10 +289,13 @@ def test_connect_two_workspaces_same_project_do_not_collide(
     runner = CliRunner()
     monkeypatch.chdir(tmp_path)
     assert runner.invoke(app, ["init", str(workspace_b)]).exit_code == 0
-    assert runner.invoke(
-        app,
-        ["git-add", str(checkout), "--public", "--workspace", str(workspace_b)],
-    ).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            ["git-add", str(checkout), "--public", "--workspace", str(workspace_b)],
+        ).exit_code
+        == 0
+    )
     fake = _FakeCodex()
     fake.install(monkeypatch)
 
@@ -310,9 +314,7 @@ def test_agents_block_preserves_unrelated_content(
         tmp_path, monkeypatch, {"README.md": CACHE_POLICY}
     )
     agents_path = checkout / "AGENTS.md"
-    agents_path.write_text(
-        "# My project\n\nCustom instructions for the agent.\n", encoding="utf-8"
-    )
+    agents_path.write_text("# My project\n\nCustom instructions for the agent.\n", encoding="utf-8")
     fake = _FakeCodex()
     fake.install(monkeypatch)
 
@@ -377,9 +379,7 @@ def test_codex_setup_removes_the_mcp_block(
 
 def test_install_agents_block_rejects_incomplete_markers(tmp_path: Path) -> None:
     agents_path = tmp_path / "AGENTS.md"
-    agents_path.write_text(
-        f"some text\n{AGENTS_MCP_BEGIN}\nno end marker here\n", encoding="utf-8"
-    )
+    agents_path.write_text(f"some text\n{AGENTS_MCP_BEGIN}\nno end marker here\n", encoding="utf-8")
 
     with pytest.raises(ValueError, match="incomplete MemoryForge mcp block"):
         install_agents_block(agents_path, kind="mcp", server_name="s", project_name="p")
