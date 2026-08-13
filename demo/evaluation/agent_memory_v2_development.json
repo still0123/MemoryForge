@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "suite_id": "agent-memory-v2-hybrid-retrieval",
+  "suite_revision": 1,
+  "split": "development",
+  "cases": [
+    {
+      "id": "dev-001-login-validate",
+      "case_type": "exact_symbol",
+      "question": "How does auth.login.LoginService.validate check credentials?",
+      "expected_status": "answered",
+      "expected_sources": [
+        "wiki/pages/auth/login.md"
+      ]
+    },
+    {
+      "id": "dev-002-session-jwt",
+      "case_type": "single_hop",
+      "question": "Explain how session JWT tokens are issued with TTL",
+      "expected_status": "answered",
+      "expected_sources": [
+        "wiki/pages/auth/login.md",
+        "wiki/pages/auth/session.md"
+      ]
+    },
+    {
+      "id": "dev-003-session-revoke",
+      "case_type": "relation_traversal",
+      "question": "If I call LoginService.validate, what other auth components get invoked?",
+      "expected_status": "answered",
+      "expected_sources": [
+        "wiki/pages/auth/login.md",
+        "wiki/pages/auth/session.md"
+      ]
+    },
+    {
+      "id": "dev-004-billing-invoice",
+      "case_type": "paraphrase",
+      "question": "Which service renders a PDF document when the customer asks for a bill?",
+      "expected_status": "answered",
+      "expected_sources": [
+        "wiki/pages/billing/invoice.md"
+      ]
+    },
+    {
+      "id": "dev-005-billing-stripe",
+      "case_type": "multi_source",
+      "question": "Generate invoice PDF then charge through Stripe payment gateway",
+      "expected_status": "answered",
+      "expected_sources": [
+        "wiki/pages/billing/invoice.md",
+        "wiki/pages/billing/payment.md"
+      ]
+    },
+    {
+      "id": "dev-006-search-index",
+      "case_type": "single_hop",
+      "question": "search.engine.SearchEngine.build_index inverted list documents",
+      "expected_status": "answered",
+      "expected_sources": [
+        "wiki/pages/search/index.md"
+      ]
+    },
+    {
+      "id": "dev-007-logout-revoke",
+      "case_type": "relation_traversal",
+      "question": "When I logout and SessionManager issues a new token, which revoke path is used?",
+      "expected_status": "answered",
+      "expected_sources": [
+        "wiki/pages/auth/session.md"
+      ]
+    },
+    {
+      "id": "dev-008-qualified-name",
+      "case_type": "exact_symbol",
+      "question": "billing.payment.PaymentProcessor.charge implementation details",
+      "expected_status": "answered",
+      "expected_sources": [
+        "wiki/pages/billing/payment.md"
+      ]
+    },
+    {
+      "id": "dev-009-unanswerable-ml-model",
+      "case_type": "unanswerable",
+      "question": "How does the ML recommendation model rank products?",
+      "expected_status": "unanswerable",
+      "expected_sources": []
+    },
+    {
+      "id": "dev-010-multi-auth-billing",
+      "case_type": "multi_source",
+      "question": "Login with bcrypt then process Stripe payment for invoice PDF generation",
+      "expected_status": "answered",
+      "expected_sources": [
+        "wiki/pages/auth/login.md",
+        "wiki/pages/billing/invoice.md",
+        "wiki/pages/billing/payment.md"
+      ]
+    }
+  ],
+  "expected_metrics": {
+    "source_recall_at_3_min": 0.9,
+    "page_route_recall_at_3_min": 0.9,
+    "mrr_min": 0.7
+  }
+}
