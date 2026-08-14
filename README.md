@@ -126,7 +126,18 @@ MCP 调用成功统一返回 `status: ok`，项目证据另由 `evidence_status`
 
 <sub>真实运行截图：左侧为本地知识库首页，右侧为待审核更新，不含用户本地数据。</sub>
 
-桌面端构建与运行见 [桌面端指南](docs/DESKTOP_APP_CN.md)。
+
+### macOS 桌面端
+
+macOS 桌面端是日常使用的推荐方式：
+
+```bash
+python -m pip install ".[desktop]"
+memoryforge-desktop
+```
+
+首次启动选择你的 Workspace 目录即可使用原生窗口浏览 Wiki、添加来源、审核更新和提问。
+桌面端构建与运行详情见 [macOS 桌面端指南](docs/DESKTOP_APP_CN.md)。
 
 ### Windows 桌面端
 
