@@ -44,6 +44,7 @@ from memoryforge.compiler.compiler import (
     compilation_payload,
     compile_pending_sources,
     compile_repository_topics,
+    current_conversation_source_ids,
 )
 from memoryforge.compiler.lifecycle import (
     apply_changeset,
@@ -54,6 +55,11 @@ from memoryforge.compiler.lifecycle import (
 from memoryforge.compiler.linting import lint_workspace
 from memoryforge.compiler.module_planner import build_architecture_graph, build_module_plan
 from memoryforge.compiler.refresh import refresh_workspace
+from memoryforge.compiler.trae_provider import (
+    TRAE_MODEL,
+    TRAE_REASONING_EFFORT,
+    TraeCliProvider,
+)
 from memoryforge.core.errors import (
     ChangeSetStoreError,
     FeatureUnavailableError,
@@ -1315,6 +1321,71 @@ def ingest(
     ) as exc:
         _exit_with_safe_error(exc)
     typer.echo(json.dumps(compilation_payload(stored), ensure_ascii=False, indent=2))
+
+
+@app.command("recompile")
+def recompile_conversations(
+    target: Annotated[str, typer.Argument(help="Source type to recompile.")],
+    trae: Annotated[
+        bool,
+        typer.Option("--trae", help="Compile with the fixed Trae CLI model."),
+    ] = False,
+    allow_local_llm: Annotated[
+        bool,
+        typer.Option(
+            "--allow-local-llm",
+            help="Allow Trae to receive local_only conversation sources.",
+        ),
+    ] = False,
+    workspace: WorkspaceOption = Path("."),
+) -> None:
+    """Recompile all current conversations into one reviewable proposal."""
+    if target != "conversations":
+        _exit_with_safe_error(ValueError("recompile target must be conversations"))
+    if trae and not allow_local_llm:
+        _exit_with_safe_error(ValueError("--trae requires --allow-local-llm"))
+    try:
+        opened = Workspace.open(workspace)
+        source_ids = current_conversation_source_ids(opened)
+        compiler_mode = "trae" if trae else "deterministic"
+        model = TRAE_MODEL if trae else None
+        metadata: dict[str, object] = {
+            "status": "no_sources",
+            "target": target,
+            "source_count": len(source_ids),
+            "compiler": compiler_mode,
+            "model": model,
+            "reasoning_effort": TRAE_REASONING_EFFORT if trae else None,
+        }
+        if not source_ids:
+            typer.echo(json.dumps(metadata, ensure_ascii=False, indent=2))
+            return
+        provider = TraeCliProvider() if trae else None
+        compilation = compile_pending_sources(
+            opened,
+            source_ids=source_ids,
+            provider=provider,
+            allow_local=allow_local_llm,
+            reorganize_existing=trae,
+        )
+        if compilation is None:
+            raise ValueError("conversation recompilation produced no proposal")
+        stored = ChangeSetStore(opened).create(
+            compilation.changeset,
+            compilation.candidate_files,
+        )
+        metadata.update(compilation_payload(stored))
+    except (
+        MemoryForgeError,
+        WorkspaceIntegrityError,
+        WorkspaceSecurityError,
+        ValueError,
+        FileNotFoundError,
+        OSError,
+        sqlite3.Error,
+    ) as exc:
+        _exit_with_safe_error(exc)
+    typer.echo(json.dumps(metadata, ensure_ascii=False, indent=2))
 
 
 @app.command("changeset-list")

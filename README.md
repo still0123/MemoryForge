@@ -72,6 +72,16 @@ memoryforge apply <changeset-id> --workspace ./my-wiki
 memoryforge ask '这个项目为什么这样设计？' --workspace ./my-wiki
 ```
 
+重新编译所有当前 AI 会话（包括已应用版本）仍只会生成待审核 ChangeSet：
+
+```bash
+memoryforge recompile conversations --workspace ./my-wiki
+memoryforge recompile conversations --workspace ./my-wiki --trae --allow-local-llm
+```
+
+`--trae` 固定使用 `gpt-5.6-sol__max` 与 `xhigh` 推理强度；它会把本地会话发送给
+该模型，因此必须显式授权。两种模式都只生成 `PROPOSED` ChangeSet，不会自动发布。
+
 源码安装、代码仓库、飞书、网页、GitHub Thread、AI 会话和桌面端的完整步骤见
 [中文使用指南](docs/USER_GUIDE_CN.md)。
 

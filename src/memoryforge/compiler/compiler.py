@@ -6,8 +6,9 @@ import hashlib
 import json
 import re
 import sqlite3
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from typing import Protocol
 
 from memoryforge.compiler.index_rendering import (
     PageSummary,
@@ -164,34 +165,58 @@ class AgentUpdateCandidate:
     sources: tuple[CurrentSource, ...]
 
 
+class PageCompilerProvider(Protocol):
+    def compile_pages(
+        self,
+        messages: Sequence[Mapping[str, str]],
+    ) -> tuple[PageChange, ...]: ...
+
+
+def current_conversation_source_ids(workspace: Workspace) -> tuple[str, ...]:
+    """Return every current conversation source without loading source content."""
+    return tuple(
+        source.source_id
+        for source in _load_current_sources(workspace, set())
+        if "conversation" in source.tags
+    )
+
+
 def compile_pending_sources(
     workspace: Workspace,
     *,
     source_ids: tuple[str, ...] = (),
-    provider: OpenAICompatibleProvider | None = None,
+    provider: PageCompilerProvider | None = None,
     allow_local: bool = False,
+    reorganize_existing: bool = False,
 ) -> Compilation | None:
     """Compile pending local sources into a reviewable Wiki ChangeSet."""
+    if reorganize_existing and provider is None:
+        raise ValueError("reorganizing existing sources requires a compiler provider")
     selected = set(source_ids)
     _require_known_sources(workspace, selected)
     pending = _load_pending_sources(workspace, selected)
     stale_pages = _stale_pages(workspace, selected)
     if stale_pages:
         return _compile_stale_pages(workspace, stale_pages)
-    if not pending and selected:
+    if selected:
         selected_sources = _load_current_sources(workspace, selected)
         if selected_sources and all("conversation" in source.tags for source in selected_sources):
             pending = list(selected_sources)
     if not pending:
         return _compile_missing_repository_overviews(workspace) if not selected else None
 
-    routed_pages = _routed_pages_for_pending_sources(workspace, pending)
+    replaced_page_paths: tuple[str, ...] = ()
+    if reorganize_existing:
+        replaced_page_paths = _replaceable_page_paths(workspace, pending)
+        routed_pages = ()
+    else:
+        routed_pages = _routed_pages_for_pending_sources(workspace, pending)
     routed_source_ids = {
         source_id for routed_page in routed_pages for source_id in routed_page.source_ids
     }
     compilation_source_ids = {source.source_id for source in pending} | routed_source_ids
     candidate_pages: tuple[PageCard, ...] = ()
-    if provider is not None:
+    if provider is not None and not reorganize_existing:
         candidate_pages = _candidate_pages_for_pending_sources(
             workspace,
             pending,
@@ -224,6 +249,7 @@ def compile_pending_sources(
             provider,
             routed_pages=routed_pages,
             candidate_pages=candidate_pages,
+            replaced_page_paths=replaced_page_paths,
         )
 
     return _compile_deterministically(workspace, compilation_sources, routed_pages)
@@ -392,7 +418,7 @@ def _compile_deterministically(
             f"{source.source_id}:{source.source_version}" for source in page_sources
         )
         page_identities.append(f"{path}:{source_versions}")
-    page_identities.extend(sorted(candidate_files))
+    page_identities.extend(_candidate_file_identities(candidate_files))
     identity = "\n".join(
         [
             base_commit,
@@ -670,15 +696,17 @@ def _compile_with_provider(
     workspace: Workspace,
     pending: list[CurrentSource],
     available_sources: list[CurrentSource],
-    provider: OpenAICompatibleProvider,
+    provider: PageCompilerProvider,
     *,
     routed_pages: tuple[RoutedPage, ...] = (),
     candidate_pages: tuple[PageCard, ...] = (),
+    replaced_page_paths: tuple[str, ...] = (),
 ) -> Compilation:
     source_texts = {
         source.source_id: _read_source_text(workspace, source) for source in available_sources
     }
     prompt_context = workspace.prompt_context()
+    reorganize_existing = bool(replaced_page_paths)
     plan_provider = getattr(provider, "plan_pages", None)
     plan: CompilationPlan | None = None
     if plan_provider is not None:
@@ -691,6 +719,7 @@ def _compile_with_provider(
                     source_id for page in routed_pages for source_id in page.source_ids
                 },
                 prompt_context=prompt_context,
+                reorganize_existing=reorganize_existing,
             )
         )
         _validate_compilation_plan(
@@ -705,6 +734,7 @@ def _compile_with_provider(
         routed_source_ids={source_id for page in routed_pages for source_id in page.source_ids},
         plan=plan,
         prompt_context=prompt_context,
+        reorganize_existing=reorganize_existing,
     )
     changes = _normalize_llm_citations(provider.compile_pages(messages), source_texts)
     sources_by_id = {source.source_id: source for source in available_sources}
@@ -716,6 +746,7 @@ def _compile_with_provider(
         source_texts=source_texts,
         routed_pages=routed_pages,
         candidate_pages=candidate_pages,
+        replaced_page_paths=replaced_page_paths,
     )
 
     operations: list[ChangeOperation] = []
@@ -762,6 +793,16 @@ def _compile_with_provider(
     if not candidate_files:
         raise ValueError("provider returned no PageChange proposals")
 
+    removed_paths = set(replaced_page_paths) - set(candidate_files)
+    operations.extend(
+        ChangeOperation(
+            type=ChangeOperationType.ARCHIVE_PAGE,
+            path=path,
+            origin=ChangeOrigin.DETERMINISTIC_CLEANUP,
+        )
+        for path in sorted(removed_paths)
+    )
+
     used_source_ids = list(dict.fromkeys(used_source_ids))
     used_sources = [sources_by_id[source_id] for source_id in used_source_ids]
     index_path = "wiki/INDEX.md"
@@ -777,8 +818,17 @@ def _compile_with_provider(
             origin=ChangeOrigin.DETERMINISTIC_NAVIGATION,
         )
     )
-    candidate_files[index_path] = _render_index(workspace, candidate_files)
-    _add_relations_page(workspace, candidate_files, operations)
+    candidate_files[index_path] = _render_index(
+        workspace,
+        candidate_files,
+        removed_paths=removed_paths,
+    )
+    _add_relations_page(
+        workspace,
+        candidate_files,
+        operations,
+        removed_paths=removed_paths,
+    )
 
     base_commit = workspace.current_commit()
     pending_ids = {source.source_id for source in pending}
@@ -793,6 +843,8 @@ def _compile_with_provider(
             "llm",
             *(f"{source.source_id}:{source.source_version}" for source in used_sources),
             *page_identities,
+            *sorted(removed_paths),
+            *_candidate_file_identities(candidate_files),
         ]
     )
     changeset_id = "chg_" + hashlib.sha256(identity.encode()).hexdigest()[:20]
@@ -809,6 +861,13 @@ def _compile_with_provider(
     )
 
 
+def _candidate_file_identities(candidate_files: Mapping[str, str]) -> tuple[str, ...]:
+    return tuple(
+        f"{path}:{hashlib.sha256(content.encode()).hexdigest()}"
+        for path, content in sorted(candidate_files.items())
+    )
+
+
 def _llm_messages(
     pending: list[CurrentSource],
     source_texts: dict[str, str],
@@ -817,6 +876,7 @@ def _llm_messages(
     routed_source_ids: set[str],
     plan: CompilationPlan | None = None,
     prompt_context: str = "",
+    reorganize_existing: bool = False,
 ) -> tuple[dict[str, str], ...]:
     source_blocks = []
     for source in pending:
@@ -849,6 +909,13 @@ def _llm_messages(
         if plan is not None
         else ""
     )
+    reorganization_context = (
+        " This is an explicit full conversation reorganization. Group semantically related "
+        "sessions into coherent topic pages, keep unrelated topics separate, and preserve exact "
+        "task counts, decisions, and named entities from the sources."
+        if reorganize_existing
+        else ""
+    )
     return (
         {
             "role": "system",
@@ -867,7 +934,9 @@ def _llm_messages(
                 "move sources between existing pages. Paths must be wiki/pages/<filename>.md. "
                 "Do not return frontmatter in body; the local compiler adds it. "
                 "Every citation locator must be a character range in its source. "
-                "Return no INDEX or raw file changes." + workspace_context
+                "Return no INDEX or raw file changes."
+                + reorganization_context
+                + workspace_context
             ),
         },
         {
@@ -893,6 +962,7 @@ def _planning_messages(
     *,
     routed_source_ids: set[str],
     prompt_context: str,
+    reorganize_existing: bool = False,
 ) -> tuple[dict[str, str], ...]:
     base = _llm_messages(
         pending,
@@ -900,6 +970,7 @@ def _planning_messages(
         candidate_pages,
         routed_source_ids=routed_source_ids,
         prompt_context=prompt_context,
+        reorganize_existing=reorganize_existing,
     )
     return (
         {
@@ -910,6 +981,12 @@ def _planning_messages(
                 '"related_pages":[]}],"conflicts":[]}}. '
                 "List every pending source exactly once, choose create or update, and explain "
                 "the routing in one short reason. Do not write Markdown or hidden reasoning."
+                + (
+                    " Group related conversation sessions by concrete topic; do not merge them "
+                    "only because they share a broad repository or product name."
+                    if reorganize_existing
+                    else ""
+                )
                 + ("\n\nWORKSPACE CONTRACT:\n" + prompt_context if prompt_context else "")
             ),
         },
@@ -964,6 +1041,7 @@ def _validate_llm_changes(
     source_texts: dict[str, str],
     routed_pages: tuple[RoutedPage, ...] = (),
     candidate_pages: tuple[PageCard, ...] = (),
+    replaced_page_paths: tuple[str, ...] = (),
 ) -> None:
     covered_source_ids: set[str] = set()
     for change in changes:
@@ -1005,32 +1083,38 @@ def _validate_llm_changes(
                 raise ValueError("provider citation must quote a source fact, not a heading")
             if end < len(source_text) and source_text[end - 1] not in ".!?。！？；;\n":
                 raise ValueError("provider citation must end at a source sentence boundary")
-        matching_routed_pages = [
-            page for page in routed_pages if change_source_ids & set(page.source_ids)
-        ]
-        if matching_routed_pages:
-            if len(matching_routed_pages) != 1 or change_source_ids != set(
-                matching_routed_pages[0].source_ids
-            ):
-                raise ValueError("provider cannot change an existing Wiki page ownership group")
-            expected_existing_sources = matching_routed_pages[0].source_ids
+        target_path = _target_page_path(
+            change,
+            routed_pages,
+            candidate_pages,
+            pending_ids=pending_ids,
+        )
+        if target_path in replaced_page_paths:
+            expected_existing_sources = workspace.source_ids_for_page(target_path)
+            if set(expected_existing_sources) != change_source_ids:
+                raise ValueError("provider cannot reuse a Wiki path owned by different sources")
         else:
-            existing_source_ids = change_source_ids - pending_ids
-            matching_cards = [
-                page for page in candidate_pages if set(page.source_ids) == existing_source_ids
+            matching_routed_pages = [
+                page for page in routed_pages if change_source_ids & set(page.source_ids)
             ]
-            if existing_source_ids and len(matching_cards) != 1:
-                raise ValueError("provider can only extend a supplied existing Wiki page")
-            expected_existing_sources = matching_cards[0].source_ids if matching_cards else ()
+            if matching_routed_pages:
+                if len(matching_routed_pages) != 1 or change_source_ids != set(
+                    matching_routed_pages[0].source_ids
+                ):
+                    raise ValueError("provider cannot change an existing Wiki page ownership group")
+                expected_existing_sources = matching_routed_pages[0].source_ids
+            else:
+                existing_source_ids = change_source_ids - pending_ids
+                matching_cards = [
+                    page for page in candidate_pages if set(page.source_ids) == existing_source_ids
+                ]
+                if existing_source_ids and len(matching_cards) != 1:
+                    raise ValueError("provider can only extend a supplied existing Wiki page")
+                expected_existing_sources = matching_cards[0].source_ids if matching_cards else ()
         _validate_page_ownership(
             workspace,
             change,
-            _target_page_path(
-                change,
-                routed_pages,
-                candidate_pages,
-                pending_ids=pending_ids,
-            ),
+            target_path,
             expected_existing_sources=expected_existing_sources,
         )
     for routed_page in routed_pages:
@@ -1545,6 +1629,23 @@ def _routed_pages_for_pending_sources(
             if page_paths != (routed_page.path,):
                 raise ValueError("source belongs to multiple Wiki pages: " + source_id)
     return tuple(routed_pages[path] for path in sorted(routed_pages))
+
+
+def _replaceable_page_paths(
+    workspace: Workspace,
+    sources: list[CurrentSource],
+) -> tuple[str, ...]:
+    """Return pages wholly owned by an explicitly selected source set."""
+    selected = {source.source_id for source in sources}
+    paths = {
+        path
+        for source in sources
+        for path in workspace.page_paths_for_source(source.source_id)
+    }
+    for path in paths:
+        if not set(workspace.source_ids_for_page(path)) <= selected:
+            raise ValueError("cannot reorganize a Wiki page containing unselected sources")
+    return tuple(sorted(paths))
 
 
 def _add_relations_page(
