@@ -530,11 +530,11 @@ def test_connect_rejects_unsupported_host(
 
     result = runner.invoke(
         app,
-        ["connect", "claude", str(checkout), "--workspace", str(workspace)],
+        ["connect", "gemini", str(checkout), "--workspace", str(workspace)],
     )
 
     assert result.exit_code != 0
-    assert "unsupported AI Host 'claude'" in result.output
+    assert "unsupported AI Host 'gemini'" in result.output
     assert fake.calls == []
 
 

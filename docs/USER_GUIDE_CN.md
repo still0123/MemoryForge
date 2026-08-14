@@ -11,7 +11,7 @@ flowchart LR
     C --> D[知识更新]
     D --> E[审核并应用]
     E --> F[浏览 / 搜索 / 提问]
-    F --> G[可选：连接 Codex]
+    F --> G[可选：连接 Codex / Claude Code]
 ```
 
 ## 1. 先选一个入口
@@ -339,7 +339,12 @@ memoryforge watch --interval 60 --workspace "$MF_WORKSPACE"
 
 `watch` 只产生待审核 ChangeSet。它不会自动批准、自动应用或把未审核内容暴露给 AI。
 
-## 10. 连接 Codex，让它按需查询知识库
+## 10. 在 Codex 或 Claude Code 中按需使用知识库
+
+推荐方式是只注册 MCP，不开启自动会话注入。这样 AI 可以在需要时查询正式 Wiki，也可以在你明确
+选择后把某个旧会话主题加载进当前对话；普通新对话保持干净，不会自动继承上一次主题。
+
+### 10.1 Codex：一次连接整个 Workspace
 
 如果你主要在 Codex 中工作，可以把一个 Workspace 注册成全局只读 MCP Router。连接一次即可：
 
@@ -348,6 +353,78 @@ memoryforge connect codex --workspace "$MF_WORKSPACE"
 ```
 
 完成后重启 Codex（或 ChatGPT Desktop / IDE 扩展），用 `/mcp` 确认 `memoryforge` 已出现。之后正常提问即可；当问题涉及已登记项目、历史决策、飞书资料或 Wiki 时，Codex 会按需调用 `memoryforge_context`。
+
+默认连接还会移除该 Workspace 过去安装的 MemoryForge `SessionStart` Hook，并作废尚未消费的 Codex
+Capsule；其他产品的 Hook 不会被删除。只有确实希望“下一次新任务自动加载”时，才显式开启：
+
+```bash
+memoryforge connect codex --startup-hook --workspace "$MF_WORKSPACE"
+```
+
+### 10.2 Claude Code CLI：功能适用，但接入命令不同
+
+Claude Code CLI 支持同一个本地 stdio MCP Server。MemoryForge 会通过 Claude 官方 CLI 注册 user
+scope 全局 Router，并安装个人级 `memoryforge-knowledge` Skill：
+
+```bash
+memoryforge connect claude --workspace "$MF_WORKSPACE"
+```
+
+如果需要让 Claude 读取 `local_only` 来源（AI 会话通常属于这一类），显式授权：
+
+```bash
+memoryforge connect claude --allow-local-llm --workspace "$MF_WORKSPACE"
+```
+
+这会扩大模型可见范围，应只在确认 Claude Code 可以接收这些资料时开启。
+
+安装后在终端执行 `claude mcp list`，进入 Claude Code 后使用 `/mcp` 查看连接状态。卸载使用：
+
+```bash
+claude mcp remove --scope user memoryforge
+```
+
+Claude Code CLI 可以直接使用 `memoryforge_context`、`memoryforge_episodes`、
+`memoryforge_load_session` 和 `memoryforge_read_evidence`。它与 Codex 共用相同的渐进式加载和证据协议。
+默认连接不会创建 SessionStart Hook；个人 Skill 位于
+`~/.claude/skills/memoryforge-knowledge/SKILL.md`，用于指导 Claude 按需调用工具。
+
+Claude Code 官方参考：[MCP 接入](https://code.claude.com/docs/en/mcp)、
+[Skills](https://code.claude.com/docs/en/slash-commands)、
+[Hooks](https://code.claude.com/docs/en/hooks)。
+
+### 10.3 在当前对话加载指定历史主题
+
+Codex 和 Claude Code 中都可以先创建新对话，再直接说：
+
+```text
+列出我最近的 MemoryForge 主题
+加载第 2 个主题
+```
+
+第一句只返回编号、主题和短摘要。第二句必须调用 `memoryforge_load_session`，并显示一份有字符上限的
+详细摘要，例如核心结论、实现路径、调用链、相关文件和会话引用；不能只回复“已加载”。详细内容只
+进入当前对话，不会自动出现在之后的新对话。
+
+后续继续问该主题时，Host 应保留对应 `session_refs`，并使用
+`memoryforge_load_session(session_refs, question=...)` 只取相关片段。如果返回
+`no_session_evidence`，再用同一个问题调用 `memoryforge_context`，而不是把无关旧会话当成答案。
+
+### 10.4 可选的下一任务自动注入
+
+普通用户不需要这一模式。Claude Code 如果确实需要，可以显式开启：
+
+```bash
+memoryforge connect claude --startup-hook --workspace "$MF_WORKSPACE"
+```
+
+MemoryForge 只合并自己的条目，不会覆盖 `~/.claude/settings.json` 中的其他 Hook。随后使用
+`memoryforge continue --to claude` 为指定目录准备一次性 Capsule。Claude Code 的 `SessionStart` 会在
+新建、恢复和清空会话时运行，因此必须保持 Capsule 与目标目录严格绑定。再次运行不带
+`--startup-hook` 的 `memoryforge connect claude` 可关闭该 Workspace 的自动注入。Claude Code 会把 Hook 返回的
+`additionalContext` 放入模型上下文，通常不会把它显示成一条普通聊天消息。
+
+### 10.5 查询结果和隐私边界
 
 它不会把整个 Wiki 预先塞进每个对话，而是先返回少量页面和 Citation，需要时再读取一条原文 Evidence。当前 MCP 返回的主要字段包括：
 
@@ -360,7 +437,7 @@ memoryforge connect codex --workspace "$MF_WORKSPACE"
 
 全局 Router 搜索整个已应用 Workspace。当前项目只影响排序优先级，不会把其他已登记仓库排除，因此跨仓库问题和没有当前项目的新对话也可以检索。
 
-默认只向 AI Host 提供公开来源。如果确认 Host 可以接收本地资料，再显式授权：
+默认只向 AI Host 提供公开来源。如果确认 Codex 可以接收本地资料，再显式授权：
 
 ```bash
 memoryforge connect codex --workspace "$MF_WORKSPACE" --allow-local-llm

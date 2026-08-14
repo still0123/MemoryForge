@@ -65,6 +65,7 @@ from memoryforge.core.models import Sensitivity
 from memoryforge.evaluation.agent_evaluation import run_agent_evaluation
 from memoryforge.evaluation.evaluation import run_evaluation
 from memoryforge.interface.codex_connect import (
+    connect_claude_router,
     connect_codex,
     connect_codex_router,
     install_agents_block,
@@ -2008,7 +2009,7 @@ def mcp_config(
 
 @app.command()
 def connect(
-    host: Annotated[str, typer.Argument(help="AI Host to connect; only 'codex' is supported.")],
+    host: Annotated[str, typer.Argument(help="AI Host to connect: codex or claude.")],
     project: Annotated[
         Path | None,
         typer.Argument(
@@ -2033,22 +2034,31 @@ def connect(
 ) -> None:
     """Register the read-only MCP server with an AI Host (one-shot)."""
     try:
-        if host != "codex":
-            raise ValueError(f"unsupported AI Host '{host}'; only 'codex' is supported")
-        result = (
-            connect_codex_router(
+        if host == "claude":
+            if project is not None:
+                raise ValueError("Claude one-shot connection uses the global Router; omit project")
+            result = connect_claude_router(
                 workspace,
                 allow_local=allow_local_llm,
                 startup_hook=startup_hook,
             )
-            if project is None
-            else connect_codex(
-                workspace,
-                project,
-                allow_local=allow_local_llm,
-                startup_hook=startup_hook,
+        elif host == "codex":
+            result = (
+                connect_codex_router(
+                    workspace,
+                    allow_local=allow_local_llm,
+                    startup_hook=startup_hook,
+                )
+                if project is None
+                else connect_codex(
+                    workspace,
+                    project,
+                    allow_local=allow_local_llm,
+                    startup_hook=startup_hook,
+                )
             )
-        )
+        else:
+            raise ValueError(f"unsupported AI Host '{host}'; use 'codex' or 'claude'")
     except (
         MemoryForgeError,
         WorkspaceIntegrityError,
