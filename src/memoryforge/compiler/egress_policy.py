@@ -23,6 +23,7 @@ T = TypeVar("T")
 class DecisionLike(Protocol):
     allowed: bool
 
+
 SCHEMA_SQL: tuple[str, ...] = (
     """
     CREATE TABLE IF NOT EXISTS source_egress_rules (

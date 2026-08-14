@@ -1094,13 +1094,6 @@ def _citation_metadata(
     return metadata
 
 
-def _citation_page_paths(
-    workspace: Path,
-    citations: list[CitationPayload],
-) -> dict[tuple[str, int, str], str]:
-    return {key: value[0] for key, value in _citation_metadata(workspace, citations).items()}
-
-
 def _is_wiki_fact(
     workspace: Path,
     source_id: str,

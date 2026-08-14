@@ -528,13 +528,6 @@ def _source_uri(repository_identity: str, relative_path: str) -> str:
     return f"mf://git/{quote(repository_identity, safe='')}/{quote(relative_path, safe='/')}"
 
 
-def _repository_identity(remote_url: str, repository_root: Path) -> str:
-    """Return a credential-free remote identity, or the local root when unsure."""
-    return (
-        _sanitize_remote_url(remote_url) or _sanitize_scp_remote(remote_url) or str(repository_root)
-    )
-
-
 def _sanitize_remote_url(remote_url: str) -> str | None:
     """Keep only scheme, host, optional numeric port, and path from URL remotes."""
     try:

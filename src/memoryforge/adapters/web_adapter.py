@@ -250,9 +250,7 @@ def _resolve_public_url(value: str) -> tuple[str, tuple[str, ...]]:
         )
     except (OSError, ValueError) as exc:
         raise WebPageError("web page host cannot be resolved safely") from exc
-    if not addresses or any(
-        not ipaddress.ip_address(address).is_global for address in addresses
-    ):
+    if not addresses or any(not ipaddress.ip_address(address).is_global for address in addresses):
         raise WebPageError("web page must resolve only to public network addresses")
     return url, addresses
 

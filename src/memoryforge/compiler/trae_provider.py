@@ -132,9 +132,7 @@ class TraeCliProvider:
             try:
                 return json.loads(output_path.read_text(encoding="utf-8"))
             except (FileNotFoundError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-                raise ProviderResponseFormatError(
-                    "Trae CLI response is not valid JSON"
-                ) from exc
+                raise ProviderResponseFormatError("Trae CLI response is not valid JSON") from exc
 
 
 def _resolve_executable(override: str | Path | None) -> str:

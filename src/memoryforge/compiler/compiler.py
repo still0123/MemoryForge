@@ -141,6 +141,7 @@ def compile_pending_sources(
         return _compile_missing_repository_overviews(workspace) if not selected else None
 
     replaced_page_paths: tuple[str, ...] = ()
+    routed_pages: tuple[RoutedPage, ...]
     if reorganize_existing:
         replaced_page_paths = _replaceable_page_paths(workspace, pending)
         routed_pages = ()
@@ -869,9 +870,7 @@ def _llm_messages(
                 "move sources between existing pages. Paths must be wiki/pages/<filename>.md. "
                 "Do not return frontmatter in body; the local compiler adds it. "
                 "Every citation locator must be a character range in its source. "
-                "Return no INDEX or raw file changes."
-                + reorganization_context
-                + workspace_context
+                "Return no INDEX or raw file changes." + reorganization_context + workspace_context
             ),
         },
         {
@@ -1573,9 +1572,7 @@ def _replaceable_page_paths(
     """Return pages wholly owned by an explicitly selected source set."""
     selected = {source.source_id for source in sources}
     paths = {
-        path
-        for source in sources
-        for path in workspace.page_paths_for_source(source.source_id)
+        path for source in sources for path in workspace.page_paths_for_source(source.source_id)
     }
     for path in paths:
         if not set(workspace.source_ids_for_page(path)) <= selected:
