@@ -8,8 +8,8 @@ from typer.testing import CliRunner
 
 import memoryforge.interface.cli as cli_module
 import memoryforge.portal.desktop as desktop
-from memoryforge.interface.cli import app
 from memoryforge.core.errors import WorkspaceError
+from memoryforge.interface.cli import app
 
 
 def test_recent_workspace_round_trip_and_ignores_stale_path(tmp_path: Path) -> None:
@@ -24,9 +24,20 @@ def test_recent_workspace_round_trip_and_ignores_stale_path(tmp_path: Path) -> N
     assert desktop.load_recent_workspace(state_path) is None
 
 
+def test_default_state_path_uses_windows_local_app_data(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(desktop.sys, "platform", "win32")
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+
+    assert desktop.default_state_path() == tmp_path / "MemoryForge" / "desktop.json"
+
+
 def test_choose_workspace_returns_none_when_dialog_is_cancelled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(desktop.sys, "platform", "darwin")
     monkeypatch.setattr(
         desktop.subprocess,
         "run",
@@ -34,6 +45,30 @@ def test_choose_workspace_returns_none_when_dialog_is_cancelled(
     )
 
     assert desktop.choose_workspace() is None
+
+
+def test_choose_workspace_uses_native_windows_dialog(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        captured.update(command=command, **kwargs)
+        return subprocess.CompletedProcess(command, 0, stdout=str(tmp_path))
+
+    monkeypatch.setattr(desktop.sys, "platform", "win32")
+    monkeypatch.setattr(desktop.subprocess, "CREATE_NO_WINDOW", 0x08000000, raising=False)
+    monkeypatch.setattr(desktop.subprocess, "run", fake_run)
+
+    assert desktop.choose_workspace() == tmp_path.resolve()
+    command = captured["command"]
+    assert isinstance(command, list)
+    assert command[:4] == ["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive"]
+    assert "-STA" in command
+    assert "System.Windows.Forms.FolderBrowserDialog" in command[-1]
+    assert captured["encoding"] == "utf-8"
+    assert captured["creationflags"] == 0x08000000
 
 
 def test_run_desktop_embeds_loopback_portal_and_closes_server(
@@ -146,3 +181,15 @@ def test_desktop_cli_forwards_workspace(
 
     assert result.exit_code == 0
     assert captured == {"workspace": tmp_path, "choose": False}
+
+
+def test_windows_build_script_creates_gui_executable_contract() -> None:
+    root = Path(__file__).resolve().parent.parent
+    script = (root / "scripts" / "build_windows_app.ps1").read_text(encoding="utf-8")
+    entrypoint = (root / "scripts" / "windows_desktop_app.py").read_text(encoding="utf-8")
+
+    assert "--windowed" in script
+    assert "--onefile" in script
+    assert "dist\\MemoryForge.exe" in script
+    assert "scripts/windows_desktop_app.py" in script
+    assert "from memoryforge.portal.desktop import main" in entrypoint

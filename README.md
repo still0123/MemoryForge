@@ -10,7 +10,8 @@ Wiki，再按需提供给人或 AI。每次更新都经过审核，有证据的�
 **正式版本：[`v0.4.0`](https://github.com/still0123/MemoryForge/releases/tag/v0.4.0)**
 
 [快速开始](#快速开始) · [在 AI 应用中使用](#在-ai-应用中使用) ·
-[中文指南](docs/USER_GUIDE_CN.md) · [60 秒演示](docs/PORTFOLIO_DEMO.md) ·
+[Windows 桌面端](#windows-桌面端) · [中文指南](docs/USER_GUIDE_CN.md) ·
+[60 秒演示](docs/PORTFOLIO_DEMO.md) ·
 [设计文档](SPEC.md)
 
 ![MemoryForge：把多来源资料编译成本地技术 Wiki](assets/01-memoryforge-hero.png)
@@ -114,7 +115,7 @@ MCP 调用成功统一返回 `status: ok`，项目证据另由 `evidence_status`
 
 | 入口 | 适合场景 |
 | --- | --- |
-| **macOS 桌面端** | 日常浏览、添加来源和审核更新 |
+| **macOS / Windows 桌面端** | 日常浏览、添加来源和审核更新 |
 | **本地 Portal** | 在浏览器中完成完整流程 |
 | **CLI** | 批处理、自动更新和诊断 |
 | **Codex MCP** | 在 Codex 对话中按需读取已审核知识和历史会话 |
@@ -125,7 +126,22 @@ MCP 调用成功统一返回 `status: ok`，项目证据另由 `evidence_status`
 
 <sub>真实运行截图：左侧为本地知识库首页，右侧为待审核更新，不含用户本地数据。</sub>
 
-桌面端构建与运行见 [macOS 桌面端指南](docs/DESKTOP_APP_CN.md)。
+桌面端构建与运行见 [桌面端指南](docs/DESKTOP_APP_CN.md)。
+
+### Windows 桌面端
+
+Windows 需要在 Windows 10/11 主机上构建：
+
+```powershell
+py -3.11 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e ".[desktop]"
+.\.venv\Scripts\memoryforge.exe init .\my-wiki
+powershell -ExecutionPolicy Bypass -File .\scripts\build_windows_app.ps1
+.\dist\MemoryForge.exe
+```
+
+产物是单文件 `dist\MemoryForge.exe`。当前 `main` 已提供 Windows 文件夹选择、状态存储、
+错误提示和 PyInstaller 构建脚本；正式 Windows 发布支持仍需原生 Windows 门禁验证。
 
 ### 多客户端统一架构
 
@@ -235,7 +251,7 @@ AI：approve 只记录与提案哈希绑定的授权，apply 才写入 Wiki 并�
 | --- | --- |
 | [中文使用指南](docs/USER_GUIDE_CN.md) | 安装、导入、问答与 AI Host MCP 接入 |
 | [多客户端接入指南](docs/MULTI_CLIENT_SETUP.md) | Codex / Claude Code / Gemini 连接与 Hook 配置 |
-| [macOS 桌面端指南](docs/DESKTOP_APP_CN.md) | 原生窗口、Workspace 选择与打包方式 |
+| [桌面端指南](docs/DESKTOP_APP_CN.md) | macOS / Windows 原生窗口、Workspace 选择与打包方式 |
 | [SPEC.md](SPEC.md) | 架构、数据模型和安全边界 |
 | [公开演示](docs/PORTFOLIO_DEMO.md) | Demo 命令、展示顺序和常见追问 |
 | [公开 Benchmark](docs/BENCHMARK.md) | 方法、结果、负案例和复现 |

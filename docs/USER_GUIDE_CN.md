@@ -16,9 +16,9 @@ flowchart LR
 
 ## 1. 先选一个入口
 
-### 推荐：macOS 桌面端
+### 推荐：macOS / Windows 桌面端
 
-桌面端把本地知识门户放进原生 macOS 窗口。日常使用时双击应用即可，不需要打开浏览器，也不会访问远程网页；关闭窗口后，本地 Portal 服务会自动停止。
+桌面端把本地知识门户放进原生窗口。日常使用时双击应用即可，不需要打开浏览器，也不会访问远程网页；关闭窗口后，本地 Portal 服务会自动停止。
 
 当前仓库提供源码构建的桌面端。它的界面和网页端完全相同，使用同一个 Workspace：
 
@@ -26,7 +26,7 @@ flowchart LR
 
 ### 备选：本地网页端
 
-网页端适合不使用 macOS、临时查看知识库，或希望在浏览器中调试。它只监听 `127.0.0.1`，不是公网服务。
+网页端适合没有构建桌面应用、临时查看知识库，或希望在浏览器中调试。它只监听 `127.0.0.1`，不是公网服务。
 
 ```bash
 memoryforge start --workspace /absolute/path/to/my-wiki
@@ -42,7 +42,7 @@ CLI 适合批量导入、自动化、CI、故障排查和没有图形界面的�
 
 ### 2.1 从源码安装（桌面端和网页端都适用）
 
-要求 Python 3.11 或更高版本。当前桌面端需要在 macOS 上构建。
+要求 Python 3.11 或更高版本。桌面应用必须在目标系统上构建，不能在 macOS 上生成 Windows `.exe`。
 
 ```bash
 git clone https://github.com/still0123/MemoryForge.git
@@ -53,7 +53,7 @@ python3.11 -m venv .venv
 # 只使用本地网页端：
 .venv/bin/python -m pip install .
 
-# 需要构建 macOS 桌面端：
+# 需要构建桌面端：
 .venv/bin/python -m pip install -e '.[desktop]'
 ```
 
@@ -95,7 +95,7 @@ my-wiki/
 
 ### 2.3 打开桌面端
 
-构建可双击的应用：
+macOS 构建可双击的应用：
 
 ```bash
 ./scripts/build_macos_app.sh
@@ -103,6 +103,16 @@ open dist/MemoryForge.app
 ```
 
 之后直接双击 `dist/MemoryForge.app` 即可。首次启动选择刚才的 `my-wiki`；应用会记住最近一次选择，下次自动打开。
+
+Windows PowerShell：
+
+```powershell
+py -3.11 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e ".[desktop]"
+.\.venv\Scripts\memoryforge.exe init .\my-wiki
+powershell -ExecutionPolicy Bypass -File .\scripts\build_windows_app.ps1
+.\dist\MemoryForge.exe
+```
 
 开发时也可以不打包：
 
@@ -116,7 +126,7 @@ open dist/MemoryForge.app
 .venv/bin/memoryforge desktop --choose-workspace
 ```
 
-桌面端构建和签名细节见 [macOS 桌面端指南](DESKTOP_APP_CN.md)。
+桌面端构建和平台边界见 [桌面端指南](DESKTOP_APP_CN.md)。
 
 ## 3. 用界面完成第一份知识入库
 
@@ -597,7 +607,7 @@ memoryforge lint --workspace "$MF_WORKSPACE"
 
 更多专题文档：
 
-- [macOS 桌面端](DESKTOP_APP_CN.md)
+- [macOS / Windows 桌面端](DESKTOP_APP_CN.md)
 - [全局 Codex MCP Router](GLOBAL_CODEX_MCP_ROUTER.md)
 - [动态本地 Portal 设计](LOCAL_DYNAMIC_PORTAL_SPEC.md)
 - [README 与公开演示](../README.md)

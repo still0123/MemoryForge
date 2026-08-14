@@ -2,20 +2,33 @@
 
 from __future__ import annotations
 
+import ctypes
 import json
+import os
 import subprocess
+import sys
 from contextlib import suppress
 from importlib import import_module
 from pathlib import Path
 from threading import Thread
 from types import ModuleType
-from typing import Protocol, cast
+from typing import Any, Protocol, cast
 
 from memoryforge.core.errors import MemoryForgeError, WorkspaceError
 from memoryforge.portal.local_portal import LocalPortalServer
 
 _HOST = "127.0.0.1"
 _STATE_FILE = "desktop.json"
+_WINDOWS_FOLDER_PICKER = r"""
+Add-Type -AssemblyName System.Windows.Forms
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+$dialog = [System.Windows.Forms.FolderBrowserDialog]::new()
+$dialog.Description = "选择 MemoryForge Workspace"
+$dialog.ShowNewFolderButton = $false
+if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+    [Console]::Out.Write($dialog.SelectedPath)
+}
+"""
 
 
 class DesktopAppError(MemoryForgeError):
@@ -42,7 +55,13 @@ class _WebView(Protocol):
 
 def default_state_path() -> Path:
     """Return the per-user location for the most recently opened workspace."""
-    return Path.home() / "Library" / "Application Support" / "MemoryForge" / _STATE_FILE
+    if sys.platform == "darwin":
+        root = Path.home() / "Library" / "Application Support"
+    elif sys.platform == "win32":
+        root = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local")
+    else:
+        root = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state")
+    return root / "MemoryForge" / _STATE_FILE
 
 
 def load_recent_workspace(state_path: Path | None = None) -> Path | None:
@@ -73,20 +92,40 @@ def save_recent_workspace(workspace: Path, state_path: Path | None = None) -> No
 
 
 def choose_workspace() -> Path | None:
-    """Ask macOS for a workspace folder, returning None when the user cancels."""
+    """Open the native workspace folder picker."""
+    if sys.platform == "darwin":
+        command = [
+            "/usr/bin/osascript",
+            "-e",
+            'POSIX path of (choose folder with prompt "选择 MemoryForge Workspace")',
+        ]
+    elif sys.platform == "win32":
+        command = [
+            "powershell.exe",
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-STA",
+            "-WindowStyle",
+            "Hidden",
+            "-Command",
+            _WINDOWS_FOLDER_PICKER,
+        ]
+    else:
+        raise DesktopAppError("Desktop folder picker supports macOS and Windows.")
     try:
         result = subprocess.run(
-            [
-                "/usr/bin/osascript",
-                "-e",
-                'POSIX path of (choose folder with prompt "选择 MemoryForge Workspace")',
-            ],
+            command,
             check=False,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            creationflags=(
+                int(getattr(subprocess, "CREATE_NO_WINDOW", 0)) if sys.platform == "win32" else 0
+            ),
         )
     except OSError as exc:
-        raise DesktopAppError("Desktop folder picker requires macOS.") from exc
+        raise DesktopAppError("Unable to open the desktop folder picker.") from exc
     if result.returncode != 0 or not result.stdout.strip():
         return None
     return Path(result.stdout.strip()).expanduser().resolve()
@@ -98,7 +137,7 @@ def run_desktop(
     choose: bool = False,
     state_path: Path | None = None,
 ) -> None:
-    """Open one workspace in a native macOS window and stop on close."""
+    """Open one workspace in a native desktop window and stop on close."""
     if workspace is not None and choose:
         raise DesktopAppError("Use either --workspace or --choose-workspace, not both.")
 
@@ -164,6 +203,11 @@ def main() -> None:
 
 
 def _show_startup_error(message: str) -> None:
-    script = f'display alert "MemoryForge" message {json.dumps(message)} as critical'
-    with suppress(OSError):
-        subprocess.run(["/usr/bin/osascript", "-e", script], check=False)
+    if sys.platform == "win32":
+        with suppress(AttributeError, OSError):
+            cast(Any, ctypes).windll.user32.MessageBoxW(0, message, "MemoryForge", 0x10)
+        return
+    if sys.platform == "darwin":
+        script = f'display alert "MemoryForge" message {json.dumps(message)} as critical'
+        with suppress(OSError):
+            subprocess.run(["/usr/bin/osascript", "-e", script], check=False)

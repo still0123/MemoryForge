@@ -261,7 +261,7 @@ def desktop(
         ),
     ] = False,
 ) -> None:
-    """Open the local knowledge portal in a native macOS window."""
+    """Open the local knowledge portal in a native macOS or Windows window."""
     try:
         run_desktop(workspace, choose=choose_workspace)
     except (
