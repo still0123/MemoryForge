@@ -9,7 +9,7 @@ Wiki，再按需提供给人或 AI。每次更新都经过审核，有证据的�
 
 **正式版本：[`v0.4.0`](https://github.com/still0123/MemoryForge/releases/tag/v0.4.0)**
 
-[快速开始](#快速开始) · [在 Codex 中使用](#在-codex-中使用) ·
+[快速开始](#快速开始) · [在 AI 应用中使用](#在-ai-应用中使用) ·
 [中文指南](docs/USER_GUIDE_CN.md) · [60 秒演示](docs/PORTFOLIO_DEMO.md) ·
 [设计文档](SPEC.md)
 
@@ -25,6 +25,7 @@ GitHub Issue/PR 和 AI 对话。最终产物仍是普通 Markdown、Git 历史�
 - **上下文按需加载**：先定位少量 Wiki 页面，必要时才读取对应 Evidence。
 - **证据不足不猜测**：部分证据只支持部分结论；没有本地证据时不编造项目事实。
 - **旧会话可选择性加载**：按主题聚合历史对话，按需把指定会话上下文带入当前任务。
+- **多客户端统一接入**：同一本地 Wiki 可同时供 Codex、Claude Code、Gemini 等应用查询。
 - **资料默认留在本机**：Git、飞书、代码和会话来源默认标记为 `local_only`。
 
 ### 和普通 RAG 的区别
@@ -91,6 +92,17 @@ MCP 调用成功统一返回 `status: ok`，项目证据另由 `evidence_status`
 | `partial` | 只陈述已支持部分，同时标明未证实边界 |
 | `no_local_evidence` | Wiki 未建立该项目事实，可给通用分析但不能伪装成项目结论 |
 
+### AI 如何回答问题
+
+当你在 AI 应用中提问时，MemoryForge 不会把整个 Wiki 灌入上下文。它执行一条渐进式、
+有边界的查询链：先找页面、再读摘要、必要时才展开原文，最后由 AI 基于返回的引用合成回答。
+
+![AI Host 查询回答流程：从提问到带引用答案的完整链路](assets/usage/04-mcp-query-answer-flow.png)
+
+回答始终区分证据覆盖范围：`grounded` 表示结论有本地 Wiki 支撑并附带来源；`partial`
+会保留已证实部分并明确指出哪些结论需要进一步核验；`no_local_evidence` 表示当前 Wiki
+没有该项目的事实，AI 可以给通用建议但必须明确标注，不会伪装成项目结论。
+
 ## 使用方式
 
 | 入口 | 适合场景 |
@@ -98,7 +110,9 @@ MCP 调用成功统一返回 `status: ok`，项目证据另由 `evidence_status`
 | **macOS 桌面端** | 日常浏览、添加来源和审核更新 |
 | **本地 Portal** | 在浏览器中完成完整流程 |
 | **CLI** | 批处理、自动更新和诊断 |
-| **Codex MCP** | 在 AI 对话中按需读取已审核知识和历史会话 |
+| **Codex MCP** | 在 Codex 对话中按需读取已审核知识和历史会话 |
+| **Claude Code MCP** | 在 Claude Code CLI 中查询项目记忆和设计决策 |
+| **Gemini MCP** | 在 Gemini 中访问本地 Wiki 证据 |
 
 ![MemoryForge 桌面端：首页与知识更新审核](assets/07-memoryforge-desktop-workflow.jpg)
 
@@ -106,25 +120,52 @@ MCP 调用成功统一返回 `status: ok`，项目证据另由 `evidence_status`
 
 桌面端构建与运行见 [macOS 桌面端指南](docs/DESKTOP_APP_CN.md)。
 
-## 在 Codex 中使用
+### 多客户端统一架构
 
-### 1. 连接一次
+只需为一个 Workspace 注册一次全局 MCP Router，Codex、Claude Code、Gemini 都可以通过同一
+本地服务器访问已审核 Wiki。当前打开的项目目录仅作为页面排序提示，不是访问边界。
 
-对一个 Workspace 执行一次全局连接，重启 Codex 后用 `/mcp` 确认 `memoryforge` 已出现：
+![多客户端接入架构：三个 AI 应用通过统一全局 Router 查询本地知识](assets/usage/06-multi-client-architecture.png)
 
+默认只向 AI 暴露 `public` 来源；读取 `local_only` 内容（包括多数 AI 会话、私有代码、飞书
+私有文档）必须在连接时显式授权 `--allow-local-llm`。
+
+## 在 AI 应用中使用
+
+### 1. 连接一次：选择你的客户端
+
+对一个 Workspace 执行一次全局连接，重启客户端后用 `/mcp`（Codex/Claude）确认 `memoryforge`
+已出现：
+
+**Codex（推荐）：**
 ```bash
 memoryforge connect codex --workspace /absolute/path/to/my-wiki
 ```
 
-该命令注册一个本地 MCP Server，不会为每个仓库重复注册，也不会改写项目的 `AGENTS.md`。
-Codex 只在需要项目历史、既有决策、Wiki 证据或历史会话时按需查询，不会预载整个知识库。
+**Claude Code CLI：**
+```bash
+memoryforge connect claude --workspace /absolute/path/to/my-wiki
+claude mcp list  # 验证
+```
 
-默认只向 AI Host 提供 `public` 来源；读取 `local_only` 内容必须显式授权
-`--allow-local-llm`。详见 [Codex MCP Router](docs/GLOBAL_CODEX_MCP_ROUTER.md)。
+**Gemini：**
+```bash
+python -m memoryforge client plan gemini \
+    --workspace /absolute/path/to/my-wiki \
+    --project /absolute/path/to/your-project
+# 按输出指引执行 gemini mcp add
+```
 
-### 2. 直接提问
+连接命令只注册一个本地 MCP Server 和一个小型调用规则 Skill，不会为每个仓库重复注册，也
+不会改写项目的 `AGENTS.md` 或 `.mcp.json`。AI 只在需要项目历史、既有决策、Wiki 证据或历史
+会话时按需查询，不会预载整个知识库。
 
-连接后不需要先打开 MemoryForge，也不需要把 Wiki 粘贴进对话。可以在新任务中直接问：
+如需读取本地私有来源（代码、飞书私有文档、会话记录），在连接时加 `--allow-local-llm`。
+各客户端详细安装方式见 [多客户端接入指南](docs/MULTI_CLIENT_SETUP.md)。
+
+### 2. 直接提问，不需要粘贴 Wiki
+
+连接后不需要先打开 MemoryForge，也不需要把 Wiki 内容粘贴进对话。在任意新任务中直接问：
 
 ```text
 这个项目为什么把 approve 和 apply 分开？
@@ -133,8 +174,9 @@ Codex 只在需要项目历史、既有决策、Wiki 证据或历史会话时按
 这个结论对应哪条原文和哪个版本？
 ```
 
-Codex 会在问题涉及项目历史、设计决策或既有文档时调用 `memoryforge_context`，先读取少量
-相关 Wiki 页面；需要核验时，再通过 `memoryforge_read_evidence` 展开对应原文。
+AI 会在问题涉及项目历史、设计决策或既有文档时调用 `memoryforge_context`，先读取少量相关
+Wiki 页面；需要核验原文细节时，再通过 `memoryforge_read_evidence` 展开对应 locator 的
+原文片段；不会扫描整个原始资料库。
 
 ### 3. 加载指定旧会话
 
@@ -148,20 +190,36 @@ Codex 会在问题涉及项目历史、设计决策或既有文档时调用 `mem
 系统会用 `memoryforge_episodes` 按主题聚合近期会话，只返回主题、短摘要和原始会话引用；
 选中后再用 `memoryforge_load_session` 把有字符上限的 Episode Capsule 加入当前对话，
 不会在每次新任务自动注入旧历史。重要结论仍需通过当前代码、测试或正式 Wiki 证据确认。
-完整说明见 [多客户端接入指南](docs/MULTI_CLIENT_SETUP.md)。
 
-### 4. 按证据回答
+### 4. 可选：为下一次任务自动准备上下文
+
+如果希望创建下一次新对话时自动注入最近相关会话，可以启用 SessionStart Hook：
+
+```bash
+memoryforge connect codex --startup-hook --workspace /absolute/path/to/my-wiki
+# 或 Claude Code
+memoryforge connect claude --startup-hook --workspace /absolute/path/to/my-wiki
+```
+
+然后在目标目录运行：
+```bash
+memoryforge continue
+```
+
+选择要延续的会话主题后创建新任务即可。Capsule 是未验证的历史提示，不会自动写入正式 Wiki。
+
+### 5. 按证据回答的实际效果
 
 ```text
 你：先查 MemoryForge，再告诉我为什么 approve 和 apply 要分开。
 
-Codex：approve 只记录与提案哈希绑定的授权，apply 才写入 Wiki 并创建 Git Commit。
-       因此审阅、授权和落盘可以独立审计与重放。
+AI：approve 只记录与提案哈希绑定的授权，apply 才写入 Wiki 并创建 Git Commit。
+    因此审阅、授权和落盘可以独立审计与重放。
 
-来源：Wiki 页面 · SourceVersion · 原文 locator · Commit
+来源：Wiki 页面 · SourceVersion · 原文 locator · Commit SHA
 ```
 
-当证据完整时，Codex 基于引用回答；只有部分证据时，它会保留已支持结论并标出待核验部分；
+当证据完整时，AI 基于引用回答；只有部分证据时，它会保留已支持结论并标出待核验部分；
 没有本地证据时，则明确区分项目事实与通用分析。
 
 ## 文档
@@ -169,6 +227,7 @@ Codex：approve 只记录与提案哈希绑定的授权，apply 才写入 Wiki �
 | 文档 | 内容 |
 | --- | --- |
 | [中文使用指南](docs/USER_GUIDE_CN.md) | 安装、导入、问答与 AI Host MCP 接入 |
+| [多客户端接入指南](docs/MULTI_CLIENT_SETUP.md) | Codex / Claude Code / Gemini 连接与 Hook 配置 |
 | [macOS 桌面端指南](docs/DESKTOP_APP_CN.md) | 原生窗口、Workspace 选择与打包方式 |
 | [SPEC.md](SPEC.md) | 架构、数据模型和安全边界 |
 | [公开演示](docs/PORTFOLIO_DEMO.md) | Demo 命令、展示顺序和常见追问 |
