@@ -41,11 +41,11 @@ from memoryforge.automation.automation_validation import classify_risk
 from memoryforge.compiler.compiler import (
     _add_relations_page,
     _load_current_sources,
-    _read_source_text,
     _render_llm_page,
 )
 from memoryforge.compiler.index_rendering import _parse_page_summary
 from memoryforge.compiler.index_rendering import render_index as _render_index
+from memoryforge.compiler.source_rendering import _read_source_text
 from memoryforge.compiler.wiki_facts import (
     CitationPayload,
     is_conversation_process_note,
