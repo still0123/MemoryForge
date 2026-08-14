@@ -13,9 +13,14 @@ from typer.testing import CliRunner
 
 from memoryforge.interface.cli import app
 from memoryforge.interface.codex_connect import install_codex_session_hook
-from memoryforge.interface.mcp_server import _session_list_payload, _session_memory_payload
+from memoryforge.interface.mcp_server import (
+    _episode_list_payload,
+    _session_list_payload,
+    _session_memory_payload,
+)
 from memoryforge.storage.session_bootstrap import (
     consume_startup_capsule,
+    list_conversation_episodes,
     list_conversation_sessions,
     load_conversation_sessions,
     queue_startup_capsule,
@@ -112,6 +117,49 @@ def test_lists_only_public_sessions_without_local_authorization() -> None:
     assert sessions[0].session_ref == "session:1"
 
 
+def test_groups_related_sessions_into_topic_episodes() -> None:
+    connection = _database()
+    connection.execute(
+        "UPDATE source_versions SET title = 'Codex 会话：OAuth callback work' WHERE id = 1"
+    )
+    source_id = "3" * 64
+    connection.execute("INSERT INTO sources VALUES (3, ?)", (source_id,))
+    connection.execute(
+        "INSERT INTO source_versions VALUES (3, 3, ?, ?, 'local_only', ?)",
+        (
+            "Codex 会话：OAuth callback follow-up",
+            datetime(2026, 8, 14, 1, 3, tzinfo=UTC).isoformat(),
+            '["conversation"]',
+        ),
+    )
+    connection.execute("INSERT INTO applied_source_versions VALUES (?, 3)", (source_id,))
+    connection.execute(
+        "INSERT INTO wiki_facts VALUES (14, ?, 1, 'Assistant conclusions', ?)",
+        (
+            "1" * 64,
+            "OAuth token callback uses the device authorization result and refresh state.",
+        ),
+    )
+    connection.execute(
+        "INSERT INTO wiki_facts VALUES (30, ?, 3, 'Assistant conclusions', ?)",
+        (
+            source_id,
+            "OAuth token callback follow-up confirmed the same device authorization flow.",
+        ),
+    )
+    connection.commit()
+
+    episodes = list_conversation_episodes(connection)
+    auth = next(episode for episode in episodes if episode.topic == "OAuth callback follow-up")
+    filtered = list_conversation_episodes(connection, query="OAuth token")
+    public_only = list_conversation_episodes(connection, public_only=True)
+
+    assert auth.session_refs == ("session:3", "session:1")
+    assert auth.episode_ref.startswith("episode:")
+    assert filtered[0] == auth
+    assert public_only[0].session_refs == ("session:1",)
+
+
 def test_loads_selected_session_memory_without_user_prompts() -> None:
     memory = load_conversation_sessions(
         _database(),
@@ -194,6 +242,12 @@ def test_mcp_payload_lists_then_loads_selected_session(tmp_path: Path, monkeypat
         session_refs=[str(local["session_ref"])],
         max_characters=1000,
     )
+    episodes = _episode_list_payload(
+        tmp_path,
+        allow_local=True,
+        query=None,
+        limit=10,
+    )
     focused = _session_memory_payload(
         tmp_path,
         allow_local=True,
@@ -211,6 +265,8 @@ def test_mcp_payload_lists_then_loads_selected_session(tmp_path: Path, monkeypat
     public_only = _session_list_payload(tmp_path, allow_local=False, limit=10)
 
     assert listed["status"] == "ok"
+    assert episodes["status"] == "ok"
+    assert episodes["episodes"][0]["session_refs"]
     assert all(len(str(session["summary"])) <= 240 for session in listed["sessions"])
     assert loaded["status"] == "loaded"
     assert loaded["session_count"] == 1

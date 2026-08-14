@@ -3,8 +3,8 @@
 Exposes the protocol-agnostic Agent Access functions through the official
 MCP Python SDK v2: ``memoryforge_context`` (L2 bounded context), ``memoryforge
 _read_evidence`` (L3 one-citation excerpt), ``memoryforge_recall`` (applied
-conversation memory), ``memoryforge_sessions`` / ``memoryforge_load_session``
-(explicit in-chat session loading) and ``memoryforge_status`` (diagnostics),
+conversation memory), ``memoryforge_episodes`` / ``memoryforge_sessions`` /
+``memoryforge_load_session`` (topic and session loading) and ``memoryforge_status`` (diagnostics),
 plus the static ``memoryforge://status`` resource. Phase 4 adds the single write tool
 ``memoryforge_propose_update`` (stages one PROPOSED page ChangeSet; never
 touches the stable Wiki or Git HEAD) and the read-only preview tools
@@ -53,6 +53,7 @@ from memoryforge.storage.changesets import ChangeSetStore
 from memoryforge.storage.database import connect as _connect
 from memoryforge.storage.database import connect_readonly as _connect_readonly
 from memoryforge.storage.session_bootstrap import (
+    list_conversation_episodes,
     list_conversation_sessions,
     load_conversation_sessions,
 )
@@ -69,7 +70,7 @@ _INSTRUCTIONS = (
     "project_answer, evidence_status, verification_status and citations. When grounded, "
     "synthesize project_answer; partial means state supported facts and verify only gaps. "
     "Use memoryforge_recall only for latest-session summaries, not factual how-to. "
-    "To continue selected history, list sessions, load chosen refs, then reuse those refs "
+    "To continue history, list topic episodes, load chosen refs, then reuse those refs "
     "with each follow-up question. On no_session_evidence use memoryforge_context. "
     "Do not equate a work machine, jump host, bastion or target host unless cited evidence does. "
     "Read exact excerpts only when needed. memoryforge_propose_update stages one PROPOSED "
@@ -84,7 +85,7 @@ _ROUTER_INSTRUCTIONS = (
     "operations, login, configuration, history and cross-repository context before external "
     "search; only no_local_evidence permits fallback. When grounded, synthesize "
     "project_answer. Use memoryforge_recall only for latest summaries, not factual how-to. "
-    "To continue selected history, list sessions, load chosen refs, then reuse those refs "
+    "To continue history, list topic episodes, load chosen refs, then reuse those refs "
     "with each follow-up question. On no_session_evidence use memoryforge_context. Do not "
     "equate a work machine, jump host, bastion or target host without cited evidence. "
     "MCP Roots prioritize but never exclude registered repositories. Read evidence only for "
@@ -200,6 +201,19 @@ def build_server(
         return _session_list_payload(
             bindings.workspace,
             allow_local=bindings.allow_local,
+            limit=limit,
+        )
+
+    @server.tool(name="memoryforge_episodes", annotations=_READ_ONLY_ANNOTATIONS)
+    def memoryforge_episodes(
+        query: str | None = None,
+        limit: int = 10,
+    ) -> dict[str, object]:
+        """Group recent AI sessions by topic so the user can load one Episode."""
+        return _episode_list_payload(
+            bindings.workspace,
+            allow_local=bindings.allow_local,
+            query=query,
             limit=limit,
         )
 
@@ -487,6 +501,19 @@ def build_router_server(
             limit=limit,
         )
 
+    @server.tool(name="memoryforge_episodes", annotations=_READ_ONLY_ANNOTATIONS)
+    async def memoryforge_episodes(
+        query: str | None = None,
+        limit: int = 10,
+    ) -> dict[str, object]:
+        """Group recent AI sessions by topic so the user can load one Episode."""
+        return _episode_list_payload(
+            bindings.workspace,
+            allow_local=bindings.allow_local,
+            query=query,
+            limit=limit,
+        )
+
     @server.tool(name="memoryforge_load_session", annotations=_READ_ONLY_ANNOTATIONS)
     async def memoryforge_load_session(
         session_refs: list[str],
@@ -514,6 +541,43 @@ def build_router_server(
 class _RouterBindings:
     workspace: Path
     allow_local: bool
+
+
+def _episode_list_payload(
+    workspace: Path,
+    *,
+    allow_local: bool,
+    query: str | None,
+    limit: int,
+) -> dict[str, object]:
+    with _connect_readonly(Workspace.open_readonly(workspace).index_path) as connection:
+        episodes = list_conversation_episodes(
+            connection,
+            query=query,
+            limit=max(1, min(20, int(limit))),
+            public_only=not allow_local,
+        )
+    return {
+        "status": "ok" if episodes else "empty",
+        "verification_status": "unverified_history",
+        "episodes": [
+            {
+                "number": index,
+                "episode_ref": episode.episode_ref,
+                "topic": episode.topic,
+                "updated_at": episode.observed_at,
+                "summary": episode.summary[:240].rstrip(),
+                "session_count": len(episode.session_refs),
+                "session_refs": list(episode.session_refs),
+            }
+            for index, episode in enumerate(episodes, start=1)
+        ],
+        "next_action": (
+            "Ask which Episode to load, then call memoryforge_load_session with its session_refs."
+            if episodes
+            else "No matching visible conversation Episode is available."
+        ),
+    }
 
 
 def _session_list_payload(

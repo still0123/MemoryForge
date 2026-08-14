@@ -6,6 +6,7 @@ import json
 import re
 import sqlite3
 import sys
+from collections import Counter
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -47,6 +48,40 @@ _STOPWORDS = {
     "如何",
     "为什么",
 }
+_EPISODE_GENERIC = _STOPWORDS | {
+    "assistant",
+    "chatgpt",
+    "claude",
+    "codex",
+    "conversation",
+    "decision",
+    "enough",
+    "evidence",
+    "for",
+    "in",
+    "including",
+    "lead",
+    "long",
+    "memoryforge",
+    "reusable",
+    "session",
+    "summary",
+    "this",
+    "conversational",
+    "outrank",
+    "verified",
+    "会话",
+    "代码",
+    "对话",
+    "检查",
+    "结论",
+    "项目",
+    "问题",
+}
+_EPISODE_TITLE_PREFIX = re.compile(
+    r"^(?:codex|claude|chatgpt)\s*(?:会话|conversation)?\s*[:：-]\s*",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -60,6 +95,15 @@ class ConversationSession:
     @property
     def session_ref(self) -> str:
         return f"session:{self.source_version}"
+
+
+@dataclass(frozen=True)
+class ConversationEpisode:
+    episode_ref: str
+    topic: str
+    observed_at: str
+    summary: str
+    session_refs: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -134,6 +178,96 @@ def list_conversation_sessions(
     )
 
 
+def list_conversation_episodes(
+    connection: sqlite3.Connection,
+    *,
+    limit: int = 10,
+    query: str | None = None,
+    public_only: bool = False,
+) -> tuple[ConversationEpisode, ...]:
+    if not 1 <= limit <= 20:
+        raise ValueError("limit must be between 1 and 20")
+    sessions = list_conversation_sessions(connection, limit=100, public_only=public_only)
+    fact_text: dict[int, list[str]] = {session.source_version: [] for session in sessions}
+    if sessions:
+        placeholders = ", ".join("?" for _ in sessions)
+        rows = connection.execute(
+            f"""
+            SELECT facts.source_version, facts.quote
+            FROM wiki_facts AS facts
+            WHERE facts.source_version IN ({placeholders})
+              AND lower(facts.section_path) NOT LIKE '%user prompt%'
+              AND facts.quote NOT LIKE '```%'
+              AND trim(facts.quote) NOT LIKE 'func %'
+              AND trim(facts.quote) NOT LIKE 'def %'
+              AND trim(facts.quote) NOT LIKE 'class %'
+            ORDER BY {_SUMMARY_ORDER}
+            """,
+            tuple(session.source_version for session in sessions),
+        ).fetchall()
+        for version_id, quote in rows:
+            conclusions = fact_text[int(version_id)]
+            if len(conclusions) < 20:
+                conclusions.append(str(quote))
+    session_terms = [
+        (
+            session,
+            set(_episode_terms(session.title)),
+            set(
+                _episode_terms(
+                    " ".join((session.title, session.summary, *fact_text[session.source_version]))
+                )
+            ),
+        )
+        for session in sessions
+    ]
+    frequencies: Counter[str] = Counter()
+    for _session, title_terms, _search_terms in session_terms:
+        frequencies.update(title_terms)
+    rare_limit = max(2, len(sessions) // 20)
+    rare_terms = {term for term, count in frequencies.items() if count <= rare_limit}
+    clusters: list[tuple[list[ConversationSession], set[str], set[str]]] = []
+    for session, title_terms, search_terms in session_terms:
+        cluster = next(
+            (
+                candidate
+                for candidate in clusters
+                if _same_episode(title_terms, candidate[1], rare_terms)
+            ),
+            None,
+        )
+        if cluster is None:
+            clusters.append(([session], title_terms, search_terms))
+        else:
+            cluster[0].append(session)
+            cluster[2].update(search_terms)
+
+    query_terms = _episode_terms(query.strip()) if query else frozenset()
+    if query is not None and not query_terms:
+        raise ValueError("query must contain searchable terms")
+    if query_terms:
+        clusters = [cluster for cluster in clusters if query_terms & cluster[2]]
+        clusters.sort(key=lambda cluster: len(query_terms & cluster[2]), reverse=True)
+
+    episodes: list[ConversationEpisode] = []
+    for grouped_sessions, _title_terms, _search_terms in clusters[:limit]:
+        session_refs = tuple(session.session_ref for session in grouped_sessions[:20])
+        episodes.append(
+            ConversationEpisode(
+                episode_ref="episode:"
+                + hashlib.sha256("\0".join(session_refs).encode()).hexdigest()[:12],
+                topic=_EPISODE_TITLE_PREFIX.sub("", grouped_sessions[0].title),
+                observed_at=grouped_sessions[0].observed_at,
+                summary=next(
+                    (session.summary for session in grouped_sessions if session.summary),
+                    "",
+                ),
+                session_refs=session_refs,
+            )
+        )
+    return tuple(episodes)
+
+
 def load_conversation_sessions(
     connection: sqlite3.Connection,
     *,
@@ -144,8 +278,8 @@ def load_conversation_sessions(
 ) -> SessionMemory:
     if not session_refs:
         raise ValueError("at least one session_ref is required")
-    if len(session_refs) > 3:
-        raise ValueError("at most three sessions can be loaded")
+    if len(session_refs) > 20:
+        raise ValueError("at most twenty sessions can be loaded")
     if len(set(session_refs)) != len(session_refs):
         raise ValueError("session_refs must be unique")
     if max_characters < len(_PREFIX) + 80:
@@ -257,6 +391,18 @@ def _session_tokens(text: str) -> frozenset[str]:
         else:
             tokens.add(match)
     return frozenset(tokens)
+
+
+def _episode_terms(text: str) -> frozenset[str]:
+    terms = {term for term in _session_tokens(text) if term not in _EPISODE_GENERIC}
+    for term in tuple(terms):
+        if term.isascii() and len(term) >= 8:
+            terms.update(term[index : index + 5] for index in range(len(term) - 4))
+    return frozenset(terms)
+
+
+def _same_episode(left: set[str], right: set[str], rare_terms: set[str]) -> bool:
+    return len(left & right & rare_terms) >= 2
 
 
 def _rank_session_quotes(

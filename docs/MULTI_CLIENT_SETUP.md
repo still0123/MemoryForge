@@ -118,19 +118,19 @@ When `--capture` is enabled, MemoryForge subscribes to these hook events:
 默认方式不依赖 Hook。先创建任意新对话，然后直接说：
 
 ```text
-列出我最近的 MemoryForge 会话
-加载第 2 个
+列出我最近的 MemoryForge 主题
+加载第 2 个主题
 ```
 
-Host 会先调用 `memoryforge_sessions`，只返回最近会话的标题、日期、短摘要和临时引用。用户明确选择
-后，再调用 `memoryforge_load_session`，把最多 3 条、默认不超过 6000 字符的 Session Capsule 加入
-当前对话。加载的是已应用会话中编译出的结论，不是完整聊天记录，也不是语义检索结果。无需切换目录、
-运行终端命令或重启客户端。
+Host 会先调用 `memoryforge_episodes`，在读取时用标题确定性聚合主题，并用已编译结论匹配主题搜索。
+Episode 不复制、改写或持久化原始会话，只返回主题、短摘要和 `session_refs`。用户明确选择后，再调用
+`memoryforge_load_session`，把默认不超过 6000 字符的 Capsule 加入当前对话。需要精确时间线时才调用
+`memoryforge_sessions`。无需切换目录、运行终端命令或重启客户端。
 
 `local_only` 会话只有在 MCP 连接明确允许本地内容时才会出现在列表中；所有会话内容仍标记为
 `unverified_history`。
 
-后续问题采用渐进式链路：Host 保存用户选中的 `session_refs`，再次调用
+后续问题采用渐进式链路：Host 保存 Episode 的 `session_refs`，再次调用
 `memoryforge_load_session(session_refs, question=...)`，仅取这些会话内与问题匹配的结论。命中时返回
 `mode: focused` 和 `retrieval_scope: selected_sessions`；未命中时返回 `no_session_evidence`，Host 再用
 同一问题调用 `memoryforge_context`。不会把无关会话摘要伪装成答案，也不会每轮重复加载完整会话。

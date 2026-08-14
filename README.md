@@ -81,14 +81,14 @@ MemoryForge 搜索整个已应用 Workspace：当前打开的已登记项目只�
 先创建任意 Codex 或 Claude 对话，然后直接说：
 
 ```text
-列出我最近的 MemoryForge 会话
-加载第 2 个
+列出我最近的 MemoryForge 主题
+加载第 2 个主题
 ```
 
-MemoryForge 先用 `memoryforge_sessions` 返回低 Token 的标题和摘要；你选择后，再由
-`memoryforge_load_session` 把最多 3 条、有字符上限的 Session Capsule 加入**当前对话**。这不是
-语义检索，不要求当前目录已登记，也不需要终端命令或重启客户端。内容会标记为未验证历史，重要结论
-仍需通过当前代码、测试或正式 Wiki 证据确认。
+MemoryForge 用 `memoryforge_episodes` 把近期会话按主题聚合，只返回主题、短摘要和原始会话引用；你
+选择后，再由 `memoryforge_load_session` 把有字符上限的 Episode Capsule 加入**当前对话**。需要精确
+时间线时仍可说“列出最近会话”。不要求当前目录已登记，也不需要终端命令或重启客户端。内容会标记为
+未验证历史，重要结论仍需通过当前代码、测试或正式 Wiki 证据确认。
 
 之后继续问这段历史时，Host 会保留所选会话引用，并把新问题交给同一个工具：只在这些会话中返回
 相关结论，而不是再次注入整段 Capsule。若返回 `no_session_evidence`，才回退到项目/跨仓库 Wiki

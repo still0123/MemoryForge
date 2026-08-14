@@ -39,6 +39,7 @@ TOOL_NAMES = {
     "memoryforge_context",
     "memoryforge_read_evidence",
     "memoryforge_recall",
+    "memoryforge_episodes",
     "memoryforge_sessions",
     "memoryforge_load_session",
     "memoryforge_status",
@@ -133,6 +134,8 @@ def test_tool_discovery_contract_is_fixed(
             assert set(recall_properties) == {"limit"}
             sessions_properties = by_name["memoryforge_sessions"].input_schema["properties"]
             assert set(sessions_properties) == {"limit"}
+            episode_properties = by_name["memoryforge_episodes"].input_schema["properties"]
+            assert set(episode_properties) == {"query", "limit"}
             load_properties = by_name["memoryforge_load_session"].input_schema["properties"]
             assert set(load_properties) == {"session_refs", "max_characters", "question"}
 

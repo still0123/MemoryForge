@@ -53,8 +53,9 @@ description: >-
    Call it before any company-wide or external knowledge search. Only `no_local_evidence`
    permits external fallback. Use
    `memoryforge_recall` only for latest-session summaries, never for a factual how-to.
-   When the user asks to continue an earlier AI conversation, call `memoryforge_sessions`,
-   show the numbered results, then call `memoryforge_load_session` for the refs they select.
+   When the user asks to continue earlier work, call `memoryforge_episodes`, show the numbered
+   topics, then call `memoryforge_load_session` with the selected Episode's session refs. Use
+   `memoryforge_sessions` only when the user asks for an exact chronological conversation.
    This loads memory into the current task; no terminal command or client restart is needed.
    Keep the selected refs. For a later question about that history, call
    `memoryforge_load_session` again with the same refs and the question. If it returns
@@ -91,8 +92,8 @@ _AGENTS_MCP_LINES = (
     "- For exact current code, call chains, errors, files, or line numbers, inspect the "
     "current checkout first.",
     "- Do not load the whole Wiki at task start.",
-    "- To continue an old AI conversation, list sessions and load the user's explicit choice "
-    "inside the current task; no restart is needed.",
+    "- To continue old work, list topic Episodes and load the user's choice inside the current "
+    "task; use raw sessions only for an exact timeline. No restart is needed.",
     "- For a follow-up about selected sessions, load the same refs with the question; fall back "
     "to memoryforge_context only on no_session_evidence.",
     "- Start with memoryforge_context using the current project root.",
