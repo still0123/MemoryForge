@@ -105,7 +105,7 @@ MCP 调用成功统一返回 `status: ok`，项目证据另由 `evidence_status`
 当你在 AI 应用中提问时，MemoryForge 不会把整个 Wiki 灌入上下文。它执行一条渐进式、
 有边界的查询链：先找页面、再读摘要、必要时才展开原文，最后由 AI 基于返回的引用合成回答。
 
-![AI Host 查询回答流程：从提问到带引用答案的完整链路](assets/usage/04-mcp-query-answer-flow.jpg)
+![AI Host 查询回答流程：从提问到带引用答案的完整链路](assets/usage/04-mcp-query-answer-flow.png)
 
 回答始终区分证据覆盖范围：`grounded` 表示结论有本地 Wiki 支撑并附带来源；`partial`
 会保留已证实部分并明确指出哪些结论需要进一步核验；`no_local_evidence` 表示当前 Wiki
