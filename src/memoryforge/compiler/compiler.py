@@ -1795,6 +1795,45 @@ def _section_path_at(
     return next((path for start, path in reversed(headings) if start <= position), ())
 
 
+def _is_markdown_table(quote: str) -> bool:
+    return quote.lstrip().startswith("|") and "\n" in quote.rstrip()
+
+
+def _order_assistant_facts(raw_facts: list[SourceFact], body: str) -> list[SourceFact]:
+    """Merge adjacent paragraph+table pairs (gap must be whitespace only)
+    and return them ordered: merged conclusion+table first, standalone
+    Markdown tables second, other facts last. The merged quote is the
+    literal body slice and start is preserved from the paragraph fact.
+    """
+    merged: list[SourceFact] = []
+    tables: list[SourceFact] = []
+    other: list[SourceFact] = []
+    skip_next = False
+    for idx, fact in enumerate(raw_facts):
+        if skip_next:
+            skip_next = False
+            continue
+        is_table = _is_markdown_table(fact.quote)
+        nxt = raw_facts[idx + 1] if idx + 1 < len(raw_facts) else None
+        if not is_table and nxt is not None and _is_markdown_table(nxt.quote):
+            gap = body[fact.start + len(fact.quote) : nxt.start]
+            if gap.strip() == "":
+                merged.append(
+                    SourceFact(
+                        quote=body[fact.start : nxt.start + len(nxt.quote)],
+                        start=fact.start,
+                        section_path=fact.section_path,
+                    )
+                )
+                skip_next = True
+                continue
+        if is_table:
+            tables.append(fact)
+        else:
+            other.append(fact)
+    return merged + tables + other
+
+
 def _page_type(source: CurrentSource) -> PageType:
     normalized_title = source.title.lower()
     if any(word in normalized_title for word in _SYNTHESIS_WORDS):
@@ -1962,10 +2001,17 @@ def _conversation_facts(content: str) -> list[SourceFact]:
             continue
         body_start = match.end() + leading
         try:
-            body_facts = _meaningful_paragraphs(body)[:_CONVERSATION_FACTS_PER_TURN]
+            body_facts = _meaningful_paragraphs(body)
         except ValueError:
             continue
         role = "Assistant" if match.group("role") in {"Assistant (unverified)", "Codex"} else "User"
+        if role == "Assistant":
+            ordered = _order_assistant_facts(body_facts, body)
+            substantive = [f for f in ordered if not is_conversation_process_note(f.quote)]
+            body_facts = substantive or [
+                f for f in ordered if is_conversation_process_note(f.quote)
+            ]
+        body_facts = body_facts[:_CONVERSATION_FACTS_PER_TURN]
         turns.append(
             (
                 role,
