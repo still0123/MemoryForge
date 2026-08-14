@@ -3247,20 +3247,26 @@ def _release_drill_answered_query(payload: object) -> bool:
     citations = payload.get("citations")
     evidence = payload.get("evidence")
     support = payload.get("support")
+    legacy_keys = {
+        "status",
+        "answer",
+        "citations",
+        "evidence",
+        "source_id",
+        "source_version",
+        "locator",
+        "quote",
+        "support",
+        "wiki_pages",
+    }
+    three_state_keys = legacy_keys | {
+        "evidence_status",
+        "supported_claims",
+        "unsupported_aspects",
+    }
+    payload_keys = set(payload)
     if (
-        set(payload)
-        != {
-            "status",
-            "answer",
-            "citations",
-            "evidence",
-            "source_id",
-            "source_version",
-            "locator",
-            "quote",
-            "support",
-            "wiki_pages",
-        }
+        payload_keys not in (legacy_keys, three_state_keys)
         or not isinstance(citations, list)
         or len(citations) != 1
         or not isinstance(evidence, list)
@@ -3289,6 +3295,14 @@ def _release_drill_answered_query(payload: object) -> bool:
     )
     return (
         payload.get("status") == "answered"
+        and (
+            payload_keys == legacy_keys
+            or (
+                payload.get("evidence_status") == "grounded"
+                and payload.get("supported_claims") == [expected_answer]
+                and payload.get("unsupported_aspects") == []
+            )
+        )
         and payload.get("answer") == expected_answer
         and citation_schema_valid
         and SHA256.fullmatch(str(source_id)) is not None
@@ -3325,25 +3339,64 @@ def _release_drill_unknown_query(payload: object) -> bool:
     if not isinstance(payload, dict):
         return False
     support = payload.get("support")
-    return (
-        set(payload)
-        == {
-            "status",
-            "answer",
-            "citations",
-            "source_id",
-            "source_version",
-            "locator",
-            "quote",
-            "support",
-            "wiki_pages",
-        }
-        and payload.get("status") == "unknown"
-        and payload.get("answer") == "不知道"
-        and payload.get("citations") == []
-        and all(
-            payload.get(key) is None for key in ("source_id", "source_version", "locator", "quote")
+    legacy_keys = {
+        "status",
+        "answer",
+        "citations",
+        "source_id",
+        "source_version",
+        "locator",
+        "quote",
+        "support",
+        "wiki_pages",
+    }
+    three_state_keys = legacy_keys | {
+        "evidence_status",
+        "supported_claims",
+        "unsupported_aspects",
+    }
+    payload_keys = set(payload)
+    if payload_keys == legacy_keys:
+        state_valid = (
+            payload.get("answer") == "不知道"
+            and payload.get("citations") == []
+            and all(
+                payload.get(key) is None
+                for key in ("source_id", "source_version", "locator", "quote")
+            )
+            and payload.get("wiki_pages") == []
         )
+    elif payload_keys == three_state_keys:
+        citations = payload.get("citations")
+        evidence_status = payload.get("evidence_status")
+        if evidence_status == "no_local_evidence":
+            state_valid = (
+                payload.get("answer") == "不知道"
+                and citations == []
+                and payload.get("supported_claims") == []
+                and payload.get("wiki_pages") == []
+            )
+        else:
+            first = citations[0] if isinstance(citations, list) and citations else None
+            state_valid = (
+                evidence_status == "partial"
+                and isinstance(first, dict)
+                and isinstance(payload.get("supported_claims"), list)
+                and bool(payload["supported_claims"])
+                and isinstance(payload.get("unsupported_aspects"), list)
+                and bool(payload["unsupported_aspects"])
+                and payload.get("source_id") == first.get("source_id")
+                and payload.get("source_version") == first.get("source_version")
+                and payload.get("locator") == first.get("locator")
+                and payload.get("quote") == first.get("quote")
+                and isinstance(payload.get("wiki_pages"), list)
+                and bool(payload["wiki_pages"])
+            )
+    else:
+        return False
+    return (
+        payload.get("status") == "unknown"
+        and state_valid
         and _release_drill_support_valid(
             support,
             {
@@ -3355,7 +3408,6 @@ def _release_drill_unknown_query(payload: object) -> bool:
                 "current_source_versions": 1.0,
             },
         )
-        and payload.get("wiki_pages") == []
     )
 
 

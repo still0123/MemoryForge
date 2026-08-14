@@ -1,0 +1,485 @@
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import re
+import sqlite3
+import sys
+from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Literal
+
+from memoryforge.storage.capture_inbox import _ensure_schema
+
+Host = Literal["claude", "codex"]
+
+_PREFIX = (
+    "Unverified MemoryForge session handoff. Verify important claims against current "
+    "code, tests, or cited Wiki before acting."
+)
+
+_SUMMARY_ORDER = """
+    CASE WHEN facts.section_path = 'Assistant conclusions' THEN 0 ELSE 1 END,
+    CASE WHEN length(facts.quote) BETWEEN 80 AND 1000 THEN 0 ELSE 1 END,
+    length(facts.quote) DESC,
+    facts.id DESC
+"""
+
+_TOKEN = re.compile(r"[a-z0-9_]+|[\u4e00-\u9fff]+", re.IGNORECASE)
+_STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "how",
+    "is",
+    "of",
+    "or",
+    "the",
+    "to",
+    "what",
+    "why",
+    "这个",
+    "什么",
+    "怎么",
+    "如何",
+    "为什么",
+}
+
+
+@dataclass(frozen=True)
+class ConversationSession:
+    source_id: str
+    source_version: int
+    title: str
+    observed_at: str
+    summary: str
+
+    @property
+    def session_ref(self) -> str:
+        return f"session:{self.source_version}"
+
+
+@dataclass(frozen=True)
+class SessionMemory:
+    session_refs: tuple[str, ...]
+    content: str
+    character_count: int
+    mode: Literal["overview", "focused"]
+    matched_facts: int
+
+
+@dataclass(frozen=True)
+class StartupCapsule:
+    capsule_id: str
+    host: Host
+    project_root: str
+    source_ids: tuple[str, ...]
+    content: str
+    character_count: int
+
+
+def list_conversation_sessions(
+    connection: sqlite3.Connection,
+    *,
+    limit: int = 20,
+    public_only: bool = False,
+) -> tuple[ConversationSession, ...]:
+    if not 1 <= limit <= 100:
+        raise ValueError("limit must be between 1 and 100")
+    visibility_clause = "AND versions.sensitivity = 'public'" if public_only else ""
+    rows = connection.execute(
+        f"""
+        SELECT
+            sources.source_id,
+            versions.id,
+            versions.title,
+            versions.observed_at,
+            COALESCE((
+                SELECT facts.quote
+                FROM wiki_facts AS facts
+                WHERE facts.source_id = sources.source_id
+                  AND facts.source_version = versions.id
+                  AND lower(facts.section_path) NOT LIKE '%user prompt%'
+                  AND facts.quote NOT LIKE '```%'
+                  AND trim(facts.quote) NOT LIKE 'func %'
+                  AND trim(facts.quote) NOT LIKE 'def %'
+                  AND trim(facts.quote) NOT LIKE 'class %'
+                ORDER BY {_SUMMARY_ORDER}
+                LIMIT 1
+            ), '') AS summary
+        FROM source_versions AS versions
+        JOIN sources ON sources.id = versions.source_id
+        JOIN applied_source_versions AS applied
+          ON applied.source_id = sources.source_id
+         AND applied.source_version_id = versions.id
+        WHERE versions.tags_json LIKE '%"conversation"%'
+          {visibility_clause}
+        ORDER BY versions.observed_at DESC, sources.source_id
+        LIMIT ?
+        """,
+        (limit,),
+    ).fetchall()
+    return tuple(
+        ConversationSession(
+            source_id=str(row[0]),
+            source_version=int(row[1]),
+            title=str(row[2]),
+            observed_at=str(row[3]),
+            summary=str(row[4]).strip(),
+        )
+        for row in rows
+    )
+
+
+def load_conversation_sessions(
+    connection: sqlite3.Connection,
+    *,
+    session_refs: Sequence[str],
+    max_characters: int = 6000,
+    public_only: bool = False,
+    question: str | None = None,
+) -> SessionMemory:
+    if not session_refs:
+        raise ValueError("at least one session_ref is required")
+    if len(session_refs) > 3:
+        raise ValueError("at most three sessions can be loaded")
+    if len(set(session_refs)) != len(session_refs):
+        raise ValueError("session_refs must be unique")
+    if max_characters < len(_PREFIX) + 80:
+        raise ValueError("max_characters is too small")
+    if max_characters > 12000:
+        raise ValueError("max_characters cannot exceed 12000")
+
+    version_ids: list[int] = []
+    for ref in session_refs:
+        prefix, separator, raw_id = ref.partition(":")
+        if prefix != "session" or separator != ":" or not raw_id.isdigit():
+            raise ValueError(f"invalid session_ref: {ref}")
+        version_ids.append(int(raw_id))
+
+    placeholders = ", ".join("?" for _ in version_ids)
+    visibility_clause = "AND versions.sensitivity = 'public'" if public_only else ""
+    rows = connection.execute(
+        f"""
+        SELECT
+            sources.source_id,
+            versions.id,
+            versions.title,
+            versions.observed_at
+        FROM source_versions AS versions
+        JOIN sources ON sources.id = versions.source_id
+        JOIN applied_source_versions AS applied
+          ON applied.source_id = sources.source_id
+         AND applied.source_version_id = versions.id
+        WHERE versions.id IN ({placeholders})
+          AND versions.tags_json LIKE '%"conversation"%'
+          {visibility_clause}
+        """,
+        tuple(version_ids),
+    ).fetchall()
+    by_version = {int(row[1]): row for row in rows}
+    missing = [
+        ref
+        for ref, version_id in zip(session_refs, version_ids, strict=True)
+        if version_id not in by_version
+    ]
+    if missing:
+        raise ValueError("session is not visible or applied: " + ", ".join(missing))
+
+    normalized_question = question.strip() if question else ""
+    question_tokens = _session_tokens(normalized_question)
+    if question is not None and not normalized_question:
+        raise ValueError("question must not be empty")
+    if normalized_question and not question_tokens:
+        raise ValueError("question must contain searchable terms")
+    mode: Literal["overview", "focused"] = "focused" if normalized_question else "overview"
+    per_session = max(80, (max_characters - len(_PREFIX) - 4) // len(session_refs))
+    sections = [_PREFIX]
+    matched_facts = 0
+    for ref, version_id in zip(session_refs, version_ids, strict=True):
+        row = by_version[version_id]
+        quotes = connection.execute(
+            f"""
+            SELECT facts.quote
+            FROM wiki_facts AS facts
+            WHERE facts.source_id = ?
+              AND facts.source_version = ?
+              AND lower(facts.section_path) NOT LIKE '%user prompt%'
+              AND facts.quote NOT LIKE '```%'
+              AND trim(facts.quote) NOT LIKE 'func %'
+              AND trim(facts.quote) NOT LIKE 'def %'
+              AND trim(facts.quote) NOT LIKE 'class %'
+            ORDER BY {_SUMMARY_ORDER}
+            LIMIT ?
+            """,
+            (str(row[0]), version_id, 100 if mode == "focused" else 20),
+        ).fetchall()
+        ranked_quotes = _rank_session_quotes(
+            (str(quote_row[0]).strip() for quote_row in quotes),
+            question_tokens=question_tokens,
+        )
+        if mode == "focused" and not ranked_quotes:
+            continue
+        block = f"## {row[2]}\nSession: {ref}\nObserved: {row[3]}"
+        included = 0
+        for quote in ranked_quotes:
+            item = f"\n- {quote}"
+            remaining = per_session - len(block)
+            if remaining <= 4:
+                break
+            block += item[:remaining]
+            included += 1
+        if included == 0:
+            continue
+        matched_facts += included
+        sections.append(block[:per_session].rstrip())
+
+    content = "\n\n".join(sections)[:max_characters].rstrip() if matched_facts else ""
+    return SessionMemory(
+        session_refs=tuple(session_refs),
+        content=content,
+        character_count=len(content),
+        mode=mode,
+        matched_facts=matched_facts,
+    )
+
+
+def _session_tokens(text: str) -> frozenset[str]:
+    tokens: set[str] = set()
+    for match in _TOKEN.findall(text.lower()):
+        if match in _STOPWORDS:
+            continue
+        if all("\u4e00" <= character <= "\u9fff" for character in match):
+            tokens.update(match[index : index + 2] for index in range(len(match) - 1))
+        else:
+            tokens.add(match)
+    return frozenset(tokens)
+
+
+def _rank_session_quotes(
+    quotes: Iterable[str],
+    *,
+    question_tokens: frozenset[str],
+) -> tuple[str, ...]:
+    unique_quotes = tuple(dict.fromkeys(quote for quote in quotes if quote))
+    if not question_tokens:
+        return unique_quotes
+    scored = [
+        (len(question_tokens & _session_tokens(quote)), index, quote)
+        for index, quote in enumerate(unique_quotes)
+    ]
+    return tuple(
+        quote
+        for score, _index, quote in sorted(scored, key=lambda item: (-item[0], item[1]))
+        if score > 0
+    )
+
+
+def queue_startup_capsule(
+    connection: sqlite3.Connection,
+    *,
+    source_ids: Sequence[str],
+    host: Host,
+    project_root: Path,
+    max_characters: int = 6000,
+    created_at: datetime | None = None,
+) -> StartupCapsule:
+    if not source_ids:
+        raise ValueError("at least one --source is required")
+    if len(source_ids) > 3:
+        raise ValueError("first version supports at most three sessions")
+    if len(set(source_ids)) != len(source_ids):
+        raise ValueError("conversation sources must be unique")
+    if max_characters < len(_PREFIX) + 80:
+        raise ValueError("max_characters is too small")
+    if max_characters > 12000:
+        raise ValueError("max_characters cannot exceed 12000")
+
+    _ensure_schema(connection)
+    placeholders = ", ".join("?" for _ in source_ids)
+    rows = connection.execute(
+        f"""
+        SELECT
+            sources.source_id,
+            versions.id,
+            versions.title,
+            versions.observed_at,
+            COALESCE((
+                SELECT facts.quote
+                FROM wiki_facts AS facts
+                WHERE facts.source_id = sources.source_id
+                  AND facts.source_version = versions.id
+                  AND lower(facts.section_path) NOT LIKE '%user prompt%'
+                  AND facts.quote NOT LIKE '```%'
+                  AND trim(facts.quote) NOT LIKE 'func %'
+                  AND trim(facts.quote) NOT LIKE 'def %'
+                  AND trim(facts.quote) NOT LIKE 'class %'
+                ORDER BY {_SUMMARY_ORDER}
+                LIMIT 1
+            ), '') AS summary
+        FROM source_versions AS versions
+        JOIN sources ON sources.id = versions.source_id
+        JOIN applied_source_versions AS applied
+          ON applied.source_id = sources.source_id
+         AND applied.source_version_id = versions.id
+        WHERE versions.tags_json LIKE '%"conversation"%'
+          AND sources.source_id IN ({placeholders})
+        """,
+        tuple(source_ids),
+    ).fetchall()
+    by_source = {str(row[0]): row for row in rows}
+    missing = [source_id for source_id in source_ids if source_id not in by_source]
+    if missing:
+        raise ValueError("conversation source is not applied: " + ", ".join(missing))
+
+    per_session = max(80, (max_characters - len(_PREFIX) - 4) // len(source_ids))
+    sections = [_PREFIX]
+    refs: list[dict[str, object]] = []
+    for source_id in source_ids:
+        row = by_source[source_id]
+        title = str(row[2])
+        observed_at = str(row[3])
+        summary = str(row[4]).strip() or "No compiled session summary."
+        block = f"## {title}\nObserved: {observed_at}\n{summary}"
+        sections.append(block[:per_session].rstrip())
+        refs.append(
+            {
+                "source_id": source_id,
+                "source_version": int(row[1]),
+                "title": title,
+            }
+        )
+
+    content = "\n\n".join(sections)[:max_characters].rstrip()
+    now = created_at or datetime.now(UTC)
+    canonical_project = str(project_root.resolve(strict=False))
+    digest_input = json.dumps(
+        {
+            "host": host,
+            "project_root": canonical_project,
+            "source_refs": refs,
+            "content": content,
+            "created_at": now.isoformat(),
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+    capsule_id = hashlib.sha256(digest_input.encode("utf-8")).hexdigest()[:16]
+
+    connection.execute(
+        """
+        UPDATE startup_capsules
+        SET consumed_at = ?
+        WHERE host = ? AND project_root = ? AND consumed_at IS NULL
+        """,
+        (now.isoformat(), host, canonical_project),
+    )
+    connection.execute(
+        """
+        INSERT INTO startup_capsules(
+            capsule_id, host, project_root, content, source_refs_json,
+            character_count, created_at, consumed_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL)
+        """,
+        (
+            capsule_id,
+            host,
+            canonical_project,
+            content,
+            json.dumps(refs, ensure_ascii=False, sort_keys=True),
+            len(content),
+            now.isoformat(),
+        ),
+    )
+    connection.commit()
+    return StartupCapsule(
+        capsule_id=capsule_id,
+        host=host,
+        project_root=canonical_project,
+        source_ids=tuple(source_ids),
+        content=content,
+        character_count=len(content),
+    )
+
+
+def consume_startup_capsule(
+    connection: sqlite3.Connection,
+    *,
+    host: Host,
+    project_root: Path,
+    consumed_at: datetime | None = None,
+) -> StartupCapsule | None:
+    _ensure_schema(connection)
+    canonical_project = str(project_root.resolve(strict=False))
+    try:
+        connection.execute("BEGIN IMMEDIATE")
+        row = connection.execute(
+            """
+            SELECT capsule_id, content, source_refs_json, character_count
+            FROM startup_capsules
+            WHERE host = ? AND project_root = ? AND consumed_at IS NULL
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (host, canonical_project),
+        ).fetchone()
+        if row is None:
+            connection.commit()
+            return None
+
+        connection.execute(
+            "UPDATE startup_capsules SET consumed_at = ? WHERE capsule_id = ?",
+            ((consumed_at or datetime.now(UTC)).isoformat(), str(row[0])),
+        )
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    refs = json.loads(str(row[2]))
+    return StartupCapsule(
+        capsule_id=str(row[0]),
+        host=host,
+        project_root=canonical_project,
+        source_ids=tuple(str(ref["source_id"]) for ref in refs),
+        content=str(row[1]),
+        character_count=int(row[3]),
+    )
+
+
+def main() -> None:
+    """Lightweight SessionStart entry point; avoids loading the full CLI."""
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--workspace", type=Path, required=True)
+    parser.add_argument("--host", choices=("codex", "claude"), required=True)
+    arguments = parser.parse_args()
+    try:
+        hook_input = json.load(sys.stdin)
+        project = Path(str(hook_input["cwd"])).resolve(strict=True)
+        database = arguments.workspace / ".memoryforge" / "index.sqlite"
+        with sqlite3.connect(database) as connection:
+            capsule = consume_startup_capsule(
+                connection,
+                host=arguments.host,
+                project_root=project,
+            )
+        if capsule is not None:
+            print(
+                json.dumps(
+                    {
+                        "hookSpecificOutput": {
+                            "hookEventName": "SessionStart",
+                            "additionalContext": capsule.content,
+                        }
+                    },
+                    ensure_ascii=False,
+                )
+            )
+    except Exception as exc:  # noqa: BLE001
+        print(json.dumps({"systemMessage": f"MemoryForge startup skipped: {exc}"}))
+
+
+if __name__ == "__main__":
+    main()

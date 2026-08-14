@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from memoryforge.adapters.obsidian import build_obsidian
-from memoryforge.compiler.linting import lint_workspace
+from memoryforge.compiler.linting import LintPayload, lint_workspace
 from memoryforge.compiler.wiki_facts import IndexedWikiFact, WikiFact, parse_page_facts
 from memoryforge.core.errors import MemoryForgeError, WorkspaceError
 from memoryforge.core.models import ChangeOperationType
@@ -246,7 +246,7 @@ def _lint_candidate_tree(
     source_versions: dict[str, int],
     page_sources: dict[str, tuple[str, ...]],
     page_facts: dict[str, tuple[WikiFact, ...]],
-) -> dict[str, object]:
+) -> LintPayload:
     """Lint the prospective tree and projection before mutating stable state."""
     with tempfile.TemporaryDirectory(prefix="memoryforge-lint-") as temporary:
         root = Path(temporary)

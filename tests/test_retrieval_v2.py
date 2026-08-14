@@ -3,9 +3,7 @@ from __future__ import annotations
 import pickle
 from pathlib import Path
 
-import pytest
-
-from memoryforge.core.retrieval_models import RetrievalCandidate, RetrievalResult
+from memoryforge.core.retrieval_models import RetrievalResult
 from memoryforge.query.retrieval_v2 import retrieve_candidates
 
 REPO_ID = "a" * 64
@@ -332,49 +330,6 @@ def test_visibility_filters_before_scoring() -> None:
     assert not any(c.source_id == SRC_B for c in result.candidates)
 
 
-def test_semantic_unavailable_degrades_gracefully() -> None:
-    facts = _make_facts()
-
-    class FakeIndex:
-        def available(self) -> bool:
-            return False
-
-        def search(self, text, k=20):
-            raise RuntimeError("must not be called when available() is False")
-
-    result = retrieve_candidates(
-        Path("/tmp"),
-        "bcrypt password validation",
-        repository_id=REPO_ID,
-        visible_source=_all_visible,
-        max_pages=3,
-        semantic_index=FakeIndex(),  # type: ignore[arg-type]
-        wiki_facts=facts,
-        code_symbols=[],
-        code_relations=[],
-    )
-
-    assert result.semantic_status == "unavailable"
-    assert "semantic" not in result.routes
-    assert len(result.candidates) >= 1
-
-
-def test_semantic_none_is_disabled() -> None:
-    facts = _make_facts()
-    result = retrieve_candidates(
-        Path("/tmp"),
-        "bcrypt password validation",
-        repository_id=REPO_ID,
-        visible_source=_all_visible,
-        max_pages=3,
-        semantic_index=None,
-        wiki_facts=facts,
-        code_symbols=[],
-        code_relations=[],
-    )
-    assert result.semantic_status == "disabled"
-
-
 def test_repository_scope_isolation() -> None:
     facts = _make_facts()
 
@@ -467,8 +422,14 @@ def test_exact_full_identifier_boost() -> None:
         code_relations=[],
     )
 
-    exact_cand = next((c for c in result.candidates if c.page_path == "wiki/pages/exact.md"), None)
-    lexical_cand = next((c for c in result.candidates if c.page_path == "wiki/pages/lexical.md"), None)
+    exact_cand = next(
+        (c for c in result.candidates if c.page_path == "wiki/pages/exact.md"),
+        None,
+    )
+    lexical_cand = next(
+        (c for c in result.candidates if c.page_path == "wiki/pages/lexical.md"),
+        None,
+    )
 
     assert exact_cand is not None
     assert exact_cand.exact_rank is not None

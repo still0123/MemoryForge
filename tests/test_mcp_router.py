@@ -147,6 +147,8 @@ def test_global_router_exposes_workspace_read_tools_without_a_current_project(
                 "memoryforge_context",
                 "memoryforge_read_evidence",
                 "memoryforge_recall",
+                "memoryforge_sessions",
+                "memoryforge_load_session",
                 "memoryforge_status",
             }
             for tool in tools:

@@ -5,7 +5,9 @@ import json
 import sqlite3
 from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
+from typing import Protocol, TypeVar
 
+from memoryforge.compiler.redaction import RedactionResult
 from memoryforge.core.egress_models import (
     DisclosureReceipt,
     EgressClass,
@@ -14,6 +16,12 @@ from memoryforge.core.egress_models import (
     SourceEgressRule,
 )
 from memoryforge.core.models import Sensitivity
+
+T = TypeVar("T")
+
+
+class DecisionLike(Protocol):
+    allowed: bool
 
 SCHEMA_SQL: tuple[str, ...] = (
     """
@@ -147,8 +155,12 @@ def decide_egress(
     )
 
 
-def filter_visible_sources(candidates: Iterable, *, decide: Callable) -> tuple:
-    visible = []
+def filter_visible_sources(
+    candidates: Iterable[T],
+    *,
+    decide: Callable[[T], DecisionLike],
+) -> tuple[T, ...]:
+    visible: list[T] = []
     for candidate in candidates:
         decision = decide(candidate)
         if decision.allowed:
@@ -162,7 +174,7 @@ def record_disclosure(
     request: EgressRequest,
     text: str,
     source_refs: tuple[tuple[str, int], ...],
-    redaction,
+    redaction: RedactionResult,
     policy_sha256: str,
 ) -> DisclosureReceipt:
     content_sha256 = hashlib.sha256(text.encode("utf-8")).hexdigest()

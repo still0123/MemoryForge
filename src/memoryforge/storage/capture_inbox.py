@@ -103,6 +103,22 @@ SCHEMA_SQL: tuple[str, ...] = (
     CREATE INDEX IF NOT EXISTS idx_capture_sessions_time
     ON capture_sessions (repository_id, client, last_seen_at)
     """,
+    """
+    CREATE TABLE IF NOT EXISTS startup_capsules (
+        capsule_id TEXT PRIMARY KEY,
+        host TEXT NOT NULL,
+        project_root TEXT NOT NULL,
+        content TEXT NOT NULL,
+        source_refs_json TEXT NOT NULL,
+        character_count INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        consumed_at TEXT
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_startup_capsules_pending
+    ON startup_capsules (host, project_root, consumed_at, created_at)
+    """,
 )
 
 
@@ -413,6 +429,8 @@ def _parse_session_events(
     rows = cursor.fetchall()
     events: list[CaptureEvent] = []
     for row in rows:
+        if row[9] != 1:
+            raise ValueError("capture events must remain unverified")
         try:
             paths_list = json.loads(row[7]) if row[7] else []
         except (json.JSONDecodeError, TypeError):
@@ -428,7 +446,7 @@ def _parse_session_events(
                 text=row[6],
                 paths=tuple(paths_list),
                 sensitivity=row[8],
-                unverified=bool(row[9]),
+                unverified=True,
                 origin_sha256=row[10],
                 redaction_count=row[11],
                 truncated=bool(row[12]),

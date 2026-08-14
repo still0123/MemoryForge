@@ -35,17 +35,17 @@ import re
 import sqlite3
 from contextlib import suppress
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 from memoryforge.automation.automation_validation import classify_risk
 from memoryforge.compiler.compiler import (
     _add_relations_page,
     _load_current_sources,
-    _parse_page_summary,
     _read_source_text,
-    _render_index,
     _render_llm_page,
 )
+from memoryforge.compiler.index_rendering import _parse_page_summary
+from memoryforge.compiler.index_rendering import render_index as _render_index
 from memoryforge.compiler.wiki_facts import (
     CitationPayload,
     is_conversation_process_note,
@@ -64,7 +64,9 @@ from memoryforge.core.models import (
     RiskLevel,
     Sensitivity,
 )
-from memoryforge.query.query import SupportPayload, answer_is_supported, answer_question
+from memoryforge.query.contracts import SupportPayload
+from memoryforge.query.query import answer_question
+from memoryforge.query.support import answer_is_supported
 from memoryforge.storage.changesets import ChangeSetStore, StoredChangeSet
 from memoryforge.storage.database import connect_readonly as _connect_readonly
 from memoryforge.storage.errors import WorkspaceIntegrityError, WorkspaceSecurityError
@@ -397,62 +399,8 @@ def _query_context(
         for citation in result["citations"]
     ]
     support: SupportPayload | dict[str, object] = result.get("support") or {}
-
-    def context_content() -> dict[str, object]:
-        return {
-            "project_answer": answer_hint,
-            "answer_hint": answer_hint,
-            "evidence_status": evidence_status,
-            "verification_status": _verification_status(citations),
-            "response_mode": _response_mode(evidence_status),
-            "supported_claims": result.get("supported_claims", []),
-            "unsupported_aspects": result.get("unsupported_aspects", []),
-            "answer_strategy": answer_strategy,
-            "wiki_pages": wiki_pages,
-            "citations": citations,
-            "support": support,
-        }
-
-    content = context_content()
-    output_characters = len(json.dumps(content, ensure_ascii=False))
-    truncated = False
-    if output_characters > _CONTEXT_MAX_OUTPUT_CHARACTERS:
-        truncated = True
-        while citations:
-            citations.pop()
-            wiki_pages = [
-                page
-                for page in wiki_pages
-                if page["path"] in {citation["wiki_page"] for citation in citations}
-            ]
-            content = context_content()
-            if len(json.dumps(content, ensure_ascii=False)) <= _CONTEXT_MAX_OUTPUT_CHARACTERS:
-                break
-        else:
-            empty_answer_size = len(
-                json.dumps(
-                    {
-                        "project_answer": "",
-                        "answer_hint": "",
-                        "evidence_status": evidence_status,
-                        "verification_status": _verification_status(citations),
-                        "response_mode": _response_mode(evidence_status),
-                        "supported_claims": [],
-                        "unsupported_aspects": result.get("unsupported_aspects", []),
-                        "answer_strategy": answer_strategy,
-                        "wiki_pages": wiki_pages,
-                        "citations": citations,
-                        "support": support,
-                    },
-                    ensure_ascii=False,
-                )
-            )
-            answer_hint = _truncate_text(
-                answer_hint,
-                max(0, (_CONTEXT_MAX_OUTPUT_CHARACTERS - empty_answer_size) // 2),
-            )
-            content = context_content()
-        output_characters = len(json.dumps(content, ensure_ascii=False))
+    supported_claims = list(result.get("supported_claims", []))
+    unsupported_aspects = list(result.get("unsupported_aspects", []))
     payload: dict[str, object] = {
         "status": "ok",
         "evidence_status": evidence_status,
@@ -461,8 +409,8 @@ def _query_context(
         "workspace_commit": workspace_commit,
         "project_answer": answer_hint,
         "answer_hint": answer_hint,
-        "supported_claims": result.get("supported_claims", []),
-        "unsupported_aspects": result.get("unsupported_aspects", []),
+        "supported_claims": supported_claims,
+        "unsupported_aspects": unsupported_aspects,
         "answer_strategy": answer_strategy,
         "wiki_pages": wiki_pages,
         "citations": citations,
@@ -471,8 +419,8 @@ def _query_context(
             "max_pages": max_pages,
             "max_citations": max_citations,
             "max_output_characters": _CONTEXT_MAX_OUTPUT_CHARACTERS,
-            "output_characters": output_characters,
-            "truncated": truncated,
+            "output_characters": 0,
+            "truncated": False,
         },
     }
     if scope is not None:
@@ -492,6 +440,56 @@ def _query_context(
                 else None
             ),
         }
+
+    budget = cast(dict[str, object], payload["budget"])
+
+    def serialized_size() -> int:
+        size = len(json.dumps(payload, ensure_ascii=False))
+        for _ in range(3):
+            budget["output_characters"] = size
+            updated = len(json.dumps(payload, ensure_ascii=False))
+            if updated == size:
+                break
+            size = updated
+        return size
+
+    output_characters = serialized_size()
+    if output_characters > _CONTEXT_MAX_OUTPUT_CHARACTERS:
+        budget["truncated"] = True
+    for _ in range(32):
+        if output_characters <= _CONTEXT_MAX_OUTPUT_CHARACTERS:
+            break
+        if supported_claims:
+            supported_claims.clear()
+        elif support:
+            support = {}
+            payload["support"] = support
+        elif answer_hint:
+            excess = output_characters - _CONTEXT_MAX_OUTPUT_CHARACTERS
+            answer_limit = max(0, len(answer_hint) - max(1, (excess + 1) // 2))
+            answer_hint = _truncate_text(answer_hint, answer_limit) if answer_limit else ""
+            payload["project_answer"] = answer_hint
+            payload["answer_hint"] = answer_hint
+        elif citations:
+            citations.pop()
+            cited_pages = {citation["wiki_page"] for citation in citations}
+            wiki_pages[:] = [page for page in wiki_pages if page["path"] in cited_pages]
+            payload["verification_status"] = _verification_status(citations)
+        elif wiki_pages:
+            wiki_pages.pop()
+        elif unsupported_aspects:
+            unsupported_aspects.clear()
+        else:
+            raise ValueError("context response envelope exceeds its hard character budget")
+        output_characters = serialized_size()
+    else:
+        raise ValueError(
+            "context response could not be reduced to its hard character budget: "
+            f"size={output_characters}, answer={len(answer_hint)}, "
+            f"claims={len(supported_claims)}, citations={len(citations)}, "
+            f"pages={len(wiki_pages)}, unsupported={len(unsupported_aspects)}"
+        )
+    budget["output_characters"] = output_characters
     return payload
 
 

@@ -10,18 +10,15 @@ from typing import Literal, TypedDict
 
 from memoryforge.compiler.compiler import propose_agent_update
 from memoryforge.compiler.wiki_facts import CitationPayload
+from memoryforge.query.contracts import AskPayload, EvidencePayload
 from memoryforge.query.provider import (
     AgentStep,
     OpenAICompatibleProvider,
     ProviderResponseFormatError,
 )
-from memoryforge.query.query import (
-    AskPayload,
-    EvidencePayload,
-    answer_is_supported,
-    answer_question,
-)
+from memoryforge.query.query import answer_question
 from memoryforge.query.sessions import SessionStore, render_context, rewrite_query, save_turn
+from memoryforge.query.support import answer_is_supported
 from memoryforge.storage.changesets import ChangeSetStore
 from memoryforge.storage.workspace import (
     Workspace,
@@ -461,7 +458,10 @@ def _search_wiki(
 def _unknown_search(found: AskPayload) -> AskPayload:
     return {
         "status": "unknown",
+        "evidence_status": "no_local_evidence",
         "answer": "不知道",
+        "supported_claims": [],
+        "unsupported_aspects": list(found.get("unsupported_aspects", [])),
         "citations": [],
         "wiki_pages": [],
         "source_id": None,

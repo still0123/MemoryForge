@@ -65,8 +65,9 @@ memoryforge connect codex --workspace /absolute/path/to/my-wiki
 ```
 
 重启 Codex（或 ChatGPT Desktop / IDE 扩展）后，用 `/mcp` 确认 `memoryforge` 已出现。此推荐模式
-只注册一个本地只读 MCP Server，并安装一个小型 `memoryforge-knowledge` Codex Skill；**不会为每个
-仓库重复注册，也不会改写项目的 `AGENTS.md`**。Skill 只描述何时调用 MCP，不会预载 Wiki 内容。
+只注册一个本地只读 MCP Server，并安装一个小型 `memoryforge-knowledge` Codex Skill 和一次性
+SessionStart Hook；**不会为每个仓库重复注册，也不会改写项目的 `AGENTS.md`**。Skill 只描述何时
+调用 MCP，Hook 只在你主动准备 Session Capsule 后加载内容。
 
 之后直接在任何新对话中正常提问即可。Codex 会在问题涉及项目历史、既有决策或 Wiki 时，调用
 `memoryforge_context`；不必每次先说“请查 MemoryForge”。若某次回答必须以知识库为准，可以明确说
@@ -75,7 +76,28 @@ memoryforge connect codex --workspace /absolute/path/to/my-wiki
 MemoryForge 搜索整个已应用 Workspace：当前打开的已登记项目只会使本项目页面排在前面，**不是**
 访问边界。因此空白新对话、未登记项目，以及跨多个仓库的提问都能工作。
 
-### 3. 按需展开，控制 Token
+### 3. 在当前对话中加载指定旧会话
+
+先创建任意 Codex 或 Claude 对话，然后直接说：
+
+```text
+列出我最近的 MemoryForge 会话
+加载第 2 个
+```
+
+MemoryForge 先用 `memoryforge_sessions` 返回低 Token 的标题和摘要；你选择后，再由
+`memoryforge_load_session` 把最多 3 条、有字符上限的 Session Capsule 加入**当前对话**。这不是
+语义检索，不要求当前目录已登记，也不需要终端命令或重启客户端。内容会标记为未验证历史，重要结论
+仍需通过当前代码、测试或正式 Wiki 证据确认。
+
+之后继续问这段历史时，Host 会保留所选会话引用，并把新问题交给同一个工具：只在这些会话中返回
+相关结论，而不是再次注入整段 Capsule。若返回 `no_session_evidence`，才回退到项目/跨仓库 Wiki
+检索。这样既保留“我指定这几段历史”的边界，也避免长对话持续占用 Token。
+
+`memoryforge continue` 和 SessionStart Hook 仍作为自动续接下一次任务的可选方式。完整说明见
+[多客户端接入指南](docs/MULTI_CLIENT_SETUP.md#4-session-capsule把旧会话带进下一次新对话)。
+
+### 4. 按需展开，控制 Token
 
 ![渐进式加载记忆：先找页面，再读引用，最后核验原文](assets/usage/03-progressive-recall.png)
 
@@ -83,7 +105,7 @@ MemoryForge 搜索整个已应用 Workspace：当前打开的已登记项目只�
 `status: ok`，项目证据另分 `grounded`、`partial`、`no_local_evidence`。`partial` 会保留已支持的结论
 和引用；`no_local_evidence` 只表示 Wiki 没有项目证据，AI 仍可提供明确标注的通用分析。
 
-### 4. AI 的新结论仍需审核
+### 5. AI 的新结论仍需审核
 
 ![AI 建议必须形成 ChangeSet，经用户审核后才写入正式 Wiki 和 Git](assets/usage/05-review-and-apply.png)
 

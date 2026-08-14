@@ -18,6 +18,8 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+from memoryforge.core.errors import UnmappedProjectError
+from memoryforge.interface.cli import app
 from memoryforge.query import agent_access as agent_access_module
 from memoryforge.query.agent_access import (
     classify_query_intent,
@@ -30,8 +32,6 @@ from memoryforge.query.agent_access import (
     resolve_repository_scope,
     review_changeset,
 )
-from memoryforge.interface.cli import app
-from memoryforge.core.errors import UnmappedProjectError
 from memoryforge.query.query import answer_question
 from memoryforge.storage.workspace import Workspace
 from tests.cli_helpers import review_approve_apply

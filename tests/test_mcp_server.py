@@ -18,10 +18,10 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from memoryforge.query.agent_access import server_name
-from memoryforge.interface.cli import app
 from memoryforge.core.errors import UnmappedProjectError
+from memoryforge.interface.cli import app
 from memoryforge.interface.mcp_server import build_server
+from memoryforge.query.agent_access import server_name
 from memoryforge.storage.workspace import WorkspaceError
 from tests.cli_helpers import review_approve_apply
 from tests.test_agent_access import (
@@ -39,6 +39,8 @@ TOOL_NAMES = {
     "memoryforge_context",
     "memoryforge_read_evidence",
     "memoryforge_recall",
+    "memoryforge_sessions",
+    "memoryforge_load_session",
     "memoryforge_status",
     "memoryforge_propose_update",
     "memoryforge_list_changesets",
@@ -129,6 +131,30 @@ def test_tool_discovery_contract_is_fixed(
             assert by_name["memoryforge_context"].input_schema["required"] == ["question"]
             recall_properties = by_name["memoryforge_recall"].input_schema["properties"]
             assert set(recall_properties) == {"limit"}
+            sessions_properties = by_name["memoryforge_sessions"].input_schema["properties"]
+            assert set(sessions_properties) == {"limit"}
+            load_properties = by_name["memoryforge_load_session"].input_schema["properties"]
+            assert set(load_properties) == {"session_refs", "max_characters", "question"}
+
+    _run(scenario)
+
+
+def test_analysis_profile_does_not_advertise_unimplemented_diff(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace, checkout, _repository_id = _bound_workspace(
+        tmp_path, monkeypatch, {"README.md": CACHE_POLICY}, public=True
+    )
+
+    async def scenario() -> None:
+        from mcp.client import Client
+
+        server = build_server(workspace, checkout, profile="analysis")
+        async with Client(server) as client:
+            tools = {tool.name: tool for tool in (await client.list_tools()).tools}
+            mode = tools["memoryforge_impact_analysis"].input_schema["properties"]["mode"]
+            assert mode["enum"] == ["impact", "call_paths", "why_changed"]
 
     _run(scenario)
 
@@ -340,11 +366,14 @@ def test_context_isolates_repositories(
             about_cache = await _call(
                 client, "memoryforge_context", {"question": "When do cache entries expire?"}
             )
-        return str(about_retries["status"]), str(about_cache["status"])
+        return (
+            str(about_retries["evidence_status"]),
+            str(about_cache["evidence_status"]),
+        )
 
     about_retries, about_cache = _run(scenario)
-    assert about_retries == "unknown"
-    assert about_cache == "answered"
+    assert about_retries == "no_local_evidence"
+    assert about_cache == "grounded"
 
 
 def test_recall_filters_to_bound_repository_memory(

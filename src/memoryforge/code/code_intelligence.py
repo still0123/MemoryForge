@@ -169,7 +169,7 @@ def symbol_context(
                 direct_callees.append(_symbol_to_ref(tgt))
                 callee_edge_count += 1
 
-    def _sort_key(s: SymbolRef):
+    def _sort_key(s: SymbolRef) -> tuple[str, str]:
         return (s.qualified_name, s.symbol_id)
 
     module_ref = _find_container(snapshot, target, {"module"})

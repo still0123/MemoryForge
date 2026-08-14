@@ -64,7 +64,6 @@ _LEGACY_MODULES = {
     "memoryforge.refresh": "memoryforge.compiler.refresh",
     "memoryforge.retrieval_models": "memoryforge.core.retrieval_models",
     "memoryforge.retrieval_v2": "memoryforge.query.retrieval_v2",
-    "memoryforge.semantic_index": "memoryforge.query.semantic_index",
     "memoryforge.sessions": "memoryforge.query.sessions",
     "memoryforge.showcase": "memoryforge.portal.showcase",
     "memoryforge.typescript_index": "memoryforge.code.typescript_index",

@@ -4,16 +4,9 @@ import math
 import re
 from collections import Counter
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
-from memoryforge.core.retrieval_models import (
-    RetrievalCandidate,
-    RetrievalResult,
-    VisibleSource,
-)
-
-if TYPE_CHECKING:
-    from memoryforge.query.semantic_index import SemanticIndex
+from memoryforge.core.retrieval_models import RetrievalCandidate, RetrievalResult, VisibleSource
 
 _TOKEN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*|\w+", re.UNICODE)
 _IDENT_TOKEN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*")
@@ -29,7 +22,6 @@ def retrieve_candidates(
     repository_id: str | None,
     visible_source: VisibleSource,
     max_pages: int = 3,
-    semantic_index: SemanticIndex | None = None,
     wiki_facts: list[dict[str, Any]] | None = None,
     code_symbols: list[dict[str, Any]] | None = None,
     code_relations: list[dict[str, Any]] | None = None,
@@ -57,23 +49,8 @@ def retrieve_candidates(
     if lexical_hits:
         routes.append("lexical")
 
-    semantic_hits: list[tuple[dict[str, Any], int]] = []
-    semantic_status: Literal["used", "disabled", "unavailable", "stale"] = "disabled"
-    if semantic_index is None:
-        semantic_status = "disabled"
-    elif not semantic_index.available():
-        semantic_status = "unavailable"
-    else:
-        semantic_status = "used"
-        routes.append("semantic")
-        search_results = semantic_index.search(question, k=20)
-        fact_by_id = {_fact_object_id(f): f for f in facts}
-        for rank, (obj_id, _score) in enumerate(search_results, start=1):
-            if obj_id in fact_by_id:
-                semantic_hits.append((fact_by_id[obj_id], rank))
-
     symbol_ids_from_hits: set[str] = set()
-    for fact, _rank in exact_hits + lexical_hits + semantic_hits:
+    for fact, _rank in exact_hits + lexical_hits:
         sym = fact.get("symbol")
         if sym:
             symbol_ids_from_hits.add(sym)
@@ -115,13 +92,11 @@ def retrieve_candidates(
 
     exact_filtered = _filter_visible(exact_hits)
     lexical_filtered = _filter_visible(lexical_hits)
-    semantic_filtered = _filter_visible(semantic_hits)
     relation_filtered = _filter_visible(relation_hits)
 
     dedup: dict[tuple[str, str, int, str], dict[str, Any]] = {}
     exact_ranks: dict[tuple[str, str, int, str], int] = {}
     lexical_ranks: dict[tuple[str, str, int, str], int] = {}
-    semantic_ranks: dict[tuple[str, str, int, str], int] = {}
     relation_ranks: dict[tuple[str, str, int, str], int] = {}
     exact_full_hit_keys: set[tuple[str, str, int, str]] = set()
 
@@ -141,13 +116,6 @@ def retrieve_candidates(
         if key not in lexical_ranks or rank < lexical_ranks[key]:
             lexical_ranks[key] = rank
 
-    for fact, rank in semantic_filtered:
-        key = (fact["page_path"], fact["source_id"], fact["source_version"], fact["locator"])
-        if key not in dedup:
-            dedup[key] = fact
-        if key not in semantic_ranks or rank < semantic_ranks[key]:
-            semantic_ranks[key] = rank
-
     for fact, rank in relation_filtered:
         key = (fact["page_path"], fact["source_id"], fact["source_version"], fact["locator"])
         if key not in dedup:
@@ -159,7 +127,6 @@ def retrieve_candidates(
     for key, fact in dedup.items():
         exact_rank = exact_ranks.get(key)
         lexical_rank = lexical_ranks.get(key)
-        semantic_rank = semantic_ranks.get(key)
         relation_rank = relation_ranks.get(key)
 
         fused_score = 0.0
@@ -167,8 +134,6 @@ def retrieve_candidates(
             fused_score += 1.0 / (60.0 + exact_rank)
         if lexical_rank is not None:
             fused_score += 1.0 / (60.0 + lexical_rank)
-        if semantic_rank is not None:
-            fused_score += 1.0 / (60.0 + semantic_rank)
         if relation_rank is not None:
             fused_score += 1.0 / (60.0 + relation_rank)
         if key in exact_full_hit_keys:
@@ -189,7 +154,6 @@ def retrieve_candidates(
                 kind=kind,
                 exact_rank=exact_rank,
                 lexical_rank=lexical_rank,
-                semantic_rank=semantic_rank,
                 relation_rank=relation_rank,
                 fused_score=fused_score,
             )
@@ -221,12 +185,7 @@ def retrieve_candidates(
     return RetrievalResult(
         candidates=tuple(final),
         routes=tuple(routes),
-        semantic_status=semantic_status,
     )
-
-
-def _fact_object_id(fact: dict[str, Any]) -> str:
-    return f"{fact['page_path']}|{fact['source_id']}|{fact['source_version']}|{fact['locator']}"
 
 
 def _extract_identifier_tokens(text: str) -> list[str]:

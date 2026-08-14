@@ -19,7 +19,7 @@ from types import SimpleNamespace
 import pytest
 from typer.testing import CliRunner
 
-from memoryforge.query.agent_access import server_name
+from memoryforge.core.errors import UnmappedProjectError
 from memoryforge.interface.cli import app
 from memoryforge.interface.codex_connect import (
     AGENTS_MCP_BEGIN,
@@ -30,8 +30,9 @@ from memoryforge.interface.codex_connect import (
     _parse_server_json,
     connect_codex,
     install_agents_block,
+    install_codex_session_hook,
 )
-from memoryforge.core.errors import UnmappedProjectError
+from memoryforge.query.agent_access import server_name
 from tests.test_agent_access import CACHE_POLICY, _bound_workspace
 
 _AGENTS_BLOCK_LIMIT = 3000
@@ -103,6 +104,7 @@ class _FakeCodex:
         raise AssertionError(f"unexpected argv: {argv}")
 
     def install(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("CODEX_HOME", str(Path.cwd() / ".codex"))
         monkeypatch.setattr(
             "memoryforge.codex_connect.shutil.which",
             lambda name: _FAKE_CODEX if name == "codex" else None,
@@ -178,6 +180,26 @@ def test_connect_is_idempotent(
     agents = (checkout / "AGENTS.md").read_text(encoding="utf-8")
     assert agents.count(AGENTS_MCP_BEGIN) == 1
     assert agents.count(AGENTS_MCP_END) == 1
+    hooks = json.loads((Path.cwd() / ".codex/hooks.json").read_text(encoding="utf-8"))
+    assert len(hooks["hooks"]["SessionStart"]) == 1
+
+
+def test_session_hook_preserves_existing_hooks(tmp_path: Path) -> None:
+    codex_home = tmp_path / ".codex"
+    codex_home.mkdir()
+    hooks_file = codex_home / "hooks.json"
+    hooks_file.write_text(
+        json.dumps({"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "x"}]}]}}),
+        encoding="utf-8",
+    )
+
+    install_codex_session_hook(tmp_path / "wiki", codex_home)
+
+    payload = json.loads(hooks_file.read_text(encoding="utf-8"))
+    assert payload["hooks"]["Stop"][0]["hooks"][0]["command"] == "x"
+    assert "memoryforge.storage.session_bootstrap --host codex" in payload["hooks"][
+        "SessionStart"
+    ][0]["hooks"][0]["command"]
 
 
 def test_connect_without_codex_cli_returns_copyable_command(

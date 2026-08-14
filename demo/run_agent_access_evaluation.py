@@ -51,7 +51,7 @@ CONTEXT_CASES: list[dict[str, Any]] = [
         "category": "exact code symbol",
         "question": "What is the value of cache_ttl_seconds?",
         "expected": "answered",
-        "required_terms": ("60",),
+        "required_terms": ("sixty",),
         "repo": "a",
     },
     {
@@ -239,16 +239,24 @@ def _run_context_case(
         if citations
         else False
     )
+    evidence_status = str(result.get("evidence_status", "no_local_evidence"))
     if case["expected"] == "answered":
-        correct = result["status"] == "answered" and terms_correct and isolated and min_sources
+        correct = (
+            result["status"] == "ok"
+            and evidence_status == "grounded"
+            and terms_correct
+            and isolated
+            and min_sources
+        )
     else:
-        correct = result["status"] == "unknown"
+        correct = result["status"] == "ok" and evidence_status == "no_local_evidence"
     # A local-scope leak: any citation surfaced without allow_local.
     leak = len(citations) if case["repo"] == "c" and not allow_local else 0
     return {
         "id": case["id"],
         "category": case["category"],
         "status": result["status"],
+        "evidence_status": evidence_status,
         "expected": case["expected"],
         "correct": correct,
         "citations_isolated": isolated,

@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import shlex
 import sqlite3
 import sys
 import time
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal, cast
 
 import typer
 
@@ -1922,7 +1924,7 @@ def mcp(
         if profile == "":
             safe_profile = None
         elif profile in {"micro", "analysis", "capture"}:
-            safe_profile = profile  # type: ignore[assignment]
+            safe_profile = cast(Literal["micro", "analysis", "capture"], profile)
         else:
             raise ValueError(f"unknown profile: {profile}")
         if router:
@@ -1938,7 +1940,7 @@ def mcp(
                 opened.root,
                 project_root,
                 allow_local=allow_local_llm,
-                profile=safe_profile,  # type: ignore[arg-type]
+                profile=safe_profile,
             )
     except (
         MemoryForgeError,
@@ -2042,6 +2044,92 @@ def connect(
     ) as exc:
         _exit_with_safe_error(exc)
     typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+@app.command("continue")
+def continue_session(
+    host: Annotated[str, typer.Option("--to", help="codex|claude")] = "codex",
+    project: Annotated[Path, typer.Option("--project", "-p")] = Path("."),
+    workspace: Annotated[Path | None, typer.Option("--workspace", "-w")] = None,
+) -> None:
+    """Select old AI sessions for the next new Codex or Claude session."""
+    try:
+        from memoryforge.storage.session_bootstrap import (
+            list_conversation_sessions,
+            queue_startup_capsule,
+        )
+        from memoryforge.storage.workspace import workspace_database
+
+        if host not in {"codex", "claude"}:
+            raise ValueError("--to must be codex or claude")
+        workspace = workspace or _workspace_from_session_hook(host)
+        project = project.resolve(strict=True)
+        if project == Path(project.anchor):
+            project = Path(typer.prompt("当前位于根目录，请输入新任务工作目录")).resolve(
+                strict=True
+            )
+        if not project.is_dir():
+            raise ValueError("project must be an existing directory")
+        with _connect(workspace_database(workspace)) as connection:
+            sessions = list_conversation_sessions(connection, limit=10)
+            if not sessions:
+                raise ValueError("no applied AI conversations are available")
+            typer.echo("可带入的历史会话：")
+            for index, session in enumerate(sessions, start=1):
+                typer.echo(f"{index}. {session.title}")
+                typer.echo(f"   {session.summary[:100]}")
+            raw_selection = typer.prompt("选择编号（最多 3 个，逗号分隔）", default="1")
+            indexes = [int(part.strip()) for part in raw_selection.split(",")]
+            if not 1 <= len(indexes) <= 3 or any(
+                index < 1 or index > len(sessions) for index in indexes
+            ):
+                raise ValueError("select one to three listed session numbers")
+            capsule = queue_startup_capsule(
+                connection,
+                source_ids=[sessions[index - 1].source_id for index in indexes],
+                host=host,  # type: ignore[arg-type]
+                project_root=project,
+            )
+    except Exception as exc:  # noqa: BLE001
+        _exit_with_safe_error(exc)
+    typer.echo(
+        f"已准备 {len(capsule.source_ids)} 条会话、{capsule.character_count} 个字符。\n"
+        f"请回到 {host}，点击“新建任务”，工作目录选择：{capsule.project_root}\n"
+        "不要在终端输入 new。"
+    )
+
+
+def _workspace_from_session_hook(host: str) -> Path:
+    if host == "codex":
+        configured_home = os.environ.get("CODEX_HOME")
+        config = (
+            Path(configured_home).expanduser() if configured_home else Path.home() / ".codex"
+        ) / "hooks.json"
+    else:
+        config = Path.home() / ".claude" / "settings.json"
+    try:
+        payload = json.loads(config.read_text(encoding="utf-8"))
+        entries = payload["hooks"]["SessionStart"]
+    except (FileNotFoundError, json.JSONDecodeError, KeyError, TypeError):
+        raise ValueError(
+            "no SessionStart connection found; run memoryforge connect first"
+        ) from None
+    for entry in reversed(entries):
+        for hook in reversed(entry.get("hooks", [])):
+            command = hook.get("command")
+            if not isinstance(command, str):
+                continue
+            arguments = shlex.split(command)
+            if not any(
+                part in {"memoryforge.storage.session_bootstrap", "startup"}
+                for part in arguments
+            ):
+                continue
+            try:
+                return Path(arguments[arguments.index("--workspace") + 1])
+            except (ValueError, IndexError):
+                continue
+    raise ValueError("no MemoryForge SessionStart connection found; run memoryforge connect first")
 
 
 @app.command()
@@ -2338,6 +2426,160 @@ def capture_handoff(
                 max_characters=max_chars,
             )
         _json_out({"status": "ok", "handoff": result.model_dump(mode="json")})
+    except Exception as exc:  # noqa: BLE001
+        _json_out({"status": "error", "error": str(exc)})
+
+
+@capture_app.command("sessions")
+def capture_sessions(
+    limit: Annotated[int, typer.Option("--limit")] = 20,
+    workspace: Annotated[Path, typer.Option("--workspace", "-w")] = Path("."),
+) -> None:
+    """List applied AI conversation memories available for startup loading."""
+    try:
+        from memoryforge.storage.session_bootstrap import list_conversation_sessions
+        from memoryforge.storage.workspace import workspace_database
+
+        with _connect_readonly(workspace_database(workspace)) as connection:
+            sessions = list_conversation_sessions(connection, limit=limit)
+        _json_out(
+            {
+                "status": "ok",
+                "sessions": [
+                    {
+                        "source_id": session.source_id,
+                        "source_version": session.source_version,
+                        "title": session.title,
+                        "observed_at": session.observed_at,
+                        "summary": session.summary,
+                    }
+                    for session in sessions
+                ],
+            }
+        )
+    except Exception as exc:  # noqa: BLE001
+        _json_out({"status": "error", "error": str(exc)})
+
+
+@capture_app.command("queue")
+def capture_queue(
+    sources: Annotated[list[str], typer.Option("--source")],
+    host: Annotated[str, typer.Option("--host", help="claude|codex")],
+    project: Annotated[Path, typer.Option("--project", "-p")],
+    max_chars: Annotated[int, typer.Option("--max-chars")] = 6000,
+    workspace: Annotated[Path, typer.Option("--workspace", "-w")] = Path("."),
+) -> None:
+    """Queue selected AI conversations for one new client session."""
+    try:
+        from memoryforge.storage.session_bootstrap import queue_startup_capsule
+        from memoryforge.storage.workspace import workspace_database
+
+        if host not in {"claude", "codex"}:
+            raise ValueError("host must be claude or codex")
+        project = project.resolve(strict=True)
+        if not project.is_dir():
+            raise ValueError("project must be an existing directory")
+        with _connect(workspace_database(workspace)) as connection:
+            capsule = queue_startup_capsule(
+                connection,
+                source_ids=sources,
+                host=host,  # type: ignore[arg-type]
+                project_root=project,
+                max_characters=max_chars,
+            )
+        _json_out(
+            {
+                "status": "queued",
+                "capsule_id": capsule.capsule_id,
+                "host": capsule.host,
+                "project_root": capsule.project_root,
+                "source_count": len(capsule.source_ids),
+                "character_count": capsule.character_count,
+            }
+        )
+    except Exception as exc:  # noqa: BLE001
+        _json_out({"status": "error", "error": str(exc)})
+
+
+@capture_app.command("startup")
+def capture_startup(
+    host: Annotated[str, typer.Option("--host", help="claude|codex")],
+    project: Annotated[Path | None, typer.Option("--project", "-p")] = None,
+    workspace: Annotated[Path, typer.Option("--workspace", "-w")] = Path("."),
+) -> None:
+    """Consume one queued capsule and emit SessionStart hook JSON."""
+    try:
+        from memoryforge.storage.session_bootstrap import consume_startup_capsule
+        from memoryforge.storage.workspace import workspace_database
+
+        if host not in {"claude", "codex"}:
+            raise ValueError("host must be claude or codex")
+        if project is None:
+            hook_input = json.load(sys.stdin)
+            project = Path(str(hook_input["cwd"]))
+        project = project.resolve(strict=True)
+        if not project.is_dir():
+            raise ValueError("project must be an existing directory")
+        with _connect(workspace_database(workspace)) as connection:
+            capsule = consume_startup_capsule(
+                connection,
+                host=host,  # type: ignore[arg-type]
+                project_root=project,
+            )
+        if capsule is not None:
+            _json_out(
+                {
+                    "hookSpecificOutput": {
+                        "hookEventName": "SessionStart",
+                        "additionalContext": capsule.content,
+                    }
+                }
+            )
+    except Exception as exc:  # noqa: BLE001
+        _json_out({"systemMessage": f"MemoryForge startup skipped: {exc}"})
+
+
+@capture_app.command("hook-config")
+def capture_hook_config(
+    host: Annotated[str, typer.Option("--host", help="claude|codex")],
+    workspace: Annotated[Path, typer.Option("--workspace", "-w")] = Path("."),
+) -> None:
+    """Print a SessionStart hook snippet to merge into the client config."""
+    try:
+        if host not in {"claude", "codex"}:
+            raise ValueError("host must be claude or codex")
+        command = shlex.join(
+            [
+                sys.executable,
+                "-m",
+                "memoryforge.storage.session_bootstrap",
+                "--host",
+                host,
+                "--workspace",
+                str(workspace.resolve(strict=False)),
+            ]
+        )
+        target = "~/.claude/settings.json" if host == "claude" else "~/.codex/hooks.json"
+        _json_out(
+            {
+                "status": "ok",
+                "merge_into": target,
+                "config": {
+                    "hooks": {
+                        "SessionStart": [
+                            {
+                                "hooks": [
+                                    {
+                                        "type": "command",
+                                        "command": command,
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                },
+            }
+        )
     except Exception as exc:  # noqa: BLE001
         _json_out({"status": "error", "error": str(exc)})
 

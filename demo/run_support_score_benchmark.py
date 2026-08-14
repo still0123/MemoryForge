@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from memoryforge.evaluation.evaluation import run_evaluation
-from memoryforge.query.query import (
+from memoryforge.query.support import (
     _has_support_condition,
     _has_support_negation,
     _support_identifiers,

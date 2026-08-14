@@ -37,7 +37,7 @@ class ImpactEdge(BaseModel):
     depth: int = Field(ge=0)
 
 
-def _edge_sort_key(edge: ImpactEdge):
+def _edge_sort_key(edge: ImpactEdge) -> tuple[str, int, str, str]:
     return (
         edge.relation_type,
         edge.depth,

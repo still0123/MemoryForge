@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import socket
+from http.client import HTTPMessage
 from pathlib import Path
 
 import pytest
@@ -30,6 +31,49 @@ def test_web_import_rejects_non_public_network_targets(
 
     with pytest.raises(web_adapter.WebPageError, match="public network"):
         web_adapter._require_public_url("https://example.com/article")
+
+
+def test_web_import_pins_the_address_validated_before_connect(monkeypatch) -> None:
+    resolutions = 0
+    connected: list[tuple[str, int, str]] = []
+
+    def resolve(*_args, **_kwargs):
+        nonlocal resolutions
+        resolutions += 1
+        address = "93.184.216.34" if resolutions == 1 else "127.0.0.1"
+        return [(socket.AF_INET, socket.SOCK_STREAM, 0, "", (address, 443))]
+
+    class FakeResponse:
+        status = 200
+        headers = HTTPMessage()
+        headers["Content-Type"] = "text/plain; charset=utf-8"
+
+        @staticmethod
+        def read(_limit: int) -> bytes:
+            return b"Public article content " * 8
+
+    class FakeConnection:
+        def __init__(self, host: str, port: int, address: str) -> None:
+            connected.append((host, port, address))
+
+        def request(self, *_args, **_kwargs) -> None:
+            pass
+
+        @staticmethod
+        def getresponse() -> FakeResponse:
+            return FakeResponse()
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(web_adapter.socket, "getaddrinfo", resolve)
+    monkeypatch.setattr(web_adapter, "_PinnedHTTPSConnection", FakeConnection)
+
+    page = web_adapter._fetch_web_page("https://example.com/article")
+
+    assert page.media_type == "text/plain"
+    assert resolutions == 1
+    assert connected == [("example.com", 443, "93.184.216.34")]
 
 
 def test_web_import_keeps_article_text_and_uses_the_normal_wiki_flow(

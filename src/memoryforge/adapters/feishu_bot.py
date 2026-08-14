@@ -10,8 +10,9 @@ from typing import Any
 
 from memoryforge.adapters.importer import SourceValidationError
 from memoryforge.core.errors import MemoryForgeError
+from memoryforge.query.contracts import AskPayload
 from memoryforge.query.provider import OpenAICompatibleProvider
-from memoryforge.query.query import AskPayload, answer_question
+from memoryforge.query.query import answer_question
 from memoryforge.query.sessions import (
     SessionStore,
     SessionTurn,
@@ -117,7 +118,10 @@ def _module_scope_answer(
     choices = "、".join(f"/project {repository.name}" for repository in repositories)
     return {
         "status": "unknown",
+        "evidence_status": "no_local_evidence",
         "answer": f"多个项目都包含 `{module_path}` 模块。请先选择：{choices}",
+        "supported_claims": [],
+        "unsupported_aspects": ["repository_scope_required"],
         "citations": [],
         "wiki_pages": [],
         "source_id": None,

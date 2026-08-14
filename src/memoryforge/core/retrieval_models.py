@@ -22,7 +22,6 @@ class RetrievalCandidate:
     kind: Literal["page", "symbol", "relation"]
     exact_rank: int | None
     lexical_rank: int | None
-    semantic_rank: int | None
     relation_rank: int | None
     fused_score: float
 
@@ -31,4 +30,4 @@ class RetrievalCandidate:
 class RetrievalResult:
     candidates: tuple[RetrievalCandidate, ...]
     routes: tuple[str, ...]
-    semantic_status: Literal["used", "disabled", "unavailable", "stale"]
+    semantic_status: Literal["disabled"] = "disabled"

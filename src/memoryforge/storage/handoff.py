@@ -153,6 +153,7 @@ def build_handoff(
 
     unfinished_items = _extract_unfinished(events_desc)
 
+    content = _UNVERIFIED_PREFIX
     while True:
         sections: list[str] = [_UNVERIFIED_PREFIX]
 

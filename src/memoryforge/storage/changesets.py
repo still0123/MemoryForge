@@ -14,7 +14,7 @@ from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
-from typing import Literal, Protocol
+from typing import TYPE_CHECKING, Literal, Protocol
 
 from pydantic import ValidationError
 
@@ -34,6 +34,9 @@ from memoryforge.core.models import (
 from memoryforge.core.platform_lock import exclusive_posix_directory_lock
 from memoryforge.storage.database import connect
 from memoryforge.storage.errors import WorkspaceIntegrityError
+
+if TYPE_CHECKING:
+    from memoryforge.compiler.knowledge_conflicts import KnowledgeConflict, ProposalDraft
 
 
 class WorkspaceAccess(Protocol):
@@ -77,7 +80,7 @@ class StoredChangeSet:
 def _proposal_drafts(
     changeset: ChangeSet,
     candidate_files: Mapping[str, str],
-) -> tuple[object, ...]:
+) -> tuple[ProposalDraft, ...]:
     from memoryforge.compiler.knowledge_conflicts import ProposalDraft
 
     origins = {operation.path: operation.origin for operation in changeset.operations}
@@ -109,7 +112,7 @@ class ChangeSetStore:
         if changeset.status is not ChangeSetStatus.PROPOSED:
             raise ChangeSetStoreError("New ChangeSets must start in PROPOSED state")
         temp_name = f".{changeset.changeset_id}.{uuid.uuid4().hex}.tmp"
-        detected_conflicts = ()
+        detected_conflicts: tuple[KnowledgeConflict, ...] = ()
         try:
             with self._locked_staging() as staging_fd:
                 current_commit = self.workspace.current_commit()
@@ -700,7 +703,7 @@ class ChangeSetStore:
 
     def _detect_conflicts(
         self, changeset: ChangeSet, candidate_files: Mapping[str, str]
-    ) -> tuple[object, ...]:
+    ) -> tuple[KnowledgeConflict, ...]:
         from memoryforge.compiler.knowledge_conflicts import detect_conflicts
 
         pending = [
@@ -709,7 +712,7 @@ class ChangeSetStore:
             if stored.changeset.base_commit == changeset.base_commit
             for draft in _proposal_drafts(stored.changeset, stored.candidate_files)
         ]
-        conflicts = []
+        conflicts: list[KnowledgeConflict] = []
         for candidate in _proposal_drafts(changeset, candidate_files):
             conflicts.extend(
                 detect_conflicts(

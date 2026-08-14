@@ -3,23 +3,22 @@
 from __future__ import annotations
 
 import hashlib
+import http.client
 import ipaddress
 import re
 import socket
+import ssl
 from dataclasses import dataclass
 from html.parser import HTMLParser
-from http.client import HTTPMessage
 from pathlib import Path
-from typing import IO
-from urllib.error import HTTPError, URLError
-from urllib.parse import urlsplit, urlunsplit
-from urllib.request import HTTPRedirectHandler, Request, build_opener
+from urllib.parse import urljoin, urlsplit, urlunsplit
 
 from memoryforge.adapters.importer import import_local_document, read_local_text_file
 from memoryforge.core.errors import MemoryForgeError
 from memoryforge.core.models import ImportResult, LocalDocument, Sensitivity, SourceCategory
 
 _MAX_WEB_BYTES = 5 * 1024 * 1024
+_MAX_REDIRECTS = 5
 _BLOCK_TAGS = {"article", "blockquote", "br", "div", "h1", "h2", "h3", "li", "p", "pre"}
 _SKIPPED_TAGS = {"script", "style", "svg", "template"}
 _ARTICLE_MARKERS = ("article-content", "article-body", "post-content", "post-body")
@@ -37,24 +36,34 @@ class FetchedWebPage:
     content: str
 
 
-class _PublicRedirectHandler(HTTPRedirectHandler):
-    def redirect_request(
-        self,
-        req: Request,
-        fp: IO[bytes],
-        code: int,
-        msg: str,
-        headers: HTTPMessage,
-        newurl: str,
-    ) -> Request | None:
-        return super().redirect_request(
-            req,
-            fp,
-            code,
-            msg,
-            headers,
-            _require_public_url(newurl),
+class _PinnedHTTPConnection(http.client.HTTPConnection):
+    def __init__(self, host: str, port: int, address: str) -> None:
+        super().__init__(host, port, timeout=20)
+        self._address = address
+
+    def connect(self) -> None:
+        self.sock = socket.create_connection(
+            (self._address, self.port),
+            self.timeout,
         )
+
+
+class _PinnedHTTPSConnection(http.client.HTTPSConnection):
+    def __init__(self, host: str, port: int, address: str) -> None:
+        self._ssl_context = ssl.create_default_context()
+        super().__init__(host, port, timeout=20, context=self._ssl_context)
+        self._address = address
+
+    def connect(self) -> None:
+        raw_socket = socket.create_connection(
+            (self._address, self.port),
+            self.timeout,
+        )
+        try:
+            self.sock = self._ssl_context.wrap_socket(raw_socket, server_hostname=self.host)
+        except Exception:
+            raw_socket.close()
+            raise
 
 
 def import_web_page(
@@ -143,35 +152,63 @@ def _import_fetched_page(
 
 
 def _fetch_web_page(url: str) -> FetchedWebPage:
-    url = _require_public_url(url)
-    request = Request(
-        url,
-        headers={
-            "Accept": "text/html, text/plain;q=0.9",
-            "User-Agent": "Mozilla/5.0 (compatible; MemoryForge/0.1)",
-        },
-    )
-    try:
-        with build_opener(_PublicRedirectHandler()).open(request, timeout=20) as response:
-            media_type = response.headers.get_content_type()
-            if media_type not in {"text/html", "text/plain"}:
-                raise WebPageError("web page must return text/html or text/plain")
-            raw = response.read(_MAX_WEB_BYTES + 1)
-            final_url = _require_public_url(response.geturl())
-            charset = response.headers.get_content_charset() or "utf-8"
-    except HTTPError as exc:
-        raise WebPageError(f"web page request failed with HTTP {exc.code}") from exc
-    except URLError as exc:
-        raise WebPageError(f"web page request failed: {exc.reason}") from exc
-    except TimeoutError as exc:
-        raise WebPageError("web page request timed out after 20 seconds") from exc
-    if len(raw) > _MAX_WEB_BYTES:
-        raise WebPageError("web page exceeds the 5 MiB import limit")
-    try:
-        content = raw.decode(charset)
-    except (LookupError, UnicodeDecodeError) as exc:
-        raise WebPageError("web page is not readable text") from exc
-    return FetchedWebPage(url=final_url, media_type=media_type, content=content)
+    current_url = url
+    for redirect_count in range(_MAX_REDIRECTS + 1):
+        final_url, addresses = _resolve_public_url(current_url)
+        status, headers, raw = _request_pinned(final_url, addresses)
+        if status in {301, 302, 303, 307, 308}:
+            location = headers.get("Location")
+            if location is None or redirect_count == _MAX_REDIRECTS:
+                raise WebPageError("web page redirect is invalid or exceeds the limit")
+            current_url = urljoin(final_url, location)
+            continue
+        if status >= 300:
+            raise WebPageError(f"web page request failed with HTTP {status}")
+        media_type = headers.get_content_type()
+        if media_type not in {"text/html", "text/plain"}:
+            raise WebPageError("web page must return text/html or text/plain")
+        if len(raw) > _MAX_WEB_BYTES:
+            raise WebPageError("web page exceeds the 5 MiB import limit")
+        charset = headers.get_content_charset() or "utf-8"
+        try:
+            content = raw.decode(charset)
+        except (LookupError, UnicodeDecodeError) as exc:
+            raise WebPageError("web page is not readable text") from exc
+        return FetchedWebPage(url=final_url, media_type=media_type, content=content)
+    raise WebPageError("web page redirect exceeds the limit")
+
+
+def _request_pinned(
+    url: str,
+    addresses: tuple[str, ...],
+) -> tuple[int, http.client.HTTPMessage, bytes]:
+    parsed = urlsplit(url)
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    target = urlunsplit(("", "", parsed.path or "/", parsed.query, ""))
+    last_error: Exception | None = None
+    for address in addresses:
+        connection: http.client.HTTPConnection
+        if parsed.scheme == "https":
+            connection = _PinnedHTTPSConnection(parsed.hostname or "", port, address)
+        else:
+            connection = _PinnedHTTPConnection(parsed.hostname or "", port, address)
+        try:
+            connection.request(
+                "GET",
+                target,
+                headers={
+                    "Accept": "text/html, text/plain;q=0.9",
+                    "Host": parsed.netloc,
+                    "User-Agent": "Mozilla/5.0 (compatible; MemoryForge/0.1)",
+                },
+            )
+            response = connection.getresponse()
+            return response.status, response.headers, response.read(_MAX_WEB_BYTES + 1)
+        except (OSError, http.client.HTTPException) as exc:
+            last_error = exc
+        finally:
+            connection.close()
+    raise WebPageError("web page request failed safely") from last_error
 
 
 def _normalise_url(value: str) -> str:
@@ -194,22 +231,30 @@ def _normalise_url(value: str) -> str:
 
 
 def _require_public_url(value: str) -> str:
+    return _resolve_public_url(value)[0]
+
+
+def _resolve_public_url(value: str) -> tuple[str, tuple[str, ...]]:
     url = _normalise_url(value)
     parsed = urlsplit(url)
     try:
-        addresses = {
-            ipaddress.ip_address(address[4][0])
-            for address in socket.getaddrinfo(
-                parsed.hostname,
-                parsed.port or (443 if parsed.scheme == "https" else 80),
-                type=socket.SOCK_STREAM,
+        addresses = tuple(
+            dict.fromkeys(
+                str(ipaddress.ip_address(address[4][0]))
+                for address in socket.getaddrinfo(
+                    parsed.hostname,
+                    parsed.port or (443 if parsed.scheme == "https" else 80),
+                    type=socket.SOCK_STREAM,
+                )
             )
-        }
+        )
     except (OSError, ValueError) as exc:
         raise WebPageError("web page host cannot be resolved safely") from exc
-    if not addresses or any(not address.is_global for address in addresses):
+    if not addresses or any(
+        not ipaddress.ip_address(address).is_global for address in addresses
+    ):
         raise WebPageError("web page must resolve only to public network addresses")
-    return url
+    return url, addresses
 
 
 def _readable_page(page: FetchedWebPage) -> tuple[str, str]:
