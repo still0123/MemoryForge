@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Iterable, Mapping
 from datetime import datetime
 from enum import StrEnum
-from collections.abc import Iterable, Mapping
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from memoryforge.core.models import Claim, ClaimStatus, ChangeOrigin, RiskLevel
+from memoryforge.core.models import ChangeOrigin, Claim, ClaimStatus, RiskLevel
 
 
 class ProposalDraft(BaseModel):
@@ -182,8 +182,11 @@ def detect_conflicts(
                 continue
             subject_key = f"{claim.subject}:{claim.predicate}"
             cid = _make_conflict_id(
-                candidate.page_path, subject_key, ConflictKind.CONTRADICTION,
-                claim.claim_id, other.claim_id,
+                candidate.page_path,
+                subject_key,
+                ConflictKind.CONTRADICTION,
+                claim.claim_id,
+                other.claim_id,
             )
             conflicts.append(
                 KnowledgeConflict(
@@ -197,7 +200,7 @@ def detect_conflicts(
                 )
             )
 
-    for i, p1 in enumerate(pending_list + [candidate]):
+    for p1 in pending_list + [candidate]:
         for p2 in pending_list + [candidate]:
             if p1 is p2:
                 continue
@@ -217,8 +220,11 @@ def detect_conflicts(
             )
             subject_key = "same_page_pending"
             cid = _make_conflict_id(
-                p1.page_path, subject_key, ConflictKind.SAME_TARGET,
-                left_eref.claim_id, right_eref.claim_id,
+                p1.page_path,
+                subject_key,
+                ConflictKind.SAME_TARGET,
+                left_eref.claim_id,
+                right_eref.claim_id,
             )
             already = any(c.conflict_id == cid for c in conflicts)
             if not already:
@@ -256,8 +262,11 @@ def detect_conflicts(
             )
             subject_key = f"stale:{src_id}"
             cid = _make_conflict_id(
-                candidate.page_path, subject_key, ConflictKind.STALE_PROPOSAL,
-                left_eref.claim_id, right_eref.claim_id,
+                candidate.page_path,
+                subject_key,
+                ConflictKind.STALE_PROPOSAL,
+                left_eref.claim_id,
+                right_eref.claim_id,
             )
             already = any(c.conflict_id == cid for c in conflicts)
             if not already:
@@ -348,8 +357,14 @@ def resolve_conflict(
     citations: tuple[EvidenceRef, ...],
 ) -> ProposalDraft:
     resolution_title = f"Conflict resolution: {conflict.conflict_id}"
-    left_cite = f"- [{conflict.left.claim_id}] {conflict.left.source_id}@{conflict.left.source_version}:{conflict.left.locator}"
-    right_cite = f"- [{conflict.right.claim_id}] {conflict.right.source_id}@{conflict.right.source_version}:{conflict.right.locator}"
+    left_cite = (
+        f"- [{conflict.left.claim_id}] "
+        f"{conflict.left.source_id}@{conflict.left.source_version}:{conflict.left.locator}"
+    )
+    right_cite = (
+        f"- [{conflict.right.claim_id}] "
+        f"{conflict.right.source_id}@{conflict.right.source_version}:{conflict.right.locator}"
+    )
     additional_cites = "\n".join(
         f"- [{c.claim_id}] {c.source_id}@{c.source_version}:{c.locator}" for c in citations
     )

@@ -114,7 +114,10 @@ def test_workspace_and_changesets_have_no_direct_platform_lock_imports(
     tmp_path: Path,
 ) -> None:
     root = Path(__file__).resolve().parent.parent
-    for relative in ("src/memoryforge/workspace.py", "src/memoryforge/changesets.py"):
+    for relative in (
+        "src/memoryforge/storage/workspace.py",
+        "src/memoryforge/storage/changesets.py",
+    ):
         tree = ast.parse((root / relative).read_text(encoding="utf-8"))
         imported = {
             alias.name

@@ -14,7 +14,7 @@ from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
-from typing import Literal
+from typing import Literal, Protocol
 
 from pydantic import ValidationError
 
@@ -32,7 +32,23 @@ from memoryforge.core.models import (
     StagedWikiFile,
 )
 from memoryforge.core.platform_lock import exclusive_posix_directory_lock
-from memoryforge.storage.workspace import Workspace, WorkspaceIntegrityError, _connect
+from memoryforge.storage.database import connect
+from memoryforge.storage.errors import WorkspaceIntegrityError
+
+
+class WorkspaceAccess(Protocol):
+    @property
+    def staging_dir(self) -> Path: ...
+
+    @property
+    def index_path(self) -> Path: ...
+
+    def current_commit(self) -> str: ...
+
+    def validate_changeset_evidence(self, changeset: ChangeSet) -> None: ...
+
+    def validate_internal_directory(self, path: Path) -> None: ...
+
 
 CHANGESET_ID_PATTERN = re.compile(r"^chg_[A-Za-z0-9_-]+$")
 CHANGESET_FILENAME = "changeset.json"
@@ -81,7 +97,7 @@ def _proposal_drafts(
 class ChangeSetStore:
     """Stores PROPOSED records without writing the stable Wiki tree."""
 
-    def __init__(self, workspace: Workspace) -> None:
+    def __init__(self, workspace: WorkspaceAccess) -> None:
         self.workspace = workspace
         self.staging_dir = workspace.staging_dir
 
@@ -154,7 +170,7 @@ class ChangeSetStore:
         if detected_conflicts:
             from memoryforge.compiler.knowledge_conflicts import persist_conflicts
 
-            with _connect(self.workspace.index_path) as connection:
+            with connect(self.workspace.index_path) as connection:
                 persist_conflicts(connection, detected_conflicts)
         return stored
 

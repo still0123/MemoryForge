@@ -4,7 +4,7 @@ import math
 import re
 from collections import Counter
 from pathlib import Path
-from typing import Any, Literal, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Literal
 
 from memoryforge.core.retrieval_models import (
     RetrievalCandidate,
@@ -29,10 +29,10 @@ def retrieve_candidates(
     repository_id: str | None,
     visible_source: VisibleSource,
     max_pages: int = 3,
-    semantic_index: Optional["SemanticIndex"] = None,
-    wiki_facts: Optional[list[dict[str, Any]]] = None,
-    code_symbols: Optional[list[dict[str, Any]]] = None,
-    code_relations: Optional[list[dict[str, Any]]] = None,
+    semantic_index: SemanticIndex | None = None,
+    wiki_facts: list[dict[str, Any]] | None = None,
+    code_symbols: list[dict[str, Any]] | None = None,
+    code_relations: list[dict[str, Any]] | None = None,
 ) -> RetrievalResult:
     if wiki_facts is None:
         wiki_facts = []
@@ -359,10 +359,7 @@ def _relation_lane(
         if sym:
             fact_by_symbol.setdefault(sym, fact)
 
-    seed_ids = {
-        symbol_id_by_name.get(name, name)
-        for name in seed_symbol_ids
-    }
+    seed_ids = {symbol_id_by_name.get(name, name) for name in seed_symbol_ids}
     related_symbol_ids: set[str] = set()
     for rel in code_relations:
         if repository_id is not None and rel.get("repository_id") != repository_id:

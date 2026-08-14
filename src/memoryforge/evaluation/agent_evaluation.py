@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from memoryforge.query.agent import run_agent
+from memoryforge.compiler.wiki_facts import CitationPayload
 from memoryforge.evaluation.evaluation import (
     EvaluationCase,
     EvaluationSuite,
@@ -13,9 +13,10 @@ from memoryforge.evaluation.evaluation import (
     _percentage,
     _sources_recalled,
 )
+from memoryforge.query.agent import run_agent
 from memoryforge.query.provider import OpenAICompatibleProvider
-from memoryforge.compiler.wiki_facts import CitationPayload
-from memoryforge.storage.workspace import Workspace, _connect_readonly
+from memoryforge.storage.database import connect_readonly as _connect_readonly
+from memoryforge.storage.workspace import Workspace
 
 
 def run_agent_evaluation(

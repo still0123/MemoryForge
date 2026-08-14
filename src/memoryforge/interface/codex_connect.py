@@ -22,8 +22,8 @@ import sys
 from pathlib import Path
 from typing import Literal
 
-from memoryforge.query.agent_access import resolve_repository_scope, server_name
 from memoryforge.core.errors import MemoryForgeError
+from memoryforge.query.agent_access import resolve_repository_scope, server_name
 
 AGENTS_MCP_BEGIN = "<!-- BEGIN MEMORYFORGE MCP -->"
 AGENTS_MCP_END = "<!-- END MEMORYFORGE MCP -->"
@@ -307,9 +307,7 @@ def install_codex_skill(codex_home: Path | None = None) -> Path:
     if codex_home is None:
         configured_home = os.environ.get("CODEX_HOME")
         codex_home = (
-            Path(configured_home).expanduser()
-            if configured_home
-            else Path.home() / ".codex"
+            Path(configured_home).expanduser() if configured_home else Path.home() / ".codex"
         )
     skill_dir = codex_home / "skills" / "memoryforge-knowledge"
     agents_dir = skill_dir / "agents"

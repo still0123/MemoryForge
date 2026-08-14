@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-import memoryforge.storage.apply_journal as apply_journal_module
 import memoryforge.compiler.lifecycle as lifecycle_module
+import memoryforge.storage.workspace as workspace_module
 from memoryforge.storage.apply_journal import ApplyJournalStore
 from memoryforge.storage.changesets import ChangeSetStore
 from memoryforge.interface.cli import app
@@ -156,7 +156,7 @@ def test_committed_apply_reuses_matching_projection(tmp_path: Path, monkeypatch)
     def fail_rebuild(_workspace: Workspace) -> None:
         raise AssertionError("matching projection must not be rebuilt")
 
-    monkeypatch.setattr(apply_journal_module, "rebuild_applied_projection", fail_rebuild)
+    monkeypatch.setattr(workspace_module, "rebuild_applied_projection", fail_rebuild)
     recovered = Workspace.open(workspace)
 
     assert recovered.current_commit() == commit

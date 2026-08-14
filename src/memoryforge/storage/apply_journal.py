@@ -5,21 +5,21 @@ from __future__ import annotations
 import os
 import stat
 import uuid
+from collections.abc import Callable
 from contextlib import suppress
 from pathlib import PurePosixPath
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from memoryforge.storage.changesets import ChangeSetStore
-from memoryforge.core.errors import WorkspaceError
 from memoryforge.compiler.wiki_facts import parse_page_facts
-from memoryforge.storage.workspace import (
-    Workspace,
-    _connect_readonly,
-    candidate_page_sources,
-    rebuild_applied_projection,
-)
+from memoryforge.core.errors import WorkspaceError
+from memoryforge.storage.changesets import ChangeSetStore
+from memoryforge.storage.database import connect_readonly
+from memoryforge.storage.projection import candidate_page_sources
+
+if TYPE_CHECKING:
+    from memoryforge.storage.workspace import Workspace
 
 _JOURNAL_NAME = "apply-journal.json"
 _MAX_JOURNAL_BYTES = 1024 * 1024
@@ -166,7 +166,11 @@ class ApplyJournalStore:
             os.close(directory_fd)
 
 
-def recover_interrupted_apply(workspace: Workspace) -> None:
+def recover_interrupted_apply(
+    workspace: Workspace,
+    *,
+    rebuild_projection: Callable[[Workspace], None],
+) -> None:
     store = ApplyJournalStore(workspace)
     try:
         os.lstat(store.path)
@@ -175,13 +179,20 @@ def recover_interrupted_apply(workspace: Workspace) -> None:
     with workspace.exclusive_lock():
         journal = store.load()
         if journal is not None:
-            _recover_locked(workspace, store, journal)
+            _recover_locked(
+                workspace,
+                store,
+                journal,
+                rebuild_projection=rebuild_projection,
+            )
 
 
 def _recover_locked(
     workspace: Workspace,
     store: ApplyJournalStore,
     journal: ApplyJournal,
+    *,
+    rebuild_projection: Callable[[Workspace], None],
 ) -> None:
     head = workspace.current_commit()
     commit: str | None = None
@@ -189,8 +200,11 @@ def _recover_locked(
         if journal.phase == "committed":
             raise WorkspaceError("apply journal Commit is missing from Workspace history")
         workspace.version_store.restore_paths(journal.base_commit, journal.paths)
-        if not _projection_matches_commit(workspace, journal.base_commit):
-            rebuild_applied_projection(workspace)
+        if not _projection_matches_commit(
+            workspace,
+            journal.base_commit,
+        ):
+            rebuild_projection(workspace)
         store.clear()
         return
 
@@ -208,7 +222,7 @@ def _recover_locked(
 
     workspace.version_store.restore_paths(commit, journal.paths)
     if not _projection_matches_commit(workspace, commit):
-        rebuild_applied_projection(workspace)
+        rebuild_projection(workspace)
     changesets = ChangeSetStore(workspace)
     pending = workspace.staging_dir / journal.changeset_id
     applied = workspace.staging_dir / "applied" / journal.changeset_id
@@ -227,7 +241,10 @@ def _recover_locked(
     store.clear()
 
 
-def _projection_matches_commit(workspace: Workspace, commit: str) -> bool:
+def _projection_matches_commit(
+    workspace: Workspace,
+    commit: str,
+) -> bool:
     paths = workspace.version_store.list_wiki_paths_at(commit)
     contents = workspace.version_store.read_wiki_texts_at(commit, paths=paths) if paths else {}
     expected_sources = {
@@ -240,7 +257,7 @@ def _projection_matches_commit(workspace: Workspace, commit: str) -> bool:
         for page_path, content in contents.items()
         for fact in parse_page_facts(page_path, content)
     }
-    with _connect_readonly(workspace.index_path) as connection:
+    with connect_readonly(workspace.index_path) as connection:
         actual_sources = {
             (str(row[0]), str(row[1]))
             for row in connection.execute("SELECT page_path, source_id FROM page_sources")

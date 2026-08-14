@@ -2,11 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
-import platform
-import shutil
 import sqlite3
-import subprocess
 import sys
 import time
 from datetime import UTC, datetime
@@ -16,9 +12,22 @@ from typing import Annotated
 import typer
 
 from memoryforge import __version__
-from memoryforge.query.agent import run_agent
-from memoryforge.query.agent_access import recall_context, resolve_repository_scope
-from memoryforge.evaluation.agent_evaluation import run_agent_evaluation
+from memoryforge.adapters.botmux_adapter import BotmuxHookError, handle_botmux_hook
+from memoryforge.adapters.codex_adapter import CodexImportError, import_codex_rollout
+from memoryforge.adapters.feishu_adapter import FeishuDocumentError, import_feishu_document
+from memoryforge.adapters.feishu_bot import FeishuBotError, reply_to_feishu_text
+from memoryforge.adapters.feishu_service import FeishuServiceError, serve_feishu_bot
+from memoryforge.adapters.folder_adapter import sync_folder
+from memoryforge.adapters.git_adapter import GitRepositoryError
+from memoryforge.adapters.git_sync import sync_git_checkout
+from memoryforge.adapters.github_thread_adapter import (
+    delete_github_thread,
+    import_github_thread,
+    import_github_thread_json,
+)
+from memoryforge.adapters.importer import MAX_SOURCE_BYTES, SourceValidationError, import_local_file
+from memoryforge.adapters.obsidian import OUTPUT_RELATIVE, build_obsidian
+from memoryforge.adapters.web_adapter import WebPageError, import_html_file, import_web_page
 from memoryforge.automation.automation_apply import evaluate_staged, run_automation_apply
 from memoryforge.automation.automation_policy import (
     BUILTIN_PROFILES,
@@ -26,46 +35,14 @@ from memoryforge.automation.automation_policy import (
     policy_sha256,
     save_policy,
 )
-from memoryforge.adapters.botmux_adapter import BotmuxHookError, handle_botmux_hook
-from memoryforge.storage.changesets import ChangeSetStore, StoredChangeSet
 from memoryforge.code.code_index import build_code_index
 from memoryforge.compiler.code_wiki_compiler import compile_code_wiki
-from memoryforge.adapters.codex_adapter import CodexImportError, import_codex_rollout
-from memoryforge.interface.codex_connect import (
-    AGENTS_MCP_BEGIN,
-    AGENTS_MCP_END,
-    AGENTS_RECALL_BEGIN,
-    AGENTS_RECALL_END,
-    connect_codex,
-    connect_codex_router,
-    install_agents_block,
-)
 from memoryforge.compiler.compiler import (
     Compilation,
     compilation_payload,
     compile_pending_sources,
     compile_repository_topics,
 )
-from memoryforge.portal.desktop import run_desktop
-from memoryforge.core.errors import (
-    ChangeSetStoreError,
-    FeatureUnavailableError,
-    MemoryForgeError,
-    WorkspaceError,
-)
-from memoryforge.evaluation.evaluation import run_evaluation
-from memoryforge.adapters.feishu_adapter import FeishuDocumentError, import_feishu_document
-from memoryforge.adapters.feishu_bot import FeishuBotError, reply_to_feishu_text
-from memoryforge.adapters.feishu_service import FeishuServiceError, serve_feishu_bot
-from memoryforge.adapters.folder_adapter import sync_folder
-from memoryforge.adapters.git_adapter import GitRepositoryError
-from memoryforge.adapters.github_thread_adapter import (
-    delete_github_thread,
-    import_github_thread,
-    import_github_thread_json,
-)
-from memoryforge.core.host_config import codex_toml_block, mcp_servers_config
-from memoryforge.adapters.importer import MAX_SOURCE_BYTES, SourceValidationError, import_local_file
 from memoryforge.compiler.lifecycle import (
     apply_changeset,
     approve_changeset,
@@ -73,32 +50,45 @@ from memoryforge.compiler.lifecycle import (
     review_changeset,
 )
 from memoryforge.compiler.linting import lint_workspace
-from memoryforge.portal.local_portal import serve_local_portal
-from memoryforge.interface.mcp_server import build_router_server, build_server
-from memoryforge.core.models import Sensitivity
 from memoryforge.compiler.module_planner import build_architecture_graph, build_module_plan
-from memoryforge.adapters.obsidian import OUTPUT_RELATIVE, build_obsidian
-from memoryforge.core.platform_lock import inspect_posix_namespace_lock_root
+from memoryforge.compiler.refresh import refresh_workspace
+from memoryforge.core.errors import (
+    ChangeSetStoreError,
+    FeatureUnavailableError,
+    MemoryForgeError,
+    WorkspaceError,
+)
+from memoryforge.core.host_config import codex_toml_block, mcp_servers_config
+from memoryforge.core.models import Sensitivity
+from memoryforge.evaluation.agent_evaluation import run_agent_evaluation
+from memoryforge.evaluation.evaluation import run_evaluation
+from memoryforge.interface.codex_connect import (
+    connect_codex,
+    connect_codex_router,
+    install_agents_block,
+)
+from memoryforge.interface.doctor import doctor_report
+from memoryforge.interface.mcp_server import build_router_server, build_server
+from memoryforge.portal.desktop import run_desktop
+from memoryforge.portal.local_portal import serve_local_portal
+from memoryforge.portal.showcase import build_showcase
+from memoryforge.query.agent import run_agent
+from memoryforge.query.agent_access import recall_context, resolve_repository_scope
 from memoryforge.query.provider import OpenAICompatibleProvider, ProviderConfig
 from memoryforge.query.query import answer_question
-from memoryforge.compiler.refresh import refresh_workspace
 from memoryforge.query.sessions import SessionStore
-from memoryforge.portal.showcase import build_showcase
-from memoryforge.adapters.web_adapter import WebPageError, import_html_file, import_web_page
-from memoryforge.compiler.wiki_facts import parse_page_facts
+from memoryforge.storage.changesets import ChangeSetStore, StoredChangeSet
+from memoryforge.storage.database import connect as _connect
+from memoryforge.storage.database import connect_readonly as _connect_readonly
+from memoryforge.storage.errors import WorkspaceIntegrityError, WorkspaceSecurityError
 from memoryforge.storage.workspace import (
     Workspace,
-    WorkspaceIntegrityError,
-    WorkspaceSecurityError,
-    _connect_readonly,
-    candidate_page_sources,
     list_git_checkouts,
     list_git_code_modules,
     rebuild_applied_projection,
     register_git_checkout,
     register_git_code_module,
     search_sources,
-    sync_git_checkout,
 )
 
 app = typer.Typer(
@@ -2078,7 +2068,7 @@ def eval(
 @app.command()
 def doctor(workspace: WorkspaceOption = Path(".")) -> None:
     """Run a read-only local environment and Workspace diagnostic."""
-    result = _doctor_report(workspace)
+    result = doctor_report(workspace)
     typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
 
 
@@ -2183,330 +2173,6 @@ def _changeset_summary(stored: StoredChangeSet) -> dict[str, object]:
     return payload
 
 
-def _doctor_report(workspace: Path) -> dict[str, object]:
-    checks = [
-        _doctor_item(
-            "python",
-            status="ok",
-            message=f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
-        ),
-        _doctor_item("platform", status="ok", message=platform.system()),
-        _doctor_git(),
-    ]
-    workspace_item, opened = _doctor_workspace(workspace)
-    checks.append(workspace_item)
-    root = Path(workspace).expanduser()
-    index_path = opened.index_path if opened is not None else root / ".memoryforge/index.sqlite"
-    checks.append(_doctor_index(index_path))
-    checks.append(_doctor_projection(opened))
-    checks.append(_doctor_lock_directory(opened))
-    checks.append(_doctor_model())
-    checks.append(_doctor_feishu())
-    checks.append(_doctor_codex())
-    checks.append(_doctor_agents_block(opened))
-    remediation = [
-        str(check["remediation"]) for check in checks if check.get("remediation") is not None
-    ]
-    return {
-        "status": "error" if any(check["status"] == "error" for check in checks) else "ok",
-        "checks": checks,
-        "remediation": remediation,
-    }
-
-
-def _doctor_item(
-    name: str,
-    *,
-    status: str,
-    message: str | None = None,
-    remediation: str | None = None,
-) -> dict[str, object]:
-    item: dict[str, object] = {"name": name, "status": status}
-    if message is not None:
-        item["message"] = message
-    if remediation is not None:
-        item["remediation"] = remediation
-    return item
-
-
-def _doctor_git() -> dict[str, object]:
-    executable = shutil.which("git")
-    if executable is None:
-        return _doctor_item(
-            "git",
-            status="error",
-            remediation="Install Git and add it to PATH.",
-        )
-    try:
-        completed = subprocess.run(
-            [executable, "--version"],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        return _doctor_item(
-            "git",
-            status="error",
-            message=str(exc),
-            remediation="Make the installed Git executable runnable.",
-        )
-    if completed.returncode != 0:
-        return _doctor_item(
-            "git",
-            status="error",
-            message=completed.stderr.strip(),
-            remediation="Reinstall Git or fix its executable permissions.",
-        )
-    return _doctor_item("git", status="ok", message=completed.stdout.strip())
-
-
-def _doctor_codex() -> dict[str, object]:
-    executable = shutil.which("codex")
-    if executable is None:
-        return _doctor_item(
-            "codex",
-            status="not_configured",
-            message="Codex CLI not found on PATH.",
-            remediation="Install the Codex CLI, then run 'memoryforge connect codex'.",
-        )
-    try:
-        completed = subprocess.run(
-            [executable, "mcp", "list", "--json"],
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        return _doctor_item(
-            "codex",
-            status="error",
-            message=str(exc),
-            remediation="Make the Codex CLI executable runnable.",
-        )
-    if completed.returncode != 0:
-        return _doctor_item(
-            "codex",
-            status="error",
-            message=completed.stderr.strip() or "codex mcp list failed",
-            remediation="Fix the Codex CLI configuration, then re-run doctor.",
-        )
-    try:
-        payload = json.loads(completed.stdout)
-    except json.JSONDecodeError:
-        return _doctor_item(
-            "codex",
-            status="error",
-            message="codex mcp list --json returned unparseable output.",
-            remediation="Update the Codex CLI to a version with machine-readable MCP output.",
-        )
-    if isinstance(payload, dict):
-        registered = [name for name in payload if name.startswith("memoryforge-")]
-    elif isinstance(payload, list):
-        registered = [
-            str(entry["name"])
-            for entry in payload
-            if isinstance(entry, dict) and str(entry.get("name", "")).startswith("memoryforge-")
-        ]
-    else:
-        registered = []
-    if not registered:
-        return _doctor_item(
-            "codex",
-            status="ok",
-            message="Codex CLI available; no MemoryForge MCP server registered "
-            "(run 'memoryforge connect codex' to register one).",
-        )
-    return _doctor_item(
-        "codex",
-        status="ok",
-        message=f"{len(registered)} MemoryForge MCP server(s) registered.",
-    )
-
-
-def _doctor_agents_block(opened: Workspace | None) -> dict[str, object]:
-    if opened is None:
-        return _doctor_item(
-            "agents_block",
-            status="not_configured",
-            message="Workspace unavailable; project AGENTS.md files not inspected.",
-        )
-    managed = 0
-    for checkout in list_git_checkouts(opened.root):
-        agents_path = Path(checkout.checkout_path) / "AGENTS.md"
-        try:
-            text = agents_path.read_text(encoding="utf-8")
-        except OSError:
-            continue
-        mcp_ok = AGENTS_MCP_BEGIN in text and AGENTS_MCP_END in text
-        recall_ok = AGENTS_RECALL_BEGIN in text and AGENTS_RECALL_END in text
-        if mcp_ok or recall_ok:
-            managed += 1
-    if managed == 0:
-        return _doctor_item(
-            "agents_block",
-            status="not_configured",
-            message="No managed MemoryForge block in registered project AGENTS.md files.",
-            remediation=(
-                "Run 'memoryforge connect codex' for each project that should "
-                "use on-demand knowledge."
-            ),
-        )
-    return _doctor_item(
-        "agents_block",
-        status="ok",
-        message=f"{managed} registered project(s) carry a managed MemoryForge block.",
-    )
-
-
-def _doctor_workspace(workspace: Path) -> tuple[dict[str, object], Workspace | None]:
-    try:
-        opened = Workspace.open_readonly(workspace)
-    except Exception as exc:
-        return (
-            _doctor_item(
-                "workspace",
-                status="error",
-                message=str(exc),
-                remediation="Run 'memoryforge init <workspace>' or fix the workspace path.",
-            ),
-            None,
-        )
-    return _doctor_item("workspace", status="ok", message=str(opened.root)), opened
-
-
-def _doctor_index(index_path: Path) -> dict[str, object]:
-    try:
-        with _connect_readonly(index_path) as connection:
-            quick_check = [str(row[0]) for row in connection.execute("PRAGMA quick_check")]
-            if quick_check != ["ok"]:
-                raise sqlite3.DatabaseError("SQLite quick_check failed")
-            if connection.execute("PRAGMA foreign_key_check").fetchone() is not None:
-                raise sqlite3.IntegrityError("SQLite foreign_key_check failed")
-            copied = sqlite3.connect(":memory:")
-            try:
-                connection.backup(copied)
-                copied.execute("INSERT INTO source_fts(source_fts) VALUES ('integrity-check')")
-                copied.execute(
-                    """
-                    INSERT INTO wiki_fact_fts(wiki_fact_fts, rank)
-                    VALUES ('integrity-check', 1)
-                    """
-                )
-            finally:
-                copied.close()
-    except Exception as exc:
-        return _doctor_item(
-            "index",
-            status="error",
-            message=str(exc),
-            remediation="Run 'memoryforge init <workspace>' or restore .memoryforge/index.sqlite.",
-        )
-    return _doctor_item("index", status="ok")
-
-
-def _doctor_projection(workspace: Workspace | None) -> dict[str, object]:
-    if workspace is None:
-        return _doctor_item(
-            "projection",
-            status="error",
-            remediation="Restore a valid Workspace before checking its Wiki projection.",
-        )
-    try:
-        commit = workspace.current_commit()
-        paths = workspace.version_store.list_wiki_paths_at(commit)
-        contents = workspace.version_store.read_wiki_texts_at(commit, paths=paths) if paths else {}
-        expected_sources = {
-            (page_path, source_id)
-            for page_path, source_ids in candidate_page_sources(contents).items()
-            for source_id in source_ids
-        }
-        expected_facts = {
-            (page_path, fact.fact_id)
-            for page_path, content in contents.items()
-            for fact in parse_page_facts(page_path, content)
-        }
-        with _connect_readonly(workspace.index_path) as connection:
-            actual_sources = {
-                (str(row[0]), str(row[1]))
-                for row in connection.execute(
-                    "SELECT page_path, source_id FROM page_sources"
-                ).fetchall()
-            }
-            actual_facts = {
-                (str(row[0]), str(row[1]))
-                for row in connection.execute(
-                    "SELECT page_path, fact_id FROM wiki_facts"
-                ).fetchall()
-            }
-        workspace.version_store.require_clean_paths(("wiki",))
-        if expected_sources != actual_sources or expected_facts != actual_facts:
-            raise WorkspaceIntegrityError("Git Wiki and SQLite projection differ")
-    except Exception as exc:
-        return _doctor_item(
-            "projection",
-            status="error",
-            message=str(exc),
-            remediation=(
-                "Recover any interrupted apply, then run rollback or restore the Workspace "
-                "from a verified backup."
-            ),
-        )
-    return _doctor_item("projection", status="ok", message=commit)
-
-
-def _doctor_lock_directory(workspace: Workspace | None) -> dict[str, object]:
-    try:
-        if sys.platform == "win32":
-            if workspace is None:
-                raise FileNotFoundError("Workspace lock directory is unavailable")
-            path = workspace.internal_dir
-        else:
-            path = inspect_posix_namespace_lock_root()
-        if not path.exists():
-            return _doctor_item(
-                "lock_directory",
-                status="ok",
-                message="The private lock directory will be created on first write.",
-            )
-        if not path.is_dir():
-            raise FileNotFoundError("lock directory is missing")
-        if not os.access(path, os.W_OK | os.X_OK):
-            raise PermissionError("lock directory is not writable")
-    except Exception as exc:
-        return _doctor_item(
-            "lock_directory",
-            status="error",
-            message=str(exc),
-            remediation=(
-                "Create a private ~/.memoryforge-locks directory owned by the current user "
-                "with mode 0700."
-                if sys.platform != "win32"
-                else "Make the Workspace .memoryforge directory writable by the current user."
-            ),
-        )
-    return _doctor_item("lock_directory", status="ok")
-
-
-def _doctor_model() -> dict[str, object]:
-    try:
-        ProviderConfig.from_environment()
-    except Exception:
-        status = "not_configured"
-    else:
-        status = "configured"
-    return _doctor_item("model", status=status)
-
-
-def _doctor_feishu() -> dict[str, object]:
-    return _doctor_item(
-        "feishu",
-        status="configured" if shutil.which("lark-cli") is not None else "not_configured",
-    )
-
-
 def _exit_with_safe_error(exc: Exception) -> None:
     if isinstance(exc, FeatureUnavailableError):
         message = str(exc)
@@ -2546,7 +2212,10 @@ client_app = typer.Typer(no_args_is_help=True, help="Multi-client integration pl
 app.add_typer(client_app, name="client")
 capture_app = typer.Typer(no_args_is_help=True, help="Capture inbox and handoff utilities.")
 app.add_typer(capture_app, name="capture")
-conflict_app = typer.Typer(no_args_is_help=True, help="Knowledge conflict inspection and resolution.")
+conflict_app = typer.Typer(
+    no_args_is_help=True,
+    help="Knowledge conflict inspection and resolution.",
+)
 app.add_typer(conflict_app, name="conflict")
 egress_app = typer.Typer(no_args_is_help=True, help="Source egress policy and audit.")
 app.add_typer(egress_app, name="egress")
@@ -2568,10 +2237,12 @@ def client_plan(
     """薄命令 → 对应 adapter.plan_install / plan_uninstall。"""
     try:
         from memoryforge.client_integrations import get_adapter
+
         adapter = get_adapter(agent)
         plan = adapter.plan_install(workspace, project, capture=capture_enabled)
         if write_config and not dry_run:
             import subprocess
+
             for step in plan.commands:
                 subprocess.run(step, check=True)
         _json_out(
@@ -2595,6 +2266,7 @@ def client_verify(
     """薄命令 → adapter.verify_install。"""
     try:
         from memoryforge.client_integrations import get_adapter
+
         result = get_adapter(agent).verify_install(workspace, project)
         _json_out({"status": "ok", "agent": agent, "result": result})
     except Exception as exc:  # noqa: BLE001
@@ -2610,6 +2282,7 @@ def client_remove(
     """薄命令 → adapter.plan_uninstall。"""
     try:
         from memoryforge.client_integrations import get_adapter
+
         plan = get_adapter(agent).plan_uninstall(workspace, project)
         _json_out({"status": "ok", "agent": agent, "plan": plan})
     except Exception as exc:  # noqa: BLE001
@@ -2617,11 +2290,14 @@ def client_remove(
 
 
 @capture_app.command("drain")
-def capture_drain(workspace: Annotated[Path, typer.Option("--workspace", "-w")] = Path(".")) -> None:
+def capture_drain(
+    workspace: Annotated[Path, typer.Option("--workspace", "-w")] = Path("."),
+) -> None:
     """薄命令 → capture_inbox.drain_capture_spool。"""
     try:
         from memoryforge.storage.capture_inbox import drain_capture_spool
-        from memoryforge.storage.workspace import workspace_database, _connect
+        from memoryforge.storage.workspace import workspace_database
+
         db = workspace_database(workspace)
         with _connect(db) as conn:
             result = drain_capture_spool(workspace, conn)
@@ -2651,7 +2327,8 @@ def capture_handoff(
     try:
         from memoryforge.storage.capture_inbox import drain_capture_spool
         from memoryforge.storage.handoff import build_handoff
-        from memoryforge.storage.workspace import workspace_database, _connect
+        from memoryforge.storage.workspace import workspace_database
+
         with _connect(workspace_database(workspace)) as connection:
             drain_capture_spool(workspace, connection)
             result = build_handoff(
@@ -2675,11 +2352,10 @@ def capture_proposal(
     """薄命令 → handoff.show_session_proposal。"""
     try:
         from memoryforge.storage.capture_inbox import build_capture_proposal
-        from memoryforge.storage.workspace import workspace_database, _connect
+        from memoryforge.storage.workspace import workspace_database
+
         with _connect(workspace_database(workspace)) as connection:
-            result = build_capture_proposal(
-                connection, repository_id=repo_id, session_id=session
-            )
+            result = build_capture_proposal(connection, repository_id=repo_id, session_id=session)
         if print_output:
             _json_out(result.__dict__)
         else:
@@ -2697,15 +2373,23 @@ def cli_freshness(
     """薄命令 → freshness.page_freshness。"""
     try:
         from memoryforge.compiler.freshness import page_freshness
-        from memoryforge.storage.workspace import Workspace, workspace_database, _connect
+        from memoryforge.storage.workspace import Workspace, _connect, workspace_database
+
         applied: dict[str, int] = {}
         current: dict[str, int] = {}
         db = workspace_database(workspace)
         with _connect(db) as conn:
-            for sid, svid in conn.execute("SELECT source_id, source_version_id FROM applied_source_versions"):
+            for sid, svid in conn.execute(
+                "SELECT source_id, source_version_id FROM applied_source_versions"
+            ):
                 applied[str(sid)] = int(svid)
             for row in conn.execute(
-                "SELECT s.source_id, v.id FROM sources AS s JOIN source_versions AS v ON v.source_id = s.id WHERE v.is_current = 1"
+                """
+                SELECT s.source_id, v.id
+                FROM sources AS s
+                JOIN source_versions AS v ON v.source_id = s.id
+                WHERE v.is_current = 1
+                """
             ):
                 current[str(row[0])] = int(row[1])
         ws = Workspace(workspace)
@@ -2732,7 +2416,8 @@ def conflict_list(
 ) -> None:
     """薄命令 → knowledge_conflicts 查询。"""
     try:
-        from memoryforge.storage.workspace import workspace_database, _connect
+        from memoryforge.storage.workspace import workspace_database
+
         db = workspace_database(workspace)
         sql = "SELECT conflict_id, page_path, resolution FROM knowledge_conflicts WHERE 1=1"
         params: list[object] = []
@@ -2755,7 +2440,8 @@ def conflict_show(
 ) -> None:
     """薄命令 → knowledge_conflicts 单条查询。"""
     try:
-        from memoryforge.storage.workspace import workspace_database, _connect
+        from memoryforge.storage.workspace import workspace_database
+
         db = workspace_database(workspace)
         with _connect(db) as conn:
             row = conn.execute(
@@ -2770,7 +2456,13 @@ def conflict_show(
 @conflict_app.command("resolve")
 def conflict_resolve(
     conflict_id: Annotated[str, typer.Argument(help="Conflict ID.")],
-    resolution: Annotated[str, typer.Option("--resolution", help="supersede_left|supersede_right|reconciled|dismissed")],
+    resolution: Annotated[
+        str,
+        typer.Option(
+            "--resolution",
+            help="supersede_left|supersede_right|reconciled|dismissed",
+        ),
+    ],
     workspace: Annotated[Path, typer.Option("--workspace", "-w")] = Path("."),
 ) -> None:
     """薄命令 → knowledge_conflicts.resolve_conflict。"""
@@ -2780,7 +2472,8 @@ def conflict_resolve(
             conflict_from_row,
             resolve_conflict,
         )
-        from memoryforge.storage.workspace import workspace_database, _connect
+        from memoryforge.storage.workspace import workspace_database
+
         db = workspace_database(workspace)
         with _connect(db) as conn:
             row = conn.execute(
@@ -2796,7 +2489,12 @@ def conflict_resolve(
             resolution=ConflictResolution(resolution),
             citations=(),
         )
-        _json_out({"status": "ok", "proposal": proposal.model_dump(mode="json") if proposal else None})
+        _json_out(
+            {
+                "status": "ok",
+                "proposal": proposal.model_dump(mode="json") if proposal else None,
+            }
+        )
     except Exception as exc:  # noqa: BLE001
         _json_out({"status": "error", "error": str(exc)})
 
@@ -2808,7 +2506,8 @@ def egress_show(
 ) -> None:
     """薄命令 → egress_policy 查询。"""
     try:
-        from memoryforge.storage.workspace import workspace_database, _connect
+        from memoryforge.storage.workspace import workspace_database
+
         db = workspace_database(workspace)
         sql = "SELECT source_id, egress_class, allowed_hosts FROM source_egress_rules"
         params: tuple[object, ...] = ()
@@ -2832,9 +2531,11 @@ def egress_set(
     """薄命令 → egress_policy.upsert_rule。"""
     try:
         from datetime import UTC, datetime
-        from memoryforge.core.egress_models import EgressClass, SourceEgressRule
+
         from memoryforge.compiler.egress_policy import upsert_rule
-        from memoryforge.storage.workspace import workspace_database, _connect
+        from memoryforge.core.egress_models import EgressClass, SourceEgressRule
+        from memoryforge.storage.workspace import workspace_database
+
         hosts = (host,) if host else ()
         rule = SourceEgressRule(
             source_id=source_id,
@@ -2859,9 +2560,11 @@ def egress_deny(
     """薄命令 → egress set --class never_model。"""
     try:
         from datetime import UTC, datetime
-        from memoryforge.core.egress_models import EgressClass, SourceEgressRule
+
         from memoryforge.compiler.egress_policy import upsert_rule
-        from memoryforge.storage.workspace import workspace_database, _connect
+        from memoryforge.core.egress_models import EgressClass, SourceEgressRule
+        from memoryforge.storage.workspace import workspace_database
+
         rule = SourceEgressRule(
             source_id=source_id,
             egress_class=EgressClass.NEVER_MODEL,
@@ -2886,19 +2589,46 @@ def egress_preview(
     """薄命令 → egress_policy.decide_egress 针对默认上下文的预览。"""
     try:
         import uuid
-        from memoryforge.core.egress_models import EgressRequest
+
         from memoryforge.compiler.egress_policy import decide_egress
+        from memoryforge.core.egress_models import EgressRequest
         from memoryforge.core.models import Sensitivity
-        from memoryforge.storage.workspace import workspace_database, _connect
+        from memoryforge.storage.workspace import workspace_database
+
         db = workspace_database(workspace)
-        request = EgressRequest(request_id=str(uuid.uuid4()), host_id=host, repository_id="preview", purpose="context", max_characters=8000)
+        request = EgressRequest(
+            request_id=str(uuid.uuid4()),
+            host_id=host,
+            repository_id="preview",
+            purpose="context",
+            max_characters=8000,
+        )
         decisions: list[dict[str, object]] = []
         with _connect(db) as conn:
             for row in conn.execute(
-                "SELECT s.source_id, v.id, v.sensitivity FROM sources AS s JOIN source_versions AS v ON v.source_id = s.id WHERE v.is_current = 1 LIMIT 50"
+                """
+                SELECT s.source_id, v.id, v.sensitivity
+                FROM sources AS s
+                JOIN source_versions AS v ON v.source_id = s.id
+                WHERE v.is_current = 1
+                LIMIT 50
+                """
             ):
-                d = decide_egress(conn, request=request, source_id=str(row[0]), source_version=int(row[1]), sensitivity=Sensitivity(str(row[2])))
-                decisions.append({"source_id": row[0], "allowed": d.allowed, "reason_code": d.reason_code, "class": d.egress_class.value})
+                decision = decide_egress(
+                    conn,
+                    request=request,
+                    source_id=str(row[0]),
+                    source_version=int(row[1]),
+                    sensitivity=Sensitivity(str(row[2])),
+                )
+                decisions.append(
+                    {
+                        "source_id": row[0],
+                        "allowed": decision.allowed,
+                        "reason_code": decision.reason_code,
+                        "class": decision.egress_class.value,
+                    }
+                )
         _json_out({"status": "ok", "question": question, "host": host, "preview": decisions})
     except Exception as exc:  # noqa: BLE001
         _json_out({"status": "error", "error": str(exc)})
@@ -2912,9 +2642,14 @@ def egress_audit(
 ) -> None:
     """薄命令 → disclosure_receipts 查询。"""
     try:
-        from memoryforge.storage.workspace import workspace_database, _connect
+        from memoryforge.storage.workspace import workspace_database
+
         db = workspace_database(workspace)
-        sql = "SELECT request_id, host_id, repository_id, purpose, disclosed_at FROM disclosure_receipts WHERE 1=1"
+        sql = """
+            SELECT request_id, host_id, repository_id, purpose, disclosed_at
+            FROM disclosure_receipts
+            WHERE 1=1
+        """
         params: list[object] = []
         if host:
             sql += " AND host_id = ?"

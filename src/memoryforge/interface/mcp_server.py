@@ -34,6 +34,8 @@ from mcp.shared.exceptions import MCPDeprecationWarning
 from mcp.types import ToolAnnotations
 
 from memoryforge import __version__
+from memoryforge.core.errors import MemoryForgeError
+from memoryforge.core.models import GitRepositoryRecord
 from memoryforge.query.agent_access import (
     list_changesets,
     propose_grounded_update,
@@ -47,14 +49,9 @@ from memoryforge.query.agent_access import (
     server_name,
 )
 from memoryforge.storage.changesets import ChangeSetStore
-from memoryforge.core.errors import MemoryForgeError
-from memoryforge.core.models import GitRepositoryRecord
-from memoryforge.storage.workspace import (
-    Workspace,
-    _connect,
-    _connect_readonly,
-    is_public_source_version,
-)
+from memoryforge.storage.database import connect as _connect
+from memoryforge.storage.database import connect_readonly as _connect_readonly
+from memoryforge.storage.workspace import Workspace, is_public_source_version
 
 if TYPE_CHECKING:
     from memoryforge.compiler.wiki_facts import CitationPayload
@@ -187,6 +184,7 @@ def build_server(
         )
 
     if profile != "micro":
+
         @server.tool(name="memoryforge_recall", annotations=_READ_ONLY_ANNOTATIONS)
         def memoryforge_recall(limit: int = 3) -> dict[str, object]:
             """Return latest-session summaries only; not factual how-to or runbooks."""
@@ -238,10 +236,10 @@ def build_server(
 
     if profile == "analysis":
         try:
-            from memoryforge.code.code_intelligence import symbol_context
-            from memoryforge.code.code_impact import impact_analysis, call_paths, analyze_diff
             from memoryforge.code.code_history import why_changed
+            from memoryforge.code.code_impact import analyze_diff, call_paths, impact_analysis
             from memoryforge.code.code_index import build_code_index
+            from memoryforge.code.code_intelligence import symbol_context
 
             def snapshot():
                 return build_code_index(bindings.workspace, bindings.scope.repository_id)
@@ -320,6 +318,7 @@ def build_server(
 
     if profile == "capture":
         try:
+            from memoryforge.core.capture_models import CaptureEvent
             from memoryforge.storage.capture_inbox import (
                 RedactionResult,
                 build_capture_proposal,
@@ -327,7 +326,6 @@ def build_server(
                 spool_capture_event,
             )
             from memoryforge.storage.handoff import build_handoff
-            from memoryforge.core.capture_models import CaptureEvent
 
             @server.tool(name="memoryforge_spool_event")
             def memoryforge_spool_event(event_json: str) -> dict[str, object]:
@@ -360,13 +358,18 @@ def build_server(
                         return build_handoff(
                             connection,
                             repository_id=repo_id,
-                            before=(datetime.fromisoformat(before) if before else datetime.now(UTC)),
+                            before=(
+                                datetime.fromisoformat(before) if before else datetime.now(UTC)
+                            ),
                             max_characters=max(1, int(max_chars)),
                         ).model_dump(mode="json")
                 except Exception as exc:  # noqa: BLE001
                     return {"status": "error", "error": str(exc)}
 
-            @server.tool(name="memoryforge_capture_proposal_show", annotations=_READ_ONLY_ANNOTATIONS)
+            @server.tool(
+                name="memoryforge_capture_proposal_show",
+                annotations=_READ_ONLY_ANNOTATIONS,
+            )
             def memoryforge_capture_proposal_show(
                 repo_id: str,
                 session: str,

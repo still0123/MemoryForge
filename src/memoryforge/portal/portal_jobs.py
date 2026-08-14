@@ -22,12 +22,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
-from memoryforge.storage.changesets import ChangeSetStore
-from memoryforge.code.code_index import build_code_index
-from memoryforge.compiler.code_wiki_compiler import compile_code_wiki
 from memoryforge.adapters.codex_adapter import CodexImportError, import_codex_rollout
-from memoryforge.compiler.compiler import Compilation, compile_pending_sources
-from memoryforge.core.errors import ChangeSetStoreError
 from memoryforge.adapters.feishu_adapter import (
     import_feishu_document,
     preview_feishu_document,
@@ -39,21 +34,26 @@ from memoryforge.adapters.git_adapter import (
     scan_git_snapshot_code,
     snapshot_git_repository,
 )
+from memoryforge.adapters.git_sync import sync_git_checkout
 from memoryforge.adapters.github_thread_adapter import import_github_thread, parse_github_thread_url
 from memoryforge.adapters.importer import import_local_file, validate_source_path
-from memoryforge.compiler.lifecycle import apply_changeset
-from memoryforge.core.models import ImportResult, Sensitivity
-from memoryforge.compiler.module_planner import build_module_plan
-from memoryforge.query.provider import OpenAICompatibleProvider
 from memoryforge.adapters.web_adapter import _normalise_url, import_web_page
+from memoryforge.code.code_index import build_code_index
+from memoryforge.compiler.code_wiki_compiler import compile_code_wiki
+from memoryforge.compiler.compiler import Compilation, compile_pending_sources
+from memoryforge.compiler.lifecycle import apply_changeset
+from memoryforge.compiler.module_planner import build_module_plan
+from memoryforge.core.errors import ChangeSetStoreError
+from memoryforge.core.models import ImportResult, Sensitivity
+from memoryforge.query.provider import OpenAICompatibleProvider
+from memoryforge.storage.changesets import ChangeSetStore
+from memoryforge.storage.database import connect_readonly as _connect_readonly
 from memoryforge.storage.workspace import (
     Workspace,
-    _connect_readonly,
     list_git_checkouts,
     list_git_code_modules,
     register_git_checkout,
     register_git_code_module,
-    sync_git_checkout,
 )
 
 _JOB_ID = re.compile(r"^job_[a-f0-9]{24}$")

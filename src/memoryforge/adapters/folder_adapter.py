@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Literal, cast
 
-from memoryforge.core.errors import MemoryForgeError
 from memoryforge.adapters.importer import (
     _canonical_relative_source_path,
     _extract_title,
@@ -18,6 +17,8 @@ from memoryforge.adapters.importer import (
     read_local_text_file,
     validate_source_path,
 )
+from memoryforge.adapters.web_adapter import FetchedWebPage, _readable_page
+from memoryforge.core.errors import MemoryForgeError
 from memoryforge.core.models import (
     FolderDocumentSyncResult,
     FolderSyncResult,
@@ -25,7 +26,6 @@ from memoryforge.core.models import (
     Sensitivity,
     SourceCategory,
 )
-from memoryforge.adapters.web_adapter import FetchedWebPage, _readable_page
 from memoryforge.storage.workspace import (
     Workspace,
     reconcile_folder_sources,

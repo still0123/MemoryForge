@@ -38,7 +38,6 @@ from pathlib import Path
 from typing import Literal
 
 from memoryforge.automation.automation_validation import classify_risk
-from memoryforge.storage.changesets import ChangeSetStore, StoredChangeSet
 from memoryforge.compiler.compiler import (
     _add_relations_page,
     _load_current_sources,
@@ -46,6 +45,11 @@ from memoryforge.compiler.compiler import (
     _read_source_text,
     _render_index,
     _render_llm_page,
+)
+from memoryforge.compiler.wiki_facts import (
+    CitationPayload,
+    is_conversation_process_note,
+    parse_page_citations,
 )
 from memoryforge.core.errors import MemoryForgeError, UnmappedProjectError
 from memoryforge.core.models import (
@@ -61,16 +65,11 @@ from memoryforge.core.models import (
     Sensitivity,
 )
 from memoryforge.query.query import SupportPayload, answer_is_supported, answer_question
-from memoryforge.compiler.wiki_facts import (
-    CitationPayload,
-    is_conversation_process_note,
-    parse_page_citations,
-)
+from memoryforge.storage.changesets import ChangeSetStore, StoredChangeSet
+from memoryforge.storage.database import connect_readonly as _connect_readonly
+from memoryforge.storage.errors import WorkspaceIntegrityError, WorkspaceSecurityError
 from memoryforge.storage.workspace import (
     Workspace,
-    WorkspaceIntegrityError,
-    WorkspaceSecurityError,
-    _connect_readonly,
     is_applied_source_version,
     is_public_source_version,
     list_git_checkouts,

@@ -20,8 +20,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from memoryforge.query.agent_access import server_name
 from memoryforge.interface.codex_connect import mcp_command
+from memoryforge.query.agent_access import server_name
 
 
 def mcp_servers_config(

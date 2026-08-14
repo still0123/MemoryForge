@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import deque
-from collections.abc import Callable, Iterable
+from collections.abc import Iterable
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -17,7 +17,6 @@ from memoryforge.code.code_models import (
     CodeSymbol,
     CodeSymbolKind,
 )
-
 
 IMPACT_TYPES = {
     CodeRelationType.CALLS,
@@ -193,7 +192,9 @@ def impact_analysis(
                 relation_id=relation.relation_id,
                 relation_type=relation.type.value,
                 source=_symbol_to_ref(source_sym),
-                target=target_ref if current_depth == 0 else _symbol_to_ref(symbols_by_id[current_id]),
+                target=(
+                    target_ref if current_depth == 0 else _symbol_to_ref(symbols_by_id[current_id])
+                ),
                 evidence=evidence,
                 depth=current_depth + 1,
             )
@@ -209,7 +210,12 @@ def impact_analysis(
 
     direct_sorted = tuple(sorted(direct_edges, key=_edge_sort_key))
     transitive_sorted = tuple(sorted(transitive_edges, key=_edge_sort_key))
-    tests_sorted = tuple(sorted((_symbol_to_ref(t) for t in tests_list), key=lambda s: (s.qualified_name, s.symbol_id)))
+    tests_sorted = tuple(
+        sorted(
+            (_symbol_to_ref(test) for test in tests_list),
+            key=lambda symbol: (symbol.qualified_name, symbol.symbol_id),
+        )
+    )
 
     risk: Literal["low", "medium", "high", "unknown"]
     total_affected = len(direct_edges) + len(transitive_edges)
@@ -225,10 +231,7 @@ def impact_analysis(
         base_risk = "low"
 
     if graph_incomplete and base_risk != "high":
-        if base_risk == "low":
-            risk = "medium"
-        else:
-            risk = base_risk
+        risk = "medium" if base_risk == "low" else base_risk
     else:
         risk = base_risk
     if graph_incomplete:

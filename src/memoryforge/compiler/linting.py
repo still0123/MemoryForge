@@ -16,12 +16,9 @@ from memoryforge.compiler.wiki_facts import (
     parse_page_citations,
     parse_page_facts,
 )
-from memoryforge.storage.workspace import (
-    WorkspaceIntegrityError,
-    WorkspaceSecurityError,
-    _blob_relative_path,
-    is_generated_navigation_page,
-)
+from memoryforge.storage.blob_store import blob_relative_path as _blob_relative_path
+from memoryforge.storage.errors import WorkspaceIntegrityError, WorkspaceSecurityError
+from memoryforge.storage.projection import is_generated_navigation_page
 
 _INDEX_ENTRY = re.compile(
     r"^- \[(?:\\.|[^\]])+\]\((?P<path>[^)]+)\) — .+$",

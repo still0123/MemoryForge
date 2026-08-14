@@ -6,9 +6,8 @@ import re
 import sqlite3
 from datetime import datetime
 
-from memoryforge.storage.capture_inbox import _ensure_schema
 from memoryforge.core.capture_models import HandoffPayload
-
+from memoryforge.storage.capture_inbox import _ensure_schema
 
 _UNVERIFIED_PREFIX = "Unverified handoff. Verify against code, tests, or cited Wiki before acting."
 _EMPTY_PREFIX = "Unverified handoff. No recent capture sessions."
@@ -58,10 +57,7 @@ def _fetch_events(
         """,
         (repository_id, client, session_id, before.isoformat()),
     )
-    return [
-        (row[0], row[1], row[2], row[3])
-        for row in cursor.fetchall()
-    ]
+    return [(row[0], row[1], row[2], row[3]) for row in cursor.fetchall()]
 
 
 def _parse_paths(paths_json: str) -> list[str]:
@@ -100,9 +96,7 @@ def build_handoff(
 ) -> HandoffPayload:
     _ensure_schema(connection)
 
-    session_info = _fetch_latest_session(
-        connection, repository_id=repository_id, before=before
-    )
+    session_info = _fetch_latest_session(connection, repository_id=repository_id, before=before)
     if session_info is None:
         return HandoffPayload(
             handoff_id="",

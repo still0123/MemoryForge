@@ -13,11 +13,8 @@ from contextlib import suppress
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, Literal, NotRequired, TypedDict
 
-from memoryforge.core.egress_models import EgressRequest
 from memoryforge.compiler.egress_policy import decide_egress, record_disclosure
-from memoryforge.compiler.egress_policy import rule_sha256 as _egress_rule_sha256
 from memoryforge.compiler.freshness import FreshnessState, page_freshness
-from memoryforge.query.provider import OpenAICompatibleProvider, ProviderUnavailableError
 from memoryforge.compiler.redaction import redact_for_model
 from memoryforge.compiler.wiki_facts import (
     AppliedCodeSymbolMatch,
@@ -25,23 +22,23 @@ from memoryforge.compiler.wiki_facts import (
     is_conversation_process_note,
 )
 from memoryforge.compiler.wiki_facts import parse_page_citations as _page_citations
+from memoryforge.core.egress_models import EgressRequest
+from memoryforge.query.provider import OpenAICompatibleProvider, ProviderUnavailableError
+from memoryforge.storage.database import connect as _connect
+from memoryforge.storage.database import connect_readonly as _connect_readonly
 from memoryforge.storage.workspace import (
     DATABASE_RELATIVE_PATH,
-    _connect,
-    _connect_readonly,
+    _wiki_fact_fts_query,
     find_applied_code_symbol_facts,
     find_applied_page_paths,
     find_applied_wiki_fact_page_paths,
     is_public_source_version,
     read_source_excerpt,
     repository_page_paths,
-    _wiki_fact_fts_query,
 )
 
 if TYPE_CHECKING:
     from memoryforge.core.retrieval_models import RetrievalResult
-    from memoryforge.query.retrieval_v2 import retrieve_candidates as _retrieve_candidates_fn
-    from memoryforge.query.semantic_index import SemanticIndex
 
 _INDEX_ENTRY = re.compile(
     r"^- \[(?P<title>(?:\\.|[^\]])+)\]\((?P<path>[^)]+)\) — (?P<summary>.+)$",
@@ -271,11 +268,11 @@ def answer_question(
     except Exception as exc:  # noqa: BLE001
         logging.debug("egress request build skipped: %s", exc)
 
-    retrieval_v2_result: "RetrievalResult | None" = None
+    retrieval_v2_result: RetrievalResult | None = None
     if egress_request is not None:
         try:
-            from memoryforge.query.retrieval_v2 import retrieve_candidates
             from memoryforge.core.retrieval_models import VisibleSource
+            from memoryforge.query.retrieval_v2 import retrieve_candidates
 
             def _visible_source(source_id: str, source_version: int) -> bool:
                 if public_only:
@@ -580,7 +577,6 @@ def answer_question(
             model_status = "used"
 
     page_freshness_warnings: list[str] = []
-    selected_pages = list(dict.fromkeys(page_path for page_path, _ in selected))
     applied_map: dict[str, int] = {}
     current_map: dict[str, int] = {}
     try:
@@ -600,6 +596,7 @@ def answer_question(
             cur_commit = ""
             try:
                 from memoryforge.storage.workspace import Workspace
+
                 ws = Workspace(workspace_root)
                 try:
                     cur_commit = ws.current_commit()
@@ -624,15 +621,11 @@ def answer_question(
                     )
                     if report.state in (FreshnessState.CONFLICTED, FreshnessState.SUPERSEDED):
                         stale_page_penalty[page_path] = 1.0
-                        page_freshness_warnings.append(
-                            f"{page_path}:{report.state.value} dropped"
-                        )
+                        page_freshness_warnings.append(f"{page_path}:{report.state.value} dropped")
                         continue
                     if report.state == FreshnessState.STALE:
                         stale_page_penalty[page_path] = 0.5
-                        page_freshness_warnings.append(
-                            f"{page_path}:stale support_score -0.5"
-                        )
+                        page_freshness_warnings.append(f"{page_path}:stale support_score -0.5")
                 except Exception as exc:  # noqa: BLE001
                     logging.debug("page_freshness skipped for %s: %s", page_path, exc)
                 filtered_selected.append((page_path, citation))
@@ -828,7 +821,11 @@ def _model_answer(
 def _egress_policy_digest(connection: sqlite3.Connection) -> str:
     try:
         rows = connection.execute(
-            "SELECT source_id, egress_class, allowed_hosts FROM source_egress_rules ORDER BY source_id"
+            """
+            SELECT source_id, egress_class, allowed_hosts
+            FROM source_egress_rules
+            ORDER BY source_id
+            """
         ).fetchall()
         payload = json.dumps(
             [list(r) for r in rows], sort_keys=True, separators=(",", ":"), ensure_ascii=True
@@ -1131,7 +1128,19 @@ def _is_explicit_code_question(question: str) -> bool:
         }
     ) or any(
         marker in question
-        for marker in ("代码", "函数", "方法", "字段", "属性", "模块", "文件", "调用", "依赖", "导入", "继承")
+        for marker in (
+            "代码",
+            "函数",
+            "方法",
+            "字段",
+            "属性",
+            "模块",
+            "文件",
+            "调用",
+            "依赖",
+            "导入",
+            "继承",
+        )
     )
 
 
@@ -1277,8 +1286,7 @@ def _support_score(
     if real_workspace:
         database = workspace_root / DATABASE_RELATIVE_PATH
         source_versions = {
-            (citation["source_id"], citation["source_version"])
-            for _, citation in selected
+            (citation["source_id"], citation["source_version"]) for _, citation in selected
         }
         with _connect_readonly(database) as connection:
             current_source_versions = float(
@@ -1557,10 +1565,9 @@ def _candidate_pages(
         ordered_pages = (*module_pages, *fact_pages, *strict_pages)
     else:
         ordered_pages = (*fact_pages, *strict_pages, *module_pages)
-    exact_code_pages: tuple[WikiPage, ...] = ()
-    if (
-        (not definition_question or not has_explanatory_definition)
-        and (ranked_index or exact_symbol_page_paths or relaxed_fts_paths)
+    exact_code_pages: tuple[Path, ...] = ()
+    if (not definition_question or not has_explanatory_definition) and (
+        ranked_index or exact_symbol_page_paths or relaxed_fts_paths
     ):
         exact_code_pages = _exact_code_pages(
             workspace_root,
