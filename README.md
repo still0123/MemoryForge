@@ -41,14 +41,21 @@ GitHub Issue/PR 和 AI 对话。最终产物仍是普通 Markdown、Git 历史�
 
 需要 Python 3.11+。v0.4.0 的正式验证范围为 macOS。
 
+**从源码安装（推荐，保证最新版本）：**
+
 ```bash
+git clone https://github.com/still0123/MemoryForge.git
+cd MemoryForge
+
 python3.11 -m venv .venv
 source .venv/bin/activate
-python -m pip install memoryforge-wiki
+python -m pip install .
 
 memoryforge init ./my-wiki
 memoryforge start --workspace ./my-wiki
 ```
+
+> 如果 PyPI 安装 `python -m pip install memoryforge-wiki` 失败（镜像源同步问题或包未发布），请使用上面的源码安装方式。
 
 Portal 只绑定 `127.0.0.1`。在浏览器中按"添加来源 → 后台任务 → 知识更新 → 批准并应用"
 完成首份资料入库，再从首页搜索或提问。
