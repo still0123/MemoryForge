@@ -85,6 +85,13 @@ policy:
   allow_implicit_invocation: true
 """
 
+_CLAUDE_SKILL = _CODEX_SKILL.replace(
+    "This loads memory into the current task; no terminal command or client restart is needed.",
+    "This loads memory into the current task; no terminal command or client restart is needed. "
+    "After loading, show the useful bounded summary (key conclusions, implementation path, "
+    "call chain, related files and session references); never reply only that it was loaded.",
+)
+
 _AGENTS_MCP_LINES = (
     "## MemoryForge on-demand knowledge",
     "",
@@ -322,6 +329,62 @@ def connect_codex_router(
     }
 
 
+def connect_claude_router(
+    workspace: Path,
+    *,
+    allow_local: bool = False,
+    startup_hook: bool = False,
+    claude_executable: str = "claude",
+) -> dict[str, object]:
+    """Register one user-scoped Claude Code Router and personal on-demand Skill."""
+    name = "memoryforge"
+    command = router_mcp_command(workspace, allow_local=allow_local)
+    claude = shutil.which(claude_executable)
+    install = [
+        "claude",
+        "mcp",
+        "add",
+        "--transport",
+        "stdio",
+        "--scope",
+        "user",
+        name,
+        "--",
+        *command,
+    ]
+    if claude is None:
+        return {
+            "status": "claude_not_found",
+            "server": name,
+            "install_command": shlex.join(install),
+            "restart_hint": "Install Claude Code, then re-run this command.",
+        }
+    existing = _existing_claude_server(claude, name)
+    if existing is None:
+        _run_client(claude, install[1:], "claude mcp add failed")
+        action = "added"
+    else:
+        existing_command, existing_scope = existing
+        if existing_command != command or existing_scope != "user":
+            raise CodexConnectConflictError(
+                "Claude MCP server already exists with a different command or scope; "
+                "remove it with 'claude mcp remove memoryforge' before reconnecting"
+            )
+        action = "unchanged"
+    skill_file = install_claude_skill()
+    hook_state = configure_claude_session_hook(workspace, enabled=startup_hook)
+    return {
+        "status": "connected" if action == "added" else "unchanged",
+        "server": name,
+        "routing": "mcp_roots",
+        "scope": "user",
+        "command": command,
+        "skill_file": str(skill_file),
+        **hook_state,
+        "next_step": "Run 'claude mcp list'; inside Claude Code use /mcp.",
+    }
+
+
 def install_codex_skill(codex_home: Path | None = None) -> Path:
     """Install the global Router's small, implicit Codex trigger skill."""
     if codex_home is None:
@@ -340,6 +403,19 @@ def install_codex_skill(codex_home: Path | None = None) -> Path:
     return skill_file
 
 
+def install_claude_skill(claude_home: Path | None = None) -> Path:
+    """Install the personal, on-demand MemoryForge Skill for Claude Code."""
+    if claude_home is None:
+        claude_home = Path.home() / ".claude"
+    skill_dir = claude_home / "skills" / "memoryforge-knowledge"
+    if skill_dir.is_symlink():
+        raise ValueError("MemoryForge Claude skill path must not be a symlink")
+    skill_dir.mkdir(parents=True, exist_ok=True)
+    skill_file = skill_dir / "SKILL.md"
+    skill_file.write_text(_CLAUDE_SKILL, encoding="utf-8")
+    return skill_file
+
+
 def install_codex_session_hook(workspace: Path, codex_home: Path | None = None) -> Path:
     """Merge the one-shot Session Capsule loader into Codex hooks.json."""
     if codex_home is None:
@@ -348,37 +424,7 @@ def install_codex_session_hook(workspace: Path, codex_home: Path | None = None) 
             Path(configured_home).expanduser() if configured_home else Path.home() / ".codex"
         )
     hooks_file = codex_home / "hooks.json"
-    if hooks_file.exists():
-        try:
-            payload = json.loads(hooks_file.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as exc:
-            raise CodexConnectError("Codex hooks.json is not valid JSON") from exc
-    else:
-        payload = {}
-    if not isinstance(payload, dict):
-        raise CodexConnectError("Codex hooks.json root must be an object")
-    hooks = payload.setdefault("hooks", {})
-    if not isinstance(hooks, dict):
-        raise CodexConnectError("Codex hooks.json 'hooks' must be an object")
-    session_start = hooks.setdefault("SessionStart", [])
-    if not isinstance(session_start, list):
-        raise CodexConnectError("Codex SessionStart hooks must be a list")
-    command = shlex.join(
-        [
-            sys.executable,
-            "-m",
-            "memoryforge.storage.session_bootstrap",
-            "--host",
-            "codex",
-            "--workspace",
-            str(workspace.resolve(strict=False)),
-        ]
-    )
-    entry = {"hooks": [{"type": "command", "command": command}]}
-    if entry in session_start:
-        return hooks_file
-    session_start.append(entry)
-    _write_hooks_file(hooks_file, payload)
+    _install_session_hook(workspace, host="codex", config_file=hooks_file)
     return hooks_file
 
 
@@ -390,49 +436,11 @@ def remove_codex_session_hook(workspace: Path, codex_home: Path | None = None) -
             Path(configured_home).expanduser() if configured_home else Path.home() / ".codex"
         )
     hooks_file = codex_home / "hooks.json"
-    if not hooks_file.exists():
-        return hooks_file, False
-    try:
-        payload = json.loads(hooks_file.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise CodexConnectError("Codex hooks.json is not valid JSON") from exc
-    if not isinstance(payload, dict):
-        raise CodexConnectError("Codex hooks.json root must be an object")
-    hooks = payload.get("hooks")
-    if hooks is None:
-        return hooks_file, False
-    if not isinstance(hooks, dict):
-        raise CodexConnectError("Codex hooks.json 'hooks' must be an object")
-    session_start = hooks.get("SessionStart")
-    if session_start is None:
-        return hooks_file, False
-    if not isinstance(session_start, list):
-        raise CodexConnectError("Codex SessionStart hooks must be a list")
-    expected_workspace = workspace.resolve(strict=False)
-    kept_entries: list[object] = []
-    removed = False
-    for entry in session_start:
-        if not isinstance(entry, dict) or not isinstance(entry.get("hooks"), list):
-            kept_entries.append(entry)
-            continue
-        kept_hooks = []
-        for hook in entry["hooks"]:
-            if _is_workspace_session_hook(hook, expected_workspace):
-                removed = True
-            else:
-                kept_hooks.append(hook)
-        if kept_hooks:
-            kept_entry = dict(entry)
-            kept_entry["hooks"] = kept_hooks
-            kept_entries.append(kept_entry)
-    if not removed:
-        return hooks_file, False
-    if kept_entries:
-        hooks["SessionStart"] = kept_entries
-    else:
-        del hooks["SessionStart"]
-    _write_hooks_file(hooks_file, payload)
-    return hooks_file, True
+    return hooks_file, _remove_session_hook(
+        workspace,
+        host="codex",
+        config_file=hooks_file,
+    )
 
 
 def configure_codex_session_hook(workspace: Path, *, enabled: bool) -> dict[str, object]:
@@ -445,11 +453,7 @@ def configure_codex_session_hook(workspace: Path, *, enabled: bool) -> dict[str,
             "cleared_startup_capsules": 0,
         }
     hook_file, removed = remove_codex_session_hook(workspace)
-    cleared = 0
-    database = workspace.resolve(strict=False) / ".memoryforge" / "index.sqlite"
-    if database.is_file():
-        with sqlite3.connect(database) as connection:
-            cleared = clear_pending_startup_capsules(connection, host="codex")
+    cleared = _clear_pending_capsules(workspace, host="codex")
     return {
         "session_hook": "disabled",
         "session_hook_file": str(hook_file),
@@ -458,7 +462,113 @@ def configure_codex_session_hook(workspace: Path, *, enabled: bool) -> dict[str,
     }
 
 
-def _is_workspace_session_hook(hook: object, workspace: Path) -> bool:
+def configure_claude_session_hook(workspace: Path, *, enabled: bool) -> dict[str, object]:
+    """Keep Claude startup injection opt-in and clear stale Claude Capsules."""
+    settings_file = Path.home() / ".claude" / "settings.json"
+    if enabled:
+        _install_session_hook(workspace, host="claude", config_file=settings_file)
+        return {
+            "session_hook": "enabled",
+            "session_hook_file": str(settings_file),
+            "cleared_startup_capsules": 0,
+        }
+    removed = _remove_session_hook(workspace, host="claude", config_file=settings_file)
+    cleared = _clear_pending_capsules(workspace, host="claude")
+    return {
+        "session_hook": "disabled",
+        "session_hook_file": str(settings_file),
+        "removed_session_hook": removed,
+        "cleared_startup_capsules": cleared,
+    }
+
+
+def _install_session_hook(workspace: Path, *, host: str, config_file: Path) -> None:
+    if config_file.exists():
+        try:
+            payload = json.loads(config_file.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise CodexConnectError(f"{config_file} is not valid JSON") from exc
+    else:
+        payload = {}
+    if not isinstance(payload, dict):
+        raise CodexConnectError(f"{config_file} root must be an object")
+    hooks = payload.setdefault("hooks", {})
+    if not isinstance(hooks, dict):
+        raise CodexConnectError(f"{config_file} 'hooks' must be an object")
+    entries = hooks.setdefault("SessionStart", [])
+    if not isinstance(entries, list):
+        raise CodexConnectError("SessionStart hooks must be a list")
+    command = shlex.join(
+        [
+            sys.executable,
+            "-m",
+            "memoryforge.storage.session_bootstrap",
+            "--host",
+            host,
+            "--workspace",
+            str(workspace.resolve(strict=False)),
+        ]
+    )
+    entry = {"hooks": [{"type": "command", "command": command}]}
+    if entry not in entries:
+        entries.append(entry)
+        _write_hooks_file(config_file, payload)
+
+
+def _remove_session_hook(workspace: Path, *, host: str, config_file: Path) -> bool:
+    if not config_file.exists():
+        return False
+    try:
+        payload = json.loads(config_file.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise CodexConnectError(f"{config_file} is not valid JSON") from exc
+    if not isinstance(payload, dict):
+        raise CodexConnectError(f"{config_file} root must be an object")
+    hooks = payload.get("hooks")
+    if hooks is None:
+        return False
+    if not isinstance(hooks, dict):
+        raise CodexConnectError(f"{config_file} 'hooks' must be an object")
+    entries = hooks.get("SessionStart")
+    if entries is None:
+        return False
+    if not isinstance(entries, list):
+        raise CodexConnectError("SessionStart hooks must be a list")
+    kept_entries: list[object] = []
+    removed = False
+    for entry in entries:
+        if not isinstance(entry, dict) or not isinstance(entry.get("hooks"), list):
+            kept_entries.append(entry)
+            continue
+        kept_hooks = []
+        for hook in entry["hooks"]:
+            if _is_workspace_session_hook(hook, workspace.resolve(strict=False), host=host):
+                removed = True
+            else:
+                kept_hooks.append(hook)
+        if kept_hooks:
+            updated = dict(entry)
+            updated["hooks"] = kept_hooks
+            kept_entries.append(updated)
+    if not removed:
+        return False
+    if kept_entries:
+        hooks["SessionStart"] = kept_entries
+    else:
+        del hooks["SessionStart"]
+    _write_hooks_file(config_file, payload)
+    return True
+
+
+def _clear_pending_capsules(workspace: Path, *, host: Literal["claude", "codex"]) -> int:
+    database = workspace.resolve(strict=False) / ".memoryforge" / "index.sqlite"
+    if not database.is_file():
+        return 0
+    with sqlite3.connect(database) as connection:
+        return clear_pending_startup_capsules(connection, host=host)
+
+
+def _is_workspace_session_hook(hook: object, workspace: Path, *, host: str = "codex") -> bool:
     if not isinstance(hook, dict) or not isinstance(hook.get("command"), str):
         return False
     try:
@@ -467,9 +577,67 @@ def _is_workspace_session_hook(hook: object, workspace: Path) -> bool:
         configured_workspace = Path(arguments[workspace_index + 1]).resolve(strict=False)
     except (ValueError, IndexError):
         return False
+    try:
+        configured_host = arguments[arguments.index("--host") + 1]
+    except (ValueError, IndexError):
+        return False
     module_hook = "memoryforge.storage.session_bootstrap" in arguments
     legacy_hook = "memoryforge" in arguments and "capture" in arguments and "startup" in arguments
-    return (module_hook or legacy_hook) and configured_workspace == workspace
+    return (
+        (module_hook or legacy_hook)
+        and configured_workspace == workspace
+        and configured_host == host
+    )
+
+
+def _existing_claude_server(claude: str, name: str) -> tuple[list[str], str] | None:
+    completed = _run_client(
+        claude,
+        ["mcp", "get", name],
+        "claude mcp get failed",
+        check=False,
+    )
+    if completed.returncode != 0:
+        return None
+    command = ""
+    arguments = ""
+    scope = ""
+    for line in completed.stdout.splitlines():
+        key, separator, value = line.strip().partition(":")
+        if not separator:
+            continue
+        if key == "Command":
+            command = value.strip()
+        elif key == "Args":
+            arguments = value.strip()
+        elif key == "Scope":
+            scope = "user" if value.strip().startswith("User") else value.strip().lower()
+    if not command or not scope:
+        raise CodexConnectConflictError("could not parse 'claude mcp get' output")
+    return [command, *shlex.split(arguments)], scope
+
+
+def _run_client(
+    executable: str,
+    arguments: list[str],
+    failure_message: str,
+    *,
+    check: bool = True,
+) -> subprocess.CompletedProcess[str]:
+    try:
+        completed = subprocess.run(
+            [executable, *arguments],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise CodexConnectError(f"{failure_message}: {exc}") from exc
+    if check and completed.returncode != 0:
+        detail = completed.stderr.strip() or completed.stdout.strip()
+        raise CodexConnectError(f"{failure_message}: {detail or 'unknown error'}")
+    return completed
 
 
 def _write_hooks_file(hooks_file: Path, payload: dict[str, object]) -> None:

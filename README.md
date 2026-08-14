@@ -78,7 +78,7 @@ MemoryForge 搜索整个已应用 Workspace：当前打开的已登记项目只�
 
 ### 3. 在当前对话中加载指定旧会话
 
-先创建任意 Codex 或 Claude 对话，然后直接说：
+先创建任意 Codex 或 Claude Code 对话，然后直接说：
 
 ```text
 列出我最近的 MemoryForge 主题
@@ -86,7 +86,8 @@ MemoryForge 搜索整个已应用 Workspace：当前打开的已登记项目只�
 ```
 
 MemoryForge 用 `memoryforge_episodes` 把近期会话按主题聚合，只返回主题、短摘要和原始会话引用；你
-选择后，再由 `memoryforge_load_session` 把有字符上限的 Episode Capsule 加入**当前对话**。需要精确
+选择后，再由 `memoryforge_load_session` 把有字符上限的 Episode Capsule 加入**当前对话**，并展示
+核心结论、实现路径、调用链、相关文件等有用摘要，而不是只回复“已加载”。需要精确
 时间线时仍可说“列出最近会话”。不要求当前目录已登记，也不需要终端命令或重启客户端。内容会标记为
 未验证历史，重要结论仍需通过当前代码、测试或正式 Wiki 证据确认。
 
@@ -97,6 +98,10 @@ MemoryForge 用 `memoryforge_episodes` 把近期会话按主题聚合，只返�
 若确实需要“下一次新任务自动加载”，可显式执行 `memoryforge connect codex --startup-hook`，再使用
 `memoryforge continue`。它不是默认行为。完整说明见
 [多客户端接入指南](docs/MULTI_CLIENT_SETUP.md#4-session-capsule把旧会话带进下一次新对话)。
+
+Claude Code CLI 使用相同协议，一次执行
+`memoryforge connect claude --workspace /absolute/path/to/my-wiki` 即可全局接入；需要读取本地会话时再
+显式增加 `--allow-local-llm`。默认同样不会在新对话自动注入旧主题。
 
 ### 4. 按需展开，控制 Token
 
