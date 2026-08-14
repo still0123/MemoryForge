@@ -595,6 +595,26 @@ def consume_startup_capsule(
     )
 
 
+def clear_pending_startup_capsules(
+    connection: sqlite3.Connection,
+    *,
+    host: Host,
+    cleared_at: datetime | None = None,
+) -> int:
+    """Discard pending automatic startup context for one Host."""
+    _ensure_schema(connection)
+    cursor = connection.execute(
+        """
+        UPDATE startup_capsules
+        SET consumed_at = ?
+        WHERE host = ? AND consumed_at IS NULL
+        """,
+        ((cleared_at or datetime.now(UTC)).isoformat(), host),
+    )
+    connection.commit()
+    return cursor.rowcount
+
+
 def main() -> None:
     """Lightweight SessionStart entry point; avoids loading the full CLI."""
     parser = argparse.ArgumentParser()

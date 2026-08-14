@@ -2022,6 +2022,13 @@ def connect(
             help="Allow local_only content in the registered read-only connection.",
         ),
     ] = False,
+    startup_hook: Annotated[
+        bool,
+        typer.Option(
+            "--startup-hook",
+            help="Opt in to automatic one-shot SessionStart Capsule injection.",
+        ),
+    ] = False,
     workspace: WorkspaceOption = Path("."),
 ) -> None:
     """Register the read-only MCP server with an AI Host (one-shot)."""
@@ -2029,9 +2036,18 @@ def connect(
         if host != "codex":
             raise ValueError(f"unsupported AI Host '{host}'; only 'codex' is supported")
         result = (
-            connect_codex_router(workspace, allow_local=allow_local_llm)
+            connect_codex_router(
+                workspace,
+                allow_local=allow_local_llm,
+                startup_hook=startup_hook,
+            )
             if project is None
-            else connect_codex(workspace, project, allow_local=allow_local_llm)
+            else connect_codex(
+                workspace,
+                project,
+                allow_local=allow_local_llm,
+                startup_hook=startup_hook,
+            )
         )
     except (
         MemoryForgeError,
@@ -2112,7 +2128,7 @@ def _workspace_from_session_hook(host: str) -> Path:
         entries = payload["hooks"]["SessionStart"]
     except (FileNotFoundError, json.JSONDecodeError, KeyError, TypeError):
         raise ValueError(
-            "no SessionStart connection found; run memoryforge connect first"
+            "no SessionStart connection found; run memoryforge connect codex --startup-hook"
         ) from None
     for entry in reversed(entries):
         for hook in reversed(entry.get("hooks", [])):
@@ -2121,15 +2137,16 @@ def _workspace_from_session_hook(host: str) -> Path:
                 continue
             arguments = shlex.split(command)
             if not any(
-                part in {"memoryforge.storage.session_bootstrap", "startup"}
-                for part in arguments
+                part in {"memoryforge.storage.session_bootstrap", "startup"} for part in arguments
             ):
                 continue
             try:
                 return Path(arguments[arguments.index("--workspace") + 1])
             except (ValueError, IndexError):
                 continue
-    raise ValueError("no MemoryForge SessionStart connection found; run memoryforge connect first")
+    raise ValueError(
+        "no MemoryForge SessionStart connection found; run memoryforge connect codex --startup-hook"
+    )
 
 
 @app.command()

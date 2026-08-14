@@ -65,9 +65,9 @@ memoryforge connect codex --workspace /absolute/path/to/my-wiki
 ```
 
 重启 Codex（或 ChatGPT Desktop / IDE 扩展）后，用 `/mcp` 确认 `memoryforge` 已出现。此推荐模式
-只注册一个本地只读 MCP Server，并安装一个小型 `memoryforge-knowledge` Codex Skill 和一次性
-SessionStart Hook；**不会为每个仓库重复注册，也不会改写项目的 `AGENTS.md`**。Skill 只描述何时
-调用 MCP，Hook 只在你主动准备 Session Capsule 后加载内容。
+只注册一个本地只读 MCP Server，并安装一个小型 `memoryforge-knowledge` Codex Skill；**不会为每个
+仓库重复注册，不会改写项目的 `AGENTS.md`，也不会在新对话里自动注入旧会话**。Skill 只描述何时
+按需调用 MCP。
 
 之后直接在任何新对话中正常提问即可。Codex 会在问题涉及项目历史、既有决策或 Wiki 时，调用
 `memoryforge_context`；不必每次先说“请查 MemoryForge”。若某次回答必须以知识库为准，可以明确说
@@ -94,7 +94,8 @@ MemoryForge 用 `memoryforge_episodes` 把近期会话按主题聚合，只返�
 相关结论，而不是再次注入整段 Capsule。若返回 `no_session_evidence`，才回退到项目/跨仓库 Wiki
 检索。这样既保留“我指定这几段历史”的边界，也避免长对话持续占用 Token。
 
-`memoryforge continue` 和 SessionStart Hook 仍作为自动续接下一次任务的可选方式。完整说明见
+若确实需要“下一次新任务自动加载”，可显式执行 `memoryforge connect codex --startup-hook`，再使用
+`memoryforge continue`。它不是默认行为。完整说明见
 [多客户端接入指南](docs/MULTI_CLIENT_SETUP.md#4-session-capsule把旧会话带进下一次新对话)。
 
 ### 4. 按需展开，控制 Token

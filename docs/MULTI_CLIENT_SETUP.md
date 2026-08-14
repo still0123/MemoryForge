@@ -141,8 +141,17 @@ Episode 不复制、改写或持久化原始会话，只返回主题、短摘要
 
 #### 一次性配置 SessionStart Hook
 
-`memoryforge connect codex --workspace ...` 已自动安全合并 Codex Hook，无需额外命令。
-Claude Code 或需要修复配置时，生成可合并片段：
+默认连接不会安装 SessionStart Hook，也不会让新对话自动继承旧会话。Codex 用户需要显式选择：
+
+```bash
+memoryforge connect codex --startup-hook \
+  --workspace /absolute/path/to/my-wiki
+```
+
+不带 `--startup-hook` 再次运行连接命令，会移除该 Workspace 的旧版 MemoryForge SessionStart Hook，
+并作废尚未消费的 Codex Capsule；其他产品的 Hook 和 Claude Capsule 不受影响。
+
+Claude Code 或需要手工配置时，生成可合并片段：
 
 ```bash
 # Claude Code

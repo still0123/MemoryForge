@@ -17,6 +17,7 @@ import json
 import os
 import shlex
 import shutil
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -25,6 +26,7 @@ from typing import Literal
 
 from memoryforge.core.errors import MemoryForgeError
 from memoryforge.query.agent_access import resolve_repository_scope, server_name
+from memoryforge.storage.session_bootstrap import clear_pending_startup_capsules
 
 AGENTS_MCP_BEGIN = "<!-- BEGIN MEMORYFORGE MCP -->"
 AGENTS_MCP_END = "<!-- END MEMORYFORGE MCP -->"
@@ -204,6 +206,7 @@ def connect_codex(
     project_root: Path,
     *,
     allow_local: bool = False,
+    startup_hook: bool = False,
     codex_executable: str = "codex",
 ) -> dict[str, object]:
     """Register the MCP server with Codex and install the AGENTS block.
@@ -249,7 +252,7 @@ def connect_codex(
         server_name=name,
         project_name=scope.name,
     )
-    hook_file = install_codex_session_hook(workspace)
+    hook_state = configure_codex_session_hook(workspace, enabled=startup_hook)
     return {
         "status": "connected" if action == "added" else "unchanged",
         "server": name,
@@ -257,7 +260,7 @@ def connect_codex(
         "repository_id": scope.repository_id,
         "command": command,
         "agents_file": str(agents_path),
-        "session_hook_file": str(hook_file),
+        **hook_state,
         "restart_hint": (
             "Restart Codex (or the ChatGPT desktop app / IDE extension) and check with /mcp."
         ),
@@ -268,6 +271,7 @@ def connect_codex_router(
     workspace: Path,
     *,
     allow_local: bool = False,
+    startup_hook: bool = False,
     codex_executable: str = "codex",
 ) -> dict[str, object]:
     """Register one global server that routes through the current MCP Root.
@@ -304,14 +308,14 @@ def connect_codex_router(
     else:
         action = "unchanged"
     skill_file = install_codex_skill()
-    hook_file = install_codex_session_hook(workspace)
+    hook_state = configure_codex_session_hook(workspace, enabled=startup_hook)
     return {
         "status": "connected" if action == "added" else "unchanged",
         "server": name,
         "routing": "mcp_roots",
         "command": command,
         "skill_file": str(skill_file),
-        "session_hook_file": str(hook_file),
+        **hook_state,
         "restart_hint": (
             "Restart Codex (or the ChatGPT desktop app / IDE extension) and check with /mcp."
         ),
@@ -374,11 +378,106 @@ def install_codex_session_hook(workspace: Path, codex_home: Path | None = None) 
     if entry in session_start:
         return hooks_file
     session_start.append(entry)
-    codex_home.mkdir(parents=True, exist_ok=True)
+    _write_hooks_file(hooks_file, payload)
+    return hooks_file
+
+
+def remove_codex_session_hook(workspace: Path, codex_home: Path | None = None) -> tuple[Path, bool]:
+    """Remove only this Workspace's MemoryForge SessionStart hook."""
+    if codex_home is None:
+        configured_home = os.environ.get("CODEX_HOME")
+        codex_home = (
+            Path(configured_home).expanduser() if configured_home else Path.home() / ".codex"
+        )
+    hooks_file = codex_home / "hooks.json"
+    if not hooks_file.exists():
+        return hooks_file, False
+    try:
+        payload = json.loads(hooks_file.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise CodexConnectError("Codex hooks.json is not valid JSON") from exc
+    if not isinstance(payload, dict):
+        raise CodexConnectError("Codex hooks.json root must be an object")
+    hooks = payload.get("hooks")
+    if hooks is None:
+        return hooks_file, False
+    if not isinstance(hooks, dict):
+        raise CodexConnectError("Codex hooks.json 'hooks' must be an object")
+    session_start = hooks.get("SessionStart")
+    if session_start is None:
+        return hooks_file, False
+    if not isinstance(session_start, list):
+        raise CodexConnectError("Codex SessionStart hooks must be a list")
+    expected_workspace = workspace.resolve(strict=False)
+    kept_entries: list[object] = []
+    removed = False
+    for entry in session_start:
+        if not isinstance(entry, dict) or not isinstance(entry.get("hooks"), list):
+            kept_entries.append(entry)
+            continue
+        kept_hooks = []
+        for hook in entry["hooks"]:
+            if _is_workspace_session_hook(hook, expected_workspace):
+                removed = True
+            else:
+                kept_hooks.append(hook)
+        if kept_hooks:
+            kept_entry = dict(entry)
+            kept_entry["hooks"] = kept_hooks
+            kept_entries.append(kept_entry)
+    if not removed:
+        return hooks_file, False
+    if kept_entries:
+        hooks["SessionStart"] = kept_entries
+    else:
+        del hooks["SessionStart"]
+    _write_hooks_file(hooks_file, payload)
+    return hooks_file, True
+
+
+def configure_codex_session_hook(workspace: Path, *, enabled: bool) -> dict[str, object]:
+    """Keep startup injection opt-in and discard stale queued context when disabled."""
+    if enabled:
+        hook_file = install_codex_session_hook(workspace)
+        return {
+            "session_hook": "enabled",
+            "session_hook_file": str(hook_file),
+            "cleared_startup_capsules": 0,
+        }
+    hook_file, removed = remove_codex_session_hook(workspace)
+    cleared = 0
+    database = workspace.resolve(strict=False) / ".memoryforge" / "index.sqlite"
+    if database.is_file():
+        with sqlite3.connect(database) as connection:
+            cleared = clear_pending_startup_capsules(connection, host="codex")
+    return {
+        "session_hook": "disabled",
+        "session_hook_file": str(hook_file),
+        "removed_session_hook": removed,
+        "cleared_startup_capsules": cleared,
+    }
+
+
+def _is_workspace_session_hook(hook: object, workspace: Path) -> bool:
+    if not isinstance(hook, dict) or not isinstance(hook.get("command"), str):
+        return False
+    try:
+        arguments = shlex.split(hook["command"])
+        workspace_index = arguments.index("--workspace")
+        configured_workspace = Path(arguments[workspace_index + 1]).resolve(strict=False)
+    except (ValueError, IndexError):
+        return False
+    module_hook = "memoryforge.storage.session_bootstrap" in arguments
+    legacy_hook = "memoryforge" in arguments and "capture" in arguments and "startup" in arguments
+    return (module_hook or legacy_hook) and configured_workspace == workspace
+
+
+def _write_hooks_file(hooks_file: Path, payload: dict[str, object]) -> None:
+    hooks_file.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(
         mode="w",
         encoding="utf-8",
-        dir=codex_home,
+        dir=hooks_file.parent,
         prefix=".hooks-",
         delete=False,
     ) as temporary:
@@ -386,7 +485,6 @@ def install_codex_session_hook(workspace: Path, codex_home: Path | None = None) 
         temporary.write("\n")
         temporary_path = Path(temporary.name)
     os.replace(temporary_path, hooks_file)
-    return hooks_file
 
 
 def _existing_command(codex: str, name: str) -> list[str] | None:

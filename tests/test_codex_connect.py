@@ -31,6 +31,7 @@ from memoryforge.interface.codex_connect import (
     connect_codex,
     install_agents_block,
     install_codex_session_hook,
+    remove_codex_session_hook,
 )
 from memoryforge.query.agent_access import server_name
 from tests.test_agent_access import CACHE_POLICY, _bound_workspace
@@ -180,8 +181,8 @@ def test_connect_is_idempotent(
     agents = (checkout / "AGENTS.md").read_text(encoding="utf-8")
     assert agents.count(AGENTS_MCP_BEGIN) == 1
     assert agents.count(AGENTS_MCP_END) == 1
-    hooks = json.loads((Path.cwd() / ".codex/hooks.json").read_text(encoding="utf-8"))
-    assert len(hooks["hooks"]["SessionStart"]) == 1
+    assert second["session_hook"] == "disabled"
+    assert not (Path.cwd() / ".codex/hooks.json").exists()
 
 
 def test_session_hook_preserves_existing_hooks(tmp_path: Path) -> None:
@@ -197,9 +198,33 @@ def test_session_hook_preserves_existing_hooks(tmp_path: Path) -> None:
 
     payload = json.loads(hooks_file.read_text(encoding="utf-8"))
     assert payload["hooks"]["Stop"][0]["hooks"][0]["command"] == "x"
-    assert "memoryforge.storage.session_bootstrap --host codex" in payload["hooks"][
-        "SessionStart"
-    ][0]["hooks"][0]["command"]
+    assert (
+        "memoryforge.storage.session_bootstrap --host codex"
+        in payload["hooks"]["SessionStart"][0]["hooks"][0]["command"]
+    )
+
+
+def test_session_hook_removal_preserves_other_hooks(tmp_path: Path) -> None:
+    codex_home = tmp_path / ".codex"
+    codex_home.mkdir()
+    workspace = tmp_path / "wiki"
+    other_workspace = tmp_path / "other-wiki"
+    install_codex_session_hook(workspace, codex_home)
+    install_codex_session_hook(other_workspace, codex_home)
+    hooks_file = codex_home / "hooks.json"
+    payload = json.loads(hooks_file.read_text(encoding="utf-8"))
+    payload["hooks"]["SessionStart"][0]["hooks"].append(
+        {"type": "command", "command": "flux-island session-start"}
+    )
+    hooks_file.write_text(json.dumps(payload), encoding="utf-8")
+
+    _path, removed = remove_codex_session_hook(workspace, codex_home)
+
+    assert removed is True
+    updated = hooks_file.read_text(encoding="utf-8")
+    assert "flux-island session-start" in updated
+    assert str(other_workspace) in updated
+    assert str(workspace) not in updated.replace(str(other_workspace), "")
 
 
 def test_connect_without_codex_cli_returns_copyable_command(

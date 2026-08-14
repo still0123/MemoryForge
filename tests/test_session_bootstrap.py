@@ -19,6 +19,7 @@ from memoryforge.interface.mcp_server import (
     _session_memory_payload,
 )
 from memoryforge.storage.session_bootstrap import (
+    clear_pending_startup_capsules,
     consume_startup_capsule,
     list_conversation_episodes,
     list_conversation_sessions,
@@ -358,6 +359,28 @@ def test_new_queue_replaces_pending_capsule(tmp_path: Path) -> None:
     assert loaded is not None
     assert loaded.capsule_id == second.capsule_id
     assert loaded.capsule_id != first.capsule_id
+
+
+def test_clear_pending_capsules_is_scoped_to_host(tmp_path: Path) -> None:
+    connection = _database()
+    queue_startup_capsule(
+        connection,
+        source_ids=("1" * 64,),
+        host="codex",
+        project_root=tmp_path,
+    )
+    claude = queue_startup_capsule(
+        connection,
+        source_ids=("2" * 64,),
+        host="claude",
+        project_root=tmp_path,
+    )
+
+    cleared = clear_pending_startup_capsules(connection, host="codex")
+
+    assert cleared == 1
+    assert consume_startup_capsule(connection, host="codex", project_root=tmp_path) is None
+    assert consume_startup_capsule(connection, host="claude", project_root=tmp_path) == claude
 
 
 def test_hook_config_prints_copyable_codex_session_start_command(tmp_path: Path) -> None:
