@@ -158,11 +158,88 @@ def test_local_portal_index_shell_is_small_and_self_contained(tmp_path: Path) ->
     assert "body.innerHTML=data.html" in script
     assert 'setAttribute("aria-current","page")' in script
     assert 'class:"hero"' in script
-    assert "打开完整正文" in script
+    assert "查看 Wiki 全文" in script
+    assert "打开完整正文" not in script
+    assert "查看来源原文" in script
+    assert "继续加载" in script
+    assert "/api/source-text" in script
     assert 'heading("来源管理"' in script
     assert 'section("可阅读知识"' in script
     assert 'section("继续探索"' in script
     assert "Git 仓库链接（HTTPS）" in script
+
+
+def test_local_portal_source_text_reads_only_applied_version(tmp_path: Path) -> None:
+    workspace = _workspace_with_pages(tmp_path, count=1)
+    source = tmp_path / "source/fixture.md"
+    applied_text = source.read_text(encoding="utf-8")
+    source.write_text("# Fixture\n\nPending replacement must stay hidden.\n", encoding="utf-8")
+    updated = import_local_file(workspace, source, source_root=source.parent)
+    with sqlite3.connect(workspace / ".memoryforge/index.sqlite") as connection:
+        current_version = int(
+            connection.execute(
+                """
+                SELECT versions.id
+                FROM source_versions AS versions
+                JOIN sources ON sources.id = versions.source_id
+                WHERE sources.source_id = ? AND versions.is_current = 1
+                """,
+                (updated.source_id,),
+            ).fetchone()[0]
+        )
+
+    portal = LocalPortalApp(workspace)
+    page = json.loads(portal.dispatch("/api/page?path=wiki%2Fpages%2Fpage-00.md")[2])
+    applied = page["sources"][0]
+
+    assert applied["source_id"] == updated.source_id
+    assert applied["source_version"] != current_version
+    status, _, body = portal.dispatch(
+        f"/api/source-text?source_id={updated.source_id}&source_version={current_version}"
+    )
+    assert status == 404
+    assert "Pending replacement" not in body.decode()
+
+    status, _, body = portal.dispatch(
+        f"/api/source-text?source_id={applied['source_id']}"
+        f"&source_version={applied['source_version']}"
+    )
+    assert status == 200
+    assert json.loads(body)["text"] == applied_text
+    assert portal.dispatch("/api/source-text?path=%2Ftmp%2Ffixture.md")[0] == 400
+
+
+def test_local_portal_source_text_paginates_complete_immutable_text(tmp_path: Path) -> None:
+    workspace = _workspace_with_pages(tmp_path, count=1)
+    portal = LocalPortalApp(workspace)
+    source = json.loads(
+        portal.dispatch("/api/page?path=wiki%2Fpages%2Fpage-00.md")[2]
+    )["sources"][0]
+    text = (tmp_path / "source/fixture.md").read_text(encoding="utf-8")
+    endpoint = (
+        f"/api/source-text?source_id={source['source_id']}"
+        f"&source_version={source['source_version']}"
+    )
+
+    first = json.loads(portal.dispatch(endpoint + "&offset=0&limit=10")[2])
+    rest = json.loads(portal.dispatch(endpoint + "&offset=10&limit=100")[2])
+    capped = json.loads(portal.dispatch(endpoint + "&limit=999999")[2])
+
+    assert first == {
+        "workspace_commit": first["workspace_commit"],
+        "source_id": source["source_id"],
+        "source_version": source["source_version"],
+        "text": text[:10],
+        "offset": 0,
+        "limit": 10,
+        "total": len(text),
+        "has_more": True,
+    }
+    assert rest["text"] == text[10:]
+    assert rest["offset"] == 10
+    assert rest["total"] == len(text)
+    assert rest["has_more"] is False
+    assert capped["limit"] == 20_000
 
 
 def test_local_portal_classifies_projects_sources_templates_and_relations(

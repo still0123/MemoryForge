@@ -56,6 +56,13 @@ class SourceEntry:
             "page_count": len(self.page_paths),
         }
 
+    def applied_public(self) -> dict[str, Any]:
+        return {
+            **self.public(),
+            "source_id": self.source_id,
+            "source_version": self.version,
+        }
+
 
 @dataclass(frozen=True)
 class PageEntry:
@@ -131,6 +138,7 @@ class PortalCatalog:
         self.commit = commit
         self.pages: dict[str, PageEntry] = {}
         self.sources: dict[str, SourceEntry] = {}
+        self.applied_sources: dict[str, SourceEntry] = {}
         self.repositories: dict[str, RepositoryEntry] = {}
         self.direct: dict[str, tuple[Relation, ...]] = {}
         self.mentions: dict[str, tuple[Relation, ...]] = {}
@@ -244,6 +252,11 @@ class PortalCatalog:
             "refreshable": source.repository_id is not None or "feishu" in source.tags,
         }
 
+    def require_applied_source_version(self, source_id: str, source_version: int) -> None:
+        source = self.applied_sources.get(source_id)
+        if source is None or source.version != source_version:
+            raise FileNotFoundError("source version is not applied")
+
     def list_pages(
         self,
         query: str,
@@ -327,9 +340,9 @@ class PortalCatalog:
             "breadcrumbs": self._breadcrumbs(page),
             "structure": [{"level": level, "title": title} for level, title in page.headings],
             "sources": [
-                self.sources[source_id].public()
+                self.applied_sources[source_id].applied_public()
                 for source_id in page.source_ids
-                if source_id in self.sources
+                if source_id in self.applied_sources
             ],
             "related": {
                 "direct": self._public_relations(self.direct.get(page_path, ())),
@@ -370,6 +383,20 @@ class PortalCatalog:
                 LEFT JOIN git_source_revisions AS revisions
                   ON revisions.source_version_id = versions.id
                 WHERE versions.is_current = 1
+                ORDER BY sources.source_id
+                """
+            ).fetchall()
+            applied_source_rows = connection.execute(
+                """
+                SELECT
+                    sources.source_id, sources.source_path, versions.id AS source_version,
+                    versions.title, versions.observed_at, versions.tags_json,
+                    revisions.repository_id, revisions.relative_path
+                FROM applied_source_versions AS applied
+                JOIN sources ON sources.source_id = applied.source_id
+                JOIN source_versions AS versions ON versions.id = applied.source_version_id
+                LEFT JOIN git_source_revisions AS revisions
+                  ON revisions.source_version_id = versions.id
                 ORDER BY sources.source_id
                 """
             ).fetchall()
@@ -436,6 +463,27 @@ class PortalCatalog:
                 version=int(row["source_version"]),
                 applied=int(row["applied_version"] or 0) == int(row["source_version"]),
                 repository_id=source_repository_id,
+                relative_path=(
+                    str(row["relative_path"]) if row["relative_path"] is not None else None
+                ),
+                tags=tags,
+                page_paths=tuple(source_page_paths[source_id]),
+            )
+        for row in applied_source_rows:
+            source_id = str(row["source_id"])
+            tags = _tags(str(row["tags_json"]))
+            source_path = str(row["source_path"])
+            repository_id = (
+                str(row["repository_id"]) if row["repository_id"] is not None else None
+            )
+            self.applied_sources[source_id] = SourceEntry(
+                source_id=source_id,
+                title=str(row["title"]),
+                kind=_source_kind(tags, source_path, repository_id),
+                updated=str(row["observed_at"]),
+                version=int(row["source_version"]),
+                applied=True,
+                repository_id=repository_id,
                 relative_path=(
                     str(row["relative_path"]) if row["relative_path"] is not None else None
                 ),

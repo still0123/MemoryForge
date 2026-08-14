@@ -35,11 +35,13 @@ from memoryforge.portal.showcase import _display_wiki_text, _markdown_document, 
 from memoryforge.query.provider import OpenAICompatibleProvider
 from memoryforge.query.query import answer_question
 from memoryforge.storage.errors import WorkspaceIntegrityError, WorkspaceSecurityError
-from memoryforge.storage.workspace import Workspace
+from memoryforge.storage.workspace import Workspace, read_source_version_text
 
 _HOST = "127.0.0.1"
 _DEFAULT_LIMIT = 50
 _MAX_LIMIT = 100
+_DEFAULT_SOURCE_TEXT_LIMIT = 4_000
+_MAX_SOURCE_TEXT_LIMIT = 20_000
 _JSON = "application/json"
 _HTML = "text/html; charset=utf-8"
 _CSS = "text/css; charset=utf-8"
@@ -408,6 +410,36 @@ class LocalPortalApp:
             "html": _markdown_html(rendered_body),
         }
 
+    def source_text(
+        self,
+        source_id: str,
+        source_version: int,
+        *,
+        offset: int,
+        limit: int,
+    ) -> dict[str, Any]:
+        _validate_pagination(offset, limit)
+        limit = min(limit, _MAX_SOURCE_TEXT_LIMIT)
+        catalog = self._catalog()
+        catalog.require_applied_source_version(source_id, source_version)
+        text = read_source_version_text(
+            self.root,
+            source_id=source_id,
+            source_version=source_version,
+        )
+        total = len(text)
+        end = min(total, offset + limit)
+        return {
+            "workspace_commit": catalog.commit,
+            "source_id": source_id,
+            "source_version": source_version,
+            "text": text[offset:end],
+            "offset": offset,
+            "limit": limit,
+            "total": total,
+            "has_more": end < total,
+        }
+
     def dispatch(self, request_path: str) -> tuple[int, str, bytes]:
         parsed = urlparse(request_path)
         try:
@@ -447,6 +479,29 @@ class LocalPortalApp:
                 if not refs:
                     raise ValueError("source ref is required")
                 return _json_response(self._catalog().source_details(refs[0]))
+            if parsed.path == "/api/source-text":
+                params = parse_qs(parsed.query)
+                source_ids = params.get("source_id")
+                source_versions = params.get("source_version")
+                if not source_ids or not source_versions:
+                    raise ValueError("source id and version are required")
+                try:
+                    source_version = int(source_versions[0])
+                except ValueError as exc:
+                    raise ValueError("invalid source version") from exc
+                offset, limit = _pagination(
+                    params,
+                    default_limit=_DEFAULT_SOURCE_TEXT_LIMIT,
+                    max_limit=_MAX_SOURCE_TEXT_LIMIT,
+                )
+                return _json_response(
+                    self.source_text(
+                        source_ids[0],
+                        source_version,
+                        offset=offset,
+                        limit=limit,
+                    )
+                )
             if parsed.path == "/api/pages":
                 params = parse_qs(parsed.query)
                 offset, limit = _pagination(params)
@@ -891,14 +946,19 @@ def _json_response(payload: dict[str, Any], *, status: int = 200) -> tuple[int, 
     return status, _JSON, body
 
 
-def _pagination(params: dict[str, list[str]]) -> tuple[int, int]:
+def _pagination(
+    params: dict[str, list[str]],
+    *,
+    default_limit: int = _DEFAULT_LIMIT,
+    max_limit: int = _MAX_LIMIT,
+) -> tuple[int, int]:
     try:
         offset = int(params.get("offset", ["0"])[0])
-        limit = int(params.get("limit", [str(_DEFAULT_LIMIT)])[0])
+        limit = int(params.get("limit", [str(default_limit)])[0])
     except ValueError as exc:
         raise ValueError("invalid pagination") from exc
     _validate_pagination(offset, limit)
-    return offset, min(limit, _MAX_LIMIT)
+    return offset, min(limit, max_limit)
 
 
 def _validate_pagination(offset: int, limit: int) -> None:

@@ -598,7 +598,7 @@ function pageCard(page){
     element("p",{text:page.summary||"暂无摘要"}),
     element("div",{class:"card-footer"},[
       element("small",{class:"meta",text:pageMeta(page)}),
-      element("span",{class:"open-page",text:"打开完整正文 →"})
+      element("span",{class:"open-page",text:"查看 Wiki 全文 →"})
     ])
   ])
 }
@@ -1072,12 +1072,31 @@ function sourceDetails(items){
   if(!items.length)return null;
   return element("details",{},[
     element("summary",{text:`来源详情 · ${items.length}`}),
-    element("div",{class:"detail-body"},items.map(item=>
-      element("div",{class:"source-row"},[
+    element("div",{class:"detail-body"},items.map(sourceOriginal))
+  ])
+}
+function sourceOriginal(item){
+  const text=element("pre",{class:"diff",hidden:""});
+  const action=element("button",{class:"button",type:"button",text:"查看来源原文"});
+  let offset=0;
+  action.addEventListener("click",async()=>{
+    action.disabled=true;
+    try{
+      const data=await api(`/api/source-text?source_id=${encodeURIComponent(item.source_id)}&source_version=${item.source_version}&offset=${offset}&limit=4000`);
+      text.hidden=false;text.append(document.createTextNode(data.text));
+      offset=data.offset+data.limit;
+      if(data.has_more){action.textContent="继续加载";action.disabled=false}else action.remove()
+    }catch(error){action.textContent=error.message}
+  });
+  return element("div",{},[
+    element("div",{class:"source-row"},[
+      element("div",{},[
         element("span",{text:item.name}),
-        element("small",{class:"meta",text:`${item.status} · 版本 ${item.current_version}`})
-      ])
-    ))
+        element("div",{class:"meta",text:`${item.status} · 版本 ${item.source_version}`})
+      ]),
+      action
+    ]),
+    text
   ])
 }
 async function renderPage(path){
