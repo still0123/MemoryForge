@@ -163,6 +163,10 @@ def test_local_portal_index_shell_is_small_and_self_contained(tmp_path: Path) ->
     assert "查看来源原文" in script
     assert "继续加载" in script
     assert "/api/source-text" in script
+    assert "view=published" in script
+    assert 'view:"evidence"' in script
+    assert "搜索源码证据" in script
+    assert "moduleTree" in script
     assert 'heading("来源管理"' in script
     assert 'section("可阅读知识"' in script
     assert 'section("继续探索"' in script
@@ -300,8 +304,25 @@ def test_local_portal_classifies_projects_sources_templates_and_relations(
     alpha_project = json.loads(portal.dispatch(f"/api/project?id={repositories['alpha']}")[2])
     assert alpha_project["overview"] == []
     assert [item["path"] for item in alpha_project["modules"]] == [paths["module"]]
+    assert [item["path"] for item in alpha_project["module_tree"]] == [paths["module"]]
     assert alpha_project["file_count"] == 1
     assert len(alpha_project["files"]) == 1
+
+    published = json.loads(
+        portal.dispatch(
+            f"/api/pages?view=published&kind=code&project={repositories['alpha']}"
+        )[2]
+    )
+    assert published["total"] == 1
+    assert published["items"][0]["template"] == "code_module"
+
+    evidence = json.loads(
+        portal.dispatch(
+            f"/api/pages?view=evidence&kind=code&project={repositories['alpha']}"
+        )[2]
+    )
+    assert evidence["total"] == 1
+    assert evidence["items"][0]["template"] == "code_file"
 
     expected_templates = {
         paths["project"]: "project",

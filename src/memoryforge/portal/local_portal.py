@@ -377,6 +377,7 @@ class LocalPortalApp:
         kind: str = "",
         project: str = "",
         parent: str = "",
+        view: str = "all",
         offset: int = 0,
         limit: int = _DEFAULT_LIMIT,
     ) -> dict[str, Any]:
@@ -386,6 +387,7 @@ class LocalPortalApp:
             kind=kind,
             project=project,
             parent=parent,
+            view=view,
             offset=offset,
             limit=min(limit, _MAX_LIMIT),
         )
@@ -511,6 +513,7 @@ class LocalPortalApp:
                         kind=params.get("kind", [""])[0],
                         project=params.get("project", [""])[0],
                         parent=params.get("parent", [""])[0],
+                        view=params.get("view", ["all"])[0],
                         offset=offset,
                         limit=limit,
                     )

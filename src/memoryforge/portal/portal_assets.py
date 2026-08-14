@@ -101,6 +101,11 @@ overflow:hidden;padding:20px 20px 18px}.metric-card::before{content:"";position:
 width:3px;background:var(--accent)}.metric-label{display:block;color:var(--muted);font-size:11px;font-weight:650}
 .metric{display:block;margin-top:5px;font-size:28px;font-weight:760;letter-spacing:-.04em}
 .page-card{display:flex!important;min-height:150px;flex-direction:column}.page-card p{flex:1;margin:8px 0 16px}
+.module-tree{display:grid;gap:8px}.module-node{margin:0}.module-node summary{color:var(--text);background:var(--soft)}
+.module-children{display:grid;gap:6px;padding:8px 12px 12px}.module-link{display:block;padding:10px 12px;
+color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:8px;text-decoration:none}
+.module-link:hover{border-color:var(--accent);background:var(--accent-soft)}.module-link strong{display:block}
+.module-link small{display:block;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .card-top,.card-footer{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .card-top h3{margin:0}.kind-chip{flex:none;padding:3px 8px;color:var(--accent);background:var(--accent-soft);
 border-radius:999px;font-size:10px;font-weight:750}.open-page{flex:none;color:var(--accent);font-size:12px;
@@ -268,7 +273,7 @@ function recentGrid(){
 function projectCard(project){
   return element("a",{class:"card",href:"#project="+encodeURIComponent(project.repository_id)},[
     element("h3",{text:project.name}),
-    element("p",{text:`${project.page_count} 页 · ${project.module_count} 个模块`}),
+    element("p",{text:`${project.knowledge_page_count??project.page_count} 个知识页 · ${project.evidence_file_count??0} 个源码证据`}),
     element("small",{class:"meta",text:
       `${project.languages.join(" / ")||"语言未识别"} · Commit ${project.commit||"未同步"}`})
   ])
@@ -329,7 +334,7 @@ async function renderSources(kind,offset=0){
   const limit=50;
   const [sources,pages]=await Promise.all([
     api(`/api/sources?kind=${encodeURIComponent(kind)}&offset=${offset}&limit=${limit}`),
-    api(`/api/pages?kind=${encodeURIComponent(kind)}&offset=${offset}&limit=${limit}`)
+    api(`/api/pages?view=published&kind=${encodeURIComponent(kind)}&offset=${offset}&limit=${limit}`)
   ]);
   const sourceList=sources.items.length?element("div",{class:"card"},sources.items.map(item=>
     element("div",{class:"source-row"},[
@@ -430,7 +435,7 @@ async function renderSearch(value,offset=0){
   requestController=new AbortController();
   const limit=50;
   try{
-    const data=await api(`/api/pages?q=${encodeURIComponent(value)}&offset=${offset}&limit=${limit}`,
+    const data=await api(`/api/pages?view=published&q=${encodeURIComponent(value)}&offset=${offset}&limit=${limit}`,
       requestController.signal);
     show([
       heading("全局搜索",`“${value}”`,`${data.total} 个匹配页面`),
@@ -642,7 +647,7 @@ function recentGrid(){
 function projectCard(project){
   return element("a",{class:"card project-card",href:"#project="+encodeURIComponent(project.repository_id)},[
     element("h3",{text:project.name}),
-    element("p",{text:`${project.page_count} 页 · ${project.module_count} 个模块`}),
+    element("p",{text:`${project.knowledge_page_count??project.page_count} 个知识页 · ${project.evidence_file_count??0} 个源码证据`}),
     element("small",{class:"meta",text:
       `${project.languages.join(" / ")||"语言未识别"} · Commit ${project.commit||"未同步"}`})
   ])
@@ -732,17 +737,59 @@ async function renderProject(id){
     ])
   ];
   if(data.overview.length)nodes.push(section("先读这里","项目是什么、入口在哪里、模块如何协作",pageGrid(data.overview,"还没有项目概览。")));
-  nodes.push(section("顶层模块","先从这里理解项目分层；进入模块页再继续下钻。",pageGrid(data.modules,"还没有模块页。")));
+  nodes.push(section("模块树","按项目层级浏览；源码文件只在需要时打开。",
+    data.module_tree?.length?moduleTree(data.module_tree):pageGrid(data.modules,"还没有模块页。")));
   nodes.push(section("相关资料","会话、飞书资料和笔记如何关联到这个项目",pageGrid(data.related,"还没有相关资料。")));
   if(data.file_count){
-    nodes.push(section("代码文件","建议先通过顶部搜索按文件名或符号定位。",element("details",{},[
-      element("summary",{text:`查看 ${Math.min(data.files.length,data.file_count)} 个代码文件示例（共 ${data.file_count} 个）`} ),
-      element("div",{class:"detail-body"},pageGrid(data.files,"还没有代码文件页。"))
+    nodes.push(section("代码文件","源码证据按需打开，不混入项目知识页。",element("div",{},[
+      element("div",{class:"actions-row"},[
+        element("a",{class:"button primary",href:"#evidence="+encodeURIComponent(data.repository_id),text:"搜索源码证据"})
+      ]),
+      element("details",{},[
+        element("summary",{text:`查看 ${Math.min(data.files.length,data.file_count)} 个代码文件示例（共 ${data.file_count} 个）`} ),
+        element("div",{class:"detail-body"},pageGrid(data.files,"还没有代码文件页。"))
+      ])
     ])));
   }
   show(nodes)
 }
 const sourceNames={code:"代码知识",conversation:"AI 会话",feishu:"飞书资料",note:"文件、网页和笔记"};
+function moduleTree(nodes){
+  const root=element("div",{class:"module-tree"});
+  for(const node of nodes){
+    const link=element("a",{class:"module-link",href:"#page="+encodeURIComponent(node.path)},[
+      element("strong",{text:displayPageTitle(node)}),
+      element("small",{class:"meta",text:node.summary||"代码模块"})
+    ]);
+    if(node.children?.length){
+      root.append(element("details",{class:"module-node"},[
+        element("summary",{text:`${displayPageTitle(node)} · ${node.children.length} 个子模块`}),
+        element("div",{class:"module-children"},[link,moduleTree(node.children)])
+      ]));
+    }else root.append(link)
+  }
+  return root
+}
+async function renderEvidence(projectId,query="",offset=0){
+  const limit=50;
+  const params=new URLSearchParams({view:"evidence",kind:"code",project:projectId,q:query,offset:String(offset),limit:String(limit)});
+  const data=await api("/api/pages?"+params.toString());
+  const input=element("input",{type:"search",placeholder:"文件名、符号或路径",value:query});
+  const form=element("form",{class:"form"},[
+    element("label",{},[element("span",{text:"搜索源码证据"}),input]),
+    element("button",{class:"button primary",type:"submit",text:"搜索"})
+  ]);
+  form.addEventListener("submit",event=>{
+    event.preventDefault();
+    renderEvidence(projectId,input.value.trim(),0)
+  });
+  show([
+    heading("项目证据","源码证据",`${data.total} 个匹配文件；仅展示当前 Commit 的代码文件。`),
+    form,
+    section("匹配文件",`${data.total} 个`,pageGrid(data.items,"没有匹配的源码证据。")),
+    pagination(offset,limit,data.total,next=>renderEvidence(projectId,query,next))
+  ])
+}
 function sourceRow(item){
   const body=element("div",{class:"detail-body"});
   const details=element("details",{},[
@@ -780,7 +827,7 @@ function sourceRow(item){
 async function renderSources(kind,offset=0){
   if(kind==="code"){await renderProjects();return}
   const limit=50;
-  const pages=await api(`/api/pages?kind=${encodeURIComponent(kind)}&offset=${offset}&limit=${limit}`);
+  const pages=await api(`/api/pages?view=published&kind=${encodeURIComponent(kind)}&offset=${offset}&limit=${limit}`);
   const type=knowledgeTypes[kind]||{title:sourceNames[kind]||"知识",description:"打开页面查看内容和关联。"};
   show([
     heading("我的知识",type.title,type.description+" 打开一页后可继续查看关联知识。"),
@@ -1173,7 +1220,7 @@ async function renderSearch(value,offset=0){
   const limit=50;
   try{
     const data=await api(
-      `/api/pages?q=${encodeURIComponent(value)}&offset=${offset}&limit=${limit}`,
+      `/api/pages?view=published&q=${encodeURIComponent(value)}&offset=${offset}&limit=${limit}`,
       {signal:requestController.signal}
     );
     show([
@@ -1198,6 +1245,7 @@ async function route(){
     else if(hash==="#knowledge")await renderKnowledge();
     else if(hash==="#projects")await renderProjects();
     else if(hash.startsWith("#project="))await renderProject(decodeURIComponent(hash.slice(9)));
+    else if(hash.startsWith("#evidence="))await renderEvidence(decodeURIComponent(hash.slice(10)));
     else if(hash.startsWith("#sources="))await renderSources(decodeURIComponent(hash.slice(9)));
     else if(hash.startsWith("#source-manager="))await renderSourceManager(decodeURIComponent(hash.slice(16)));
     else if(hash==="#add-source")await renderAddSource();

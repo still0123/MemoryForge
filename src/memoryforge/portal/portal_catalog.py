@@ -110,6 +110,7 @@ class RepositoryEntry:
     page_paths: list[str] = field(default_factory=list)
     module_paths: set[str] = field(default_factory=set)
     languages: set[str] = field(default_factory=set)
+    evidence_file_count: int = 0
 
     def public(self) -> dict[str, Any]:
         return {
@@ -117,7 +118,9 @@ class RepositoryEntry:
             "name": self.name,
             "commit": self.commit[:12],
             "page_count": len(self.page_paths),
+            "knowledge_page_count": len(self.page_paths),
             "module_count": len(self.module_paths),
+            "evidence_file_count": self.evidence_file_count,
             "languages": sorted(self.languages),
             "top_modules": _top_modules(self.module_paths),
         }
@@ -196,7 +199,22 @@ class PortalCatalog:
                     and related.kind in {"conversation", "feishu", "note"}
                 ):
                     related_paths.add(related.path)
-        file_pages = [page for page in pages if page.kind == "code" and page.subtype == "code_file"]
+        all_project_pages = [
+            page for page in self.pages.values() if page.repository_id == repository_id
+        ]
+        file_pages = [
+            page
+            for page in all_project_pages
+            if page.kind == "code" and page.subtype == "code_file"
+        ]
+        module_pages = [
+            page
+            for page in pages
+            if page.kind == "code"
+            and page.subtype == "code_module"
+            and page.module_path is not None
+            and page.path.startswith("wiki/pages/code/")
+        ]
         return {
             "workspace_commit": self.commit,
             **repository.public(),
@@ -209,6 +227,7 @@ class PortalCatalog:
                 and page.module_path is not None
                 and "/" not in page.module_path
             ],
+            "module_tree": _module_tree(module_pages),
             # A large repository can contain thousands of file pages. The portal
             # starts from architecture and modules; it keeps only a small set of
             # file examples in this response and leaves exhaustive lookup to search.
@@ -264,14 +283,19 @@ class PortalCatalog:
         kind: str,
         project: str,
         parent: str,
+        view: str = "all",
         offset: int,
         limit: int,
     ) -> dict[str, Any]:
         if kind and kind not in {"project", "code", "feishu", "conversation", "note"}:
             raise ValueError("invalid page kind")
+        if view not in {"all", "published", "evidence"}:
+            raise ValueError("invalid page view")
         if project and project not in self.repositories:
             raise ValueError("unknown project")
         matches = list(self.pages.values())
+        if view != "all":
+            matches = [page for page in matches if _page_in_view(page, view)]
         if kind:
             matches = [page for page in matches if page.kind == kind]
         if project:
@@ -568,6 +592,8 @@ class PortalCatalog:
             self.pages[page_path] = page
             if repository is not None:
                 repository.page_paths.append(page_path)
+                if page.kind == "code" and page.subtype == "code_file":
+                    repository.evidence_file_count += 1
                 if module_path:
                     repository.module_paths.add(module_path)
                 for path in relative_paths:
@@ -758,6 +784,37 @@ def _module_parent(path: str) -> str:
 
 def _top_modules(modules: set[str]) -> list[str]:
     return sorted({path.split("/", 1)[0] for path in modules if path and path != "."})
+
+
+def _page_in_view(page: PageEntry, view: str) -> bool:
+    """Keep the default portal view focused on current narrative knowledge."""
+    canonical_module = (
+        page.kind == "code"
+        and page.subtype == "code_module"
+        and page.path.startswith("wiki/pages/code/")
+    )
+    if view == "published":
+        return page.kind != "code" or canonical_module
+    if view == "evidence":
+        return page.kind == "code" and page.subtype == "code_file"
+    return True
+
+
+def _module_tree(pages: list[PageEntry]) -> list[dict[str, Any]]:
+    nodes = {
+        page.module_path: {**page.public(), "children": []}
+        for page in pages
+        if page.module_path
+    }
+    roots: list[dict[str, Any]] = []
+    for path in sorted(nodes):
+        parent = _module_parent(path)
+        node = nodes[path]
+        if parent in nodes:
+            nodes[parent]["children"].append(node)
+        else:
+            roots.append(node)
+    return roots
 
 
 def _resolve_link(page_path: str, target: str) -> str | None:
