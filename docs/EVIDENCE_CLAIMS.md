@@ -77,7 +77,7 @@
 | macOS 本地门禁 559 passed，Linux 本地门禁 556 passed / 3 skipped，覆盖率 88% | [`CROSS_PLATFORM_DELIVERY_SPEC.md`](CROSS_PLATFORM_DELIVERY_SPEC.md) | 不等于原生 Windows confirmation |
 | Candidate 1-8 的失败或 superseded 结果仍保留 | [`registry.json`](../demo/evaluation/registry.json) | 不把历史 gate 重新标为最终成功 |
 
-## 面试表述
+## 公开表述口径
 
 可以说“系统具备可审核、可回溯、可复现的编译与发布链路”。不能说“通用文档问答已解决”、
 “任意仓库 precision/recall 为 100%”或“达到生产 SLA”。

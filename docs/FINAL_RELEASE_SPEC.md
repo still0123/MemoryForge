@@ -11,7 +11,7 @@
 - 目标标签：`v0.2.0`
 
 本轮只把已经实现的文档 Wiki、代码 Wiki、可信架构图和公开评测收敛成一个可发布版本。
-完成标准不是“本机能跑”，而是远端 CI、全新虚拟环境、公开 Evidence 和面试演示使用同一组
+完成标准不是“本机能跑”，而是远端 CI、全新虚拟环境、公开 Evidence 和公开展示使用同一组
 可验证事实。
 
 ## 2. Ponytail 决策
@@ -50,7 +50,7 @@ v0.2.0 在 v0.1.0 基础上增加：
 - 双重放 Evidence 不一致；
 - 固定题集任一既有 100% 指标回退；
 - 单文件增量页面比例高于 25%；
-- README、Benchmark、Changelog、简历材料和 Evidence 数字冲突；
+- README、Benchmark、Changelog、项目介绍材料和 Evidence 数字冲突；
 - 仓库包含凭据、公司代码、飞书私有正文或伪造运行结果。
 
 P2 功能、体验优化和未被现有门禁证明必要的重构不进入 v0.2.0。
@@ -109,7 +109,7 @@ git diff --check
 
 CLI help 测试必须检查 Typer command option contract，不能依赖终端宽度、ANSI 或开发机 TTY。
 
-## 7. 文档与面试验收
+## 7. 文档与展示验收
 
 以下文档必须使用相同指标和边界：
 
@@ -129,7 +129,7 @@ CLI help 测试必须检查 Typer command option contract，不能依赖终端�
 5. 展示公开 Benchmark、clean-room provenance 和已知失败；
 6. 明确当前不是通用编码 Agent、在线 SaaS、向量数据库或多租户系统。
 
-所有简历数字必须能在提交的 JSON Evidence 中直接找到，不能把局部实验写成普遍结论。
+所有公开数字必须能在提交的 JSON Evidence 中直接找到，不能把局部实验写成普遍结论。
 
 ## 8. 发布流程
 
@@ -159,6 +159,6 @@ CLI help 测试必须检查 Typer command option contract，不能依赖终端�
 - GitHub Actions 全矩阵通过；
 - committed public Evidence 与 release provenance 可回读；
 - v0.2.0 Wheel 在 clean-room 通过；
-- README、Benchmark、Changelog、演示与简历主张一致；
+- README、Benchmark、Changelog、演示与项目介绍主张一致；
 - 远端 annotated tag 和 GitHub Release 可访问；
 - 工作树干净，远端 SHA 已核对。

@@ -148,7 +148,7 @@ provenance 的 Commit 必须等于 annotated tag 解引用 Commit。
 GitHub Actions 并移除 workflow；后续版本使用 `scripts/check_local.sh` 生成本地 Evidence，再手动
 上传 Release 资产。
 
-## 9. Phase 6：面试材料
+## 9. Phase 6：公开展示材料
 
 更新：
 

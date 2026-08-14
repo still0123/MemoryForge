@@ -1,4 +1,4 @@
-# MemoryForge 简历表述
+# MemoryForge 项目介绍
 
 版本口径：`v0.4.0` 正式发布，macOS 本地门禁 `656 passed`；Linux 未在本版本重跑，
 Windows 未验证。当前 `main` 的 Portal 加固尚未发布，不与 v0.4.0 Release Evidence 混写。
@@ -27,7 +27,7 @@ Python · SQLite FTS5 · Pydantic · Typer · OpenAI-compatible API · 飞书
   SHA256、tag/Commit provenance 与远端资产手动回下载校验；v0.4.0 在 macOS 完成
   `656 passed` 本地门禁。
 
-## 面试时的 30 秒介绍
+## 30 秒项目介绍
 
 我做的不是一个把文档塞进模型的聊天机器人，而是一个技术知识编译器。资料先经过可审核的 Wiki 编译，查询时从目录路由到少量页面，必要时才回到原文，所以每个回答都能指出来源。我的重点是把“知识沉淀、增量维护、可信问答”做成一条闭环；MiniClaude 和飞书只是这条闭环的交互入口。
 
@@ -40,5 +40,5 @@ Python · SQLite FTS5 · Pydantic · Typer · OpenAI-compatible API · 飞书
 - **Click 10%/0%**：第二个公开仓库的 development/holdout Answer accuracy；Citation 100% 只表示
   引用可回读，不能外推为答案正确。
 
-完整演示顺序见 [秋招演示与面试说明](PORTFOLIO_DEMO.md)，指标方法见
+完整演示顺序见 [公开演示与展示说明](PORTFOLIO_DEMO.md)，指标方法见
 [公开 Benchmark](BENCHMARK.md)，主张边界见 [Evidence Claims](EVIDENCE_CLAIMS.md)。

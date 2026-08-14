@@ -1,4 +1,4 @@
-# 秋招演示与面试说明
+# 公开演示与展示说明
 
 <!-- memoryforge-release-claim: version=0.4.0; status=released; supported_platforms=macos; macos_passed=656; linux_status=not_rerun; windows_status=not_verified; release_verification=passed -->
 
@@ -195,7 +195,7 @@ Citation 可回读不等于答案正确。Click 外测的失败用于限制结�
 - [ ] 明确区分 `v0.4.0` Release 与当前 `main`。
 - [ ] Demo 能从空 Workspace 重新跑通。
 - [ ] 至少展示一次审核链、一个正常回答和一个拒答。
-- [ ] 所有简历数字都能回到提交的 JSON 或 Release 资产。
+- [ ] 所有公开数字都能回到提交的 JSON 或 Release 资产。
 - [ ] 不把局部 Benchmark 外推为生产 SLA。
 
 ## 历史研究
