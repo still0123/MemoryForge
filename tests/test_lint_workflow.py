@@ -8,7 +8,7 @@ from typing import Any
 
 from typer.testing import CliRunner
 
-import memoryforge.storage.workspace as workspace_module
+import memoryforge.storage.blob_store as blob_store_module
 from memoryforge.interface.cli import app
 from memoryforge.compiler.linting import lint_workspace
 from memoryforge.storage.workspace import Workspace
@@ -35,7 +35,7 @@ def test_lint_reads_normal_workspace_without_workspace_open(tmp_path: Path, monk
         raise AssertionError("lint must not use the mutable blob chain helper")
 
     monkeypatch.setattr(Workspace, "open", fail_workspace_open)
-    monkeypatch.setattr(workspace_module, "_open_blob_chain", fail_blob_chain)
+    monkeypatch.setattr(blob_store_module, "open_blob_chain", fail_blob_chain)
 
     result = runner.invoke(app, ["lint", "--workspace", str(workspace)])
 

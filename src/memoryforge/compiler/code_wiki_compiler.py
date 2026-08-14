@@ -24,6 +24,7 @@ from memoryforge.code.code_models import (
     ModulePlan,
 )
 from memoryforge.compiler.compiler import Compilation, _render_index
+from memoryforge.compiler.module_planner import build_architecture_graph, build_module_plan
 from memoryforge.core.models import (
     ChangeOperation,
     ChangeOperationType,
@@ -32,11 +33,10 @@ from memoryforge.core.models import (
     ChangeSetStatus,
     ChangeSetValidation,
 )
-from memoryforge.compiler.module_planner import build_architecture_graph, build_module_plan
 from memoryforge.query.provider import OpenAICompatibleProvider, ProviderUnavailableError
+from memoryforge.storage.projection import candidate_page_sources
 from memoryforge.storage.workspace import (
     Workspace,
-    candidate_page_sources,
     get_git_checkout_readonly,
     list_current_git_source_versions,
     read_source_version_text,

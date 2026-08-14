@@ -10,7 +10,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal, cast
 
-from memoryforge.storage.changesets import StoredChangeSet
+from memoryforge.compiler.wiki_facts import (
+    conversation_conclusion_text,
+    is_conversation_process_note,
+)
 from memoryforge.core.models import (
     ChangeOperation,
     ChangeOperationType,
@@ -29,12 +32,9 @@ from memoryforge.core.models import (
 )
 from memoryforge.query.provider import OpenAICompatibleProvider
 from memoryforge.query.query import EvidencePayload
-from memoryforge.compiler.wiki_facts import conversation_conclusion_text, is_conversation_process_note
-from memoryforge.storage.workspace import (
-    Workspace,
-    candidate_page_sources,
-    list_git_checkouts,
-)
+from memoryforge.storage.changesets import StoredChangeSet
+from memoryforge.storage.projection import candidate_page_sources
+from memoryforge.storage.workspace import Workspace, list_git_checkouts
 
 PageType = Literal["entity", "concept", "synthesis"]
 CodeFact = tuple[str, int, str | None]

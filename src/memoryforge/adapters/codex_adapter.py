@@ -7,10 +7,14 @@ import re
 from pathlib import Path
 from typing import Any, Literal
 
-from memoryforge.core.errors import MemoryForgeError
 from memoryforge.adapters.importer import MAX_SOURCE_BYTES
+from memoryforge.core.errors import MemoryForgeError
 from memoryforge.core.models import ImportResult
-from memoryforge.query.sessions import ConversationMessage, is_valid_session_id, remember_conversation
+from memoryforge.query.sessions import (
+    ConversationMessage,
+    is_valid_session_id,
+    remember_conversation,
+)
 
 _MAX_MESSAGES = 100
 _MAX_CONTENT_CHARS = 40_000

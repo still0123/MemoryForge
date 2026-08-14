@@ -19,13 +19,13 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from memoryforge.core.errors import MemoryForgeError
 from memoryforge.adapters.importer import (
     MAX_SOURCE_BYTES,
     import_local_document,
     read_local_text_file,
     validate_local_document,
 )
+from memoryforge.core.errors import MemoryForgeError
 from memoryforge.core.models import ImportResult, LocalDocument, Sensitivity, SourceCategory
 from memoryforge.storage.workspace import Workspace, deactivate_current_source
 

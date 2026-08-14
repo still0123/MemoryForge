@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, Literal, Optional
+from typing import Literal
 
 VisibleSource = Callable[[str, int], bool]
 
@@ -19,10 +20,10 @@ class RetrievalCandidate:
     source_version: int
     locator: str
     kind: Literal["page", "symbol", "relation"]
-    exact_rank: Optional[int]
-    lexical_rank: Optional[int]
-    semantic_rank: Optional[int]
-    relation_rank: Optional[int]
+    exact_rank: int | None
+    lexical_rank: int | None
+    semantic_rank: int | None
+    relation_rank: int | None
     fused_score: float
 
 

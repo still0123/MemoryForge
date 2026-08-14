@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import math
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 
 class SemanticIndex:
@@ -13,7 +13,7 @@ class SemanticIndex:
         self._ids: list[str] = []
         self._hashes: list[str] = []
         self._vectors: list[list[float]] = []
-        self._index_id: Optional[str] = None
+        self._index_id: str | None = None
         self._built = False
 
         try:
@@ -56,9 +56,7 @@ class SemanticIndex:
 
         combined_text = "\n".join(texts)
         text_hash = hashlib.sha256(combined_text.encode("utf-8")).hexdigest()
-        self._index_id = hashlib.sha256(
-            f"{self._repository_id}\0{text_hash}".encode("utf-8")
-        ).hexdigest()
+        self._index_id = hashlib.sha256(f"{self._repository_id}\0{text_hash}".encode()).hexdigest()
 
         self._ids = ids
         self._hashes = hashes
@@ -85,7 +83,7 @@ class SemanticIndex:
             return []
 
         scores: list[tuple[str, float]] = []
-        for obj_id, vec in zip(self._ids, self._vectors):
+        for obj_id, vec in zip(self._ids, self._vectors, strict=True):
             sim = self._cosine(q_vec, vec)
             scores.append((obj_id, sim))
 
@@ -93,7 +91,7 @@ class SemanticIndex:
         return scores[: max(0, k)]
 
     @property
-    def index_id(self) -> Optional[str]:
+    def index_id(self) -> str | None:
         return self._index_id
 
     @property
@@ -155,7 +153,7 @@ class SemanticIndex:
     def _cosine(a: list[float], b: list[float]) -> float:
         if len(a) != len(b):
             return 0.0
-        dot = sum(x * y for x, y in zip(a, b))
+        dot = sum(x * y for x, y in zip(a, b, strict=True))
         na = math.sqrt(sum(x * x for x in a))
         nb = math.sqrt(sum(x * x for x in b))
         if na == 0.0 or nb == 0.0:

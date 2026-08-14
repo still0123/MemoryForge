@@ -4,7 +4,7 @@ import hashlib
 import json
 import sqlite3
 from collections.abc import Callable, Iterable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from memoryforge.core.egress_models import (
     DisclosureReceipt,
@@ -75,9 +75,7 @@ def rule_sha256(rule: SourceEgressRule) -> str:
     return hashlib.sha256(_rule_canonical_json(rule).encode("utf-8")).hexdigest()
 
 
-def _get_rule(
-    connection: sqlite3.Connection, source_id: str
-) -> SourceEgressRule | None:
+def _get_rule(connection: sqlite3.Connection, source_id: str) -> SourceEgressRule | None:
     cursor = connection.execute(
         "SELECT source_id, egress_class, allowed_hosts, updated_at, actor "
         "FROM source_egress_rules WHERE source_id = ?",
@@ -149,9 +147,7 @@ def decide_egress(
     )
 
 
-def filter_visible_sources(
-    candidates: Iterable, *, decide: Callable
-) -> tuple:
+def filter_visible_sources(candidates: Iterable, *, decide: Callable) -> tuple:
     visible = []
     for candidate in candidates:
         decision = decide(candidate)
@@ -172,7 +168,7 @@ def record_disclosure(
     content_sha256 = hashlib.sha256(text.encode("utf-8")).hexdigest()
     character_count = len(text)
     redaction_count = redaction.redaction_count
-    disclosed_at = datetime.now(timezone.utc)
+    disclosed_at = datetime.now(UTC)
     source_refs_json = json.dumps(list(source_refs), sort_keys=True, separators=(",", ":"))
 
     connection.execute(

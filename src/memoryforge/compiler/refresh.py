@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping
 
 from memoryforge.adapters.feishu_adapter import FeishuDocumentSyncResult, refresh_feishu_documents
+from memoryforge.adapters.git_sync import sync_git_checkout
 from memoryforge.core.models import GitRepositorySyncResult
-from memoryforge.storage.workspace import list_git_checkouts, sync_git_checkout
+from memoryforge.storage.workspace import list_git_checkouts
 
 
 @dataclass(frozen=True)
@@ -32,6 +33,7 @@ def route_refresh_impact(
     """薄钩子 → freshness.impacted_pages_for_refresh；暂不主动调用。"""
     try:
         from memoryforge.compiler.freshness import impacted_pages_for_refresh
+
         return impacted_pages_for_refresh(
             changed_sources,
             source_to_pages=source_to_pages,

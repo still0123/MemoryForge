@@ -72,15 +72,11 @@ def page_freshness(
         else:
             all_current = False
 
-    claim_superseded = any(
-        claim.status == ClaimStatus.SUPERSEDED for claim in claims_list
-    )
+    claim_superseded = any(claim.status == ClaimStatus.SUPERSEDED for claim in claims_list)
 
     open_conflict_list = list(open_conflicts)
     has_open_conflict = any(page_path == cp for (_, cp) in open_conflict_list)
-    open_conflict_ids = tuple(
-        sorted({cid for (cid, cp) in open_conflict_list if cp == page_path})
-    )
+    open_conflict_ids = tuple(sorted({cid for (cid, cp) in open_conflict_list if cp == page_path}))
 
     reason_codes: list[str] = []
     state: FreshnessState
@@ -129,7 +125,7 @@ def impacted_pages_for_refresh(
         code_sources_in_map = set(code_dependents.keys())
 
     for source_id, new_version in changed_sources:
-        for (old_source_id, old_version), page_list in source_to_pages.items():
+        for (old_source_id, _old_version), page_list in source_to_pages.items():
             if old_source_id == source_id:
                 for p in page_list:
                     pages.add(p)
@@ -138,8 +134,8 @@ def impacted_pages_for_refresh(
                 dep_key = (dep, new_version)
                 for p in source_to_pages.get(dep_key, ()):
                     pages.add(p)
-                old_dep_key = (dep, old_version) if new_version else dep_key
-                for p in source_to_pages.get(old_dep_key, ()):
-                    pages.add(p)
+                for (candidate_id, _candidate_version), page_list in source_to_pages.items():
+                    if candidate_id == dep:
+                        pages.update(page_list)
 
     return tuple(sorted(pages))

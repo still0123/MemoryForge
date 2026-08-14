@@ -19,6 +19,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from memoryforge.adapters.obsidian import build_obsidian
 from memoryforge.automation.automation_policy import (
     AutomationPolicy,
     decide,
@@ -35,7 +36,6 @@ from memoryforge.automation.automation_validation import (
     change_set_risk,
     source_versions_sha256,
 )
-from memoryforge.storage.changesets import ChangeSetStore, StoredChangeSet
 from memoryforge.compiler.lifecycle import _apply_stored
 from memoryforge.core.models import (
     AutomationDecision,
@@ -46,13 +46,11 @@ from memoryforge.core.models import (
     SourceTrust,
     ValidationCheck,
 )
-from memoryforge.adapters.obsidian import build_obsidian
 from memoryforge.portal.portal_jobs import run_automation
-from memoryforge.storage.workspace import (
-    Workspace,
-    _connect_readonly,
-    candidate_page_sources,
-)
+from memoryforge.storage.changesets import ChangeSetStore, StoredChangeSet
+from memoryforge.storage.database import connect_readonly as _connect_readonly
+from memoryforge.storage.projection import candidate_page_sources
+from memoryforge.storage.workspace import Workspace
 
 
 @dataclass(frozen=True)

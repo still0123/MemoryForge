@@ -17,8 +17,13 @@ from threading import Lock
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
+from memoryforge.compiler.lifecycle import (
+    get_update,
+    get_update_pages,
+    list_updates,
+    reject_changeset,
+)
 from memoryforge.core.errors import MemoryForgeError
-from memoryforge.compiler.lifecycle import get_update, get_update_pages, list_updates, reject_changeset
 from memoryforge.portal.portal_assets import APP_CSS, CONTROL_JS, INDEX_HTML
 from memoryforge.portal.portal_catalog import PortalCatalog
 from memoryforge.portal.portal_jobs import (
@@ -26,14 +31,11 @@ from memoryforge.portal.portal_jobs import (
     automation_status,
     configure_automation,
 )
+from memoryforge.portal.showcase import _display_wiki_text, _markdown_document, _markdown_html
 from memoryforge.query.provider import OpenAICompatibleProvider
 from memoryforge.query.query import answer_question
-from memoryforge.portal.showcase import _display_wiki_text, _markdown_document, _markdown_html
-from memoryforge.storage.workspace import (
-    Workspace,
-    WorkspaceIntegrityError,
-    WorkspaceSecurityError,
-)
+from memoryforge.storage.errors import WorkspaceIntegrityError, WorkspaceSecurityError
+from memoryforge.storage.workspace import Workspace
 
 _HOST = "127.0.0.1"
 _DEFAULT_LIMIT = 50

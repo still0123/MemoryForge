@@ -15,8 +15,8 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit, urlunsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-from memoryforge.core.errors import MemoryForgeError
 from memoryforge.adapters.importer import import_local_document, read_local_text_file
+from memoryforge.core.errors import MemoryForgeError
 from memoryforge.core.models import ImportResult, LocalDocument, Sensitivity, SourceCategory
 
 _MAX_WEB_BYTES = 5 * 1024 * 1024

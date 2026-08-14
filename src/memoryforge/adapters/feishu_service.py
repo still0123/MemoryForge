@@ -9,8 +9,8 @@ import time
 from pathlib import Path
 from typing import Any
 
-from memoryforge.core.errors import MemoryForgeError
 from memoryforge.adapters.feishu_bot import FeishuBotError, handle_lark_cli_event
+from memoryforge.core.errors import MemoryForgeError
 from memoryforge.query.provider import OpenAICompatibleProvider
 
 

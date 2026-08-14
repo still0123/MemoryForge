@@ -23,9 +23,7 @@ def plan_install(
     cmd = mcp_command(python, workspace, project, "micro")
     sname = server_name(agent)
 
-    commands: tuple[tuple[str, ...], ...] = (
-        ("claude", "mcp", "add", sname, "--", *cmd),
-    )
+    commands: tuple[tuple[str, ...], ...] = (("claude", "mcp", "add", sname, "--", *cmd),)
 
     hook_events: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()

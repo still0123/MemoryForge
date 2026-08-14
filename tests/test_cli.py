@@ -430,7 +430,7 @@ def test_cli_doctor_reports_readonly_checks_and_remediation(
     lock_root = tmp_path / "locks"
     lock_root.mkdir(mode=0o700)
     monkeypatch.setattr(
-        "memoryforge.cli.inspect_posix_namespace_lock_root",
+        "memoryforge.interface.doctor.inspect_posix_namespace_lock_root",
         lambda: lock_root,
     )
 
@@ -457,7 +457,7 @@ def test_cli_doctor_reports_readonly_checks_and_remediation(
         raise OSError("lock root unavailable")
 
     monkeypatch.setattr(
-        "memoryforge.cli.inspect_posix_namespace_lock_root",
+        "memoryforge.interface.doctor.inspect_posix_namespace_lock_root",
         unsafe_lock_root,
     )
     lock_broken = json.loads(runner.invoke(app, ["doctor", "--workspace", str(workspace)]).stdout)

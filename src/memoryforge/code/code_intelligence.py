@@ -61,9 +61,7 @@ def _is_relation_visible(relation: CodeRelation, visible_source: VisibleSource) 
     return True
 
 
-def _find_matches(
-    snapshot: CodeIndexSnapshot, identifier: str
-) -> list[CodeSymbol]:
+def _find_matches(snapshot: CodeIndexSnapshot, identifier: str) -> list[CodeSymbol]:
     exact: list[CodeSymbol] = []
     prefix: list[CodeSymbol] = []
     short_name: list[CodeSymbol] = []
@@ -75,10 +73,7 @@ def _find_matches(
             prefix.append(symbol)
         else:
             last_dot = qn.rfind(".")
-            if last_dot >= 0:
-                name_part = qn[last_dot + 1 :]
-            else:
-                name_part = qn
+            name_part = qn[last_dot + 1 :] if last_dot >= 0 else qn
             if name_part == identifier:
                 short_name.append(symbol)
     if exact:
@@ -155,7 +150,10 @@ def symbol_context(
             elif rtype is CodeRelationType.IMPORTS and imports_edge_count < max_relations:
                 imports.append(_symbol_to_ref(src))
                 imports_edge_count += 1
-            elif rtype in {CodeRelationType.IMPLEMENTS, CodeRelationType.EXTENDS} and impl_edge_count < max_relations:
+            elif (
+                rtype in {CodeRelationType.IMPLEMENTS, CodeRelationType.EXTENDS}
+                and impl_edge_count < max_relations
+            ):
                 implements_extends.append(_symbol_to_ref(src))
                 impl_edge_count += 1
             elif rtype is CodeRelationType.TESTS and tests_edge_count < max_relations:

@@ -5,16 +5,16 @@ import json
 import os
 import random
 import sqlite3
-import stat
-import tempfile
+from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Callable, Literal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from memoryforge.core.capture_models import CaptureEvent, InboxSession
+from memoryforge.core.capture_models import CaptureEvent
 from memoryforge.core.models import ChangeOrigin, RiskLevel
 
 
@@ -129,7 +129,9 @@ def _upsert_session(connection: sqlite3.Connection, event: CaptureEvent) -> None
     now_iso = event.observed_at.isoformat()
     connection.execute(
         """
-        INSERT INTO capture_sessions (repository_id, client, session_id, state, first_seen_at, last_seen_at)
+        INSERT INTO capture_sessions(
+            repository_id, client, session_id, state, first_seen_at, last_seen_at
+        )
         VALUES (?, ?, ?, 'open', ?, ?)
         ON CONFLICT(repository_id, client, session_id) DO UPDATE SET
             last_seen_at = excluded.last_seen_at,
@@ -254,10 +256,8 @@ def spool_capture_event(
 ) -> Literal["spooled", "duplicate"]:
     spool_directory = _spool_dir(workspace)
     spool_directory.mkdir(parents=True, exist_ok=True, mode=0o700)
-    try:
+    with suppress(OSError):
         os.chmod(spool_directory, 0o700)
-    except OSError:
-        pass
 
     target_path = spool_directory / f"{event.event_id}.json"
     if target_path.is_file():
@@ -315,7 +315,12 @@ def spool_capture_event(
         truncated=prepared_event.truncated,
     )
 
-    payload = json.dumps(final_event.model_dump(mode="json"), indent=2, sort_keys=True, ensure_ascii=False)
+    payload = json.dumps(
+        final_event.model_dump(mode="json"),
+        indent=2,
+        sort_keys=True,
+        ensure_ascii=False,
+    )
     tmp_name = f"tmp-{os.getpid()}-{random.randint(0, 1_000_000_000):010d}.json"
     tmp_path = spool_directory / tmp_name
 
@@ -326,16 +331,12 @@ def spool_capture_event(
             fh.flush()
             os.fsync(fh.fileno())
     except BaseException:
-        try:
+        with suppress(OSError):
             tmp_path.unlink()
-        except OSError:
-            pass
         raise
 
-    try:
+    with suppress(OSError):
         os.chmod(tmp_path, 0o600)
-    except OSError:
-        pass
 
     os.rename(tmp_path, target_path)
     return "spooled"
@@ -443,9 +444,7 @@ def build_capture_proposal(
     session_id: str,
 ) -> ProposalDraft:
     _ensure_schema(connection)
-    events = _parse_session_events(
-        connection, repository_id=repository_id, session_id=session_id
-    )
+    events = _parse_session_events(connection, repository_id=repository_id, session_id=session_id)
 
     client_name = events[0].client if events else "unknown"
     repo_prefix = repository_id[:12]

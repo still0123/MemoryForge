@@ -23,9 +23,7 @@ def plan_install(
     cmd = mcp_command(python, workspace, project, "micro")
     sname = server_name(agent)
 
-    commands: tuple[tuple[str, ...], ...] = (
-        ("codex", "mcp", "add", sname, "--", *cmd),
-    )
+    commands: tuple[tuple[str, ...], ...] = (("codex", "mcp", "add", sname, "--", *cmd),)
 
     hook_events: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
@@ -60,9 +58,7 @@ def verify_install(
     return IntegrationResult(
         status="unsupported",
         server_name=server_name("codex"),
-        next_steps=(
-            "Dry-run mode only. Execute plan commands via codex CLI to install.",
-        ),
+        next_steps=("Dry-run mode only. Execute plan commands via codex CLI to install.",),
     )
 
 

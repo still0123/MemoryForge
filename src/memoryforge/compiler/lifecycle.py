@@ -11,20 +11,22 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
+from memoryforge.adapters.obsidian import build_obsidian
+from memoryforge.compiler.linting import lint_workspace
+from memoryforge.compiler.wiki_facts import IndexedWikiFact, WikiFact, parse_page_facts
+from memoryforge.core.errors import MemoryForgeError, WorkspaceError
+from memoryforge.core.models import ChangeOperationType
+from memoryforge.portal.showcase import _markdown_document
 from memoryforge.storage.apply_journal import ApplyJournalStore
 from memoryforge.storage.changesets import ChangeSetStore, StoredChangeSet
-from memoryforge.core.errors import MemoryForgeError, WorkspaceError
-from memoryforge.compiler.linting import lint_workspace
-from memoryforge.core.models import ChangeOperationType
-from memoryforge.adapters.obsidian import build_obsidian
-from memoryforge.portal.showcase import _markdown_document
-from memoryforge.compiler.wiki_facts import IndexedWikiFact, WikiFact, parse_page_facts
+from memoryforge.storage.database import connect_readonly as _connect_readonly
+from memoryforge.storage.projection import (
+    candidate_page_sources,
+    validate_changeset_page_sources,
+)
 from memoryforge.storage.workspace import (
     Workspace,
-    _connect_readonly,
-    candidate_page_sources,
     validate_candidate_page_evidence,
-    validate_changeset_page_sources,
 )
 
 _TITLE = re.compile(r"^#\s+(.+?)\s*$", re.MULTILINE)

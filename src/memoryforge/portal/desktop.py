@@ -79,7 +79,7 @@ def choose_workspace() -> Path | None:
             [
                 "/usr/bin/osascript",
                 "-e",
-                "POSIX path of (choose folder with prompt \"选择 MemoryForge Workspace\")",
+                'POSIX path of (choose folder with prompt "选择 MemoryForge Workspace")',
             ],
             check=False,
             capture_output=True,

@@ -7,24 +7,29 @@ import os
 import re
 import sqlite3
 import stat
-import uuid
 from collections.abc import Iterable, Iterator, Mapping
-from contextlib import contextmanager, suppress
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import Literal, cast
 
-from memoryforge.storage.capture_inbox import SCHEMA_SQL as CAPTURE_SCHEMA
-from memoryforge.storage.capture_inbox import drain_capture_spool
 from memoryforge.compiler.egress_policy import SCHEMA_SQL as EGRESS_SCHEMA
-from memoryforge.core.errors import ChangeSetStoreError, WorkspaceError
 from memoryforge.compiler.knowledge_conflicts import SCHEMA_SQL as CONFLICT_SCHEMA
+from memoryforge.compiler.wiki_facts import (
+    AppliedCodeSymbolMatch,
+    IndexedWikiFact,
+    WikiFact,
+    WikiFactSearchResult,
+    citation_quote_matches_excerpt,
+    parse_page_citations,
+    parse_page_facts,
+)
+from memoryforge.core.errors import ChangeSetStoreError, WorkspaceError
 from memoryforge.core.manifests import SourceManifestStore
 from memoryforge.core.models import (
     ChangeSet,
     ClaimStatus,
-    GitDocumentSyncResult,
     GitRepositoryRecord,
     GitRepositorySyncResult,
     ImportResult,
@@ -35,16 +40,63 @@ from memoryforge.core.models import (
     SourceVersionManifest,
 )
 from memoryforge.core.platform_lock import UnsafeLockFileError, exclusive_workspace_lock
-from memoryforge.storage.version_store import GitVersionStore
-from memoryforge.compiler.wiki_facts import (
-    AppliedCodeSymbolMatch,
-    IndexedWikiFact,
-    WikiFact,
-    WikiFactSearchResult,
-    citation_quote_matches_excerpt,
-    parse_page_citations,
-    parse_page_facts,
+from memoryforge.storage.apply_journal import recover_interrupted_apply
+from memoryforge.storage.blob_store import (
+    blob_relative_path,
+    blob_uri,
+    cleanup_blob_temps,
+    cleanup_orphan_blob,
+    no_follow_flag,
+    read_blob_bytes,
+    unlink_blob,
+    verify_blob_hash,
+    write_blob,
 )
+from memoryforge.storage.capture_inbox import SCHEMA_SQL as CAPTURE_SCHEMA
+from memoryforge.storage.capture_inbox import drain_capture_spool
+from memoryforge.storage.database import connect, connect_readonly
+from memoryforge.storage.errors import (
+    WorkspaceIntegrityError as WorkspaceIntegrityError,
+)
+from memoryforge.storage.errors import WorkspaceSecurityError as WorkspaceSecurityError
+from memoryforge.storage.identifiers import CHAR_LOCATOR as _CHAR_LOCATOR
+from memoryforge.storage.identifiers import CODE_IDENTIFIER as _CODE_IDENTIFIER
+from memoryforge.storage.identifiers import CONTENT_SHA256 as _CONTENT_SHA256
+from memoryforge.storage.identifiers import FEISHU_SOURCE_PATH as _FEISHU_SOURCE_PATH
+from memoryforge.storage.identifiers import ORIGIN_MAIN_SOURCE_ID as _ORIGIN_MAIN_SOURCE_ID
+from memoryforge.storage.projection import (
+    candidate_page_sources as candidate_page_sources,
+)
+from memoryforge.storage.projection import indexed_facts as _indexed_facts
+from memoryforge.storage.projection import (
+    is_generated_navigation_page as is_generated_navigation_page,
+)
+from memoryforge.storage.projection import (
+    is_generated_repository_overview as is_generated_repository_overview,
+)
+from memoryforge.storage.projection import is_stable_wiki_page_path as _is_stable_wiki_page_path
+from memoryforge.storage.projection import normalize_page_facts as _normalize_page_facts
+from memoryforge.storage.projection import normalize_page_sources as _normalize_page_sources
+from memoryforge.storage.projection import (
+    page_source_ids_from_frontmatter as _page_source_ids_from_frontmatter,
+)
+from memoryforge.storage.projection import (
+    validate_changeset_page_sources as validate_changeset_page_sources,
+)
+from memoryforge.storage.projection import validate_stable_page_paths as _validate_stable_page_paths
+from memoryforge.storage.version_store import GitVersionStore
+
+_blob_relative_path = blob_relative_path
+_blob_uri = blob_uri
+_cleanup_blob_temps = cleanup_blob_temps
+_cleanup_orphan_blob = cleanup_orphan_blob
+_connect = connect
+_connect_readonly = connect_readonly
+_no_follow_flag = no_follow_flag
+_read_blob_bytes = read_blob_bytes
+_unlink_blob = unlink_blob
+_verify_blob_hash = verify_blob_hash
+_write_blob = write_blob
 
 DATABASE_RELATIVE_PATH = Path(".memoryforge/index.sqlite")
 RAW_CATEGORIES = ("design", "postmortem", "summary", "notes", "refs")
@@ -62,15 +114,6 @@ _GITIGNORE_RULES = (
 )
 _CJK_RUN = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]+")
 _SEARCH_RUN = re.compile(r"[A-Za-z0-9_]+|[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]+")
-_CHAR_LOCATOR = re.compile(r"^chars:(?P<start>\d+)-(?P<end>\d+)$")
-_CONTENT_SHA256 = re.compile(r"^[a-f0-9]{64}$")
-_CODE_IDENTIFIER = re.compile(r"^[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*$")
-_ORIGIN_MAIN_SOURCE_ID = re.compile(r"^src_[a-f0-9]{16}$")
-_FEISHU_SOURCE_PATH = re.compile(r"^feishu/(?P<document_id>[A-Za-z0-9_-]{8,})\.md$")
-_BLOB_ROOT = Path("raw/blobs")
-_SECURE_DIR_FD_SUPPORTED = all(
-    function in os.supports_dir_fd for function in (os.open, os.mkdir, os.stat, os.unlink)
-)
 _BASELINE_PATHS = (
     ".gitignore",
     ".memoryforgeignore",
@@ -344,14 +387,6 @@ CREATE TRIGGER IF NOT EXISTS wiki_facts_au AFTER UPDATE ON wiki_facts BEGIN
   );
 END""",
 )
-
-
-class WorkspaceSecurityError(ValueError):
-    """Raised when a workspace path violates the local storage boundary."""
-
-
-class WorkspaceIntegrityError(RuntimeError):
-    """Raised when immutable evidence no longer matches its recorded digest."""
 
 
 @dataclass(frozen=True)
@@ -911,9 +946,10 @@ class Workspace:
         if version_store.has_repository():
             workspace.version_store.validate_metadata()
             workspace.current_commit()
-            from memoryforge.storage.apply_journal import recover_interrupted_apply
-
-            recover_interrupted_apply(workspace)
+            recover_interrupted_apply(
+                workspace,
+                rebuild_projection=rebuild_applied_projection,
+            )
         _upgrade_workspace_contract(resolved)
         workspace_database(resolved)
         _backfill_source_manifests(resolved)
@@ -1272,136 +1308,10 @@ def _registered_feishu_tags(value: object) -> tuple[str, ...]:
 
 
 def sync_git_checkout(workspace: Path, repository_id: str) -> GitRepositorySyncResult:
-    """Import committed documentation from one registered local checkout."""
-    from memoryforge.adapters.git_adapter import (
-        CODE_WIKI_VERSION,
-        scan_git_snapshot_code,
-        scan_git_snapshot_documentation,
-        snapshot_git_repository,
-    )
-    from memoryforge.adapters.importer import (
-        SourceValidationError,
-        import_local_document,
-        validate_local_document,
-    )
+    """Compatibility wrapper for :func:`memoryforge.adapters.git_sync.sync_git_checkout`."""
+    from memoryforge.adapters.git_sync import sync_git_checkout as sync
 
-    opened = Workspace.open(workspace)
-    repository = _get_git_repository(opened, repository_id)
-    snapshot = snapshot_git_repository(Path(repository.checkout_path))
-    if str(snapshot.repository_root) != repository.checkout_path:
-        raise WorkspaceError("registered Git checkout path no longer matches its repository root")
-    current_repository_id = hashlib.sha256(snapshot.repository_identity.encode("utf-8")).hexdigest()
-    if current_repository_id != repository.repository_id:
-        raise WorkspaceError("registered Git checkout identity changed; add it as a new checkout")
-
-    scanned_documents = list(
-        scan_git_snapshot_documentation(
-            snapshot,
-            sensitivity=repository.sensitivity,
-        )
-    )
-    scanned_documents.extend(
-        scan_git_snapshot_code(
-            snapshot,
-            list_git_code_modules(opened, repository.repository_id),
-            sensitivity=repository.sensitivity,
-        )
-    )
-    scanned_documents = sorted(
-        {document.source_path: document for document in scanned_documents}.values(),
-        key=lambda document: document.source_path,
-    )
-    reusable_paths = (
-        _current_git_paths(
-            opened,
-            repository.repository_id,
-            snapshot.revision,
-            repository.sensitivity,
-            code_wiki_version=CODE_WIKI_VERSION,
-        )
-        if repository.last_synced_commit == snapshot.revision
-        else set()
-    )
-    safe_documents = []
-    skipped = []
-
-    def can_reuse(document: LocalDocument) -> bool:
-        return not document.source_path.startswith(".memoryforge/code-modules/") and (
-            "code" not in document.tags or CODE_WIKI_VERSION in document.tags
-        )
-
-    for document in scanned_documents:
-        if document.source_path in reusable_paths and can_reuse(document):
-            safe_documents.append(document)
-            continue
-        try:
-            validate_local_document(document)
-        except SourceValidationError:
-            if "code" not in document.tags:
-                raise
-            skipped.append(document.source_path)
-            continue
-        safe_documents.append(document)
-    scanned_documents = safe_documents
-
-    documents: list[GitDocumentSyncResult] = []
-    counts = {"created": 0, "updated": 0, "unchanged": 0}
-    for document in scanned_documents:
-        source_id = hashlib.sha256(
-            f"{repository.repository_id}\0{document.source_path}".encode()
-        ).hexdigest()
-        if document.source_path in reusable_paths and can_reuse(document):
-            counts["unchanged"] += 1
-            documents.append(
-                GitDocumentSyncResult(
-                    source_id=source_id,
-                    relative_path=document.source_path,
-                    revision=snapshot.revision,
-                    status="unchanged",
-                )
-            )
-            continue
-        imported = import_local_document(opened.root, document, source_id=source_id)
-        _record_git_source_revision(
-            opened,
-            source_id=imported.source_id,
-            repository_id=repository.repository_id,
-            relative_path=document.source_path,
-            commit_sha=snapshot.revision,
-        )
-        counts[imported.status] += 1
-        documents.append(
-            GitDocumentSyncResult(
-                source_id=imported.source_id,
-                relative_path=document.source_path,
-                revision=snapshot.revision,
-                status=imported.status,
-            )
-        )
-
-    _reconcile_git_snapshot_sources(
-        opened,
-        repository_id=repository.repository_id,
-        current_paths={document.source_path for document in scanned_documents},
-    )
-    with _connect(opened.index_path) as connection:
-        connection.execute(
-            """
-            UPDATE git_repositories
-            SET last_synced_commit = ?
-            WHERE repository_id = ?
-            """,
-            (snapshot.revision, repository.repository_id),
-        )
-    return GitRepositorySyncResult(
-        repository_id=repository.repository_id,
-        head_commit=snapshot.revision,
-        created=counts["created"],
-        updated=counts["updated"],
-        unchanged=counts["unchanged"],
-        skipped=tuple(skipped),
-        documents=tuple(documents),
-    )
+    return sync(workspace, repository_id)
 
 
 def _reconcile_git_snapshot_sources(
@@ -2464,22 +2374,6 @@ def is_applied_source_version(
     return row is not None
 
 
-@contextmanager
-def _connect(database_path: Path) -> Iterator[sqlite3.Connection]:
-    connection = sqlite3.connect(database_path, timeout=30)
-    connection.row_factory = sqlite3.Row
-    connection.execute("PRAGMA foreign_keys = ON")
-    connection.execute("PRAGMA busy_timeout = 30000")
-    try:
-        yield connection
-        connection.commit()
-    except Exception:
-        connection.rollback()
-        raise
-    finally:
-        connection.close()
-
-
 def _validate_repository_scope(connection: sqlite3.Connection, repository_id: str) -> None:
     if _CONTENT_SHA256.fullmatch(repository_id) is None:
         raise ValueError("repository_id must be a SHA-256 hex digest")
@@ -2489,37 +2383,6 @@ def _validate_repository_scope(connection: sqlite3.Connection, repository_id: st
     ).fetchone()
     if row is None:
         raise ValueError("unknown Git repository: " + repository_id)
-
-
-@contextmanager
-def _connect_readonly(database_path: Path) -> Iterator[sqlite3.Connection]:
-    connection = sqlite3.connect(
-        database_path.as_uri() + "?mode=ro",
-        uri=True,
-        timeout=30,
-    )
-    connection.row_factory = sqlite3.Row
-    connection.execute("PRAGMA foreign_keys = ON")
-    connection.execute("PRAGMA query_only = ON")
-    connection.execute("PRAGMA busy_timeout = 30000")
-    try:
-        yield connection
-    finally:
-        connection.close()
-
-
-def candidate_page_sources(candidate_files: Mapping[str, str]) -> dict[str, tuple[str, ...]]:
-    """Read locally generated `sources` frontmatter for candidate stable pages."""
-    page_sources: dict[str, tuple[str, ...]] = {}
-    for path, content in candidate_files.items():
-        if _is_stable_wiki_page_path(path):
-            if is_generated_navigation_page(content):
-                continue
-            source_ids = _page_source_ids_from_frontmatter(content)
-            if not source_ids:
-                raise WorkspaceIntegrityError("candidate Wiki page has invalid sources metadata")
-            page_sources[path] = source_ids
-    return page_sources
 
 
 def validate_candidate_page_evidence(
@@ -2649,185 +2512,6 @@ def rebuild_applied_projection(workspace: Workspace) -> None:
                 for fact in sorted(page_facts[path], key=lambda item: item.fact_id)
             ),
         )
-
-
-def is_generated_repository_overview(content: str) -> bool:
-    """Recognize local navigation pages that deliberately have no source ownership."""
-    return _generated_navigation_kind(content) == "repository_overview"
-
-
-def is_generated_navigation_page(content: str) -> bool:
-    """Recognize locally derived navigation pages that own no source evidence."""
-    return _generated_navigation_kind(content) is not None
-
-
-def _generated_navigation_kind(content: str) -> str | None:
-    if not content.startswith("---\n"):
-        return None
-    closing = content.find("\n---\n", len("---\n"))
-    if closing < 0:
-        return None
-    fields = {
-        key.strip(): value.strip()
-        for line in content[len("---\n") : closing].splitlines()
-        for key, separator, value in (line.partition(":"),)
-        if separator
-    }
-    generated = fields.get("generated")
-    common = (
-        fields.get("type") == "entity"
-        and bool(fields.get("title"))
-        and bool(fields.get("summary"))
-        and _CONTENT_SHA256.fullmatch(fields.get("repository_id", "")) is not None
-        and "sources" not in fields
-    )
-    if not common:
-        return None
-    if generated == "repository_overview":
-        return generated
-    if (
-        generated == "code_module_overview"
-        and _CONTENT_SHA256.fullmatch(fields.get("module_id", "")) is not None
-    ):
-        return generated
-    return None
-
-
-def validate_changeset_page_sources(
-    page_sources: Mapping[str, tuple[str, ...]],
-    source_ids: Iterable[str],
-) -> None:
-    """Require candidate pages to give every ChangeSet source one page owner."""
-    if not page_sources:
-        return
-    expected_source_ids = set(source_ids)
-    source_owners: dict[str, str] = {}
-    for page_path, page_source_ids in page_sources.items():
-        for source_id in page_source_ids:
-            previous_page_path = source_owners.get(source_id)
-            if previous_page_path is not None:
-                raise WorkspaceIntegrityError(
-                    "candidate Wiki page source belongs to multiple pages: " + source_id
-                )
-            source_owners[source_id] = page_path
-    if set(source_owners) != expected_source_ids:
-        raise WorkspaceIntegrityError(
-            "candidate Wiki page sources must exactly match ChangeSet source IDs"
-        )
-
-
-def _normalize_page_sources(
-    page_sources: Mapping[str, tuple[str, ...]],
-) -> dict[str, tuple[str, ...]]:
-    normalized: dict[str, tuple[str, ...]] = {}
-    for page_path, source_ids in page_sources.items():
-        if not _is_stable_wiki_page_path(page_path):
-            raise ValueError("page source mappings must stay below wiki/pages/")
-        if not source_ids:
-            raise ValueError(f"page source mappings must include sources: {page_path}")
-        if len(source_ids) != len(set(source_ids)):
-            raise ValueError(f"page source mappings must not duplicate sources: {page_path}")
-        if any(_CONTENT_SHA256.fullmatch(source_id) is None for source_id in source_ids):
-            raise ValueError(f"page source mappings contain an invalid source ID: {page_path}")
-        normalized[page_path] = tuple(sorted(source_ids))
-    return normalized
-
-
-def _normalize_page_facts(
-    page_facts: Mapping[str, tuple[WikiFact, ...]],
-) -> dict[str, tuple[WikiFact, ...]]:
-    normalized: dict[str, tuple[WikiFact, ...]] = {}
-    _validate_stable_page_paths(page_facts)
-    for page_path, facts in page_facts.items():
-        if any(fact.page_path != page_path for fact in facts):
-            raise ValueError("Wiki fact page path does not match its mapping")
-        if len({fact.fact_id for fact in facts}) != len(facts):
-            raise ValueError(f"Wiki facts must have unique identities: {page_path}")
-        for fact in facts:
-            if _CONTENT_SHA256.fullmatch(fact.fact_id) is None:
-                raise ValueError("Wiki fact identity must be a SHA-256 digest")
-            if _CONTENT_SHA256.fullmatch(fact.source_id) is None:
-                raise ValueError("Wiki fact source identity must be a SHA-256 digest")
-            if fact.source_version < 1:
-                raise ValueError("Wiki fact SourceVersion must be positive")
-            if _CHAR_LOCATOR.fullmatch(fact.locator) is None:
-                raise ValueError("Wiki fact locator must be a character range")
-            if not fact.quote:
-                raise ValueError("Wiki fact quote must not be empty")
-        normalized[page_path] = tuple(sorted(facts, key=lambda fact: fact.fact_id))
-    return normalized
-
-
-def _validate_stable_page_paths(page_paths: Iterable[str]) -> None:
-    if any(not _is_stable_wiki_page_path(path) for path in page_paths):
-        raise ValueError("Wiki fact mappings must stay below wiki/pages/")
-
-
-def _indexed_facts(rows: Iterable[sqlite3.Row]) -> dict[str, tuple[IndexedWikiFact, ...]]:
-    facts: dict[str, list[IndexedWikiFact]] = {}
-    for row in rows:
-        page_path = str(row["page_path"])
-        facts.setdefault(page_path, []).append(
-            IndexedWikiFact(
-                fact_id=str(row["fact_id"]),
-                page_path=page_path,
-                repository_id=(
-                    str(row["repository_id"]) if row["repository_id"] is not None else None
-                ),
-                source_id=str(row["source_id"]),
-                source_version=int(row["source_version"]),
-                locator=str(row["locator"]),
-                section_path=str(row["section_path"]),
-                quote=str(row["quote"]),
-                routing_text=str(row["routing_text"]),
-                symbol=str(row["symbol"]) if row["symbol"] is not None else None,
-                relation_type=(
-                    str(row["relation_type"]) if row["relation_type"] is not None else None
-                ),
-            )
-        )
-    return {path: tuple(records) for path, records in facts.items()}
-
-
-def _is_stable_wiki_page_path(path: str) -> bool:
-    parts = PurePosixPath(path).parts
-    return (
-        "\\" not in path
-        and len(parts) >= 3
-        and parts[:2] == ("wiki", "pages")
-        and path.endswith(".md")
-        and all(part not in {"", ".", ".."} for part in parts)
-        and str(PurePosixPath(path)) == path
-    )
-
-
-def _page_source_ids_from_frontmatter(content: str) -> tuple[str, ...]:
-    if not content.startswith("---\n"):
-        return ()
-    closing = content.find("\n---\n", len("---\n"))
-    if closing < 0:
-        return ()
-    for line in content[len("---\n") : closing].splitlines():
-        key, separator, value = line.partition(":")
-        if key.strip() != "sources" or not separator:
-            continue
-        try:
-            decoded = json.loads(value.strip())
-        except json.JSONDecodeError as exc:
-            raise WorkspaceIntegrityError(
-                "candidate Wiki page has invalid sources metadata"
-            ) from exc
-        if not isinstance(decoded, list) or not all(
-            isinstance(source_id, str) for source_id in decoded
-        ):
-            raise WorkspaceIntegrityError("candidate Wiki page has invalid sources metadata")
-        source_ids = tuple(decoded)
-        if not source_ids or len(source_ids) != len(set(source_ids)):
-            raise WorkspaceIntegrityError("candidate Wiki page has invalid sources metadata")
-        if any(_CONTENT_SHA256.fullmatch(source_id) is None for source_id in source_ids):
-            raise WorkspaceIntegrityError("candidate Wiki page has invalid sources metadata")
-        return source_ids
-    return ()
 
 
 def _absolute_path(path: Path) -> Path:
@@ -3379,254 +3063,6 @@ def _backfill_source_manifests(root: Path) -> None:
             continue
         _verify_blob_hash(root, content_sha256, snapshot_path)
         store.write(manifest)
-
-
-def _write_blob(root: Path, content_sha256: str, content: bytes) -> tuple[Path, bool]:
-    relative = _blob_relative_path(content_sha256)
-    filename = relative.name
-    with _open_blob_chain(root, content_sha256, create=True) as chain:
-        prefix_fd = chain[-1][2]
-        _cleanup_stale_blob_temps(prefix_fd, content_sha256)
-        temp_name = f"{content_sha256}.tmp-{uuid.uuid4().hex}"
-        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | _no_follow_flag()
-        try:
-            descriptor = os.open(temp_name, flags, 0o600, dir_fd=prefix_fd)
-            with os.fdopen(descriptor, "wb") as snapshot:
-                snapshot.write(content)
-                snapshot.flush()
-                os.fsync(snapshot.fileno())
-                os.fchmod(snapshot.fileno(), 0o600)
-            _assert_blob_chain(root, chain)
-            try:
-                os.link(
-                    temp_name,
-                    filename,
-                    src_dir_fd=prefix_fd,
-                    dst_dir_fd=prefix_fd,
-                    follow_symlinks=False,
-                )
-                os.fsync(prefix_fd)
-                created = True
-            except FileExistsError:
-                try:
-                    _verify_blob_hash(root, content_sha256, relative)
-                    created = False
-                except WorkspaceIntegrityError:
-                    os.unlink(filename, dir_fd=prefix_fd)
-                    os.fsync(prefix_fd)
-                    os.link(
-                        temp_name,
-                        filename,
-                        src_dir_fd=prefix_fd,
-                        dst_dir_fd=prefix_fd,
-                        follow_symlinks=False,
-                    )
-                    os.fsync(prefix_fd)
-                    created = True
-            _assert_blob_chain(root, chain)
-            return relative, created
-        except Exception:
-            raise
-        finally:
-            with suppress(OSError):
-                os.unlink(temp_name, dir_fd=prefix_fd)
-                os.fsync(prefix_fd)
-
-
-def _cleanup_stale_blob_temps(prefix_fd: int, content_sha256: str) -> None:
-    prefix = f"{content_sha256}.tmp-"
-    for name in os.listdir(prefix_fd):
-        if name.startswith(prefix):
-            with suppress(OSError):
-                os.unlink(name, dir_fd=prefix_fd)
-    os.fsync(prefix_fd)
-
-
-def _cleanup_blob_temps(root: Path, content_sha256: str) -> None:
-    try:
-        with _open_blob_chain(root, content_sha256, create=False) as chain:
-            _cleanup_stale_blob_temps(chain[-1][2], content_sha256)
-    except FileNotFoundError:
-        return
-
-
-def _verify_blob_hash(
-    root: Path,
-    content_sha256: str,
-    relative: Path,
-    *,
-    repair_permissions: bool = True,
-) -> None:
-    _read_blob_bytes(
-        root,
-        content_sha256,
-        relative,
-        repair_permissions=repair_permissions,
-    )
-
-
-def _read_blob_bytes(
-    root: Path,
-    content_sha256: str,
-    relative: Path,
-    *,
-    repair_permissions: bool = True,
-) -> bytes:
-    expected_relative = _blob_relative_path(content_sha256)
-    if relative != expected_relative:
-        raise WorkspaceIntegrityError("blob integrity metadata is inconsistent")
-
-    content = bytearray()
-    try:
-        with _open_blob_chain(root, content_sha256, create=False) as chain:
-            prefix_fd = chain[-1][2]
-            descriptor = os.open(
-                expected_relative.name,
-                os.O_RDONLY | _no_follow_flag(),
-                dir_fd=prefix_fd,
-            )
-            try:
-                file_stat = os.fstat(descriptor)
-                if not stat.S_ISREG(file_stat.st_mode):
-                    raise WorkspaceSecurityError("immutable blob must be a regular file")
-                digest = hashlib.sha256()
-                with os.fdopen(descriptor, "rb", closefd=False) as snapshot:
-                    for chunk in iter(lambda: snapshot.read(1024 * 1024), b""):
-                        digest.update(chunk)
-                        content.extend(chunk)
-                if repair_permissions:
-                    os.fchmod(descriptor, 0o600)
-            finally:
-                os.close(descriptor)
-            _assert_blob_chain(root, chain)
-    except FileNotFoundError as exc:
-        raise WorkspaceIntegrityError("blob integrity check failed: evidence is missing") from exc
-    except OSError as exc:
-        raise WorkspaceSecurityError("secure blob verification failed") from exc
-
-    if digest.hexdigest() != content_sha256:
-        raise WorkspaceIntegrityError("blob integrity check failed: digest mismatch")
-    return bytes(content)
-
-
-def _cleanup_orphan_blob(root: Path, database_path: Path, content_sha256: str) -> None:
-    try:
-        with _connect(database_path) as connection:
-            connection.execute("BEGIN IMMEDIATE")
-            exists = connection.execute(
-                "SELECT 1 FROM blobs WHERE content_sha256 = ?",
-                (content_sha256,),
-            ).fetchone()
-            if exists is None:
-                _unlink_blob(root, content_sha256)
-    except (OSError, sqlite3.Error):
-        # The import error remains the primary failure. A later import verifies or reuses
-        # content-addressed orphan blobs safely.
-        return
-
-
-def _unlink_blob(root: Path, content_sha256: str) -> None:
-    try:
-        with _open_blob_chain(root, content_sha256, create=False) as chain:
-            os.unlink(
-                _blob_relative_path(content_sha256).name,
-                dir_fd=chain[-1][2],
-            )
-    except (FileNotFoundError, WorkspaceSecurityError):
-        return
-
-
-@contextmanager
-def _open_blob_chain(
-    root: Path,
-    content_sha256: str,
-    *,
-    create: bool,
-) -> Iterator[list[tuple[int, str, int]]]:
-    _require_secure_dir_fd_support()
-    descriptors: list[int] = []
-    chain: list[tuple[int, str, int]] = []
-    directory_flags = os.O_RDONLY | _directory_flag() | _no_follow_flag()
-    try:
-        root_fd = os.open(root, directory_flags)
-        descriptors.append(root_fd)
-        raw_fd = _open_directory_at(root_fd, "raw", create=False)
-        descriptors.append(raw_fd)
-        chain.append((root_fd, "raw", raw_fd))
-        blobs_fd = _open_directory_at(raw_fd, "blobs", create=create)
-        descriptors.append(blobs_fd)
-        chain.append((raw_fd, "blobs", blobs_fd))
-        prefix = content_sha256[:2]
-        prefix_fd = _open_directory_at(blobs_fd, prefix, create=create)
-        descriptors.append(prefix_fd)
-        chain.append((blobs_fd, prefix, prefix_fd))
-        _assert_blob_chain(root, chain)
-        yield chain
-    finally:
-        for descriptor in reversed(descriptors):
-            os.close(descriptor)
-
-
-def _open_directory_at(parent_fd: int, name: str, *, create: bool) -> int:
-    flags = os.O_RDONLY | _directory_flag() | _no_follow_flag()
-    try:
-        descriptor = os.open(name, flags, dir_fd=parent_fd)
-    except FileNotFoundError:
-        if not create:
-            raise
-        with suppress(FileExistsError):
-            os.mkdir(name, 0o700, dir_fd=parent_fd)
-        descriptor = os.open(name, flags, dir_fd=parent_fd)
-    os.fchmod(descriptor, 0o700)
-    return descriptor
-
-
-def _assert_blob_chain(root: Path, chain: list[tuple[int, str, int]]) -> None:
-    root_stat = root.stat(follow_symlinks=False)
-    opened_root_stat = os.fstat(chain[0][0])
-    if (root_stat.st_dev, root_stat.st_ino) != (
-        opened_root_stat.st_dev,
-        opened_root_stat.st_ino,
-    ):
-        raise WorkspaceSecurityError("workspace changed during blob operation")
-
-    for parent_fd, name, child_fd in chain:
-        path_stat = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
-        opened_stat = os.fstat(child_fd)
-        if not stat.S_ISDIR(path_stat.st_mode) or (path_stat.st_dev, path_stat.st_ino) != (
-            opened_stat.st_dev,
-            opened_stat.st_ino,
-        ):
-            raise WorkspaceSecurityError("workspace directory changed during blob operation")
-
-
-def _require_secure_dir_fd_support() -> None:
-    if not _SECURE_DIR_FD_SUPPORTED:
-        raise WorkspaceSecurityError("secure blob operations are unsupported on this platform")
-    if not hasattr(os, "O_DIRECTORY") or not hasattr(os, "O_NOFOLLOW"):
-        raise WorkspaceSecurityError("secure blob operations are unsupported on this platform")
-
-
-def _directory_flag() -> int:
-    flag = getattr(os, "O_DIRECTORY", None)
-    if flag is None:
-        raise WorkspaceSecurityError("secure blob operations are unsupported on this platform")
-    return int(flag)
-
-
-def _no_follow_flag() -> int:
-    flag = getattr(os, "O_NOFOLLOW", None)
-    if flag is None:
-        raise WorkspaceSecurityError("secure blob operations are unsupported on this platform")
-    return int(flag)
-
-
-def _blob_relative_path(content_sha256: str) -> Path:
-    return _BLOB_ROOT / content_sha256[:2] / f"{content_sha256}.blob"
-
-
-def _blob_uri(content_sha256: str) -> str:
-    return f"mf://blob/{content_sha256}"
 
 
 def _search_terms(text: str) -> str:

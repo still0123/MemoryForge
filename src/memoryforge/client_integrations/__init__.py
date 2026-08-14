@@ -33,6 +33,7 @@ def get_adapter(agent: str) -> ModuleType:
 
     return import_module(module_name)
 
+
 __all__ = [
     "codex",
     "claude",

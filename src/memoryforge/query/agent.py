@@ -8,8 +8,8 @@ from pathlib import Path
 from time import perf_counter
 from typing import Literal, TypedDict
 
-from memoryforge.storage.changesets import ChangeSetStore
 from memoryforge.compiler.compiler import propose_agent_update
+from memoryforge.compiler.wiki_facts import CitationPayload
 from memoryforge.query.provider import (
     AgentStep,
     OpenAICompatibleProvider,
@@ -22,7 +22,7 @@ from memoryforge.query.query import (
     answer_question,
 )
 from memoryforge.query.sessions import SessionStore, render_context, rewrite_query, save_turn
-from memoryforge.compiler.wiki_facts import CitationPayload
+from memoryforge.storage.changesets import ChangeSetStore
 from memoryforge.storage.workspace import (
     Workspace,
     is_public_source_version,

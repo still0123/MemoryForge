@@ -438,10 +438,10 @@ def test_doctor_reports_codex_registration(
     fake = _FakeCodex()
     fake.servers["memoryforge-demo-12345678"] = ["/usr/bin/python3", "-m", "x"]
     monkeypatch.setattr(
-        "memoryforge.cli.shutil.which",
+        "memoryforge.interface.doctor.shutil.which",
         lambda name: _FAKE_CODEX if name == "codex" else None,
     )
-    monkeypatch.setattr("memoryforge.cli.subprocess.run", fake.run)
+    monkeypatch.setattr("memoryforge.interface.doctor.subprocess.run", fake.run)
     runner = CliRunner()
 
     result = runner.invoke(app, ["doctor", "--workspace", str(tmp_path)])
@@ -457,7 +457,7 @@ def test_doctor_reports_missing_codex(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr("memoryforge.cli.shutil.which", lambda name: None)
+    monkeypatch.setattr("memoryforge.interface.doctor.shutil.which", lambda name: None)
     runner = CliRunner()
 
     result = runner.invoke(app, ["doctor", "--workspace", str(tmp_path)])

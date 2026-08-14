@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import subprocess
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 
 class CodeHistoryResult(BaseModel):
@@ -103,7 +103,7 @@ def why_changed(
         if name_status.returncode == 0:
             changed_paths = [p for p in name_status.stdout.splitlines() if p.strip()]
 
-        author_time = datetime.fromtimestamp(author_time_int, tz=timezone.utc).isoformat()
+        author_time = datetime.fromtimestamp(author_time_int, tz=UTC).isoformat()
         commits_list.append(
             {
                 "sha": sha,

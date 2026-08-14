@@ -12,8 +12,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from memoryforge.core.errors import MemoryForgeError
 from memoryforge.adapters.importer import import_local_document
+from memoryforge.core.errors import MemoryForgeError
 from memoryforge.core.models import ImportResult, LocalDocument, Sensitivity, SourceCategory
 from memoryforge.storage.workspace import (
     Workspace,

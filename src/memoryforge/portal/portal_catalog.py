@@ -13,9 +13,9 @@ from pathlib import PurePosixPath
 from typing import Any
 
 from memoryforge.portal.showcase import _markdown_document
+from memoryforge.storage.database import connect_readonly as _connect_readonly
 from memoryforge.storage.workspace import (
     Workspace,
-    _connect_readonly,
     find_applied_page_paths,
     find_applied_wiki_fact_page_paths,
 )
