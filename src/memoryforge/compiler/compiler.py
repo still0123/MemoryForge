@@ -20,6 +20,7 @@ from memoryforge.compiler.index_rendering import (
 from memoryforge.compiler.source_rendering import (
     CurrentSource,
     _canonical_page_path,
+    _feishu_facts,
     _meaningful_paragraphs,
     _read_source_text,
     _render_code_page,
@@ -309,6 +310,12 @@ def _compile_deterministically(
                 candidate_files[path] = _render_code_page(source, content)
             elif "conversation" in source.tags:
                 candidate_files[path] = _render_conversation_page(source, content)
+            elif "feishu" in source.tags:
+                candidate_files[path] = _render_page(
+                    source,
+                    _feishu_facts(content),
+                    preserve_markdown=True,
+                )
             else:
                 candidate_files[path] = _render_page(source, _meaningful_paragraphs(content))
         else:
@@ -494,6 +501,12 @@ def _compile_stale_pages(
                 candidate_files[stale_page.path] = _render_code_page(source, content)
             elif "conversation" in source.tags:
                 candidate_files[stale_page.path] = _render_conversation_page(source, content)
+            elif "feishu" in source.tags:
+                candidate_files[stale_page.path] = _render_page(
+                    source,
+                    _feishu_facts(content),
+                    preserve_markdown=True,
+                )
             else:
                 candidate_files[stale_page.path] = _render_page(
                     source,

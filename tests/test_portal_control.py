@@ -455,6 +455,30 @@ def test_running_job_becomes_retryable_failure_after_restart(tmp_path: Path) -> 
         recovered.close()
 
 
+@pytest.mark.parametrize("status", ["queued", "running"])
+def test_submit_apply_reuses_active_job(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    status: str,
+) -> None:
+    workspace = Workspace.initialize(tmp_path / "workspace").root
+    manager = PortalJobManager(workspace)
+    monkeypatch.setattr(manager, "_ensure_worker", lambda: None)
+    try:
+        first = manager.submit_apply("chg_same", "同一更新")
+        path = manager.jobs_dir / f"{first['id']}.json"
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        payload["status"] = status
+        path.write_text(json.dumps(payload), encoding="utf-8")
+
+        repeated = manager.submit_apply("chg_same", "重复点击")
+
+        assert repeated["id"] == first["id"]
+        assert len(list(manager.jobs_dir.glob("job_*.json"))) == 1
+    finally:
+        manager.close()
+
+
 def test_retry_after_compile_failure_reuses_imported_source(
     tmp_path: Path,
     monkeypatch,

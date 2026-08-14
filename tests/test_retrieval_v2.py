@@ -437,6 +437,86 @@ def test_exact_full_identifier_boost() -> None:
         assert exact_cand.fused_score >= lexical_cand.fused_score - 1e-9
 
 
+def test_source_kind_routes_code_feishu_and_conversation_questions() -> None:
+    entity = "QuotaManager"
+    facts = [
+        {
+            "page_path": "wiki/pages/code.md",
+            "source_id": SRC_A,
+            "source_version": 1,
+            "locator": "chars:0-50",
+            "section_path": "Verified symbols",
+            "quote": "`pkg.QuotaManager.apply` (method): `def apply()`",
+            "routing_text": "QuotaManager apply method",
+            "symbol": "pkg.QuotaManager.apply",
+            "relation_type": None,
+            "repository_id": REPO_ID,
+            "source_kind": "code",
+        },
+        {
+            "page_path": "wiki/pages/feishu.md",
+            "source_id": SRC_B,
+            "source_version": 2,
+            "locator": "chars:50-100",
+            "section_path": "配额管理 / 操作步骤",
+            "quote": "在飞书控制台打开 QuotaManager 后点击保存。",
+            "routing_text": "QuotaManager 配额 操作 步骤 配置",
+            "symbol": None,
+            "relation_type": None,
+            "repository_id": None,
+            "source_kind": "feishu",
+        },
+        {
+            "page_path": "wiki/pages/conversation.md",
+            "source_id": "d" * 64,
+            "source_version": 3,
+            "locator": "chars:100-150",
+            "section_path": "Assistant conclusions",
+            "quote": "上次会话确认 QuotaManager 的配额调整由值班同学执行。",
+            "routing_text": "QuotaManager 配额 会话 历史",
+            "symbol": None,
+            "relation_type": None,
+            "repository_id": None,
+            "source_kind": "conversation",
+        },
+    ]
+
+    code = retrieve_candidates(
+        Path("/tmp"),
+        f"{entity}.apply 的作用",
+        repository_id=None,
+        visible_source=_all_visible,
+        max_pages=3,
+        wiki_facts=facts,
+    )
+    feishu = retrieve_candidates(
+        Path("/tmp"),
+        f"{entity} 的配置操作步骤",
+        repository_id=None,
+        visible_source=_all_visible,
+        max_pages=3,
+        wiki_facts=facts,
+    )
+    conversation = retrieve_candidates(
+        Path("/tmp"),
+        f"上次会话怎么讨论 {entity} 配额",
+        repository_id=None,
+        visible_source=_all_visible,
+        max_pages=3,
+        wiki_facts=facts,
+    )
+
+    assert code.candidates[0].source_kind == "code"
+    assert code.candidates[0].kind == "symbol"
+    assert feishu.candidates[0].source_kind == "feishu"
+    assert conversation.candidates[0].source_kind == "conversation"
+    assert {candidate.source_kind for candidate in feishu.candidates} == {
+        "code",
+        "feishu",
+        "conversation",
+    }
+
+
 def test_relation_lane_expands_symbol_hits() -> None:
     facts = _make_facts()
     symbols = _make_symbols()

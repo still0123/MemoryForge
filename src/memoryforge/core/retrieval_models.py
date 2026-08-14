@@ -20,6 +20,7 @@ class RetrievalCandidate:
     source_version: int
     locator: str
     kind: Literal["page", "symbol", "relation"]
+    source_kind: Literal["code", "feishu", "conversation", "note"]
     exact_rank: int | None
     lexical_rank: int | None
     relation_rank: int | None

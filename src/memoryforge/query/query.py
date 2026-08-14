@@ -124,9 +124,28 @@ def answer_question(
     prefer_environment_assignments = "环境变量" in question
     prefer_code_assignments = any(marker in question for marker in ("换算", "计算", "转换", "转成"))
     prefer_failure_facts = bool({"不可", "可用", "失败", "超时"} & base_question_terms)
+    prefer_feishu_operations = any(
+        marker in question.lower()
+        for marker in (
+            "飞书",
+            "步骤",
+            "操作",
+            "流程",
+            "配置",
+            "开通",
+            "申请",
+            "设置",
+            "how to",
+            "steps",
+            "procedure",
+            "configure",
+            "setup",
+        )
+    )
     use_section_routes = (
         prefer_environment_assignments
         or prefer_failure_facts
+        or prefer_feishu_operations
         or any(marker in question for marker in ("子模块", "字段", "属性", "方法", "作用"))
     )
     prefer_code_modules = (
@@ -258,6 +277,7 @@ def answer_question(
     local_morphology_pages: set[str] = set()
     code_page_paths: set[str] = set()
     conversation_page_paths: set[str] = set()
+    feishu_page_paths: set[str] = set()
     code_page_identifiers: dict[str, set[str]] = {}
     retrieval_page_paths = (
         tuple(dict.fromkeys(candidate.page_path for candidate in retrieval_v2_result.candidates))
@@ -293,6 +313,8 @@ def answer_question(
         )
         if '"conversation"' in frontmatter:
             conversation_page_paths.add(page_path)
+        if '"feishu"' in frontmatter:
+            feishu_page_paths.add(page_path)
         title_match = _PAGE_TITLE.search(prefix)
         conversation_title = ""
         if page_path in conversation_page_paths and title_match is not None:
@@ -407,9 +429,11 @@ def answer_question(
         prefer_code_modules=prefer_code_modules,
         exact_symbol_fact_keys=exact_symbol_fact_keys,
         conversation_page_paths=conversation_page_paths,
+        feishu_page_paths=feishu_page_paths,
         prefer_capability_facts=prefer_capability_facts,
         prefer_cleanup_conclusion=prefer_cleanup_conclusion,
         prefer_exact_identifiers=identifier_terms,
+        prefer_feishu_operations=prefer_feishu_operations,
     )
     candidate_matches = _rank_matches(
         raw_candidate_matches,
@@ -424,9 +448,11 @@ def answer_question(
         prefer_code_modules=prefer_code_modules,
         exact_symbol_fact_keys=exact_symbol_fact_keys,
         conversation_page_paths=conversation_page_paths,
+        feishu_page_paths=feishu_page_paths,
         prefer_capability_facts=prefer_capability_facts,
         prefer_cleanup_conclusion=prefer_cleanup_conclusion,
         prefer_exact_identifiers=identifier_terms,
+        prefer_feishu_operations=prefer_feishu_operations,
     )
     model_candidates = [
         match for match in candidate_matches if _has_direct_evidence(question_terms, match[2])
@@ -1036,11 +1062,25 @@ def _retrieval_wiki_facts(
         with _connect_readonly(database) as connection:
             query = """
                 SELECT facts.page_path, facts.repository_id, repositories.name AS repository_name,
-                       facts.source_id,
+                       facts.source_id, versions.title AS source_title,
+                       CASE
+                           WHEN instr(versions.tags_json, '"conversation"') > 0
+                               THEN 'conversation'
+                           WHEN instr(versions.tags_json, '"feishu"') > 0
+                                OR sources.source_path LIKE 'feishu/%'
+                               THEN 'feishu'
+                           WHEN facts.repository_id IS NOT NULL
+                                OR instr(versions.tags_json, '"code"') > 0
+                                OR instr(versions.tags_json, '"code-module"') > 0
+                               THEN 'code'
+                           ELSE 'note'
+                       END AS source_kind,
                        facts.source_version, facts.locator, facts.section_path,
                        facts.quote, facts.routing_text, facts.symbol, facts.relation_type
                 FROM wiki_fact_fts
                 JOIN wiki_facts AS facts ON facts.id = wiki_fact_fts.rowid
+                JOIN source_versions AS versions ON versions.id = facts.source_version
+                JOIN sources AS sources ON sources.id = versions.source_id
                 JOIN applied_source_versions AS applied
                   ON applied.source_id = facts.source_id
                  AND applied.source_version_id = facts.source_version
@@ -1496,15 +1536,18 @@ def _rank_matches(
     prefer_code_modules: bool = False,
     exact_symbol_fact_keys: set[tuple[str, str, int, str, str]] | None = None,
     conversation_page_paths: set[str] | None = None,
+    feishu_page_paths: set[str] | None = None,
     prefer_capability_facts: bool = False,
     prefer_cleanup_conclusion: bool = False,
     prefer_exact_identifiers: set[str] | None = None,
+    prefer_feishu_operations: bool = False,
 ) -> list[tuple[tuple[int, ...], str, CitationPayload]]:
     page_ranks = page_ranks or {}
     local_morphology_pages = local_morphology_pages or set()
     focus_terms = focus_terms or set()
     exact_symbol_fact_keys = exact_symbol_fact_keys or set()
     conversation_page_paths = conversation_page_paths or set()
+    feishu_page_paths = feishu_page_paths or set()
     prefer_exact_identifiers = prefer_exact_identifiers or set()
     page_aware = bool(page_ranks) and not any(_CJK.fullmatch(term) for term in question_terms)
     frequencies = Counter(
@@ -1545,6 +1588,12 @@ def _rank_matches(
                 bool(prefer_exact_identifiers)
                 and prefer_exact_identifiers <= _citation_terms(citation)
             ),
+            int(
+                prefer_feishu_operations
+                and page_path in feishu_page_paths
+                and bool(citation.get("section_path"))
+            ),
+            int(prefer_feishu_operations and page_path in feishu_page_paths),
             int(
                 prefer_capability_facts
                 and summary

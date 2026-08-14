@@ -13,6 +13,36 @@ _IDENT_TOKEN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*"
 _WORD = re.compile(r"[a-z0-9]+|[\u4e00-\u9fff]+", re.IGNORECASE)
 _CJK = re.compile(r"^[\u4e00-\u9fff]+$")
 _HYPHENATED_NAME = re.compile(r"(?<![A-Za-z0-9])([A-Za-z][A-Za-z0-9]*(?:-[A-Za-z0-9]+)+)")
+_EXPLICIT_CODE_IDENTIFIER = re.compile(
+    r"`[^`]+`|[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)+|"
+    r"[A-Za-z_$][A-Za-z0-9$]*_[A-Za-z0-9_$]+|[A-Za-z]+[A-Z][A-Za-z0-9_$]*"
+)
+_CONVERSATION_MARKERS = (
+    "会话",
+    "聊天",
+    "刚才",
+    "上次",
+    "之前说",
+    "我们聊",
+    "conversation",
+    "chat history",
+    "previously discussed",
+)
+_FEISHU_OPERATION_MARKERS = (
+    "飞书",
+    "步骤",
+    "操作",
+    "流程",
+    "配置",
+    "开通",
+    "申请",
+    "设置",
+    "how to",
+    "steps",
+    "procedure",
+    "configure",
+    "setup",
+)
 
 
 def retrieve_candidates(
@@ -40,6 +70,9 @@ def retrieve_candidates(
     )
 
     routes: list[str] = []
+    preferred_source_kind = _preferred_source_kind(question)
+    if preferred_source_kind is not None:
+        routes.append(f"source_{preferred_source_kind}")
 
     exact_hits = _exact_lane(question, facts, repository_id)
     if exact_hits:
@@ -138,6 +171,9 @@ def retrieve_candidates(
             fused_score += 1.0 / (60.0 + relation_rank)
         if key in exact_full_hit_keys:
             fused_score += 0.02
+        source_kind = _source_kind(fact)
+        if source_kind == preferred_source_kind:
+            fused_score += 0.01
 
         kind: Literal["page", "symbol", "relation"] = "page"
         if fact.get("symbol"):
@@ -152,6 +188,7 @@ def retrieve_candidates(
                 source_version=fact["source_version"],
                 locator=fact["locator"],
                 kind=kind,
+                source_kind=source_kind,
                 exact_rank=exact_rank,
                 lexical_rank=lexical_rank,
                 relation_rank=relation_rank,
@@ -261,6 +298,7 @@ def _lexical_lane(
                 fact.get("routing_text", "") or "",
                 fact.get("quote", "") or "",
                 fact.get("section_path", "") or "",
+                fact.get("source_title", "") or "",
                 fact.get("page_path", "") or "",
             ]
         )
@@ -384,3 +422,32 @@ def _cross_repository_lane(
         (fact, index + 1 if priority == 0 else index + 20)
         for index, (priority, fact) in enumerate(hits[:20])
     ]
+
+
+def _source_kind(
+    fact: dict[str, Any],
+) -> Literal["code", "feishu", "conversation", "note"]:
+    value = fact.get("source_kind")
+    if value in {"code", "feishu", "conversation", "note"}:
+        return value
+    if fact.get("symbol") or fact.get("relation_type") or fact.get("repository_id"):
+        return "code"
+    return "note"
+
+
+def _preferred_source_kind(
+    question: str,
+) -> Literal["code", "feishu", "conversation"] | None:
+    lowered = question.lower()
+    if any(marker in lowered for marker in _CONVERSATION_MARKERS):
+        return "conversation"
+    if any(marker in lowered for marker in _FEISHU_OPERATION_MARKERS):
+        return "feishu"
+    if _EXPLICIT_CODE_IDENTIFIER.search(question):
+        return "code"
+    if any(
+        marker in lowered
+        for marker in (" call ", " calls ", " import ", " imports ", " dependency ")
+    ) or any(marker in question for marker in ("调用", "导入", "依赖", "继承", "实现")):
+        return "code"
+    return None

@@ -176,6 +176,7 @@ class PortalJobManager:
             name=f"应用 {name}",
             kind="apply",
             payload={"changeset_id": changeset_id},
+            reuse_active=True,
         )
         return _public_job(job)
 
@@ -216,7 +217,14 @@ class PortalJobManager:
             self._queue.put(None)
             self._worker.join(timeout=5)
 
-    def _new_job(self, *, name: str, kind: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _new_job(
+        self,
+        *,
+        name: str,
+        kind: str,
+        payload: dict[str, Any],
+        reuse_active: bool = False,
+    ) -> dict[str, Any]:
         if self._closed:
             raise RuntimeError("job manager is closed")
         job = {
@@ -238,6 +246,19 @@ class PortalJobManager:
             "result": {},
         }
         with self._state_lock:
+            if reuse_active:
+                existing = next(
+                    (
+                        item
+                        for item in self._read_all()
+                        if item["type"] == kind
+                        and item["status"] in _ACTIVE_STATUSES
+                        and item["payload"] == payload
+                    ),
+                    None,
+                )
+                if existing is not None:
+                    return existing
             self._write(job)
             self._queue.put(str(job["id"]))
             self._ensure_worker()

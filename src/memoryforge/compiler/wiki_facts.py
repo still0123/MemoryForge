@@ -10,7 +10,7 @@ from pathlib import PurePosixPath
 from typing import Literal, NotRequired, TypedDict
 
 _FACT = re.compile(
-    r"^- (?P<quote>.+?)(?P<references>(?: \[\^[^\]]+\])+)$",
+    r"^(?:[-*+]|\d+[.)]) (?P<quote>.+?)(?P<references>(?: \[\^[^\]]+\])+)$",
     re.MULTILINE,
 )
 _FOOTNOTE_REFERENCE = re.compile(r"\[\^(?P<footnote>[^\]]+)\]")

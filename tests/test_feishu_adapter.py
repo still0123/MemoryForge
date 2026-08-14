@@ -10,9 +10,10 @@ import pytest
 from typer.testing import CliRunner
 
 import memoryforge.adapters.feishu_adapter as feishu_adapter
-from memoryforge.interface.cli import app
 from memoryforge.adapters.feishu_adapter import FeishuDocumentError, refresh_feishu_documents
-from memoryforge.storage.workspace import Workspace, list_feishu_documents
+from memoryforge.interface.cli import app
+from memoryforge.storage.workspace import Workspace, list_feishu_documents, search_wiki_facts
+from tests.cli_helpers import review_approve_apply
 
 
 def test_feishu_import_fetches_markdown_as_local_only_source(tmp_path: Path, monkeypatch) -> None:
@@ -312,6 +313,72 @@ def test_refresh_registers_a_preexisting_feishu_source(tmp_path: Path, monkeypat
     assert [(item.document_id, item.category.value, item.tags) for item in registered] == [
         ("doxcn12345678", "notes", ())
     ]
+
+
+def test_feishu_compiler_keeps_nested_and_tail_sections_searchable(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workspace = tmp_path / "workspace"
+    runner = CliRunner()
+    assert runner.invoke(app, ["init", str(workspace)]).exit_code == 0
+    chapters = [
+        (
+            f"## 章节 {index}\n\n"
+            f"章节 {index} 概览。\n\n"
+            f"章节 {index} 规则甲。\n\n"
+            f"章节 {index} 规则乙。\n"
+        )
+        for index in range(1, 20)
+    ]
+    chapters.append(
+        "## 章节 20\n\n"
+        "末尾章节概览。\n\n"
+        "### 最终步骤\n\n"
+        "1. 打开最终控制台。\n"
+        "2. 点击 SaveFinalConfig 保存配置。\n"
+    )
+    source_text = "# 飞书操作手册\n\n" + "\n".join(chapters)
+    monkeypatch.setattr(
+        feishu_adapter,
+        "_fetch_document",
+        lambda _reference: {
+            "document_id": "doxcn12345678",
+            "content": f"<title>飞书操作手册</title>\n{source_text}",
+        },
+    )
+
+    imported = runner.invoke(
+        app,
+        ["feishu-import", "doxcn12345678", "--workspace", str(workspace)],
+    )
+    assert imported.exit_code == 0, imported.output
+    staged = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
+    assert staged.exit_code == 0, staged.output
+    changeset_id = json.loads(staged.stdout)["changeset_id"]
+    reviewed = runner.invoke(
+        app,
+        ["review", changeset_id, "--workspace", str(workspace)],
+    )
+    page = next(
+        content
+        for path, content in json.loads(reviewed.stdout)["candidate_files"].items()
+        if path.startswith("wiki/pages/")
+    )
+
+    assert "#### 飞书操作手册 / 章节 20" in page
+    assert "##### 飞书操作手册 / 章节 20 / 最终步骤" in page
+    assert "1. 打开最终控制台。" in page
+    assert "2. 点击 SaveFinalConfig 保存配置。" in page
+    step_start = source_text.index("打开最终控制台。")
+    assert f"`chars:{step_start}-{step_start + len('打开最终控制台。')}`" in page
+
+    applied = review_approve_apply(runner, changeset_id, workspace)
+    assert applied.exit_code == 0, applied.output
+    matches = search_wiki_facts(workspace, "SaveFinalConfig")
+    assert matches
+    assert matches[0].quote == "点击 SaveFinalConfig 保存配置。"
+    assert matches[0].section_path == "飞书操作手册 / 章节 20 / 最终步骤"
 
 
 def _current_feishu_sources(workspace: Path) -> dict[str, str]:

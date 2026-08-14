@@ -50,7 +50,7 @@ _MARKDOWN_HEADING = re.compile(
     re.MULTILINE,
 )
 _MARKDOWN_LIST_ITEM = re.compile(
-    r"^[ \t]*(?:[-*+]|\d+[.)])[ \t]+"
+    r"^[ \t]*(?P<marker>[-*+]|\d+[.)])[ \t]+"
     r"(?P<fact>[^\n]+(?:\n(?![ \t]*(?:[-*+]|\d+[.)])[ \t]+)[ \t]+\S[^\n]*)*)[ \t]*$",
     re.MULTILINE,
 )
@@ -90,6 +90,8 @@ class SourceFact:
     quote: str
     start: int
     section_path: tuple[str, ...]
+    kind: str = "paragraph"
+    marker: str = ""
 
 
 def _read_source_text(workspace: Workspace, source: CurrentSource) -> str:
@@ -97,22 +99,44 @@ def _read_source_text(workspace: Workspace, source: CurrentSource) -> str:
 
 
 def _meaningful_paragraphs(content: str) -> list[SourceFact]:
-    facts: list[tuple[str, int]] = []
+    facts = _markdown_facts(content)
+    if facts:
+        return facts[:_LOCAL_FACT_LIMIT]
+    for line in content.splitlines():
+        candidate = line.lstrip("#").strip()
+        if candidate:
+            start = content.index(candidate)
+            return [
+                SourceFact(
+                    quote=candidate,
+                    start=start,
+                    section_path=_section_path_at(_markdown_headings(content), start),
+                )
+            ]
+    raise ValueError("source contains no meaningful text")
+
+
+def _markdown_facts(content: str) -> list[SourceFact]:
+    facts: list[tuple[str, int, str, str]] = []
     structured_ranges: list[tuple[int, int]] = []
     for match in re.finditer(
-        r"^```[^\n]*\n(?P<fact>.*?)^```[ \t]*$", content, re.MULTILINE | re.DOTALL
+        r"^```(?P<info>[^\n]*)\n(?P<fact>.*?)^```[ \t]*$",
+        content,
+        re.MULTILINE | re.DOTALL,
     ):
         quote = match.group("fact").strip()
         if quote:
             leading = len(match.group("fact")) - len(match.group("fact").lstrip())
-            facts.append((quote, match.start("fact") + leading))
+            facts.append(
+                (quote, match.start("fact") + leading, "code", match.group("info").strip())
+            )
         structured_ranges.append(match.span())
     for match in re.finditer(r"^(?:\|.*\|\n?){2,}", content, re.MULTILINE):
         if any(start < match.end() and match.start() < end for start, end in structured_ranges):
             continue
         quote = match.group().strip()
         if quote:
-            facts.append((quote, match.start()))
+            facts.append((quote, match.start(), "table", ""))
         structured_ranges.append(match.span())
     for match in _MARKDOWN_LIST_ITEM.finditer(content):
         if any(start < match.end() and match.start() < end for start, end in structured_ranges):
@@ -120,7 +144,9 @@ def _meaningful_paragraphs(content: str) -> list[SourceFact]:
         quote = match.group("fact").strip()
         if quote:
             leading = len(match.group("fact")) - len(match.group("fact").lstrip())
-            facts.append((quote, match.start("fact") + leading))
+            facts.append(
+                (quote, match.start("fact") + leading, "list", match.group("marker"))
+            )
         structured_ranges.append(match.span())
     for match in re.finditer(
         r"(?:\A|\n[ \t]*\n)(?P<paragraph>.*?)(?=\n[ \t]*\n|\Z)",
@@ -137,29 +163,48 @@ def _meaningful_paragraphs(content: str) -> list[SourceFact]:
         leading = len(paragraph) - len(paragraph.lstrip())
         quote = paragraph.strip()
         if quote and not quote.startswith(("#", "```", "|")):
-            facts.append((quote, match.start("paragraph") + leading))
-    if facts:
-        headings = _markdown_headings(content)
-        return [
-            SourceFact(
-                quote=quote,
-                start=start,
-                section_path=_section_path_at(headings, start),
-            )
-            for quote, start in sorted(facts, key=lambda fact: fact[1])[:_LOCAL_FACT_LIMIT]
+            facts.append((quote, match.start("paragraph") + leading, "paragraph", ""))
+    headings = _markdown_headings(content)
+    return [
+        SourceFact(
+            quote=quote,
+            start=start,
+            section_path=_section_path_at(headings, start),
+            kind=kind,
+            marker=marker,
+        )
+        for quote, start, kind, marker in sorted(facts, key=lambda fact: fact[1])
+    ]
+
+
+def _feishu_facts(content: str) -> list[SourceFact]:
+    """Distribute the fact budget across all Feishu document chapters."""
+    facts = _markdown_facts(content)
+    if not facts:
+        return _meaningful_paragraphs(content)
+    chapters: dict[tuple[str, ...], list[SourceFact]] = {}
+    for fact in facts:
+        chapters.setdefault(fact.section_path, []).append(fact)
+    groups = list(chapters.values())
+    if len(groups) > _LOCAL_FACT_LIMIT:
+        groups = [
+            groups[index * (len(groups) - 1) // (_LOCAL_FACT_LIMIT - 1)]
+            for index in range(_LOCAL_FACT_LIMIT)
         ]
-    for line in content.splitlines():
-        candidate = line.lstrip("#").strip()
-        if candidate:
-            start = content.index(candidate)
-            return [
-                SourceFact(
-                    quote=candidate,
-                    start=start,
-                    section_path=_section_path_at(_markdown_headings(content), start),
-                )
-            ]
-    raise ValueError("source contains no meaningful text")
+    selected: list[SourceFact] = []
+    fact_index = 0
+    while len(selected) < _LOCAL_FACT_LIMIT:
+        added = False
+        for group in groups:
+            if fact_index < len(group):
+                selected.append(group[fact_index])
+                added = True
+                if len(selected) == _LOCAL_FACT_LIMIT:
+                    break
+        if not added:
+            break
+        fact_index += 1
+    return sorted(selected, key=lambda fact: fact.start)
 
 
 def _markdown_headings(content: str) -> list[tuple[int, tuple[str, ...]]]:
@@ -248,12 +293,15 @@ def _render_page(
     section_title: str = "Verified facts",
     summary_fact: SourceFact | None = None,
     section_preamble: tuple[str, ...] = (),
+    preserve_markdown: bool = False,
 ) -> str:
     displayed_facts = [
         SourceFact(
             quote=" ".join(line.strip() for line in fact.quote.splitlines()),
             start=fact.start,
             section_path=fact.section_path,
+            kind=fact.kind,
+            marker=fact.marker,
         )
         for fact in facts
     ]
@@ -286,10 +334,43 @@ def _render_page(
     section_path: tuple[str, ...] = ()
     for index, fact in enumerate(displayed_facts, start=1):
         if fact.section_path != section_path:
+            previous_path = section_path
             section_path = fact.section_path
             if section_path:
-                lines.extend(["", f"### {' / '.join(section_path)}", ""])
-        lines.append(f"- {fact.quote} [^source-{source.source_id[:8]}-{index}]")
+                if preserve_markdown:
+                    common = next(
+                        (
+                            offset
+                            for offset, (left, right) in enumerate(
+                                zip(previous_path, section_path, strict=False)
+                            )
+                            if left != right
+                        ),
+                        min(len(previous_path), len(section_path)),
+                    )
+                    for depth in range(common, len(section_path)):
+                        heading = " / ".join(section_path[: depth + 1])
+                        lines.extend(["", f"{'#' * min(6, depth + 3)} {heading}", ""])
+                else:
+                    lines.extend(["", f"### {' / '.join(section_path)}", ""])
+        label = f"source-{source.source_id[:8]}-{index}"
+        original = facts[index - 1]
+        if preserve_markdown and original.kind == "code":
+            lines.extend(
+                [
+                    f"```{original.marker}",
+                    original.quote,
+                    "```",
+                    "",
+                    f"- {fact.quote} [^{label}]",
+                ]
+            )
+        elif preserve_markdown and original.kind == "table":
+            lines.extend([original.quote, "", f"- {fact.quote} [^{label}]"])
+        elif preserve_markdown and original.kind == "list":
+            lines.append(f"{original.marker or '-'} {fact.quote} [^{label}]")
+        else:
+            lines.append(f"- {fact.quote} [^{label}]")
     lines.append("")
     for index, fact in enumerate(displayed_facts, start=1):
         end = fact.start + len(facts[index - 1].quote)
