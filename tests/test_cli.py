@@ -8,9 +8,9 @@ from pathlib import Path
 from typer.main import get_command
 from typer.testing import CliRunner
 
-import memoryforge.cli as cli_module
-from memoryforge.cli import app
-from memoryforge.sessions import SessionStore
+import memoryforge.interface.cli as cli_module
+from memoryforge.interface.cli import app
+from memoryforge.query.sessions import SessionStore
 from tests.cli_helpers import review_approve_apply
 
 

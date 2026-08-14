@@ -4,8 +4,8 @@ import hashlib
 
 import pytest
 
-from memoryforge.code_intelligence import symbol_context
-from memoryforge.code_models import (
+from memoryforge.code.code_intelligence import symbol_context
+from memoryforge.code.code_models import (
     CodeIndexSnapshot,
     CodeLanguage,
     CodeLocation,

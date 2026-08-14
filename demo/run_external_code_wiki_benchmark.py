@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from memoryforge.code_evaluation import CodeEvaluationSuite, run_code_evaluation
+from memoryforge.code.code_evaluation import CodeEvaluationSuite, run_code_evaluation
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = REPO_ROOT / "demo/evaluation/external_code_wiki_sources_v021.json"

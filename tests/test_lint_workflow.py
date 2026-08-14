@@ -8,10 +8,10 @@ from typing import Any
 
 from typer.testing import CliRunner
 
-import memoryforge.workspace as workspace_module
-from memoryforge.cli import app
-from memoryforge.linting import lint_workspace
-from memoryforge.workspace import Workspace
+import memoryforge.storage.workspace as workspace_module
+from memoryforge.interface.cli import app
+from memoryforge.compiler.linting import lint_workspace
+from memoryforge.storage.workspace import Workspace
 from tests.cli_helpers import review_approve_apply
 
 

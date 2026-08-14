@@ -4,11 +4,11 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
-import memoryforge.agent as agent_module
-import memoryforge.agent_evaluation as agent_evaluation
-from memoryforge.agent_evaluation import run_agent_evaluation
-from memoryforge.provider import AgentStep, OpenAICompatibleProvider
-from memoryforge.workspace import init_workspace
+import memoryforge.query.agent as agent_module
+import memoryforge.evaluation.agent_evaluation as agent_evaluation
+from memoryforge.evaluation.agent_evaluation import run_agent_evaluation
+from memoryforge.query.provider import AgentStep, OpenAICompatibleProvider
+from memoryforge.storage.workspace import init_workspace
 
 
 class StubAgentProvider(OpenAICompatibleProvider):

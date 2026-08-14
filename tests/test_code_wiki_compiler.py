@@ -8,22 +8,22 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-import memoryforge.cli as cli_module
-from memoryforge.changesets import ChangeSetStore
-from memoryforge.cli import app
-from memoryforge.code_index import build_code_index
-from memoryforge.code_models import CitedStatement, ModuleNarrative, make_code_wiki_path
-from memoryforge.code_wiki_compiler import (
+import memoryforge.interface.cli as cli_module
+from memoryforge.storage.changesets import ChangeSetStore
+from memoryforge.interface.cli import app
+from memoryforge.code.code_index import build_code_index
+from memoryforge.code.code_models import CitedStatement, ModuleNarrative, make_code_wiki_path
+from memoryforge.compiler.code_wiki_compiler import (
     CodeWikiCompilationError,
     compile_code_wiki,
 )
-from memoryforge.compiler import _render_index
-from memoryforge.evaluation import run_evaluation
-from memoryforge.linting import lint_workspace
-from memoryforge.module_planner import build_architecture_graph, build_module_plan
-from memoryforge.provider import ProviderUnavailableError
-from memoryforge.query import _page_citations
-from memoryforge.workspace import (
+from memoryforge.compiler.compiler import _render_index
+from memoryforge.evaluation.evaluation import run_evaluation
+from memoryforge.compiler.linting import lint_workspace
+from memoryforge.compiler.module_planner import build_architecture_graph, build_module_plan
+from memoryforge.query.provider import ProviderUnavailableError
+from memoryforge.query.query import _page_citations
+from memoryforge.storage.workspace import (
     Workspace,
     init_workspace,
     rebuild_applied_projection,

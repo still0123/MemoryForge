@@ -5,9 +5,9 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from memoryforge.cli import app
-from memoryforge.manifests import SourceManifestStore
-from memoryforge.workspace import Workspace
+from memoryforge.interface.cli import app
+from memoryforge.core.manifests import SourceManifestStore
+from memoryforge.storage.workspace import Workspace
 
 
 def test_codex_import_keeps_only_conversation_text(tmp_path: Path) -> None:

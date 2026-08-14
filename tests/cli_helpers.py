@@ -4,7 +4,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner, Result
 
-from memoryforge.cli import app
+from memoryforge.interface.cli import app
 
 
 def review_approve_apply(

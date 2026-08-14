@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from memoryforge.retrieval_models import RetrievalCandidate, RetrievalResult
-from memoryforge.retrieval_v2 import retrieve_candidates
+from memoryforge.core.retrieval_models import RetrievalCandidate, RetrievalResult
+from memoryforge.query.retrieval_v2 import retrieve_candidates
 
 REPO_ID = "a" * 64
 OTHER_REPO_ID = "b" * 64

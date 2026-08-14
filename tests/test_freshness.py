@@ -6,12 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from memoryforge.freshness import (
+from memoryforge.compiler.freshness import (
     FreshnessState,
     impacted_pages_for_refresh,
     page_freshness,
 )
-from memoryforge.models import Claim, ClaimStatus, Citation
+from memoryforge.core.models import Claim, ClaimStatus, Citation
 
 
 SOURCE_ID_A = "a" * 64

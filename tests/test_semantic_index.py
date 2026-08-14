@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from memoryforge.semantic_index import SemanticIndex
+from memoryforge.query.semantic_index import SemanticIndex
 
 
 def _sha(s: str) -> str:

@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from memoryforge.mcp_server import (
+from memoryforge.interface.mcp_server import (
     _router_project_from_context,
     _select_router_project_root,
     build_router_server,
@@ -22,7 +22,7 @@ def _registered_workspace(
 ) -> tuple[Path, Path]:
     from typer.testing import CliRunner
 
-    from memoryforge.cli import app
+    from memoryforge.interface.cli import app
 
     checkout = _make_checkout(tmp_path, "repository", {"README.md": "# Router fixture\n"})
     workspace = tmp_path / "workspace"
@@ -43,7 +43,7 @@ def _register_second_checkout(
 ) -> None:
     from typer.testing import CliRunner
 
-    from memoryforge.cli import app
+    from memoryforge.interface.cli import app
 
     result = CliRunner().invoke(
         app,

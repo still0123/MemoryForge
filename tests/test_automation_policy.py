@@ -7,7 +7,7 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from memoryforge.automation_policy import (
+from memoryforge.automation.automation_policy import (
     PROFILE_AUTONOMOUS,
     PROFILE_BALANCED,
     PROFILE_MANUAL,
@@ -21,7 +21,7 @@ from memoryforge.automation_policy import (
     policy_sha256,
     save_policy,
 )
-from memoryforge.automation_validation import (
+from memoryforge.automation.automation_validation import (
     AUTO_MECHANICALLY_VERIFIED,
     AUTO_TRUSTED_SOURCE,
     REVIEW_CRITICAL,
@@ -30,7 +30,7 @@ from memoryforge.automation_validation import (
     REVIEW_UNKNOWN_ORIGIN,
     classify_risk,
 )
-from memoryforge.models import (
+from memoryforge.core.models import (
     AutomationDecision,
     ChangeOperationType,
     RiskLevel,

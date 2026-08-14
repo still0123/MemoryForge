@@ -4,7 +4,7 @@ import hashlib
 
 import pytest
 
-from memoryforge.code_models import (
+from memoryforge.code.code_models import (
     ArchitectureGraph,
     CodeIndexSnapshot,
     CodeLanguage,
@@ -18,7 +18,7 @@ from memoryforge.code_models import (
     make_code_symbol_id,
     make_code_wiki_path,
 )
-from memoryforge.module_planner import (
+from memoryforge.compiler.module_planner import (
     ModulePlanningError,
     build_architecture_graph,
     build_module_plan,

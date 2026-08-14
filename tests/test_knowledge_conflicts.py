@@ -5,7 +5,7 @@ from datetime import datetime
 
 import pytest
 
-from memoryforge.knowledge_conflicts import (
+from memoryforge.compiler.knowledge_conflicts import (
     ConflictKind,
     ConflictResolution,
     EvidenceRef,
@@ -15,7 +15,7 @@ from memoryforge.knowledge_conflicts import (
     detect_conflicts,
     resolve_conflict,
 )
-from memoryforge.models import (
+from memoryforge.core.models import (
     ChangeOrigin,
     Citation,
     Claim,

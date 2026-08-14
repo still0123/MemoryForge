@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from memoryforge.errors import MemoryForgeError
-from memoryforge.showcase import (
+from memoryforge.core.errors import MemoryForgeError
+from memoryforge.portal.showcase import (
     ShowcaseBuildError,
     _publish,
     _validate_output,

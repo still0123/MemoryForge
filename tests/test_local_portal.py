@@ -11,10 +11,10 @@ from urllib.parse import quote
 
 import pytest
 
-from memoryforge.importer import import_local_file
-from memoryforge.local_portal import LocalPortalApp, LocalPortalServer, make_handler
-from memoryforge.portal_catalog import _page_subtype
-from memoryforge.workspace import Workspace
+from memoryforge.adapters.importer import import_local_file
+from memoryforge.portal.local_portal import LocalPortalApp, LocalPortalServer, make_handler
+from memoryforge.portal.portal_catalog import _page_subtype
+from memoryforge.storage.workspace import Workspace
 
 
 def test_portal_classifies_new_code_wiki_modules_before_source_files() -> None:
@@ -377,7 +377,7 @@ def test_local_portal_http_host_methods_head_and_security_headers(tmp_path: Path
 def test_local_portal_serve_cli_help_does_not_start_server() -> None:
     from typer.testing import CliRunner
 
-    from memoryforge.cli import app
+    from memoryforge.interface.cli import app
 
     result = CliRunner().invoke(app, ["showcase", "serve", "--help"])
     assert result.exit_code == 0, result.output

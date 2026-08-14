@@ -5,9 +5,9 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from memoryforge.capture_inbox import RedactionResult, record_capture_event
-from memoryforge.capture_models import CaptureEvent
-from memoryforge.handoff import build_handoff
+from memoryforge.storage.capture_inbox import RedactionResult, record_capture_event
+from memoryforge.core.capture_models import CaptureEvent
+from memoryforge.storage.handoff import build_handoff
 
 
 REPO_A = "a" * 64

@@ -6,14 +6,14 @@ from pathlib import Path
 
 import pytest
 
-from memoryforge.code_index import build_code_index
-from memoryforge.code_models import (
+from memoryforge.code.code_index import build_code_index
+from memoryforge.code.code_models import (
     CodeIndexSnapshot,
     CodeRelationType,
     CodeSymbol,
     CodeSymbolKind,
 )
-from memoryforge.workspace import (
+from memoryforge.storage.workspace import (
     init_workspace,
     read_source_excerpt,
     register_git_checkout,

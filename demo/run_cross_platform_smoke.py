@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 import memoryforge
-from memoryforge.workspace import Workspace
+from memoryforge.storage.workspace import Workspace
 
 
 def main(argv: list[str] | None = None) -> None:

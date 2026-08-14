@@ -10,10 +10,10 @@ from typing import Any
 
 from typer.testing import CliRunner
 
-from memoryforge.changesets import ChangeSetStore
-from memoryforge.cli import app
-from memoryforge.errors import WorkspaceError
-from memoryforge.models import (
+from memoryforge.storage.changesets import ChangeSetStore
+from memoryforge.interface.cli import app
+from memoryforge.core.errors import WorkspaceError
+from memoryforge.core.models import (
     ChangeOperation,
     ChangeOperationType,
     ChangeSet,
@@ -22,8 +22,8 @@ from memoryforge.models import (
     Claim,
     ClaimStatus,
 )
-from memoryforge.version_store import GitVersionStore
-from memoryforge.workspace import Workspace, read_source_version_text
+from memoryforge.storage.version_store import GitVersionStore
+from memoryforge.storage.workspace import Workspace, read_source_version_text
 from tests.cli_helpers import review_approve_apply
 
 SOURCE_TEXT = "# Cache policy\n\nCache entries expire after sixty seconds.\n"

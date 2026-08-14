@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from memoryforge.capture_inbox import (
+from memoryforge.storage.capture_inbox import (
     CHAR_LIMITS,
     ProposalDraft,
     RedactionResult,
@@ -19,8 +19,8 @@ from memoryforge.capture_inbox import (
     spool_capture_event,
     build_capture_proposal,
 )
-from memoryforge.capture_models import CaptureEvent
-from memoryforge.models import ChangeOrigin, RiskLevel
+from memoryforge.core.capture_models import CaptureEvent
+from memoryforge.core.models import ChangeOrigin, RiskLevel
 
 
 REPO_A = "a" * 64

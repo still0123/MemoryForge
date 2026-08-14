@@ -6,8 +6,8 @@ from types import ModuleType
 
 import pytest
 
-from memoryforge import query as query_module
-from memoryforge.wiki_facts import AppliedCodeSymbolMatch, CitationPayload
+from memoryforge.query import query as query_module
+from memoryforge.compiler.wiki_facts import AppliedCodeSymbolMatch, CitationPayload
 
 
 def test_partial_evidence_contract_keeps_supported_hint_and_citation() -> None:

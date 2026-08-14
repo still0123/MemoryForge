@@ -10,8 +10,8 @@ from types import SimpleNamespace
 
 import pytest
 
-import memoryforge.platform_lock as platform_lock
-from memoryforge.workspace import Workspace
+import memoryforge.core.platform_lock as platform_lock
+from memoryforge.storage.workspace import Workspace
 
 _SCRIPT = (
     Path(__file__).resolve().parent.parent / "demo" / "run_cross_platform_delivery_benchmark.py"

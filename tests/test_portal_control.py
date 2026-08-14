@@ -10,12 +10,12 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-import memoryforge.cli as cli_module
-import memoryforge.portal_jobs as portal_jobs
-from memoryforge.cli import app
-from memoryforge.local_portal import LocalPortalApp, LocalPortalServer
-from memoryforge.portal_jobs import PortalJobManager, automation_status, configure_automation
-from memoryforge.workspace import Workspace
+import memoryforge.interface.cli as cli_module
+import memoryforge.portal.portal_jobs as portal_jobs
+from memoryforge.interface.cli import app
+from memoryforge.portal.local_portal import LocalPortalApp, LocalPortalServer
+from memoryforge.portal.portal_jobs import PortalJobManager, automation_status, configure_automation
+from memoryforge.storage.workspace import Workspace
 
 
 def test_start_requires_workspace_and_opens_browser_by_default(

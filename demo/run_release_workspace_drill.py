@@ -55,7 +55,7 @@ def run_drill(workdir: Path) -> dict[str, Any]:
     if source_dirty:
         raise RuntimeError("Workspace release drill requires a clean source worktree")
     sys.path.insert(0, str(SOURCE_ROOT))
-    from memoryforge.showcase import build_showcase
+    from memoryforge.portal.showcase import build_showcase
 
     source = workdir / "source"
     source.mkdir()

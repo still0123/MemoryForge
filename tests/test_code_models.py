@@ -5,7 +5,7 @@ import hashlib
 import pytest
 from pydantic import ValidationError
 
-from memoryforge.code_models import (
+from memoryforge.code.code_models import (
     ArchitectureEdge,
     ArchitectureGraph,
     ArchitectureNode,

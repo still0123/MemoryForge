@@ -4,8 +4,8 @@ import json
 
 import pytest
 
-from memoryforge import query as query_module
-from memoryforge.wiki_facts import (
+from memoryforge.query import query as query_module
+from memoryforge.compiler.wiki_facts import (
     citation_quote_matches_excerpt,
     conversation_conclusion_text,
     is_conversation_process_note,

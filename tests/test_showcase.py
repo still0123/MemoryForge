@@ -8,8 +8,8 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from memoryforge.cli import app
-from memoryforge.showcase import ShowcaseBuildError, _markdown_html, _page_group, build_showcase
+from memoryforge.interface.cli import app
+from memoryforge.portal.showcase import ShowcaseBuildError, _markdown_html, _page_group, build_showcase
 
 
 def test_showcase_builds_complete_public_snapshot_without_mutating_workspace(

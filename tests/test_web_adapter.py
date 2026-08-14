@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-import memoryforge.web_adapter as web_adapter
-from memoryforge.cli import app
+import memoryforge.adapters.web_adapter as web_adapter
+from memoryforge.interface.cli import app
 from tests.cli_helpers import review_approve_apply
 
 

@@ -19,9 +19,9 @@ from types import SimpleNamespace
 import pytest
 from typer.testing import CliRunner
 
-from memoryforge.agent_access import server_name
-from memoryforge.cli import app
-from memoryforge.codex_connect import (
+from memoryforge.query.agent_access import server_name
+from memoryforge.interface.cli import app
+from memoryforge.interface.codex_connect import (
     AGENTS_MCP_BEGIN,
     AGENTS_MCP_END,
     AGENTS_RECALL_BEGIN,
@@ -31,7 +31,7 @@ from memoryforge.codex_connect import (
     connect_codex,
     install_agents_block,
 )
-from memoryforge.errors import UnmappedProjectError
+from memoryforge.core.errors import UnmappedProjectError
 from tests.test_agent_access import CACHE_POLICY, _bound_workspace
 
 _AGENTS_BLOCK_LIMIT = 3000

@@ -16,22 +16,22 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from memoryforge.automation_apply import auto_apply_changeset, evaluate_staged
-from memoryforge.automation_policy import (
+from memoryforge.automation.automation_apply import auto_apply_changeset, evaluate_staged
+from memoryforge.automation.automation_policy import (
     PROFILE_MANUAL,
     AutomationPolicy,
     load_policy,
     save_policy,
 )
-from memoryforge.changesets import ChangeSetStore
-from memoryforge.cli import app
-from memoryforge.errors import ChangeSetStoreError
-from memoryforge.models import (
+from memoryforge.storage.changesets import ChangeSetStore
+from memoryforge.interface.cli import app
+from memoryforge.core.errors import ChangeSetStoreError
+from memoryforge.core.models import (
     AutomationDecision,
     AutomationDecisionReceipt,
     RiskLevel,
 )
-from memoryforge.workspace import Workspace
+from memoryforge.storage.workspace import Workspace
 
 
 def _staged_changeset(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, str]:

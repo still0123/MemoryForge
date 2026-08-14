@@ -21,14 +21,14 @@ from unittest.mock import patch
 
 from tree_sitter import Parser
 
-from memoryforge import code_index, go_index, typescript_index
-from memoryforge.changesets import ChangeSetStore
-from memoryforge.code_index import build_code_index
-from memoryforge.code_models import ModuleNode
-from memoryforge.code_wiki_compiler import compile_code_wiki
-from memoryforge.models import Sensitivity
-from memoryforge.module_planner import build_module_plan
-from memoryforge.workspace import (
+from memoryforge.code import code_index, go_index, typescript_index
+from memoryforge.storage.changesets import ChangeSetStore
+from memoryforge.code.code_index import build_code_index
+from memoryforge.code.code_models import ModuleNode
+from memoryforge.compiler.code_wiki_compiler import compile_code_wiki
+from memoryforge.core.models import Sensitivity
+from memoryforge.compiler.module_planner import build_module_plan
+from memoryforge.storage.workspace import (
     Workspace,
     register_git_checkout,
     register_git_code_module,

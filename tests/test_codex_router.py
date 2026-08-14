@@ -8,8 +8,8 @@ from types import SimpleNamespace
 import pytest
 from typer.testing import CliRunner
 
-from memoryforge.cli import app
-from memoryforge.codex_connect import connect_codex_router, router_mcp_command
+from memoryforge.interface.cli import app
+from memoryforge.interface.codex_connect import connect_codex_router, router_mcp_command
 
 
 def test_connect_codex_router_registers_one_global_command(

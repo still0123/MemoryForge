@@ -7,12 +7,12 @@ from pathlib import Path
 
 import pytest
 
-from memoryforge.changesets import ChangeSetStore
-from memoryforge.errors import ChangeSetStoreError
-from memoryforge.lifecycle import reject_changeset
-from memoryforge.models import ChangeOperation, ChangeOperationType, ChangeSet, ChangeSetStatus
-from memoryforge.platform_lock import try_lock_descriptor
-from memoryforge.workspace import Workspace, WorkspaceSecurityError
+from memoryforge.storage.changesets import ChangeSetStore
+from memoryforge.core.errors import ChangeSetStoreError
+from memoryforge.compiler.lifecycle import reject_changeset
+from memoryforge.core.models import ChangeOperation, ChangeOperationType, ChangeSet, ChangeSetStatus
+from memoryforge.core.platform_lock import try_lock_descriptor
+from memoryforge.storage.workspace import Workspace, WorkspaceSecurityError
 
 
 def test_changeset_staging_is_idempotent_and_keeps_stable_wiki_untouched(

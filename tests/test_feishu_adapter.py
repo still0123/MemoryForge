@@ -9,10 +9,10 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-import memoryforge.feishu_adapter as feishu_adapter
-from memoryforge.cli import app
-from memoryforge.feishu_adapter import FeishuDocumentError, refresh_feishu_documents
-from memoryforge.workspace import Workspace, list_feishu_documents
+import memoryforge.adapters.feishu_adapter as feishu_adapter
+from memoryforge.interface.cli import app
+from memoryforge.adapters.feishu_adapter import FeishuDocumentError, refresh_feishu_documents
+from memoryforge.storage.workspace import Workspace, list_feishu_documents
 
 
 def test_feishu_import_fetches_markdown_as_local_only_source(tmp_path: Path, monkeypatch) -> None:

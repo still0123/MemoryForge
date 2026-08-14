@@ -12,14 +12,14 @@ import pytest
 from pydantic import ValidationError
 from typer.testing import CliRunner
 
-import memoryforge.manifests as manifests_module
-import memoryforge.workspace as workspace_module
-from memoryforge.changesets import ChangeSetStore
-from memoryforge.cli import app
-from memoryforge.errors import ChangeSetStoreError, WorkspaceError
-from memoryforge.importer import import_local_file
-from memoryforge.manifests import SourceManifestStore
-from memoryforge.models import (
+import memoryforge.core.manifests as manifests_module
+import memoryforge.storage.workspace as workspace_module
+from memoryforge.storage.changesets import ChangeSetStore
+from memoryforge.interface.cli import app
+from memoryforge.core.errors import ChangeSetStoreError, WorkspaceError
+from memoryforge.adapters.importer import import_local_file
+from memoryforge.core.manifests import SourceManifestStore
+from memoryforge.core.models import (
     ChangeOperation,
     ChangeOperationType,
     ChangeSet,
@@ -27,8 +27,8 @@ from memoryforge.models import (
     SourceCategory,
     SourceVersionManifest,
 )
-from memoryforge.version_store import GitVersionStore
-from memoryforge.workspace import Workspace, WorkspaceIntegrityError, search_sources
+from memoryforge.storage.version_store import GitVersionStore
+from memoryforge.storage.workspace import Workspace, WorkspaceIntegrityError, search_sources
 
 
 def test_workspace_open_rejects_non_workspace_before_writing(tmp_path: Path) -> None:

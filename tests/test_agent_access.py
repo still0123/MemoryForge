@@ -18,8 +18,8 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from memoryforge import agent_access as agent_access_module
-from memoryforge.agent_access import (
+from memoryforge.query import agent_access as agent_access_module
+from memoryforge.query.agent_access import (
     classify_query_intent,
     list_changesets,
     propose_grounded_update,
@@ -30,10 +30,10 @@ from memoryforge.agent_access import (
     resolve_repository_scope,
     review_changeset,
 )
-from memoryforge.cli import app
-from memoryforge.errors import UnmappedProjectError
-from memoryforge.query import answer_question
-from memoryforge.workspace import Workspace
+from memoryforge.interface.cli import app
+from memoryforge.core.errors import UnmappedProjectError
+from memoryforge.query.query import answer_question
+from memoryforge.storage.workspace import Workspace
 from tests.cli_helpers import review_approve_apply
 
 CACHE_POLICY = "# Cache policy\n\nCache entries expire after sixty seconds.\n"

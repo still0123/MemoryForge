@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from memoryforge.code_history import why_changed
+from memoryforge.code.code_history import why_changed
 
 
 def _git(cwd: Path, *args: str) -> None:

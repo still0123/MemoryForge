@@ -54,8 +54,8 @@ dev = [
 ]
 
 [project.scripts]
-memoryforge = "memoryforge.cli:main"
-memoryforge-desktop = "memoryforge.desktop:main"
+memoryforge = "memoryforge.interface.cli:main"
+memoryforge-desktop = "memoryforge.portal.desktop:main"
 
 [project.urls]
 Homepage = "https://github.com/still0123/MemoryForge"

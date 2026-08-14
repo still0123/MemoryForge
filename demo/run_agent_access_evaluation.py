@@ -31,13 +31,13 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any, cast
 
-from memoryforge.agent_access import (
+from memoryforge.query.agent_access import (
     propose_grounded_update,
     query_context,
     read_applied_evidence,
 )
-from memoryforge.query import answer_question
-from memoryforge.workspace import Workspace, _connect_readonly, is_applied_source_version
+from memoryforge.query.query import answer_question
+from memoryforge.storage.workspace import Workspace, _connect_readonly, is_applied_source_version
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PROJECT_A = REPO_ROOT / "demo/fixtures/agent_access_project"

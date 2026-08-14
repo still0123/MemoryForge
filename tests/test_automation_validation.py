@@ -6,7 +6,7 @@ page-atomicity rule and the semantic NOOP diff heuristic.
 
 from __future__ import annotations
 
-from memoryforge.automation_validation import (
+from memoryforge.automation.automation_validation import (
     AUTO_MECHANICALLY_VERIFIED,
     REVIEW_AGENT_PROPOSAL,
     REVIEW_ARCHIVE,
@@ -22,7 +22,7 @@ from memoryforge.automation_validation import (
     classify_risk,
     diff_assessment,
 )
-from memoryforge.models import (
+from memoryforge.core.models import (
     ChangeOperationType,
     ChangeOrigin,
     OperationAssessment,

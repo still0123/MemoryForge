@@ -5,12 +5,12 @@ from datetime import datetime, timezone
 
 import pytest
 
-from memoryforge.egress_models import (
+from memoryforge.core.egress_models import (
     EgressClass,
     EgressRequest,
     SourceEgressRule,
 )
-from memoryforge.egress_policy import (
+from memoryforge.compiler.egress_policy import (
     SCHEMA_SQL,
     decide_egress,
     filter_visible_sources,
@@ -18,8 +18,8 @@ from memoryforge.egress_policy import (
     rule_sha256,
     upsert_rule,
 )
-from memoryforge.models import Sensitivity
-from memoryforge.redaction import redact_for_model
+from memoryforge.core.models import Sensitivity
+from memoryforge.compiler.redaction import redact_for_model
 
 
 def _make_connection() -> sqlite3.Connection:

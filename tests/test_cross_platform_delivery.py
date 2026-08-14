@@ -10,15 +10,15 @@ from pathlib import Path
 
 import pytest
 
-import memoryforge.platform_lock as platform_lock
-from memoryforge.platform_lock import (
+import memoryforge.core.platform_lock as platform_lock
+from memoryforge.core.platform_lock import (
     UnsafeLockFileError,
     exclusive_file_lock,
     lock_descriptor,
     try_lock_descriptor,
     unlock_descriptor,
 )
-from memoryforge.workspace import Workspace
+from memoryforge.storage.workspace import Workspace
 
 
 def test_descriptor_lock_round_trip_and_contention(tmp_path: Path) -> None:

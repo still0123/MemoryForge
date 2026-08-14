@@ -7,9 +7,9 @@ from urllib.request import Request
 import pytest
 from pydantic import ValidationError
 
-from memoryforge.code_models import ModuleNarrative
-from memoryforge.models import CompilationPlan, PageChange, TopicGroup
-from memoryforge.provider import (
+from memoryforge.code.code_models import ModuleNarrative
+from memoryforge.core.models import CompilationPlan, PageChange, TopicGroup
+from memoryforge.query.provider import (
     OpenAICompatibleProvider,
     ProviderConfig,
     ProviderResponseFormatError,

@@ -12,15 +12,15 @@ from pathlib import Path
 
 import pytest
 
-import memoryforge.importer as importer_module
-import memoryforge.workspace as workspace_module
-from memoryforge.importer import (
+import memoryforge.adapters.importer as importer_module
+import memoryforge.storage.workspace as workspace_module
+from memoryforge.adapters.importer import (
     MAX_SOURCE_BYTES,
     SourceValidationError,
     import_local_file,
     validate_source_path,
 )
-from memoryforge.workspace import (
+from memoryforge.storage.workspace import (
     WorkspaceIntegrityError,
     WorkspaceSecurityError,
     init_workspace,

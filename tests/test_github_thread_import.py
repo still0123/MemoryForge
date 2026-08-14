@@ -5,9 +5,9 @@ import sqlite3
 from contextlib import closing
 from pathlib import Path
 
-import memoryforge.github_thread_adapter as thread_adapter
+import memoryforge.adapters.github_thread_adapter as thread_adapter
 import pytest
-from memoryforge.github_thread_adapter import (
+from memoryforge.adapters.github_thread_adapter import (
     GitHubThreadError,
     delete_github_thread,
     import_github_thread,
@@ -16,11 +16,11 @@ from memoryforge.github_thread_adapter import (
 )
 from typer.testing import CliRunner
 
-from memoryforge.cli import app
+from memoryforge.interface.cli import app
 from tests.cli_helpers import review_approve_apply
-from memoryforge.importer import SourceValidationError
-from memoryforge.models import Sensitivity
-from memoryforge.workspace import init_workspace, search_sources
+from memoryforge.adapters.importer import SourceValidationError
+from memoryforge.core.models import Sensitivity
+from memoryforge.storage.workspace import init_workspace, search_sources
 
 
 @pytest.mark.parametrize("kind", ["issue", "pull"])

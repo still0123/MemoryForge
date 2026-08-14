@@ -8,12 +8,12 @@ import pytest
 from pydantic import ValidationError
 from typer.testing import CliRunner
 
-from memoryforge.cli import app
-from memoryforge.importer import import_local_file
-from memoryforge.manifests import SourceManifestStore
-from memoryforge.models import ChangeSet, ChangeSetStatus, Claim, ClaimStatus, Sensitivity
-from memoryforge.sessions import SessionStore
-from memoryforge.workspace import Workspace
+from memoryforge.interface.cli import app
+from memoryforge.adapters.importer import import_local_file
+from memoryforge.core.manifests import SourceManifestStore
+from memoryforge.core.models import ChangeSet, ChangeSetStatus, Claim, ClaimStatus, Sensitivity
+from memoryforge.query.sessions import SessionStore
+from memoryforge.storage.workspace import Workspace
 
 
 def test_workspace_has_clean_git_baseline_and_tracked_contract(tmp_path: Path) -> None:

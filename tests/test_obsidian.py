@@ -6,10 +6,10 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from memoryforge.cli import app
-from memoryforge.importer import import_local_file
-from memoryforge.models import Sensitivity
-from memoryforge.workspace import Workspace
+from memoryforge.interface.cli import app
+from memoryforge.adapters.importer import import_local_file
+from memoryforge.core.models import Sensitivity
+from memoryforge.storage.workspace import Workspace
 
 
 def test_obsidian_build_three_views_and_deterministic_output(

@@ -13,11 +13,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from memoryforge.code_evaluation import CodeEvaluationSuite, run_code_evaluation
-from memoryforge.code_index import build_code_index
-from memoryforge.code_models import ModuleNode
-from memoryforge.code_wiki_compiler import compile_code_wiki
-from memoryforge.module_planner import build_module_plan
+from memoryforge.code.code_evaluation import CodeEvaluationSuite, run_code_evaluation
+from memoryforge.code.code_index import build_code_index
+from memoryforge.code.code_models import ModuleNode
+from memoryforge.compiler.code_wiki_compiler import compile_code_wiki
+from memoryforge.compiler.module_planner import build_module_plan
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FIXTURE = REPO_ROOT / "demo/fixtures/code_wiki_project"

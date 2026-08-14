@@ -11,7 +11,7 @@ import subprocess
 from pathlib import Path
 from typing import Any, cast
 
-from memoryforge.evaluation import run_evaluation
+from memoryforge.evaluation.evaluation import run_evaluation
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = REPO_ROOT / "demo/evaluation/exact_symbol_routing_sources.json"

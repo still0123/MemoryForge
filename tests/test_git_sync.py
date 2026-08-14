@@ -11,16 +11,16 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from memoryforge.changesets import ChangeSetStore
-from memoryforge.cli import app
-from memoryforge.compiler import (
+from memoryforge.storage.changesets import ChangeSetStore
+from memoryforge.interface.cli import app
+from memoryforge.compiler.compiler import (
     _load_current_sources,
     _render_deterministic_group_page,
     compile_repository_topics,
 )
-from memoryforge.importer import SourceValidationError
-from memoryforge.linting import lint_workspace
-from memoryforge.models import (
+from memoryforge.adapters.importer import SourceValidationError
+from memoryforge.compiler.linting import lint_workspace
+from memoryforge.core.models import (
     ChangeOperation,
     ChangeOperationType,
     ChangeSet,
@@ -28,8 +28,8 @@ from memoryforge.models import (
     Sensitivity,
     TopicGroup,
 )
-from memoryforge.query import answer_question
-from memoryforge.workspace import (
+from memoryforge.query.query import answer_question
+from memoryforge.storage.workspace import (
     Workspace,
     WorkspaceError,
     find_applied_page_paths,
@@ -576,7 +576,7 @@ def test_same_commit_reuses_code_files_but_rebuilds_module_cards(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    from memoryforge import importer as importer_module
+    from memoryforge.adapters import importer as importer_module
 
     checkout = _create_repository(tmp_path)
     _write(checkout / "cmd" / "main.go", "package main\n\nfunc main() {}\n")

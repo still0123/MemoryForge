@@ -7,18 +7,18 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from memoryforge.cli import app
-from memoryforge.feishu_bot import (
+from memoryforge.interface.cli import app
+from memoryforge.adapters.feishu_bot import (
     FeishuBotError,
     handle_feishu_event,
     handle_lark_cli_event,
     reply_to_feishu_text,
 )
-from memoryforge.feishu_service import _send_reply
-from memoryforge.manifests import SourceManifestStore
-from memoryforge.models import GitRepositoryRecord
-from memoryforge.provider import ProviderUnavailableError
-from memoryforge.sessions import SessionStore
+from memoryforge.adapters.feishu_service import _send_reply
+from memoryforge.core.manifests import SourceManifestStore
+from memoryforge.core.models import GitRepositoryRecord
+from memoryforge.query.provider import ProviderUnavailableError
+from memoryforge.query.sessions import SessionStore
 from tests.cli_helpers import review_approve_apply
 
 

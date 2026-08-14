@@ -7,13 +7,13 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from memoryforge.cli import app
-from memoryforge.errors import WorkspaceError
-from memoryforge.linting import lint_workspace
-from memoryforge.models import Sensitivity
-from memoryforge.query import answer_question
-from memoryforge.version_store import GitVersionStore
-from memoryforge.workspace import (
+from memoryforge.interface.cli import app
+from memoryforge.core.errors import WorkspaceError
+from memoryforge.compiler.linting import lint_workspace
+from memoryforge.core.models import Sensitivity
+from memoryforge.query.query import answer_question
+from memoryforge.storage.version_store import GitVersionStore
+from memoryforge.storage.workspace import (
     Workspace,
     find_applied_code_symbol_facts,
     init_workspace,

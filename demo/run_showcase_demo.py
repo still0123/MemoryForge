@@ -11,7 +11,7 @@ from typing import Any, cast
 
 from run_code_wiki_benchmark import build_evidence
 
-from memoryforge.showcase import build_showcase
+from memoryforge.portal.showcase import build_showcase
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CLICK_EVIDENCE = REPO_ROOT / "demo/results/click_docs_holdout_v021.json"

@@ -10,8 +10,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from memoryforge.retrieval_models import RetrievalCandidate
-from memoryforge.retrieval_v2 import retrieve_candidates
+from memoryforge.core.retrieval_models import RetrievalCandidate
+from memoryforge.query.retrieval_v2 import retrieve_candidates
 
 
 def _build_fixtures() -> tuple[list[dict], list[dict], list[dict]]:

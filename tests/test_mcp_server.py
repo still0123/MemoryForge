@@ -18,11 +18,11 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from memoryforge.agent_access import server_name
-from memoryforge.cli import app
-from memoryforge.errors import UnmappedProjectError
-from memoryforge.mcp_server import build_server
-from memoryforge.workspace import WorkspaceError
+from memoryforge.query.agent_access import server_name
+from memoryforge.interface.cli import app
+from memoryforge.core.errors import UnmappedProjectError
+from memoryforge.interface.mcp_server import build_server
+from memoryforge.storage.workspace import WorkspaceError
 from tests.cli_helpers import review_approve_apply
 from tests.test_agent_access import (
     CACHE_POLICY,

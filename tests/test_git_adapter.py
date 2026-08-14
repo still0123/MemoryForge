@@ -5,12 +5,12 @@ from pathlib import Path
 
 import pytest
 
-from memoryforge.git_adapter import (
+from memoryforge.adapters.git_adapter import (
     GitRepositoryError,
     scan_git_documentation,
     snapshot_git_repository,
 )
-from memoryforge.models import Sensitivity, SourceCategory
+from memoryforge.core.models import Sensitivity, SourceCategory
 
 
 def test_scan_git_documentation_selects_tracked_documentation(tmp_path: Path) -> None:

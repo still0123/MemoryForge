@@ -8,13 +8,13 @@ from typing import Any
 import pytest
 from typer.testing import CliRunner
 
-import memoryforge.cli as cli_module
-import memoryforge.query as query_module
-import memoryforge.workspace as workspace_module
-from memoryforge.cli import app
-from memoryforge.egress_models import EgressClass, SourceEgressRule
-from memoryforge.egress_policy import upsert_rule
-from memoryforge.provider import (
+import memoryforge.interface.cli as cli_module
+import memoryforge.query.query as query_module
+import memoryforge.storage.workspace as workspace_module
+from memoryforge.interface.cli import app
+from memoryforge.core.egress_models import EgressClass, SourceEgressRule
+from memoryforge.compiler.egress_policy import upsert_rule
+from memoryforge.query.provider import (
     OpenAICompatibleProvider,
     ProviderConfig,
     ProviderUnavailableError,

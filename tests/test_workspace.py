@@ -9,9 +9,9 @@ from pathlib import Path
 
 import pytest
 
-import memoryforge.workspace as workspace_module
-from memoryforge.importer import import_local_file
-from memoryforge.workspace import (
+import memoryforge.storage.workspace as workspace_module
+from memoryforge.adapters.importer import import_local_file
+from memoryforge.storage.workspace import (
     Workspace,
     WorkspaceIntegrityError,
     WorkspaceSecurityError,

@@ -5,18 +5,18 @@ from datetime import datetime, timezone
 
 import pytest
 
-from memoryforge.egress_models import (
+from memoryforge.core.egress_models import (
     EgressClass,
     EgressRequest,
     SourceEgressRule,
 )
-from memoryforge.egress_policy import (
+from memoryforge.compiler.egress_policy import (
     SCHEMA_SQL,
     decide_egress,
     upsert_rule,
 )
-from memoryforge.models import Sensitivity
-from memoryforge.redaction import PATTERNS, redact_for_model
+from memoryforge.core.models import Sensitivity
+from memoryforge.compiler.redaction import PATTERNS, redact_for_model
 
 
 def test_pem_private_key_redacted() -> None:

@@ -12,8 +12,8 @@ import subprocess
 from pathlib import Path
 from typing import Any, cast
 
-from memoryforge.query import _top_matches
-from memoryforge.wiki_facts import CitationPayload
+from memoryforge.query.query import _top_matches
+from memoryforge.compiler.wiki_facts import CitationPayload
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEVELOPMENT = REPO_ROOT / "demo/evaluation/multi_source_coverage_development.json"

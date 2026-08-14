@@ -1,4 +1,4 @@
-from memoryforge.cli import app
+from memoryforge.interface.cli import app
 
 if __name__ == "__main__":
     app()

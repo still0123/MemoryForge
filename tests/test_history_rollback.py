@@ -5,7 +5,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from memoryforge.cli import app
+from memoryforge.interface.cli import app
 from tests.cli_helpers import review_approve_apply
 
 

@@ -18,16 +18,16 @@ import shutil
 from collections import Counter
 from pathlib import Path
 
-from memoryforge.evaluation import EvaluationCase, EvaluationSuite
-from memoryforge.manifests import SourceManifestStore
-from memoryforge.query import (
+from memoryforge.evaluation.evaluation import EvaluationCase, EvaluationSuite
+from memoryforge.core.manifests import SourceManifestStore
+from memoryforge.query.query import (
     _candidate_pages,
     _has_many_index_routes,
     _page_citations,
     _safe_wiki_page,
     _terms,
 )
-from memoryforge.workspace import find_applied_page_paths, search_wiki_facts
+from memoryforge.storage.workspace import find_applied_page_paths, search_wiki_facts
 
 _TOKEN = re.compile(r"[a-z0-9]+|[\u4e00-\u9fff]+", re.IGNORECASE)
 _CJK = re.compile(r"^[\u4e00-\u9fff]+$")

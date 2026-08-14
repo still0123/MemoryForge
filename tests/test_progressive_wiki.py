@@ -7,10 +7,10 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-import memoryforge.compiler as compiler
-from memoryforge.changesets import ChangeSetStore
-from memoryforge.cli import app
-from memoryforge.workspace import Workspace
+import memoryforge.compiler.compiler as compiler
+from memoryforge.storage.changesets import ChangeSetStore
+from memoryforge.interface.cli import app
+from memoryforge.storage.workspace import Workspace
 from tests.cli_helpers import review_approve_apply
 
 

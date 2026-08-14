@@ -16,10 +16,10 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from memoryforge.agent_access import server_name
-from memoryforge.cli import app
-from memoryforge.codex_connect import mcp_command
-from memoryforge.host_config import codex_toml_block, mcp_servers_config
+from memoryforge.query.agent_access import server_name
+from memoryforge.interface.cli import app
+from memoryforge.interface.codex_connect import mcp_command
+from memoryforge.core.host_config import codex_toml_block, mcp_servers_config
 
 
 def _make_checkout(root: Path, name: str) -> Path:

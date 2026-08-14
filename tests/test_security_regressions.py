@@ -9,18 +9,18 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from memoryforge.changesets import ChangeSetStore
-from memoryforge.errors import ChangeSetStoreError, WorkspaceError
-from memoryforge.importer import SourceValidationError, import_local_file
-from memoryforge.manifests import SourceManifestStore
-from memoryforge.models import (
+from memoryforge.storage.changesets import ChangeSetStore
+from memoryforge.core.errors import ChangeSetStoreError, WorkspaceError
+from memoryforge.adapters.importer import SourceValidationError, import_local_file
+from memoryforge.core.manifests import SourceManifestStore
+from memoryforge.core.models import (
     ChangeOperation,
     ChangeOperationType,
     ChangeSet,
     ChangeSetStatus,
     Citation,
 )
-from memoryforge.workspace import Workspace, WorkspaceSecurityError
+from memoryforge.storage.workspace import Workspace, WorkspaceSecurityError
 
 
 def test_manifest_parent_symlink_cannot_escape_workspace(tmp_path: Path) -> None:

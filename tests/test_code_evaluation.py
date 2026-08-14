@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from memoryforge.code_models import CitedStatement, ModuleNarrative
-from memoryforge.provider import ProviderUnavailableError
+from memoryforge.code.code_models import CitedStatement, ModuleNarrative
+from memoryforge.query.provider import ProviderUnavailableError
 
 _SCRIPT = Path(__file__).resolve().parent.parent / "demo" / "run_code_wiki_benchmark.py"
 _spec = importlib.util.spec_from_file_location("run_code_wiki_benchmark", _SCRIPT)

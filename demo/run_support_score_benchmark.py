@@ -11,8 +11,8 @@ import subprocess
 from pathlib import Path
 from typing import Any, cast
 
-from memoryforge.evaluation import run_evaluation
-from memoryforge.query import (
+from memoryforge.evaluation.evaluation import run_evaluation
+from memoryforge.query.query import (
     _has_support_condition,
     _has_support_negation,
     _support_identifiers,

@@ -4,12 +4,12 @@ import hashlib
 
 import pytest
 
-from memoryforge.code_impact import (
+from memoryforge.code.code_impact import (
     analyze_diff,
     call_paths,
     impact_analysis,
 )
-from memoryforge.code_models import (
+from memoryforge.code.code_models import (
     CodeIndexSnapshot,
     CodeLanguage,
     CodeLocation,

@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from memoryforge.freshness import FreshnessState
-from memoryforge.knowledge_lifecycle import run_page_lifecycle
-from memoryforge.models import (
+from memoryforge.compiler.freshness import FreshnessState
+from memoryforge.compiler.knowledge_lifecycle import run_page_lifecycle
+from memoryforge.core.models import (
     ChangeOrigin,
     Citation,
     Claim,
@@ -34,7 +34,7 @@ def _citation(source_id: str) -> Citation:
 
 def test_run_page_lifecycle_combines_freshness_and_conflicts(tmp_path: Path):
     claims = []
-    from memoryforge.knowledge_conflicts import ProposalDraft
+    from memoryforge.compiler.knowledge_conflicts import ProposalDraft
     candidate = ProposalDraft(
         page_path="wiki/pages/run.md",
         content="# Run\n\ntest",

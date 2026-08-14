@@ -5,15 +5,15 @@ from pathlib import Path
 
 import pytest
 
-import memoryforge.github_thread_adapter as thread_adapter
-from memoryforge.github_thread_adapter import (
+import memoryforge.adapters.github_thread_adapter as thread_adapter
+from memoryforge.adapters.github_thread_adapter import (
     GitHubThreadError,
     GitHubThreadSnapshot,
     import_github_thread,
     import_github_thread_json,
 )
-from memoryforge.importer import MAX_SOURCE_BYTES
-from memoryforge.workspace import init_workspace
+from memoryforge.adapters.importer import MAX_SOURCE_BYTES
+from memoryforge.storage.workspace import init_workspace
 
 
 def test_github_thread_save_json_is_private_and_replayable(

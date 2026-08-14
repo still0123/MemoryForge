@@ -6,14 +6,14 @@ from contextlib import closing
 from pathlib import Path
 
 import pytest
-from memoryforge.folder_adapter import sync_folder
+from memoryforge.adapters.folder_adapter import sync_folder
 from typer.testing import CliRunner
 
-from memoryforge.cli import app
+from memoryforge.interface.cli import app
 from tests.cli_helpers import review_approve_apply
-from memoryforge.importer import SourceValidationError
-from memoryforge.models import Sensitivity
-from memoryforge.workspace import init_workspace, search_sources
+from memoryforge.adapters.importer import SourceValidationError
+from memoryforge.core.models import Sensitivity
+from memoryforge.storage.workspace import init_workspace, search_sources
 
 
 def test_folder_import_recurses_formats_ignore_and_context(tmp_path: Path) -> None:

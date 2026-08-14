@@ -6,10 +6,10 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-import memoryforge.cli as cli_module
-import memoryforge.desktop as desktop
-from memoryforge.cli import app
-from memoryforge.errors import WorkspaceError
+import memoryforge.interface.cli as cli_module
+import memoryforge.portal.desktop as desktop
+from memoryforge.interface.cli import app
+from memoryforge.core.errors import WorkspaceError
 
 
 def test_recent_workspace_round_trip_and_ignores_stale_path(tmp_path: Path) -> None:

@@ -12,7 +12,7 @@ import subprocess
 from pathlib import Path
 from typing import Any, cast
 
-from memoryforge.workspace import search_wiki_facts
+from memoryforge.storage.workspace import search_wiki_facts
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = REPO_ROOT / "demo/evaluation/wiki_fact_index_sources.json"

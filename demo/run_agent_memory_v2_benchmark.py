@@ -18,7 +18,7 @@ from typing import Any, cast
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from memoryforge.retrieval_v2 import retrieve_candidates
+from memoryforge.query.retrieval_v2 import retrieve_candidates
 
 REGISTRY_PATH = REPO_ROOT / "demo/evaluation/agent_memory_v2_registry.json"
 DEV_PATH = REPO_ROOT / "demo/evaluation/agent_memory_v2_development.json"

@@ -6,16 +6,16 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-import memoryforge.apply_journal as apply_journal_module
-import memoryforge.lifecycle as lifecycle_module
-from memoryforge.apply_journal import ApplyJournalStore
-from memoryforge.changesets import ChangeSetStore
-from memoryforge.cli import app
-from memoryforge.errors import WorkspaceError
-from memoryforge.lifecycle import apply_changeset
-from memoryforge.linting import lint_workspace
-from memoryforge.wiki_facts import parse_page_facts
-from memoryforge.workspace import Workspace, candidate_page_sources
+import memoryforge.storage.apply_journal as apply_journal_module
+import memoryforge.compiler.lifecycle as lifecycle_module
+from memoryforge.storage.apply_journal import ApplyJournalStore
+from memoryforge.storage.changesets import ChangeSetStore
+from memoryforge.interface.cli import app
+from memoryforge.core.errors import WorkspaceError
+from memoryforge.compiler.lifecycle import apply_changeset
+from memoryforge.compiler.linting import lint_workspace
+from memoryforge.compiler.wiki_facts import parse_page_facts
+from memoryforge.storage.workspace import Workspace, candidate_page_sources
 
 
 def test_apply_journal_supports_large_changesets(tmp_path: Path) -> None:

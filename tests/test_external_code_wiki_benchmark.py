@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from memoryforge.evaluation import EvaluationSuite
+from memoryforge.evaluation.evaluation import EvaluationSuite
 
 _SCRIPT = Path(__file__).resolve().parent.parent / "demo" / "run_external_code_wiki_benchmark.py"
 _spec = importlib.util.spec_from_file_location("run_external_code_wiki_benchmark", _SCRIPT)

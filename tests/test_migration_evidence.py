@@ -15,12 +15,12 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-import memoryforge.workspace as workspace_module
-from memoryforge.changesets import ChangeSetStore
-from memoryforge.errors import ChangeSetStoreError, WorkspaceError
-from memoryforge.importer import import_local_file
-from memoryforge.manifests import SourceManifestStore
-from memoryforge.models import (
+import memoryforge.storage.workspace as workspace_module
+from memoryforge.storage.changesets import ChangeSetStore
+from memoryforge.core.errors import ChangeSetStoreError, WorkspaceError
+from memoryforge.adapters.importer import import_local_file
+from memoryforge.core.manifests import SourceManifestStore
+from memoryforge.core.models import (
     ChangeOperation,
     ChangeOperationType,
     ChangeSet,
@@ -29,7 +29,7 @@ from memoryforge.models import (
     Claim,
     ClaimStatus,
 )
-from memoryforge.workspace import Workspace, search_sources
+from memoryforge.storage.workspace import Workspace, search_sources
 
 
 def test_real_phase1a_workspace_migrates_data_contract_and_manifests(
