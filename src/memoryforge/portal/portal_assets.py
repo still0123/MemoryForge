@@ -174,9 +174,22 @@ border-color:color-mix(in srgb,var(--warn) 26%,transparent)}
 border-left:3px solid var(--accent);border-radius:0 10px 10px 0;font-size:15px}
 .page-path{display:block;margin:8px 0;padding:4px 10px;color:var(--muted);font-size:11px;
 background:var(--soft);border-radius:6px;width:fit-content;max-width:100%;overflow-wrap:anywhere}
-.markdown{font-size:16px;line-height:1.8}.markdown>h1{display:none}.markdown h2,.markdown h3,.markdown h4{
-scroll-margin-top:82px;line-height:1.35}.markdown h2{margin:1.7em 0 .55em;padding-bottom:7px;
-border-bottom:1px solid var(--line);font-size:23px}.markdown h3{margin:1.5em 0 .5em;font-size:19px}
+.markdown{font-size:16px;line-height:1.78}.markdown>h1{display:none}
+.markdown p{margin:0 0 1.05em}
+.markdown ul,.markdown ol{margin:0 0 1.2em;padding-left:1.45em}
+.markdown li{margin:.42em 0}
+.markdown ul li::marker{color:var(--accent);font-size:1.05em}
+.markdown ol{list-style:none;counter-reset:mfitem;padding-left:1.6em}
+.markdown ol li{position:relative;counter-increment:mfitem;padding-left:1.75em}
+.markdown ol li::before{content:counter(mfitem);position:absolute;left:0;top:.22em;display:grid;
+place-items:center;width:1.3em;height:1.3em;background:var(--accent-soft);
+color:var(--accent-strong);border-radius:50%;font-size:.74em;font-weight:780}
+.markdown strong{color:#14213d;font-weight:700}
+.markdown h2,.markdown h3,.markdown h4{
+scroll-margin-top:82px;line-height:1.35}.markdown h2{margin:1.9em 0 .6em;padding-bottom:8px;
+border-bottom:1px solid var(--line);font-size:23px}.markdown h3{margin:1.6em 0 .55em;font-size:19px}
+.markdown h3::before{content:"";display:inline-block;width:8px;height:8px;border-radius:2px;
+background:linear-gradient(135deg,var(--accent),var(--mint));margin-right:10px;vertical-align:2px}
 .markdown pre{padding:14px 16px;background:var(--code);border:1px solid var(--line);
 border-radius:10px;overflow:auto;font-size:13.5px}
 .markdown :not(pre)>code{padding:2px 6px;background:var(--code);border:1px solid var(--line);
