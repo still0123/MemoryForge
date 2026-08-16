@@ -4,9 +4,14 @@ import math
 import re
 from collections import Counter
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from memoryforge.core.retrieval_models import RetrievalCandidate, RetrievalResult, VisibleSource
+from memoryforge.query.support import (
+    _expanded_question_terms,
+    _explicit_code_identifiers,
+    _terms,
+)
 
 _TOKEN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*|\w+", re.UNICODE)
 _IDENT_TOKEN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*")
@@ -43,6 +48,14 @@ _FEISHU_OPERATION_MARKERS = (
     "configure",
     "setup",
 )
+# Code-location intent that must beat generic Feishu operation markers: these
+# phrases explicitly ask where a code construct is defined, which a Feishu
+# procedure lookup would not. Generic words like 配置/带宽/步骤 stay with the
+# Feishu markers so operation-style questions are not misrouted.
+_CODE_INTENT_MARKERS = re.compile(
+    r"代码|源码|定义在|定义于|在哪里定义|defined at|defined in|implemented in|located in",
+    re.IGNORECASE,
+)
 
 
 def retrieve_candidates(
@@ -74,11 +87,22 @@ def retrieve_candidates(
     if preferred_source_kind is not None:
         routes.append(f"source_{preferred_source_kind}")
 
-    exact_hits = _exact_lane(question, facts, repository_id)
+    identifiers = _explicit_code_identifiers(question)
+    exact_hits = (
+        _exact_lane(" ".join(identifiers), facts, repository_id)
+        if identifiers and preferred_source_kind == "code"
+        else []
+    )
     if exact_hits:
         routes.append("exact")
 
-    lexical_hits = _lexical_lane(question, facts)
+    question_terms = _terms(question)
+    expanded_terms = sorted(
+        term
+        for term in _expanded_question_terms(question_terms) - question_terms
+        if term.isascii()
+    )
+    lexical_hits = _lexical_lane(" ".join((question, *expanded_terms)), facts)
     if lexical_hits:
         routes.append("lexical")
 
@@ -213,10 +237,10 @@ def retrieve_candidates(
         if len(final) >= max_candidates:
             break
         if cand.page_path not in seen_pages:
+            if page_count >= max_pages:
+                continue
             seen_pages.add(cand.page_path)
             page_count += 1
-            if page_count > max_pages:
-                continue
         final.append(cand)
 
     return RetrievalResult(
@@ -429,7 +453,7 @@ def _source_kind(
 ) -> Literal["code", "feishu", "conversation", "note"]:
     value = fact.get("source_kind")
     if value in {"code", "feishu", "conversation", "note"}:
-        return value
+        return cast(Literal["code", "feishu", "conversation", "note"], value)
     if fact.get("symbol") or fact.get("relation_type") or fact.get("repository_id"):
         return "code"
     return "note"
@@ -441,13 +465,25 @@ def _preferred_source_kind(
     lowered = question.lower()
     if any(marker in lowered for marker in _CONVERSATION_MARKERS):
         return "conversation"
-    if any(marker in lowered for marker in _FEISHU_OPERATION_MARKERS):
+    # Feishu operation markers win over a bare PascalCase mention: "配置操作步骤"
+    # with a type name is a procedure lookup, not a code-location question.
+    feishu_operation = any(marker in lowered for marker in _FEISHU_OPERATION_MARKERS)
+    if _CODE_INTENT_MARKERS.search(question):
+        return "code"
+    if feishu_operation:
         return "feishu"
-    if _EXPLICIT_CODE_IDENTIFIER.search(question):
+    identifiers = _explicit_code_identifiers(question)
+    if any(
+        "." in identifier
+        or "_" in identifier
+        or "$" in identifier
+        or f"`{identifier}`" in question
+        for identifier in identifiers
+    ):
         return "code"
     if any(
         marker in lowered
-        for marker in (" call ", " calls ", " import ", " imports ", " dependency ")
-    ) or any(marker in question for marker in ("调用", "导入", "依赖", "继承", "实现")):
+        for marker in (" import ", " imports ", " dependency ")
+    ) or any(marker in question for marker in ("导入", "依赖", "继承", "实现", "用例")):
         return "code"
     return None

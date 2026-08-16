@@ -191,11 +191,62 @@ def test_focuses_follow_up_inside_selected_sessions() -> None:
     assert "逻辑大概是" not in memory.content
 
 
+def test_focused_session_title_returns_overview() -> None:
+    memory = load_conversation_sessions(
+        _database(),
+        session_refs=("session:2",),
+        question="Claude retry design",
+        max_characters=1000,
+    )
+
+    assert memory.mode == "focused"
+    assert memory.content
+    assert "Verified reusable summary for Claude retry design" in memory.content
+
+
+def test_focused_episode_topic_without_codex_prefix_returns_overview() -> None:
+    connection = _database()
+    connection.execute(
+        "UPDATE source_versions SET title = 'Codex 会话：Claude retry design' WHERE id = 2"
+    )
+    connection.commit()
+
+    memory = load_conversation_sessions(
+        connection,
+        session_refs=("session:2",),
+        question="Claude retry design",
+        max_characters=1000,
+    )
+
+    assert memory.mode == "focused"
+    assert memory.content
+    assert "Verified reusable summary for Claude retry design" in memory.content
+
+
 def test_focused_session_miss_does_not_return_unrelated_summary() -> None:
     memory = load_conversation_sessions(
         _database(),
         session_refs=("session:2",),
         question="EFS 冷热分层如何迁移数据？",
+        max_characters=1000,
+    )
+
+    assert memory.mode == "focused"
+    assert memory.matched_facts == 0
+    assert memory.content == ""
+
+
+def test_focused_session_requires_numeric_question_anchor_in_evidence() -> None:
+    connection = _database()
+    connection.execute(
+        "UPDATE source_versions SET title = 'MemoryForge v0.3 验收会话' WHERE id = 2"
+    )
+    connection.commit()
+
+    memory = load_conversation_sessions(
+        connection,
+        session_refs=("session:2",),
+        question="MemoryForge v0.3 验收会话是否明确给出了 2027 年商业收入预测？",
         max_characters=1000,
     )
 

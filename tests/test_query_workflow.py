@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -11,9 +12,11 @@ from typer.testing import CliRunner
 import memoryforge.interface.cli as cli_module
 import memoryforge.query.query as query_module
 import memoryforge.storage.workspace as workspace_module
-from memoryforge.interface.cli import app
-from memoryforge.core.egress_models import EgressClass, SourceEgressRule
 from memoryforge.compiler.egress_policy import upsert_rule
+from memoryforge.core.egress_models import EgressClass, SourceEgressRule
+from memoryforge.interface.cli import app
+from memoryforge.portal.local_portal import LocalPortalApp
+from memoryforge.query.agent_access import query_workspace_context
 from memoryforge.query.provider import (
     OpenAICompatibleProvider,
     ProviderConfig,
@@ -1508,6 +1511,80 @@ def test_candidate_pages_fill_the_remaining_budget_with_relaxed_fts_matches(
     assert calls == [(2, True), (2, False)]
 
 
+def test_scoped_query_does_not_rebuild_code_index(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pages = tmp_path / "wiki/pages"
+    pages.mkdir(parents=True)
+    (tmp_path / "wiki/INDEX.md").write_text(
+        "# Knowledge Index\n\n- [Config](pages/config.md) — bandwidth configuration\n",
+        encoding="utf-8",
+    )
+    (pages / "config.md").write_text(
+        _wiki_page("ProvisionedBandwidth is configured in FileSystemCreator."),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        query_module,
+        "repository_page_paths",
+        lambda *_args: ("wiki/pages/config.md",),
+    )
+    monkeypatch.setattr(
+        query_module,
+        "_retrieval_wiki_facts",
+        lambda *_args: [],
+    )
+    monkeypatch.setattr(
+        "memoryforge.code.code_index.build_code_index",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("queries must use persisted Wiki facts")
+        ),
+    )
+
+    result = query_module.answer_question(
+        tmp_path,
+        "Where is ProvisionedBandwidth configured in FileSystemCreator?",
+        repository_id="repo-id",
+    )
+
+    assert result["status"] in {"answered", "unknown"}
+
+
+def test_candidate_pages_prioritize_retrieval_v2_pages(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workspace = tmp_path / "workspace"
+    pages = workspace / "wiki/pages"
+    pages.mkdir(parents=True)
+    preferred_page = pages / "preferred.md"
+    strict_page = pages / "strict.md"
+    preferred_page.write_text("# Preferred\n", encoding="utf-8")
+    strict_page.write_text("# Strict\n", encoding="utf-8")
+    (workspace / "wiki/INDEX.md").write_text("# Knowledge Index\n", encoding="utf-8")
+    index_path = workspace / ".memoryforge/index.sqlite"
+    index_path.parent.mkdir()
+    index_path.touch()
+    monkeypatch.setattr(
+        query_module,
+        "find_applied_page_paths",
+        lambda *_args, **_kwargs: ("wiki/pages/strict.md",),
+    )
+
+    selected = query_module._candidate_pages(
+        workspace,
+        "where is the setting defined",
+        {"setting", "defined"},
+        max_pages=1,
+        trace=[],
+        repository_id=None,
+        preferred_page_paths=("wiki/pages/preferred.md",),
+    )
+
+    assert selected == [preferred_page]
+
+
 def test_candidate_pages_prefers_index_routes_before_relaxed_fts_matches(
     tmp_path: Path,
     monkeypatch,
@@ -1704,6 +1781,141 @@ def test_ask_prefers_specific_configuration_fact_over_runtime_overlap(
     assert "配置中声明了 Skill" in result["answer"]
 
 
+def test_ask_does_not_define_a_subject_from_an_incidental_mention(
+    tmp_path: Path,
+) -> None:
+    pages = tmp_path / "wiki/pages"
+    pages.mkdir(parents=True)
+    (tmp_path / "wiki/INDEX.md").write_text(
+        "# Knowledge Index\n\n- [Storage](pages/storage.md) — Storage glossary with caching\n",
+        encoding="utf-8",
+    )
+    (pages / "storage.md").write_text(
+        _wiki_page("Anser 负责对象存储之间的数据搬运和缓存。"),
+        encoding="utf-8",
+    )
+
+    result = query_module.answer_question(tmp_path, "缓存是什么意思？")
+
+    assert result["evidence_status"] == "no_local_evidence"
+    assert result["citations"] == []
+
+
+def test_ask_does_not_define_an_abbreviation_from_a_namespace_match(
+    tmp_path: Path,
+) -> None:
+    pages = tmp_path / "wiki/pages"
+    pages.mkdir(parents=True)
+    (tmp_path / "wiki/INDEX.md").write_text(
+        "# Knowledge Index\n\n- [AP](pages/ap.md) — AP permission types\n",
+        encoding="utf-8",
+    )
+    source_id = "a" * 64
+    (pages / "ap.md").write_text(
+        "\n".join(
+            [
+                "---",
+                'title: "Code module: sm/user/ap"',
+                "generated: code_module_overview",
+                "---",
+                "# Code module: sm/user/ap",
+                "",
+                "## Verified facts",
+                "- `sm.user.ap.PermissionRule` (struct): "
+                "`PermissionRule struct { ID string }` [^fact-1]",
+                "",
+                f"[^fact-1]: source `{source_id}` · revision `1` · `chars:0-1`",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = query_module.answer_question(tmp_path, "AP 是什么？")
+
+    assert result["evidence_status"] == "no_local_evidence"
+    assert result["citations"] == []
+
+
+def test_test_lifecycle_filter_keeps_only_run_cleanup_facts() -> None:
+    def citation(symbol: str, kind: str = "method") -> query_module.CitationPayload:
+        return {
+            "source_id": "a" * 64,
+            "source_version": 1,
+            "locator": "chars:0-1",
+            "quote": f"`{symbol}` ({kind}): `def lifecycle():`",
+            "grounding": "exact",
+        }
+
+    assert query_module._is_test_lifecycle_fact(
+        citation("testcases.EFS.efs_mgr.dfp.delete.Delete.run_test")
+    )
+    assert query_module._is_test_lifecycle_fact(
+        citation("testcases.EFS.efs_mgr.dfp.delete.Delete.post_test")
+    )
+    assert query_module._is_test_lifecycle_fact(
+        citation("testcases.EFS.efs_mgr.dfp.delete.Delete._wait_policy_deleted")
+    )
+    assert not query_module._is_test_lifecycle_fact(
+        citation("testcases.EFS.efs_mgr.dfp.delete", kind="module")
+    )
+    assert not query_module._is_test_lifecycle_fact(
+        citation("framework.robot.testset.get_log_path")
+    )
+
+
+def test_ask_does_not_add_citations_to_cover_repository_name_terms(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    pages = tmp_path / "wiki/pages"
+    pages.mkdir(parents=True)
+    (tmp_path / "wiki/INDEX.md").write_text(
+        "# Knowledge Index\n\n- [Config](pages/config.md) — bandwidth performance settings\n",
+        encoding="utf-8",
+    )
+    source_id = "a" * 64
+    (pages / "config.md").write_text(
+        "\n".join(
+            [
+                "---",
+                "type: concept",
+                "---",
+                "# Config",
+                "",
+                "## Verified facts",
+                "- ProvisionedBandwidth and PerformanceDensity are defined in "
+                "FileSystemCreator. [^fact-1]",
+                "- GetEvents accepts an mgr request. [^fact-2]",
+                "- QueryTradeAccounts returns an efs account. [^fact-3]",
+                "",
+                f"[^fact-1]: source `{source_id}` · revision `1` · `chars:0-1`",
+                f"[^fact-2]: source `{source_id}` · revision `1` · `chars:2-3`",
+                f"[^fact-3]: source `{source_id}` · revision `1` · `chars:4-5`",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(query_module, "_repository_name_terms", lambda *_args: {"efs", "mgr"})
+    monkeypatch.setattr(
+        query_module,
+        "repository_page_paths",
+        lambda *_args: ("wiki/pages/config.md",),
+    )
+
+    result = query_module.answer_question(
+        tmp_path,
+        "efs-mgr 里预置带宽或性能密度相关配置在哪里定义？",
+        repository_id="repo-id",
+        max_citations=3,
+    )
+
+    assert result["status"] == "answered"
+    assert len(result["citations"]) == 1
+    assert "FileSystemCreator" in result["citations"][0]["quote"]
+
+
 def test_ask_prefers_a_specific_cjk_fact_over_repeated_generic_terms(
     tmp_path: Path,
     monkeypatch,
@@ -1788,6 +2000,181 @@ def test_ask_uses_multiline_fact_rendered_in_the_wiki_page(
     assert payload["citations"][0]["quote"] == payload["quote"]
 
 
+def test_explicit_year_must_appear_in_fact_body(tmp_path: Path) -> None:
+    pages = tmp_path / "wiki/pages"
+    pages.mkdir(parents=True)
+    (tmp_path / "wiki/INDEX.md").write_text(
+        "# Knowledge Index\n\n- [2027 目标](pages/target.md) — EFS 营收目标\n",
+        encoding="utf-8",
+    )
+    target = pages / "target.md"
+    target.write_text(
+        _wiki_page("2027 年 EFS 精确营收目标是 100 亿元。"),
+        encoding="utf-8",
+    )
+
+    supported = query_module.answer_question(tmp_path, "EFS 2027 年营收目标是什么？")
+
+    assert supported["status"] == "answered"
+    assert "2027 年" in supported["answer"]
+
+    target.write_text(
+        _wiki_page("EFS 是弹性文件存储产品。"),
+        encoding="utf-8",
+    )
+    unsupported = query_module.answer_question(tmp_path, "EFS 2027 年营收目标是什么？")
+
+    assert unsupported["evidence_status"] == "no_local_evidence"
+    assert unsupported["citations"] == []
+
+
+def test_explicit_feishu_question_excludes_conversation_pages(tmp_path: Path) -> None:
+    pages = tmp_path / "wiki" / "pages"
+    pages.mkdir(parents=True)
+    feishu_source = "a" * 64
+    conversation_source = "b" * 64
+    feishu_quote = "EFS 是按量计费的商业化云产品。"
+    conversation_quote = "2027 年 EFS 精确营收目标是 100 亿元。"
+    (tmp_path / "wiki/INDEX.md").write_text(
+        "# Knowledge Index\n\n"
+        "- [EFS 飞书资料](pages/feishu.md) — EFS 商业模式。\n"
+        "- [EFS 历史会话](pages/conversation.md) — 2027 年 EFS 营收目标。\n",
+        encoding="utf-8",
+    )
+    (pages / "feishu.md").write_text(
+        "---\n"
+        'title: "EFS 飞书资料"\n'
+        "type: concept\n"
+        'summary: "EFS 商业模式。"\n'
+        'tags: ["feishu"]\n'
+        f'sources: ["{feishu_source}"]\n'
+        "---\n"
+        "# EFS 飞书资料\n\n"
+        "## Verified facts\n\n"
+        f"- {feishu_quote} [^fact-1]\n\n"
+        f"[^fact-1]: source `{feishu_source}` · revision `1` · `chars:0-20`\n",
+        encoding="utf-8",
+    )
+    (pages / "conversation.md").write_text(
+        "---\n"
+        'title: "EFS 历史会话"\n'
+        "type: concept\n"
+        'summary: "2027 年 EFS 营收目标。"\n'
+        'tags: ["conversation"]\n'
+        f'sources: ["{conversation_source}"]\n'
+        "---\n"
+        "# EFS 历史会话\n\n"
+        "## Conversation notes (unverified)\n\n"
+        "### Assistant conclusions\n\n"
+        f"- {conversation_quote} [^fact-1]\n\n"
+        f"[^fact-1]: source `{conversation_source}` · revision `1` · `chars:0-28`\n",
+        encoding="utf-8",
+    )
+
+    result = query_module.answer_question(
+        tmp_path,
+        "飞书资料是否说明了 2027 年 EFS 精确营收目标？",
+    )
+
+    assert result["status"] == "unknown"
+    assert result["citations"] == []
+
+
+def test_explicit_feishu_title_excludes_other_feishu_sources(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workspace, sources = _explicit_title_workspace(tmp_path, monkeypatch)
+
+    result = query_module.answer_question(
+        workspace,
+        "飞书文档《飞书章节 A》规定缓存条目何时过期？",
+    )
+
+    assert result["status"] == "answered"
+    assert {citation["source_id"] for citation in result["citations"]} == {
+        sources["feishu_a"]
+    }
+    assert "六十秒" in result["answer"]
+
+
+def test_explicit_ai_title_excludes_readme_code_and_other_sessions(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workspace, sources = _explicit_title_workspace(tmp_path, monkeypatch)
+
+    result = query_module.answer_question(
+        workspace,
+        "AI 会话《Codex 会话：缓存排障》说明缓存写入失败时如何处理？",
+        max_citations=6,
+    )
+
+    assert result["status"] == "answered"
+    assert {citation["source_id"] for citation in result["citations"]} == {
+        sources["conversation_a"]
+    }
+    assert "事务回滚" in result["answer"]
+
+
+def test_explicit_title_filters_source_version_inside_merged_page(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workspace, sources = _explicit_title_workspace(tmp_path, monkeypatch)
+
+    result = query_module.answer_question(
+        workspace,
+        "AI 会话《Codex 会话：缓存排障》说明缓存写入失败时如何处理？",
+        max_citations=6,
+    )
+
+    assert result["wiki_pages"] == ["wiki/pages/merged-conversations.md"]
+    assert all(
+        (citation["source_id"], citation["source_version"])
+        == (sources["conversation_a"], 3)
+        for citation in result["citations"]
+    )
+
+
+def test_missing_explicit_title_does_not_fall_back_to_adjacent_title(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workspace, _ = _explicit_title_workspace(tmp_path, monkeypatch)
+
+    result = query_module.answer_question(
+        workspace,
+        "飞书文档《飞书章节 C》规定缓存条目何时过期？",
+    )
+
+    assert result["evidence_status"] == "no_local_evidence"
+    assert result["citations"] == []
+
+
+def test_explicit_title_without_facts_makes_cross_source_answer_partial(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workspace, sources = _explicit_title_workspace(tmp_path, monkeypatch)
+
+    result = query_module.answer_question(
+        workspace,
+        "飞书文档《飞书章节 A》与 AI 会话《Codex 会话：空白记录》"
+        "如何说明缓存条目在六十秒后过期？",
+        max_citations=6,
+    )
+
+    assert result["evidence_status"] == "partial"
+    assert {citation["source_id"] for citation in result["citations"]} == {
+        sources["feishu_a"]
+    }
+    assert result["support"]["failed_hard_gates"] == ["required_source_group_incomplete"]
+    assert result["unsupported_aspects"] == [
+        "required_source_group_incomplete:Codex 会话：空白记录"
+    ]
+
+
 def test_ask_does_not_read_raw_blob_by_default(tmp_path: Path, monkeypatch) -> None:
     runner, workspace, _ = _workspace_with_imported_source(
         tmp_path,
@@ -1836,6 +2223,39 @@ def test_ask_rejects_unsupported_as_of_instead_of_using_current_wiki(
     assert "--as-of is not supported" in result.output
 
 
+def test_ask_cli_scopes_an_explicit_repository_name(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    opened = type("Opened", (), {"root": tmp_path})()
+    scope = type("Scope", (), {"repository_id": "repo-id"})()
+    captured = {}
+    monkeypatch.setattr(cli_module.Workspace, "open_readonly", lambda _workspace: opened)
+    monkeypatch.setattr(cli_module, "_named_repository_scope", lambda *_args: scope)
+
+    def fake_answer(root: Path, question: str, **kwargs: object) -> dict[str, object]:
+        captured.update(root=root, question=question, **kwargs)
+        return {
+            "status": "unknown",
+            "evidence_status": "no_local_evidence",
+            "answer": "不知道",
+            "supported_claims": [],
+            "unsupported_aspects": ["no_local_evidence"],
+            "citations": [],
+            "wiki_pages": [],
+        }
+
+    monkeypatch.setattr(cli_module, "answer_question", fake_answer)
+
+    result = CliRunner().invoke(
+        app,
+        ["ask", "efs-mgr 有什么配置？", "--workspace", str(tmp_path)],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["repository_id"] == "repo-id"
+
+
 def test_ask_cli_rejects_invalid_page_budget(tmp_path: Path) -> None:
     result = CliRunner().invoke(
         app,
@@ -1844,6 +2264,59 @@ def test_ask_cli_rejects_invalid_page_budget(tmp_path: Path) -> None:
 
     assert result.exit_code == 2
     assert "Invalid value" in result.output
+
+
+def test_query_clients_share_default_budget_and_core_evidence(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    runner, workspace, _ = _workspace_with_imported_source(
+        tmp_path,
+        monkeypatch,
+        "# Cache policy\n\nCache entries expire after sixty seconds.\n",
+    )
+    _apply_pending_source(runner, workspace)
+    question = "When do cache entries expire?"
+
+    direct = query_module.answer_question(workspace, question)
+    cli_result = runner.invoke(
+        app,
+        ["ask", question, "--workspace", str(workspace)],
+    )
+    assert cli_result.exit_code == 0, cli_result.output
+    cli = json.loads(cli_result.stdout)
+    portal_app = LocalPortalApp(workspace, allow_local_llm=True)
+    portal_status, _, portal_body = portal_app.dispatch_post(
+        "/api/ask",
+        {"question": question},
+    )
+    portal_app.close()
+    assert portal_status == 200
+    portal = json.loads(portal_body)
+    mcp = query_workspace_context(workspace, question, allow_local=True)
+
+    def core(payload: dict[str, Any], answer_key: str) -> dict[str, Any]:
+        return {
+            "evidence_status": payload["evidence_status"],
+            "answer": payload[answer_key],
+            "wiki_pages": payload["wiki_pages"],
+            "citations": [
+                (
+                    citation["source_id"],
+                    citation["source_version"],
+                    citation["locator"],
+                )
+                for citation in payload["citations"]
+            ],
+            "hard_gates": payload.get("support", {}).get("failed_hard_gates", []),
+        }
+
+    expected = core(direct, "answer")
+    assert core(cli, "answer") == expected
+    assert core(portal, "answer") == expected
+    assert core(mcp, "project_answer") == expected
+    assert mcp["budget"]["max_pages"] == 3
+    assert mcp["budget"]["max_citations"] == 6
 
 
 def _workspace_with_imported_source(
@@ -1901,3 +2374,169 @@ def _wiki_page(quote: str) -> str:
             "",
         ]
     )
+
+
+def _explicit_title_workspace(
+    tmp_path: Path,
+    monkeypatch,
+) -> tuple[Path, dict[str, str]]:
+    monkeypatch.setattr(query_module, "find_applied_page_paths", lambda *_args, **_kwargs: ())
+    workspace = tmp_path / "workspace"
+    pages = workspace / "wiki/pages"
+    pages.mkdir(parents=True)
+    database = workspace / ".memoryforge/index.sqlite"
+    database.parent.mkdir()
+    sources = {
+        "feishu_a": "a" * 64,
+        "feishu_b": "b" * 64,
+        "conversation_a": "c" * 64,
+        "conversation_b": "d" * 64,
+        "readme": "e" * 64,
+        "empty_conversation": "f" * 64,
+    }
+    records = (
+        (1, sources["feishu_a"], "飞书章节 A", '["feishu"]', "wiki/pages/feishu-a.md"),
+        (2, sources["feishu_b"], "飞书章节 B", '["feishu"]', "wiki/pages/feishu-b.md"),
+        (
+            3,
+            sources["conversation_a"],
+            "Codex 会话：缓存排障",
+            '["conversation"]',
+            "wiki/pages/merged-conversations.md",
+        ),
+        (
+            4,
+            sources["conversation_b"],
+            "Codex 会话：其他排障",
+            '["conversation"]',
+            "wiki/pages/merged-conversations.md",
+        ),
+        (5, sources["readme"], "README", '["code"]', "wiki/pages/readme.md"),
+        (
+            6,
+            sources["empty_conversation"],
+            "Codex 会话：空白记录",
+            '["conversation"]',
+            None,
+        ),
+    )
+    with sqlite3.connect(database) as connection:
+        connection.executescript(
+            """
+            CREATE TABLE sources (
+                id INTEGER PRIMARY KEY,
+                source_id TEXT NOT NULL UNIQUE,
+                source_path TEXT NOT NULL
+            );
+            CREATE TABLE source_versions (
+                id INTEGER PRIMARY KEY,
+                source_id INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                tags_json TEXT NOT NULL,
+                is_current INTEGER NOT NULL
+            );
+            CREATE TABLE applied_source_versions (
+                source_id TEXT PRIMARY KEY,
+                source_version_id INTEGER NOT NULL
+            );
+            CREATE TABLE wiki_facts (
+                id INTEGER PRIMARY KEY,
+                page_path TEXT NOT NULL,
+                source_id TEXT NOT NULL,
+                source_version INTEGER NOT NULL
+            );
+            """
+        )
+        for version, source_id, title, tags, page_path in records:
+            connection.execute(
+                "INSERT INTO sources VALUES (?, ?, ?)",
+                (version, source_id, f"source-{version}.md"),
+            )
+            connection.execute(
+                "INSERT INTO source_versions VALUES (?, ?, ?, ?, 1)",
+                (version, version, title, tags),
+            )
+            connection.execute(
+                "INSERT INTO applied_source_versions VALUES (?, ?)",
+                (source_id, version),
+            )
+            if page_path is not None:
+                connection.execute(
+                    "INSERT INTO wiki_facts VALUES (?, ?, ?, ?)",
+                    (version, page_path, source_id, version),
+                )
+
+    (workspace / "wiki/INDEX.md").write_text(
+        "# Knowledge Index\n\n"
+        "- [飞书章节 A](pages/feishu-a.md) — 缓存条目过期规则。\n"
+        "- [飞书章节 B](pages/feishu-b.md) — 缓存条目过期规则。\n"
+        "- [Merged conversation](pages/merged-conversations.md) — 缓存写入失败处理。\n"
+        "- [README](pages/readme.md) — 缓存写入失败处理。\n",
+        encoding="utf-8",
+    )
+    (pages / "feishu-a.md").write_text(
+        _source_page(
+            "飞书章节 A",
+            "feishu",
+            ((sources["feishu_a"], 1, "缓存条目在六十秒后过期。"),),
+        ),
+        encoding="utf-8",
+    )
+    (pages / "feishu-b.md").write_text(
+        _source_page(
+            "飞书章节 B",
+            "feishu",
+            ((sources["feishu_b"], 2, "缓存条目永久保留，不会过期。"),),
+        ),
+        encoding="utf-8",
+    )
+    (pages / "merged-conversations.md").write_text(
+        _source_page(
+            "Merged conversation",
+            "conversation",
+            (
+                (sources["conversation_a"], 3, "缓存写入失败时执行事务回滚。"),
+                (sources["conversation_b"], 4, "缓存写入失败时保留脏数据。"),
+            ),
+        ),
+        encoding="utf-8",
+    )
+    (pages / "readme.md").write_text(
+        _source_page(
+            "Code: README",
+            "code",
+            ((sources["readme"], 5, "README 建议缓存写入失败时重试。"),),
+        ),
+        encoding="utf-8",
+    )
+    return workspace, sources
+
+
+def _source_page(
+    title: str,
+    tag: str,
+    facts: tuple[tuple[str, int, str], ...],
+) -> str:
+    lines = [
+        "---",
+        f"title: {json.dumps(title, ensure_ascii=False)}",
+        "type: concept",
+        f'tags: ["{tag}"]',
+        "---",
+        f"# {title}",
+        "",
+    ]
+    if tag == "conversation":
+        lines.extend(["## Conversation notes (unverified)", "", "### Assistant conclusions", ""])
+    else:
+        lines.extend(["## Verified facts", ""])
+    for index, (_source_id, _version, quote) in enumerate(facts, start=1):
+        lines.append(f"- {quote} [^fact-{index}]")
+    lines.append("")
+    for index, (source_id, version, quote) in enumerate(facts, start=1):
+        lines.append(
+            f"[^fact-{index}]: source `{source_id}` · revision `{version}` · "
+            f"`chars:0-{len(quote)}`"
+        )
+    lines.append("")
+    return "\n".join(lines)

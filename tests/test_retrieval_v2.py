@@ -505,16 +505,68 @@ def test_source_kind_routes_code_feishu_and_conversation_questions() -> None:
         max_pages=3,
         wiki_facts=facts,
     )
+    location = retrieve_candidates(
+        Path("/tmp"),
+        f"{entity} 配置在哪里定义？",
+        repository_id=None,
+        visible_source=_all_visible,
+        max_pages=3,
+        wiki_facts=facts,
+    )
 
     assert code.candidates[0].source_kind == "code"
     assert code.candidates[0].kind == "symbol"
     assert feishu.candidates[0].source_kind == "feishu"
     assert conversation.candidates[0].source_kind == "conversation"
+    assert location.candidates[0].source_kind == "code"
     assert {candidate.source_kind for candidate in feishu.candidates} == {
         "code",
         "feishu",
         "conversation",
     }
+
+
+def test_natural_language_product_names_do_not_force_code_routing() -> None:
+    facts = [
+        {
+            "page_path": "wiki/pages/code.md",
+            "source_id": SRC_A,
+            "source_version": 1,
+            "locator": "chars:0-50",
+            "section_path": "Verified symbols",
+            "quote": "`pkg.DataFlow` (struct): `DataFlow struct { Name string }`",
+            "routing_text": "DataFlow code symbol",
+            "symbol": "pkg.DataFlow",
+            "relation_type": None,
+            "repository_id": REPO_ID,
+            "source_kind": "code",
+        },
+        {
+            "page_path": "wiki/pages/conversation.md",
+            "source_id": SRC_B,
+            "source_version": 2,
+            "locator": "chars:50-150",
+            "section_path": "Assistant conclusions",
+            "quote": "DataFlow 测试路径冲突应使用每轮唯一 FileSystemPath。",
+            "routing_text": "EFS DataFlow 测试路径隔离",
+            "symbol": None,
+            "relation_type": None,
+            "repository_id": None,
+            "source_kind": "conversation",
+        },
+    ]
+
+    result = retrieve_candidates(
+        Path("/tmp"),
+        "EFS DataFlow 测试路径冲突应该如何隔离？",
+        repository_id=None,
+        visible_source=_all_visible,
+        max_pages=2,
+        wiki_facts=facts,
+    )
+
+    assert result.candidates[0].source_kind == "conversation"
+    assert "source_code" not in result.routes
 
 
 def test_relation_lane_expands_symbol_hits() -> None:

@@ -65,13 +65,18 @@ from memoryforge.core.models import (
     Sensitivity,
 )
 from memoryforge.query.contracts import SupportPayload
-from memoryforge.query.query import answer_question
+from memoryforge.query.query import (
+    DEFAULT_QUERY_MAX_CITATIONS,
+    DEFAULT_QUERY_MAX_PAGES,
+    answer_question,
+)
 from memoryforge.query.support import answer_is_supported
 from memoryforge.storage.changesets import ChangeSetStore, StoredChangeSet
 from memoryforge.storage.database import connect_readonly as _connect_readonly
 from memoryforge.storage.errors import WorkspaceIntegrityError, WorkspaceSecurityError
 from memoryforge.storage.workspace import (
     Workspace,
+    _git_repository_record,
     is_applied_source_version,
     is_public_source_version,
     list_git_checkouts,
@@ -247,6 +252,26 @@ def resolve_repository_scope(workspace: Path, project_path: Path) -> GitReposito
     )
 
 
+def _named_repository_scope(workspace: Path, question: str) -> GitRepositoryRecord | None:
+    """Strictly scope a Workspace query only when one full repository name is explicit."""
+    opened = Workspace.open_readonly(workspace)
+    with _connect_readonly(opened.index_path) as connection:
+        rows = connection.execute(
+            "SELECT * FROM git_repositories ORDER BY registered_at, repository_id"
+        ).fetchall()
+    records = tuple(_git_repository_record(row) for row in rows)
+    matches = [
+        repository
+        for repository in records
+        if re.search(
+            rf"(?<![A-Za-z0-9_-]){re.escape(repository.name)}(?![A-Za-z0-9_-])",
+            question,
+            re.IGNORECASE,
+        )
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
 def server_name(workspace: Path, project_root: Path) -> str:
     """Return the stable, unique MCP server name for one binding (§8).
 
@@ -270,8 +295,8 @@ def query_context(
     question: str,
     *,
     allow_local: bool = False,
-    max_pages: int = 3,
-    max_citations: int = 6,
+    max_pages: int = DEFAULT_QUERY_MAX_PAGES,
+    max_citations: int = DEFAULT_QUERY_MAX_CITATIONS,
 ) -> dict[str, object]:
     """Return bounded L2 context for one question from the bound project.
 
@@ -281,8 +306,8 @@ def query_context(
     assembly, so ``Sensitivity.LOCAL_ONLY`` facts can never influence page
     selection, Support or the answer hint unless explicitly authorized.
     """
-    max_pages = _clamp_int(max_pages, 1, 3)
-    max_citations = _clamp_int(max_citations, 1, 6)
+    max_pages = _clamp_int(max_pages, 1, DEFAULT_QUERY_MAX_PAGES)
+    max_citations = _clamp_int(max_citations, 1, DEFAULT_QUERY_MAX_CITATIONS)
     try:
         scope = resolve_repository_scope(workspace, project_root)
         opened = Workspace.open_readonly(workspace)
@@ -308,8 +333,8 @@ def query_workspace_context(
     *,
     preferred_project_root: Path | None = None,
     allow_local: bool = False,
-    max_pages: int = 3,
-    max_citations: int = 6,
+    max_pages: int = DEFAULT_QUERY_MAX_PAGES,
+    max_citations: int = DEFAULT_QUERY_MAX_CITATIONS,
 ) -> dict[str, object]:
     """Return bounded context from the whole applied Workspace.
 
@@ -318,12 +343,13 @@ def query_workspace_context(
     repositories, so a new conversation and cross-repository question work
     without a current project.
     """
-    max_pages = _clamp_int(max_pages, 1, 3)
-    max_citations = _clamp_int(max_citations, 1, 6)
+    max_pages = _clamp_int(max_pages, 1, DEFAULT_QUERY_MAX_PAGES)
+    max_citations = _clamp_int(max_citations, 1, DEFAULT_QUERY_MAX_CITATIONS)
     try:
         opened = Workspace.open_readonly(workspace)
     except _OPEN_FAILURES:
         return {"status": "workspace_unavailable"}
+    named_scope = _named_repository_scope(opened.root, question)
     preferred_scope: GitRepositoryRecord | None = None
     if preferred_project_root is not None:
         try:
@@ -335,15 +361,17 @@ def query_workspace_context(
     return _query_context(
         opened,
         question,
-        repository_id=None,
+        repository_id=named_scope.repository_id if named_scope is not None else None,
         preferred_repository_id=(
-            preferred_scope.repository_id if preferred_scope is not None else None
+            preferred_scope.repository_id
+            if named_scope is None and preferred_scope is not None
+            else None
         ),
-        scope=None,
+        scope=named_scope,
         allow_local=allow_local,
         max_pages=max_pages,
         max_citations=max_citations,
-        preferred_scope=preferred_scope,
+        preferred_scope=preferred_scope if named_scope is None else None,
     )
 
 
@@ -378,7 +406,8 @@ def _query_context(
     evidence_status = str(result.get("evidence_status", "no_local_evidence"))
     answer_hint = "" if evidence_status == "no_local_evidence" else str(result["answer"])
     answer_strategy = _answer_strategy(question, evidence_status)
-    wiki_pages = [_page_entry(opened.root, page_path) for page_path in result["wiki_pages"]]
+    wiki_pages = list(result["wiki_pages"])
+    wiki_page_details = [_page_entry(opened.root, page_path) for page_path in wiki_pages]
     citation_metadata = _citation_metadata(opened.root, result["citations"])
     citations = [
         {
@@ -413,6 +442,7 @@ def _query_context(
         "unsupported_aspects": unsupported_aspects,
         "answer_strategy": answer_strategy,
         "wiki_pages": wiki_pages,
+        "wiki_page_details": wiki_page_details,
         "citations": citations,
         "support": support,
         "budget": {
@@ -473,10 +503,16 @@ def _query_context(
         elif citations:
             citations.pop()
             cited_pages = {citation["wiki_page"] for citation in citations}
-            wiki_pages[:] = [page for page in wiki_pages if page["path"] in cited_pages]
+            wiki_pages[:] = [page for page in wiki_pages if page in cited_pages]
+            wiki_page_details[:] = [
+                page for page in wiki_page_details if page["path"] in cited_pages
+            ]
             payload["verification_status"] = _verification_status(citations)
         elif wiki_pages:
-            wiki_pages.pop()
+            removed = wiki_pages.pop()
+            wiki_page_details[:] = [
+                page for page in wiki_page_details if page["path"] != removed
+            ]
         elif unsupported_aspects:
             unsupported_aspects.clear()
         else:

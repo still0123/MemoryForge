@@ -10,7 +10,7 @@ from memoryforge.compiler.wiki_facts import (
     CitationPayload,
     is_conversation_process_note,
 )
-from memoryforge.query.contracts import SupportComponents, SupportPayload
+from memoryforge.query.contracts import SourceVersionKey, SupportComponents, SupportPayload
 from memoryforge.storage.database import connect_readonly as _connect_readonly
 from memoryforge.storage.workspace import DATABASE_RELATIVE_PATH
 
@@ -48,12 +48,13 @@ _STOP_WORDS = {
 }
 # ponytail: downweight two generic verbs; learn weights only if the fixed suite regresses.
 _RANKING_STOP_WORDS = {"不能", "运行"}
-_QUESTION_NOISE_TERMS = {"在哪"}
+_QUESTION_NOISE_TERMS = {"在哪", "如何", "应该"}
 _FAILURE_TERM_EXPANSIONS = {"超时", "异常", "失败", "缺失", "回退"}
 _CAPABILITY_MARKERS = ("支持", "提供", "包括", "用于", "负责")
 _CLEANUP_RESULT_MARKERS = ("一旦", "不会", "不是", "自动", "skip")
 _CLEANUP_OBJECT_MARKERS = ("清理", "删除", "delete", "skip")
 _CODE_QUERY_EXPANSIONS = {
+    "dataflow": {"dfp", "dft"},
     "连接": {"登录", "链路"},
     "模块": {"module", "modules"},
     "子模": {"child", "children"},
@@ -63,6 +64,13 @@ _CODE_QUERY_EXPANSIONS = {
     "职责": {"responsibility", "responsibilities"},
     "方法": {"method", "methods", "func", "function", "functions"},
     "字段": {"field", "fields", "struct", "attribute", "attributes"},
+    "用例": {"test", "tests", "case", "cases", "pre_test", "run_test", "post_test"},
+    "运行": {"run", "runs", "execute", "execution", "run_test"},
+    "清理": {"cleanup", "clean", "delete", "deleted", "deletion", "post", "post_test"},
+    "带宽": {"bandwidth", "bandwidths", "provisionedbandwidth"},
+    "密度": {"density", "performancedensity"},
+    "性能": {"performance", "performancedensity"},
+    "预置": {"provisioned", "provisionedbandwidth"},
 }
 _CODE_FACT = re.compile(r"^(?:package|type|func|class|def)\b")
 _SUPPORT_THRESHOLD = 75.0
@@ -109,16 +117,26 @@ def _all_explicit_code_identifiers(question: str) -> tuple[str, ...]:
 
 
 def _support_identifiers(question: str) -> tuple[str, ...]:
+    identifiers = _all_explicit_code_identifiers(question)
+    strong_identifiers = tuple(
+        identifier
+        for identifier in identifiers
+        if "." in identifier
+        or "_" in identifier
+        or "$" in identifier
+        or f"`{identifier}`" in question
+    )
+    candidates = strong_identifiers or identifiers
     return tuple(
         identifier
-        for identifier in _all_explicit_code_identifiers(question)
+        for identifier in candidates
         if re.search(
             rf"\bin\s+`?{re.escape(identifier)}`?(?:\W|$)",
             question,
             re.IGNORECASE,
         )
         is None
-        and re.search(rf"`?{re.escape(identifier)}`?\s*(?:中|内)", question) is None
+        and re.search(rf"`?{re.escape(identifier)}`?\s*(?:中|内|用例)", question) is None
     )
 
 
@@ -144,6 +162,7 @@ def _support_score(
     symbol_matches: tuple[AppliedCodeSymbolMatch, ...],
     exact_symbol_fact_keys: set[tuple[str, str, int, str, str]],
     required_sources: int,
+    required_source_groups: tuple[frozenset[SourceVersionKey], ...] = (),
     code_page_paths: set[str],
     code_page_identifiers: dict[str, set[str]] | None = None,
 ) -> SupportPayload:
@@ -249,6 +268,26 @@ def _support_score(
         not question_has_negation
         or any(_has_support_negation(citation["quote"]) for _, citation in selected)
     )
+    quantity_terms = _quantity_subject_terms(question)
+    quantity_question = bool(quantity_terms) or any(
+        marker in question for marker in ("多少", "几个", "几项", "比例", "百分比")
+    )
+    quantity_covered = any(
+        re.search(r"\d|[一二三四五六七八九十百千万亿两]", citation["quote"])
+        and (
+            not quantity_terms
+            or bool(quantity_terms & _terms(citation["quote"]))
+        )
+        for _, citation in selected
+    )
+    relationship_sides = _relationship_sides(question)
+    relationship_covered = all(
+        any(
+            len(side_terms & _terms(citation["quote"])) >= min(2, len(side_terms))
+            for _, citation in selected
+        )
+        for side_terms in relationship_sides
+    )
     if "清理" in question and any("skip" in citation["quote"] for _, citation in selected):
         negation_alignment = 1.0
     citation_sources = {
@@ -256,6 +295,12 @@ def _support_score(
     }
     multi_source_coverage = (
         min(1.0, len(citation_sources) / required_sources) if required_sources > 1 else 1.0
+    )
+    source_group_coverage = (
+        sum(bool(group & citation_sources) for group in required_source_groups)
+        / len(required_source_groups)
+        if required_source_groups
+        else 1.0
     )
     real_workspace = (workspace_root / "raw").is_dir() and (
         workspace_root / ".memoryforge" / "index.sqlite"
@@ -284,6 +329,7 @@ def _support_score(
         "fact_co_location": fact_co_location,
         "negation_alignment": negation_alignment,
         "multi_source_coverage": round(multi_source_coverage, 4),
+        "source_group_coverage": round(source_group_coverage, 4),
         "current_source_versions": current_source_versions,
     }
     score = round(
@@ -293,13 +339,14 @@ def _support_score(
             + 0.35 * core_coverage
             + 0.15 * fact_co_location
             + 0.10 * negation_alignment
-            + 0.10 * multi_source_coverage
+            + 0.05 * multi_source_coverage
+            + 0.05 * source_group_coverage
             + 0.10 * current_source_versions
         ),
         1,
     )
     code_enforced = any(page_path in code_page_paths for page_path, _ in selected)
-    enforced = code_enforced or any(
+    enforced = bool(required_source_groups) or "分别" in question or code_enforced or any(
         "assistant conclusions" in citation.get("section_path", "").lower()
         or "assistant message" in citation.get("section_path", "").lower()
         for _, citation in selected
@@ -309,6 +356,12 @@ def _support_score(
         failed_hard_gates.append("exact_identifier_not_covered")
     if enforced and score < _SUPPORT_THRESHOLD:
         failed_hard_gates.append("score_below_threshold")
+    if enforced and quantity_question and not quantity_covered:
+        failed_hard_gates.append("quantity_not_covered")
+    if relationship_sides and not relationship_covered:
+        failed_hard_gates.append("relationship_side_not_covered")
+    if required_source_groups and source_group_coverage < 1:
+        failed_hard_gates.append("required_source_group_incomplete")
     if code_enforced:
         if conditional and not fact_co_location:
             failed_hard_gates.append("condition_not_co_located")
@@ -342,6 +395,37 @@ def _has_support_condition(text: str) -> bool:
     return bool(terms & {"after", "before", "if", "unless", "when", "without"}) or any(
         marker in text for marker in ("当", "如果", "条件", "没有")
     )
+
+
+def _quantity_subject_terms(question: str) -> set[str]:
+    match = re.search(
+        r"(?:多少(?:个|项)?|几个|几项)\s*"
+        r"(?P<subject>[A-Za-z][A-Za-z0-9_-]*|[\u4e00-\u9fff]{1,12})",
+        question,
+        re.IGNORECASE,
+    )
+    if match is not None:
+        return _terms(match["subject"])
+    match = re.search(
+        r"(?P<subject>[A-Za-z][A-Za-z0-9_-]*|[\u4e00-\u9fff]{1,12})"
+        r"(?:的)?(?:数量|比例|百分比|缺陷率)(?:分别)?(?:是多少|为多少|有多少)",
+        question,
+        re.IGNORECASE,
+    )
+    return _terms(match["subject"]) if match is not None else set()
+
+
+def _relationship_sides(question: str) -> tuple[set[str], ...]:
+    for marker in ("如何对应", "有哪些关联", "相互印证", "如何串起来"):
+        prefix, separator, _ = question.partition(marker)
+        if not separator:
+            continue
+        for conjunction in ("与", "和"):
+            left, conjunction_match, right = prefix.partition(conjunction)
+            if conjunction_match:
+                sides = tuple(_terms(side) for side in (left, right) if _terms(side))
+                return sides if len(sides) == 2 else ()
+    return ()
 
 
 def _code_identifier_tokens(text: str) -> set[str]:

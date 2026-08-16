@@ -25,6 +25,7 @@ from memoryforge.core.egress_models import EgressRequest
 from memoryforge.query.contracts import (
     AskPayload,
     EvidencePayload,
+    SourceVersionKey,
     SupportPayload,
     TraceStep,
 )
@@ -72,14 +73,20 @@ from memoryforge.storage.workspace import (
 if TYPE_CHECKING:
     from memoryforge.core.retrieval_models import RetrievalResult
 
+_FTS_SAFE = re.compile(r"[a-z0-9_]+")
+
 _INDEX_ENTRY = re.compile(
     r"^- \[(?P<title>(?:\\.|[^\]])+)\]\((?P<path>[^)]+)\) — (?P<summary>.+)$",
     re.MULTILINE,
 )
 _PAGE_TITLE = re.compile(r"^title: (?P<title>.+)$", re.MULTILINE)
-_SYMBOL_FACT_KIND = re.compile(r"^`[^`]+` \((?P<kind>[a-z_]+)\):")
+_EXPLICIT_TITLE = re.compile(r"《(?P<title>[^》]+)》")
+_SYMBOL_FACT_KIND = re.compile(r"^`(?P<symbol>[^`]+)` \((?P<kind>[a-z_]+)\):")
 _REPOSITORY_OVERVIEW_LINK = re.compile(r"^pages/repository-[a-f0-9]{12}\.md$")
 _ENVIRONMENT_ASSIGNMENT = re.compile(r"\b(?:export\s+)?[A-Z][A-Z0-9_]{2,}=")
+
+DEFAULT_QUERY_MAX_PAGES = 3
+DEFAULT_QUERY_MAX_CITATIONS = 6
 
 
 def answer_question(
@@ -88,8 +95,8 @@ def answer_question(
     *,
     debug: bool = False,
     verify: bool = False,
-    max_pages: int = 3,
-    max_citations: int = 1,
+    max_pages: int = DEFAULT_QUERY_MAX_PAGES,
+    max_citations: int = DEFAULT_QUERY_MAX_CITATIONS,
     min_source_count: int = 1,
     provider: OpenAICompatibleProvider | None = None,
     allow_local: bool = False,
@@ -110,8 +117,26 @@ def answer_question(
     _validate_min_source_count(min_source_count)
     base_question_terms = _terms(question)
     question_terms = _expanded_question_terms(base_question_terms)
-    identifier_terms = {term for term in base_question_terms if not _CJK.fullmatch(term)}
+    explicit_titles = _explicit_titles(question)
+    explicit_routing_base_terms = _terms(
+        " ".join(
+            (*explicit_titles, "飞书文档", "飞书资料", "AI", "Codex", "Claude", "会话")
+        )
+    )
+    explicit_routing_terms = _expanded_question_terms(explicit_routing_base_terms)
+    content_base_question_terms = (
+        base_question_terms - explicit_routing_base_terms
+        if explicit_titles
+        else base_question_terms
+    )
+    content_question_terms = (
+        question_terms - explicit_routing_terms if explicit_titles else question_terms
+    )
+    identifier_terms = {
+        term for term in content_base_question_terms if not _CJK.fullmatch(term)
+    }
     definition_question = _is_definition_question(question)
+    definition_subject = _definition_subject(question)
     yes_no_focus_terms = _yes_no_focus_terms(question)
     focus_terms = _question_focus_terms(question) | yes_no_focus_terms
     if "子模" in base_question_terms:
@@ -121,6 +146,10 @@ def answer_question(
     if "字段" in base_question_terms:
         focus_terms.update({"field", "fields", "struct", "attribute", "attributes"})
     answer_citation_limit = _answer_citation_limit(question, max_citations)
+    citation_question_terms = content_question_terms - _repository_name_terms(
+        workspace_root,
+        repository_id,
+    )
     prefer_environment_assignments = "环境变量" in question
     prefer_code_assignments = any(marker in question for marker in ("换算", "计算", "转换", "转成"))
     prefer_failure_facts = bool({"不可", "可用", "失败", "超时"} & base_question_terms)
@@ -163,14 +192,27 @@ def answer_question(
     prefer_cleanup_conclusion = "清理" in question and any(
         marker in question for marker in ("自动", "失败后")
     )
+    strict_source_kind = _strict_source_kind(question)
     trace: list[TraceStep] = []
     if not question_terms:
         return _unknown_payload(debug, trace)
+    required_source_groups = _explicit_applied_source_groups(workspace_root, question)
+    answer_citation_limit = min(
+        max_citations,
+        max(answer_citation_limit, len(required_source_groups)),
+    )
+    explicit_source_keys = frozenset().union(*required_source_groups)
+    explicit_source_page_paths = _explicit_source_page_paths(
+        workspace_root,
+        required_source_groups,
+    )
     symbol_matches = _applied_code_symbol_matches(
         workspace_root,
         question,
         repository_id=repository_id,
     )
+    if strict_source_kind is not None:
+        symbol_matches = ()
     if public_only:
         symbol_matches = tuple(
             match
@@ -211,7 +253,7 @@ def answer_question(
         logging.debug("egress request build skipped: %s", exc)
 
     retrieval_v2_result: RetrievalResult | None = None
-    if egress_request is not None:
+    if egress_request is not None and not explicit_titles:
         try:
             from memoryforge.core.retrieval_models import VisibleSource
             from memoryforge.query.retrieval_v2 import retrieve_candidates
@@ -233,22 +275,19 @@ def answer_question(
                 repository_id,
                 question,
             )
-            code_index_snapshot_symbols: list[dict[str, Any]] = []
-            code_index_snapshot_relations: list[dict[str, Any]] = []
-            if repository_id is not None:
-                try:
-                    from memoryforge.code.code_index import build_code_index
-
-                    snapshot = build_code_index(workspace_root, repository_id)
-                    code_index_snapshot_symbols = [
-                        symbol.model_dump(mode="json") for symbol in snapshot.symbols
-                    ]
-                    code_index_snapshot_relations = [
-                        relation.model_dump(mode="json") for relation in snapshot.relations
-                    ]
-                except Exception as exc:  # noqa: BLE001
-                    # Code indexing is optional: Wiki facts remain a usable fallback.
-                    logging.debug("retrieval_v2 code index unavailable: %s", exc)
+            if strict_source_kind is not None:
+                applied_wiki_facts_list = [
+                    fact
+                    for fact in applied_wiki_facts_list
+                    if fact.get("source_kind") == strict_source_kind
+                ]
+            if explicit_titles:
+                applied_wiki_facts_list = [
+                    fact
+                    for fact in applied_wiki_facts_list
+                    if (str(fact["source_id"]), int(fact["source_version"]))
+                    in explicit_source_keys
+                ]
             try:
                 retrieval_v2_result = retrieve_candidates(
                     workspace_root,
@@ -257,8 +296,6 @@ def answer_question(
                     visible_source=visible,
                     max_pages=max_pages,
                     wiki_facts=applied_wiki_facts_list,
-                    code_symbols=code_index_snapshot_symbols,
-                    code_relations=code_index_snapshot_relations,
                 )
                 retrieval_debug["routes"] = list(retrieval_v2_result.routes)
                 retrieval_debug["semantic_status"] = retrieval_v2_result.semantic_status
@@ -280,13 +317,31 @@ def answer_question(
     feishu_page_paths: set[str] = set()
     code_page_identifiers: dict[str, set[str]] = {}
     retrieval_page_paths = (
-        tuple(dict.fromkeys(candidate.page_path for candidate in retrieval_v2_result.candidates))
+        tuple(
+            dict.fromkeys(
+                (
+                    *explicit_source_page_paths,
+                    *(
+                        candidate.page_path
+                        for candidate in retrieval_v2_result.candidates
+                        if candidate.source_kind != "code"
+                        or "source_code" in retrieval_v2_result.routes
+                    ),
+                )
+            )
+        )
         if retrieval_v2_result is not None
-        else ()
+        else explicit_source_page_paths
     )
 
-    for page_rank, page in enumerate(
-        _candidate_pages(
+    candidate_pages = (
+        [
+            page
+            for path in explicit_source_page_paths
+            if (page := _safe_wiki_page(workspace_root, workspace_root / path)) is not None
+        ][:max_pages]
+        if explicit_titles
+        else _candidate_pages(
             workspace_root,
             question,
             question_terms,
@@ -294,14 +349,14 @@ def answer_question(
             trace=trace,
             repository_id=repository_id,
             preferred_repository_id=preferred_repository_id,
-            prefer_index_routes=max_citations > 1 or _has_many_index_routes(workspace_root),
+            prefer_index_routes=_has_many_index_routes(workspace_root),
             exact_symbol_page_paths=exact_symbol_page_paths,
             preferred_page_paths=retrieval_page_paths,
         )
-    ):
+    )
+    for page_rank, page in enumerate(candidate_pages):
         content = page.read_text(encoding="utf-8")
         page_path = str(page.relative_to(workspace_root))
-        page_ranks[page_path] = page_rank
         prefix = content[:400]
         frontmatter_end = content.find("\n---\n", 4)
         frontmatter = content[: frontmatter_end + 5] if frontmatter_end >= 0 else prefix
@@ -311,9 +366,23 @@ def answer_question(
             or "generated: code_wiki" in prefix
             or "generated: code_module_overview" in prefix
         )
-        if '"conversation"' in frontmatter:
+        conversation_page = '"conversation"' in frontmatter
+        feishu_page = '"feishu"' in frontmatter
+        page_source_kind = (
+            "conversation"
+            if conversation_page
+            else "feishu"
+            if feishu_page
+            else "code"
+            if code_page
+            else "note"
+        )
+        if strict_source_kind is not None and page_source_kind != strict_source_kind:
+            continue
+        page_ranks[page_path] = page_rank
+        if conversation_page:
             conversation_page_paths.add(page_path)
-        if '"feishu"' in frontmatter:
+        if feishu_page:
             feishu_page_paths.add(page_path)
         title_match = _PAGE_TITLE.search(prefix)
         conversation_title = ""
@@ -322,13 +391,20 @@ def answer_question(
                 parsed_title = json.loads(title_match.group("title"))
                 if isinstance(parsed_title, str):
                     conversation_title = parsed_title
-        if code_page and _is_code_file_content(content):
+        code_file_content = code_page and _is_code_file_content(content)
+        if code_file_content or "generated: code_" in prefix:
             code_page_paths.add(page_path)
+        if code_file_content:
             code_page_identifiers[page_path] = _code_identifier_tokens(_code_fact_text(content))
         if not any(_CJK.fullmatch(term) for term in question_terms) and not code_page:
             local_morphology_pages.add(page_path)
         trace.append({"level": "L1", "artifact": page_path})
         for citation in _page_citations(content):
+            if explicit_titles and (
+                citation["source_id"],
+                citation["source_version"],
+            ) not in explicit_source_keys:
+                continue
             if _is_conversation_search_clue(citation):
                 continue
             if (
@@ -348,22 +424,22 @@ def answer_question(
                     ),
                 }
             exact_overlap = (
-                _section_matching_terms(question_terms, citation)
+                _section_matching_terms(content_question_terms, citation)
                 if use_section_routes
-                else _matching_terms(question_terms, citation)
+                else _matching_terms(content_question_terms, citation)
             )
             overlap = _local_english_matching_terms(
-                question_terms,
+                content_question_terms,
                 citation,
                 include_section=use_section_routes,
                 enabled=page_path in local_morphology_pages,
             )
             is_summary = citation.get("is_summary", False)
             raw_candidate_matches.append((frozenset(overlap), is_summary, page_path, citation))
-            has_cjk_terms = any(_CJK.fullmatch(term) for term in question_terms)
-            required_overlap = 1 if len(question_terms) == 1 else 2
+            has_cjk_terms = any(_CJK.fullmatch(term) for term in content_question_terms)
+            required_overlap = 1 if len(content_question_terms) == 1 else 2
             if has_cjk_terms:
-                required_overlap = min(3, len(question_terms))
+                required_overlap = min(3, len(content_question_terms))
                 aligned_negation = any(cue in question for cue in _NEGATION_CUES) and any(
                     cue in citation["quote"] for cue in _NEGATION_CUES
                 )
@@ -398,6 +474,10 @@ def answer_question(
             if (
                 identifier_terms
                 and not overlap & identifier_terms
+                and not any(
+                    not _CJK.fullmatch(term) and term.isascii() and term.isalpha()
+                    for term in overlap
+                )
                 and not (
                     ("字段" in base_question_terms and overlap & focus_terms)
                     or ("方法" in base_question_terms and overlap & identifier_terms)
@@ -406,19 +486,58 @@ def answer_question(
                 sufficient_match = False
             if _citation_fact_key(page_path, citation) in exact_symbol_fact_keys:
                 sufficient_match = True
+            if definition_subject and not _defines_subject(
+                citation,
+                definition_subject,
+                code_page=code_page,
+                identifier_terms=identifier_terms,
+            ):
+                sufficient_match = False
             if sufficient_match:
                 raw_matches.append((frozenset(overlap), is_summary, page_path, citation))
 
+    explicit_numbers = set(re.findall(r"(?<![A-Za-z0-9])\d{2,}(?![A-Za-z0-9])", question))
+    if explicit_numbers:
+        raw_matches = [
+            match
+            for match in raw_matches
+            if explicit_numbers <= set(re.findall(r"\d{2,}", match[3]["quote"]))
+        ]
+        raw_candidate_matches = [
+            match
+            for match in raw_candidate_matches
+            if explicit_numbers <= set(re.findall(r"\d{2,}", match[3]["quote"]))
+        ]
+    test_lifecycle_question = "用例" in base_question_terms and bool(
+        {"运行", "清理"} & base_question_terms
+    )
+    if test_lifecycle_question:
+        raw_matches = [match for match in raw_matches if _is_test_lifecycle_fact(match[3])]
+        raw_candidate_matches = [
+            match for match in raw_candidate_matches if _is_test_lifecycle_fact(match[3])
+        ]
     if "方法" in base_question_terms and identifier_terms:
         method_symbol = max(identifier_terms, key=len)
         raw_matches = [match for match in raw_matches if method_symbol in _citation_terms(match[3])]
         raw_candidate_matches = [
             match for match in raw_candidate_matches if method_symbol in _citation_terms(match[3])
         ]
+    if yes_no_focus_terms:
+        required_focus = min(2, len(yes_no_focus_terms))
+        raw_matches = [
+            match
+            for match in raw_matches
+            if len(yes_no_focus_terms & _citation_terms(match[3])) >= required_focus
+        ]
+        raw_candidate_matches = [
+            match
+            for match in raw_candidate_matches
+            if len(yes_no_focus_terms & _citation_terms(match[3])) >= required_focus
+        ]
 
     matches = _rank_matches(
         raw_matches,
-        question_terms=question_terms,
+        question_terms=content_question_terms,
         page_ranks=page_ranks,
         local_morphology_pages=local_morphology_pages,
         focus_terms=focus_terms,
@@ -437,7 +556,7 @@ def answer_question(
     )
     candidate_matches = _rank_matches(
         raw_candidate_matches,
-        question_terms=question_terms,
+        question_terms=content_question_terms,
         page_ranks=page_ranks,
         local_morphology_pages=local_morphology_pages,
         focus_terms=focus_terms,
@@ -455,7 +574,9 @@ def answer_question(
         prefer_feishu_operations=prefer_feishu_operations,
     )
     model_candidates = [
-        match for match in candidate_matches if _has_direct_evidence(question_terms, match[2])
+        match
+        for match in candidate_matches
+        if _has_direct_evidence(content_question_terms, match[2])
     ]
 
     if not matches and (provider is None or not model_candidates):
@@ -470,12 +591,10 @@ def answer_question(
         selected = _top_matches(
             matches,
             answer_citation_limit,
-            question_terms=question_terms,
+            question_terms=citation_question_terms,
             required_sources=min_source_count,
-            minimum_citations=min(
-                answer_citation_limit,
-                _answer_citation_limit(question, 1),
-            ),
+            required_source_groups=required_source_groups,
+            minimum_citations=answer_citation_limit,
         )
         answer = (
             _fallback_answer(question, selected)
@@ -509,12 +628,10 @@ def answer_question(
             selected = _top_matches(
                 fallback_matches,
                 answer_citation_limit,
-                question_terms=question_terms,
+                question_terms=citation_question_terms,
                 required_sources=min_source_count,
-                minimum_citations=min(
-                    answer_citation_limit,
-                    _answer_citation_limit(question, 1),
-                ),
+                required_source_groups=required_source_groups,
+                minimum_citations=answer_citation_limit,
             )
             answer = _fallback_answer(question, selected)
             model_status = "fallback"
@@ -589,11 +706,12 @@ def answer_question(
     support = _support_score(
         workspace_root,
         question,
-        question_terms,
+        content_question_terms,
         selected,
         symbol_matches=symbol_matches,
         exact_symbol_fact_keys=exact_symbol_fact_keys,
         required_sources=min_source_count,
+        required_source_groups=required_source_groups,
         code_page_paths=code_page_paths,
         code_page_identifiers=code_page_identifiers,
     )
@@ -604,12 +722,24 @@ def answer_question(
         if "stale_sources" not in support["failed_hard_gates"] and total_penalty > 0:
             support["failed_hard_gates"].append("stale_sources")
     if not support["sufficient"]:
+        selected_sources = {
+            (citation["source_id"], citation["source_version"]) for _, citation in selected
+        }
+        missing_titles = [
+            title
+            for title, group in zip(explicit_titles, required_source_groups, strict=True)
+            if not group & selected_sources
+        ]
         return _unknown_payload(
             debug,
             trace,
             support=support,
             answer=answer,
             selected=selected,
+            unsupported_aspects=[
+                f"required_source_group_incomplete:{title}" for title in missing_titles
+            ]
+            or None,
         )
 
     citations = [citation for _, citation in selected]
@@ -885,12 +1015,13 @@ def _unknown_payload(
     support: SupportPayload | None = None,
     answer: str = "",
     selected: list[tuple[str, CitationPayload]] | None = None,
+    unsupported_aspects: list[str] | None = None,
 ) -> AskPayload:
     selected = selected or []
     citations = [citation for _, citation in selected]
     pages = list(dict.fromkeys(page_path for page_path, _ in selected))
     partial = bool(citations)
-    unsupported_aspects = (
+    unsupported = unsupported_aspects or (
         list(support["failed_hard_gates"])
         if partial and support is not None
         else ["no_local_evidence"]
@@ -901,7 +1032,7 @@ def _unknown_payload(
         "evidence_status": "partial" if partial else "no_local_evidence",
         "answer": answer if partial else "不知道",
         "supported_claims": [answer] if partial and answer else [],
-        "unsupported_aspects": unsupported_aspects,
+        "unsupported_aspects": unsupported,
         "citations": citations,
         "wiki_pages": pages,
         "source_id": citation["source_id"] if citation else None,
@@ -948,8 +1079,12 @@ def _applied_code_symbol_matches(
     repository_ids_by_identifier: dict[str, set[str | None]] = {}
     for match in matches:
         repository_ids_by_identifier.setdefault(match.identifier, set()).add(match.repository_id)
+    contextual_repository_ids = _question_repository_ids(workspace_root, question)
     unambiguous = tuple(
-        match for match in matches if len(repository_ids_by_identifier[match.identifier]) == 1
+        match
+        for match in matches
+        if len(repository_ids_by_identifier[match.identifier]) == 1
+        or match.repository_id in contextual_repository_ids
     )
     contextualized: list[AppliedCodeSymbolMatch] = []
     for identifier in dict.fromkeys(match.identifier for match in unambiguous):
@@ -992,6 +1127,17 @@ def _requested_symbol_kinds(question: str) -> set[str]:
     if kinds & {"function", "method"}:
         kinds.update({"function", "method"})
     return kinds
+
+
+def _is_test_lifecycle_fact(citation: CitationPayload) -> bool:
+    match = _SYMBOL_FACT_KIND.match(citation["quote"])
+    if match is None or match["kind"] not in {"function", "method"}:
+        return False
+    symbol = match["symbol"].casefold()
+    return (
+        symbol.endswith((".run_test", ".post_test"))
+        or ("._wait_" in symbol and "deleted" in symbol)
+    )
 
 
 def _is_code_relation_question(question: str) -> bool:
@@ -1041,6 +1187,7 @@ def _is_explicit_code_question(question: str) -> bool:
             "属性",
             "模块",
             "文件",
+            "用例",
             "调用",
             "依赖",
             "导入",
@@ -1054,10 +1201,19 @@ def _retrieval_wiki_facts(
     repository_id: str | None,
     question: str,
 ) -> list[dict[str, Any]]:
-    """Use FTS to bound Retrieval v2 before its in-memory reranking lanes."""
+    """Use FTS to bound Retrieval v2 before its in-memory reranking lanes.
+
+    Code-identifier tokens (camelCase/PascalCase words such as
+    ``PerformanceInfo`` or ``ProvisionedBandwidth``) get an exact AND query
+    first: those facts are the precise evidence for symbol-level questions and
+    must not be pushed out of the 300-row window by high-frequency Feishu
+    pages. When the AND query finds nothing, fall back to the broad OR query.
+    """
     database = workspace_root / DATABASE_RELATIVE_PATH
     if not database.is_file() or database.is_symlink():
         return []
+    expanded_terms = _expanded_question_terms(_terms(question))
+    identifier_terms = _question_identifier_terms(question)
     try:
         with _connect_readonly(database) as connection:
             query = """
@@ -1088,16 +1244,47 @@ def _retrieval_wiki_facts(
                   ON repositories.repository_id = facts.repository_id
                 WHERE wiki_fact_fts MATCH ?
                 """
-            parameters: list[object] = [_wiki_fact_fts_query(question)]
+            parameters: list[object] = [_expanded_fts_query(expanded_terms, question)]
             if repository_id is not None:
                 query += " AND (facts.repository_id IS NULL OR facts.repository_id = ?)"
                 parameters.append(repository_id)
             query += " ORDER BY bm25(wiki_fact_fts), facts.page_path, facts.locator LIMIT 300"
             rows = connection.execute(query, tuple(parameters)).fetchall()
+            if not rows and identifier_terms:
+                identifier_query = " AND ".join(f'"{term}"' for term in identifier_terms)
+                parameters = [identifier_query]
+                if repository_id is not None:
+                    query = query.replace(
+                        " WHERE wiki_fact_fts MATCH ?",
+                        " WHERE wiki_fact_fts MATCH ?"
+                        " AND (facts.repository_id IS NULL OR facts.repository_id = ?)",
+                    )
+                    parameters.append(repository_id)
+                rows = connection.execute(query, tuple(parameters)).fetchall()
     except (sqlite3.Error, ValueError) as exc:
         logging.debug("retrieval_v2 fact load unavailable: %s", exc)
         return []
     return [dict(row) for row in rows]
+
+
+def _expanded_fts_query(expanded_terms: set[str], question: str) -> str:
+    """FTS query over expanded terms; falls back to the raw question tokens."""
+    terms = [term for term in expanded_terms if _FTS_SAFE.fullmatch(term)]
+    if not terms:
+        return _wiki_fact_fts_query(question)
+    escaped = [term.replace('"', '""') for term in terms]
+    return " OR ".join(f'"{term}"' for term in escaped)
+
+
+def _question_identifier_terms(question: str) -> tuple[str, ...]:
+    """Lowercased PascalCase/camelCase words in the question, longest first."""
+    identifiers = tuple(
+        dict.fromkeys(
+            match.group(0).lower()
+            for match in re.finditer(r"[A-Z][a-z0-9]+(?:[A-Z][a-z0-9]+)+", question)
+        )
+    )
+    return tuple(sorted(identifiers, key=len, reverse=True))
 
 
 def _candidate_pages(
@@ -1259,7 +1446,16 @@ def _candidate_pages(
     else:
         ordered_pages = (*fact_pages, *strict_pages, *module_pages)
     exact_code_pages: tuple[Path, ...] = ()
-    if (not definition_question or not has_explanatory_definition) and (
+    code_shortcut = (
+        _is_explicit_code_question(question)
+        or bool(exact_symbol_page_paths)
+        or any(marker in question for marker in ("换算", "计算", "转换", "转成"))
+        or (
+            "作用" in question
+            and bool(_explicit_code_identifiers(question))
+        )
+    )
+    if code_shortcut and (not definition_question or not has_explanatory_definition) and (
         ranked_index or exact_symbol_page_paths or relaxed_fts_paths
     ):
         exact_code_pages = _exact_code_pages(
@@ -1268,15 +1464,14 @@ def _candidate_pages(
             max_pages=candidate_limit,
             repository_id=repository_id,
         )
-    if fact_pages:
-        ordered_pages = (*exact_symbol_pages, *exact_code_pages, *ordered_pages, *preferred_pages)
-    else:
-        ordered_pages = (*exact_symbol_pages, *exact_code_pages, *preferred_pages, *ordered_pages)
+    ordered_pages = (*exact_symbol_pages, *exact_code_pages, *preferred_pages, *ordered_pages)
     if (exact_symbol_pages or exact_code_pages) and (
         not _is_code_relation_question(question)
         or any(marker in question for marker in ("方法", "字段", "属性", "函数"))
     ):
-        exact_candidates = list(dict.fromkeys((*exact_symbol_pages, *exact_code_pages)))
+        exact_candidates = list(
+            dict.fromkeys((*exact_symbol_pages, *preferred_pages, *exact_code_pages))
+        )
         if preferred_paths:
             exact_candidates.sort(
                 key=lambda page: (str(page.relative_to(workspace_root)) not in preferred_paths,)
@@ -1453,15 +1648,29 @@ def _validate_min_source_count(min_source_count: int) -> None:
 
 def _answer_citation_limit(question: str, max_citations: int) -> int:
     """Give a two-part question room for two complementary source facts."""
-    if max_citations == 1 and "方法" in question:
-        return 8
-    if max_citations == 1 and any(marker in question for marker in ("子模块", "字段", "属性")):
-        return 6
-    if max_citations == 1 and any(
-        marker in question for marker in ("分别", "以及", "与", "、", "，", "什么时候")
+    if max_citations == 1:
+        return 1
+    if "方法" in question:
+        return min(max_citations, 8)
+    if any(marker in question for marker in ("子模块", "字段", "属性")):
+        return min(max_citations, 6)
+    if any(
+        marker in question
+        for marker in (
+            "分别",
+            "以及",
+            "与",
+            "、",
+            "，",
+            "什么时候",
+            " and ",
+            " after ",
+            " before ",
+            " when ",
+        )
     ):
-        return 2
-    return max_citations
+        return min(max_citations, 2)
+    return 1
 
 
 def _top_matches(
@@ -1470,6 +1679,7 @@ def _top_matches(
     *,
     question_terms: set[str],
     required_sources: int = 1,
+    required_source_groups: tuple[frozenset[SourceVersionKey], ...] = (),
     minimum_citations: int = 1,
 ) -> list[tuple[str, CitationPayload]]:
     # ponytail: greedy page-level coverage is O(n²), sufficient for the 6-citation budget.
@@ -1489,12 +1699,25 @@ def _top_matches(
             remaining.append(match)
     covered_terms: set[str] = set()
     while remaining and len(selected) < max_citations:
+        uncovered_groups = tuple(
+            group for group in required_source_groups if not group & selected_sources
+        )
         if not selected:
             selected_index = 0
         else:
             selected_index = max(
                 range(len(remaining)),
                 key=lambda index: (
+                    int(
+                        any(
+                            (
+                                remaining[index][2]["source_id"],
+                                remaining[index][2]["source_version"],
+                            )
+                            in group
+                            for group in uncovered_groups
+                        )
+                    ),
                     int(
                         len(selected_sources) < required_sources
                         and (
@@ -1510,9 +1733,13 @@ def _top_matches(
         _, page_path, citation = remaining.pop(selected_index)
         new_terms = _matching_terms(question_terms, citation) - covered_terms
         source = (citation["source_id"], citation["source_version"])
+        source_groups_complete = all(
+            group & selected_sources for group in required_source_groups
+        )
         if (
             len(selected) >= minimum_citations
             and len(selected_sources) >= required_sources
+            and source_groups_complete
             and not new_terms
         ):
             break
@@ -1658,13 +1885,163 @@ def _title_module_path(title: str) -> str | None:
     return title.partition(": ")[2].lower()
 
 
+def _question_repository_ids(workspace_root: Path, question: str) -> set[str]:
+    database = workspace_root / DATABASE_RELATIVE_PATH
+    if not database.is_file() or database.is_symlink():
+        return set()
+    try:
+        with _connect_readonly(database) as connection:
+            rows = connection.execute(
+                "SELECT repository_id, name FROM git_repositories"
+            ).fetchall()
+    except sqlite3.Error:
+        return set()
+    repositories = [(str(row["repository_id"]), str(row["name"])) for row in rows]
+    aliases = Counter(
+        part.casefold()
+        for _, name in repositories
+        if name.casefold().endswith("-mgr")
+        for part in name.split("-")
+        if len(part) >= 3 and part.casefold() != "mgr"
+    )
+    return {
+        repository_id
+        for repository_id, name in repositories
+        if re.search(
+            rf"(?<![A-Za-z0-9_-]){re.escape(name)}(?![A-Za-z0-9_-])",
+            question,
+            re.IGNORECASE,
+        )
+        or any(
+            aliases[part.casefold()] == 1
+            and re.search(
+                rf"(?<![A-Za-z0-9_-]){re.escape(part)}(?![A-Za-z0-9_-])",
+                question,
+                re.IGNORECASE,
+            )
+            for part in name.split("-")
+            if len(part) >= 3 and part.casefold() != "mgr"
+        )
+    }
+
+
+def _repository_name_terms(workspace_root: Path, repository_id: str | None) -> set[str]:
+    if repository_id is None:
+        return set()
+    database = workspace_root / DATABASE_RELATIVE_PATH
+    if not database.is_file() or database.is_symlink():
+        return set()
+    try:
+        with _connect_readonly(database) as connection:
+            row = connection.execute(
+                "SELECT name FROM git_repositories WHERE repository_id = ?",
+                (repository_id,),
+            ).fetchone()
+    except sqlite3.Error:
+        return set()
+    return _terms(str(row["name"])) if row is not None else set()
+
+
+def _explicit_titles(question: str) -> tuple[str, ...]:
+    return tuple(
+        dict.fromkeys(
+            title
+            for match in _EXPLICIT_TITLE.finditer(question)
+            if (title := match["title"].strip())
+        )
+    )
+
+
+def _explicit_applied_source_groups(
+    workspace_root: Path,
+    question: str,
+) -> tuple[frozenset[SourceVersionKey], ...]:
+    titles = _explicit_titles(question)
+    if not titles:
+        return ()
+    database = workspace_root / DATABASE_RELATIVE_PATH
+    if not database.is_file() or database.is_symlink():
+        return tuple(frozenset() for _ in titles)
+    groups: list[frozenset[SourceVersionKey]] = []
+    try:
+        with _connect_readonly(database) as connection:
+            for title in titles:
+                rows = connection.execute(
+                    """
+                    SELECT sources.source_id, versions.id
+                    FROM applied_source_versions AS applied
+                    JOIN sources ON sources.source_id = applied.source_id
+                    JOIN source_versions AS versions
+                      ON versions.id = applied.source_version_id
+                    WHERE versions.title = ? COLLATE NOCASE
+                    ORDER BY sources.source_id, versions.id
+                    """,
+                    (title,),
+                ).fetchall()
+                groups.append(
+                    frozenset((str(row["source_id"]), int(row["id"])) for row in rows)
+                )
+    except sqlite3.Error:
+        return tuple(frozenset() for _ in titles)
+    return tuple(groups)
+
+
+def _explicit_source_page_paths(
+    workspace_root: Path,
+    groups: tuple[frozenset[SourceVersionKey], ...],
+) -> tuple[str, ...]:
+    database = workspace_root / DATABASE_RELATIVE_PATH
+    if not groups or not database.is_file() or database.is_symlink():
+        return ()
+    paths: list[str] = []
+    try:
+        with _connect_readonly(database) as connection:
+            for group in groups:
+                for source_id, source_version in sorted(group):
+                    rows = connection.execute(
+                        """
+                        SELECT DISTINCT page_path
+                        FROM wiki_facts
+                        WHERE source_id = ? AND source_version = ?
+                        ORDER BY page_path
+                        """,
+                        (source_id, source_version),
+                    ).fetchall()
+                    paths.extend(str(row["page_path"]) for row in rows)
+    except sqlite3.Error:
+        return ()
+    return tuple(dict.fromkeys(paths))
+
+
+def _strict_source_kind(question: str) -> Literal["feishu", "conversation"] | None:
+    lowered = question.casefold()
+    requests_feishu = any(marker in lowered for marker in ("飞书资料", "飞书文档"))
+    requests_conversation = re.search(
+        r"(?:ai|codex|claude)\s*(?:会话|conversation)",
+        lowered,
+    ) is not None
+    if requests_feishu == requests_conversation:
+        return None
+    return "feishu" if requests_feishu else "conversation"
+
+
 def _yes_no_focus_terms(question: str) -> set[str]:
-    """Return the condition half of one compact Chinese yes-or-no question."""
+    """Return the subject terms of one explicit Chinese existence question."""
+    for marker in ("是否", "有没有", "是否有"):
+        if marker in question:
+            suffix = question.split(marker, maxsplit=1)[1]
+            focus = _terms(suffix) - {
+                "实现",
+                "说明",
+                "给出",
+                "明确",
+                "存在",
+                "支持",
+            }
+            return focus
     for match in _WORDS.finditer(question):
         token = match.group().lower()
         if _CJK.fullmatch(token) and token.endswith("吗"):
-            # ponytail: only explicit yes/no questions need this.
-            # General tail weighting regressed recall.
             return _terms(token[len(token) // 2 :])
     return set()
 
@@ -1746,6 +2123,55 @@ def _safe_wiki_page(workspace_root: Path, page: Path) -> Path | None:
 
 def _unescape_link_text(value: str) -> str:
     return re.sub(r"\\(.)", r"\1", value)
+
+
+def _is_code_definition_fact(
+    citation: CitationPayload,
+    identifier_terms: set[str],
+) -> bool:
+    kind = _SYMBOL_FACT_KIND.match(citation["quote"])
+    if kind is None or kind["kind"] not in {
+        "class",
+        "enum",
+        "interface",
+        "struct",
+        "type",
+        "type_alias",
+    }:
+        return False
+    symbol_name = kind["symbol"].rsplit(".", maxsplit=1)[-1]
+    return not identifier_terms or bool(identifier_terms & _terms(symbol_name))
+
+
+def _definition_subject(question: str) -> str | None:
+    match = re.fullmatch(
+        r"\s*(?:"
+        r"什么是\s*(?P<prefix>[A-Za-z][A-Za-z0-9_-]*|[\u4e00-\u9fff]{1,12})"
+        r"|(?P<suffix>[A-Za-z][A-Za-z0-9_-]*|[\u4e00-\u9fff]{1,12})"
+        r"\s*(?:是什么|是什么意思|是啥)"
+        r")[？?]?\s*",
+        question,
+    )
+    if match is None:
+        return None
+    return match["prefix"] or match["suffix"]
+
+
+def _defines_subject(
+    citation: CitationPayload,
+    subject: str,
+    *,
+    code_page: bool,
+    identifier_terms: set[str],
+) -> bool:
+    if code_page:
+        return _is_code_definition_fact(citation, identifier_terms)
+    quote = re.sub(r"[`*_]", "", citation["quote"])
+    return re.search(
+        rf"(?:^|[\n|。；])\s*{re.escape(subject)}\s*(?:\||是|指|表示|：|:)",
+        quote,
+        re.IGNORECASE,
+    ) is not None
 
 
 def _is_definition_question(question: str) -> bool:

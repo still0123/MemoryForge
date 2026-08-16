@@ -414,6 +414,39 @@ def test_query_workspace_context_uses_current_project_only_as_a_preference(
     assert result["scope"]["preferred_repository"]["repository_id"] == repository_id
 
 
+def test_query_workspace_context_strictly_scopes_one_named_repository(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    checkout = _make_checkout(tmp_path, "efs-mgr", {"README.md": CACHE_POLICY})
+    workspace = tmp_path / "workspace"
+    runner = CliRunner()
+    monkeypatch.chdir(tmp_path)
+    assert runner.invoke(app, ["init", str(workspace)]).exit_code == 0
+    registered = runner.invoke(
+        app,
+        ["git-add", str(checkout), "--public", "--workspace", str(workspace)],
+    )
+    assert registered.exit_code == 0, registered.output
+    repository_id = json.loads(registered.stdout)["repository_id"]
+    captured: dict[str, object] = {}
+
+    def fake_answer(_workspace: Path, _question: str, **kwargs: object) -> dict[str, object]:
+        captured.update(kwargs)
+        return {"status": "unknown", "answer": "不知道", "wiki_pages": [], "citations": []}
+
+    monkeypatch.setattr("memoryforge.agent_access.answer_question", fake_answer)
+
+    result = query_workspace_context(
+        workspace,
+        "efs-mgr 是否实现了区块链共识模块？",
+    )
+
+    assert captured["repository_id"] == repository_id
+    assert captured["preferred_repository_id"] is None
+    assert result["repository"]["repository_id"] == repository_id
+
+
 def test_query_context_filters_local_only_evidence_by_default(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

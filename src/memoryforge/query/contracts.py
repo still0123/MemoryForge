@@ -4,6 +4,8 @@ from typing import Any, Literal, NotRequired, TypedDict
 
 from memoryforge.compiler.wiki_facts import CitationPayload
 
+SourceVersionKey = tuple[str, int]
+
 
 class EvidencePayload(CitationPayload):
     text: str
@@ -15,6 +17,7 @@ class SupportComponents(TypedDict):
     fact_co_location: float
     negation_alignment: float
     multi_source_coverage: float
+    source_group_coverage: float
     current_source_versions: float
 
 

@@ -41,6 +41,8 @@ _STOPWORDS = {
     "the",
     "to",
     "what",
+    "was",
+    "were",
     "why",
     "这个",
     "什么",
@@ -354,6 +356,7 @@ def load_conversation_sessions(
         ranked_quotes = _rank_session_quotes(
             (str(quote_row[0]).strip() for quote_row in quotes),
             question_tokens=question_tokens,
+            ignored_tokens=_session_tokens(str(row[2])),
         )
         if mode == "focused" and not ranked_quotes:
             continue
@@ -409,18 +412,26 @@ def _rank_session_quotes(
     quotes: Iterable[str],
     *,
     question_tokens: frozenset[str],
+    ignored_tokens: frozenset[str] = frozenset(),
 ) -> tuple[str, ...]:
     unique_quotes = tuple(dict.fromkeys(quote for quote in quotes if quote))
     if not question_tokens:
         return unique_quotes
-    scored = [
-        (len(question_tokens & _session_tokens(quote)), index, quote)
-        for index, quote in enumerate(unique_quotes)
-    ]
+    effective_tokens = question_tokens - ignored_tokens
+    if not effective_tokens:
+        return unique_quotes
+    numeric_tokens = {token for token in effective_tokens if token.isdigit()}
+    minimum_overlap = min(2, len(effective_tokens))
+    scored = []
+    for index, quote in enumerate(unique_quotes):
+        quote_tokens = _session_tokens(quote)
+        if numeric_tokens and not numeric_tokens <= quote_tokens:
+            continue
+        overlap = len(effective_tokens & quote_tokens)
+        if overlap >= minimum_overlap:
+            scored.append((overlap, index, quote))
     return tuple(
-        quote
-        for score, _index, quote in sorted(scored, key=lambda item: (-item[0], item[1]))
-        if score > 0
+        quote for _score, _index, quote in sorted(scored, key=lambda item: (-item[0], item[1]))
     )
 
 

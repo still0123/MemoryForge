@@ -6,8 +6,8 @@ from types import ModuleType
 
 import pytest
 
-from memoryforge.query import query as query_module
 from memoryforge.compiler.wiki_facts import AppliedCodeSymbolMatch, CitationPayload
+from memoryforge.query import query as query_module
 
 
 def test_partial_evidence_contract_keeps_supported_hint_and_citation() -> None:
@@ -23,6 +23,7 @@ def test_partial_evidence_contract_keeps_supported_hint_and_citation() -> None:
             "fact_co_location": 1.0,
             "negation_alignment": 1.0,
             "multi_source_coverage": 1.0,
+            "source_group_coverage": 1.0,
             "current_source_versions": 1.0,
         },
         "failed_hard_gates": ["runtime_call_not_verified"],
@@ -61,6 +62,107 @@ def test_code_support_rejects_topic_only_evidence(tmp_path: Path) -> None:
     assert not support["sufficient"]
     assert support["components"]["core_term_coverage"] < 0.2
     assert support["failed_hard_gates"] == ["score_below_threshold"]
+
+
+def test_multi_part_question_enforces_support_threshold(tmp_path: Path) -> None:
+    citation = _citation("MemoryForge 当前提供本地 Portal 控制面。")
+    question = "MemoryForge 当前架构和未来商业收入分别是什么？"
+
+    support = query_module._support_score(
+        tmp_path,
+        question,
+        query_module._terms(question),
+        [("wiki/pages/readme.md", citation)],
+        symbol_matches=(),
+        exact_symbol_fact_keys=set(),
+        required_sources=1,
+        code_page_paths=set(),
+    )
+
+    assert support["enforced"]
+    assert not support["sufficient"]
+    assert "score_below_threshold" in support["failed_hard_gates"]
+
+
+def test_support_prefers_strong_identifier_over_product_name(tmp_path: Path) -> None:
+    page_path = "wiki/pages/code/repository/multi.md"
+    citation = _citation(
+        "`multi.LockKey` (function): `func LockKey(key string, timeout time.Duration) bool`"
+    )
+    question = "ANAS DataFlow 并发重名如何通过 multi.LockKey 控制？"
+
+    support = query_module._support_score(
+        tmp_path,
+        question,
+        query_module._terms(question),
+        [(page_path, citation)],
+        symbol_matches=(),
+        exact_symbol_fact_keys=set(),
+        required_sources=1,
+        code_page_paths={page_path},
+    )
+
+    assert support["components"]["exact_identifier_coverage"] == 1.0
+    assert "exact_identifier_not_covered" not in support["failed_hard_gates"]
+
+
+def test_quantity_support_requires_number_and_subject_in_the_same_fact(tmp_path: Path) -> None:
+    question = "Lark Channel Bridge 会话里累计产出了多少个 MR？"
+    version_citation = {
+        **_citation("Codex CLI 已从 0.141.0 升级到 0.145.0。"),
+        "section_path": "Assistant conclusions",
+    }
+    mr_citation = {
+        **_citation("累计产出 45 个 MR。"),
+        "section_path": "Assistant conclusions",
+    }
+
+    unsupported = query_module._support_score(
+        tmp_path,
+        question,
+        query_module._terms(question),
+        [("wiki/pages/bridge.md", version_citation)],
+        symbol_matches=(),
+        exact_symbol_fact_keys=set(),
+        required_sources=1,
+        code_page_paths=set(),
+    )
+    supported_quantity = query_module._support_score(
+        tmp_path,
+        question,
+        query_module._terms(question),
+        [("wiki/pages/bridge.md", mr_citation)],
+        symbol_matches=(),
+        exact_symbol_fact_keys=set(),
+        required_sources=1,
+        code_page_paths=set(),
+    )
+
+    assert "quantity_not_covered" in unsupported["failed_hard_gates"]
+    assert "quantity_not_covered" not in supported_quantity["failed_hard_gates"]
+
+
+def test_code_support_rejects_quantity_question_without_numeric_evidence(tmp_path: Path) -> None:
+    page_path = "wiki/pages/code/repository/ap.md"
+    citation = _citation(
+        "`testcases.EFS.efs_mgr.ap.delete` (module): "
+        "`module testcases.EFS.efs_mgr.ap.delete`"
+    )
+    question = "EFS AP IAM 的测试覆盖和线上缺陷率分别是多少？"
+
+    support = query_module._support_score(
+        tmp_path,
+        question,
+        query_module._terms(question),
+        [(page_path, citation)],
+        symbol_matches=(),
+        exact_symbol_fact_keys=set(),
+        required_sources=1,
+        code_page_paths={page_path},
+    )
+
+    assert not support["sufficient"]
+    assert "quantity_not_covered" in support["failed_hard_gates"]
 
 
 def test_code_support_accepts_an_exact_signature(tmp_path: Path) -> None:
@@ -194,6 +296,165 @@ def test_multi_source_support_requires_distinct_sources(tmp_path: Path) -> None:
 
     assert support["components"]["multi_source_coverage"] == 0.5
     assert "multi_source_incomplete" in support["failed_hard_gates"]
+
+
+def test_required_source_groups_reject_three_sources_from_one_group(tmp_path: Path) -> None:
+    citations = [
+        (
+            f"wiki/pages/feishu-{index}.md",
+            {
+                **_citation("Cache expiry is documented."),
+                "source_id": source_id,
+                "locator": f"chars:{index}-{index + 1}",
+            },
+        )
+        for index, source_id in enumerate(("a" * 64, "b" * 64, "c" * 64), start=1)
+    ]
+
+    support = query_module._support_score(
+        tmp_path,
+        "How do cache expiry and session rollback correspond?",
+        query_module._terms("How do cache expiry and session rollback correspond?"),
+        citations,
+        symbol_matches=(),
+        exact_symbol_fact_keys=set(),
+        required_sources=2,
+        required_source_groups=(
+            frozenset({("a" * 64, 1), ("b" * 64, 1), ("c" * 64, 1)}),
+            frozenset({("d" * 64, 2)}),
+        ),
+        code_page_paths=set(),
+    )
+
+    assert support["components"]["multi_source_coverage"] == 1.0
+    assert support["components"]["source_group_coverage"] == 0.5
+    assert "required_source_group_incomplete" in support["failed_hard_gates"]
+    assert not support["sufficient"]
+
+
+def test_required_source_groups_accept_one_citation_per_group(tmp_path: Path) -> None:
+    feishu = {**_citation("Cache expires after sixty seconds."), "source_id": "a" * 64}
+    conversation = {
+        **_citation("Session rollback runs after cache expiry."),
+        "source_id": "d" * 64,
+        "source_version": 2,
+        "locator": "chars:11-20",
+    }
+
+    support = query_module._support_score(
+        tmp_path,
+        "How do cache expiry and session rollback work?",
+        query_module._terms("How do cache expiry and session rollback work?"),
+        [("wiki/pages/feishu.md", feishu), ("wiki/pages/session.md", conversation)],
+        symbol_matches=(),
+        exact_symbol_fact_keys=set(),
+        required_sources=1,
+        required_source_groups=(
+            frozenset({("a" * 64, 1)}),
+            frozenset({("d" * 64, 2)}),
+        ),
+        code_page_paths=set(),
+    )
+
+    assert support["components"]["source_group_coverage"] == 1.0
+    assert "required_source_group_incomplete" not in support["failed_hard_gates"]
+    assert support["sufficient"]
+
+
+def test_top_matches_prioritizes_an_uncovered_source_group() -> None:
+    first = {**_citation("Cache expiry policy."), "source_id": "a" * 64}
+    repeated = {
+        **_citation("Cache expiry policy details."),
+        "source_id": "a" * 64,
+        "locator": "chars:11-20",
+    }
+    conversation = {
+        **_citation("Cache expiry policy."),
+        "source_id": "d" * 64,
+        "source_version": 2,
+    }
+
+    selected = query_module._top_matches(
+        [
+            ((3,), "wiki/pages/feishu.md", first),
+            ((2,), "wiki/pages/feishu.md", repeated),
+            ((1,), "wiki/pages/session.md", conversation),
+        ],
+        2,
+        question_terms={"cache", "expiry", "policy"},
+        required_source_groups=(
+            frozenset({("a" * 64, 1)}),
+            frozenset({("d" * 64, 2)}),
+        ),
+    )
+
+    assert [(citation["source_id"], citation["source_version"]) for _, citation in selected] == [
+        ("a" * 64, 1),
+        ("d" * 64, 2),
+    ]
+
+
+def test_merged_page_source_versions_cover_separate_groups(tmp_path: Path) -> None:
+    first = {**_citation("Cache expiry policy."), "source_id": "a" * 64}
+    second = {
+        **_citation("Session rollback policy."),
+        "source_id": "d" * 64,
+        "source_version": 2,
+        "locator": "chars:11-20",
+    }
+
+    support = query_module._support_score(
+        tmp_path,
+        "Cache expiry and session rollback policy",
+        {"cache", "expiry", "session", "rollback", "policy"},
+        [("wiki/pages/merged.md", first), ("wiki/pages/merged.md", second)],
+        symbol_matches=(),
+        exact_symbol_fact_keys=set(),
+        required_sources=1,
+        required_source_groups=(
+            frozenset({("a" * 64, 1)}),
+            frozenset({("d" * 64, 2)}),
+        ),
+        code_page_paths=set(),
+    )
+
+    assert support["components"]["source_group_coverage"] == 1.0
+    assert support["sufficient"]
+
+
+def test_relationship_support_requires_both_sides_in_fact_bodies(tmp_path: Path) -> None:
+    question = "学习手册的 AP 权限概念与 AI 会话中的 IAM 测试覆盖如何对应？"
+    citations = [
+        (
+            "wiki/pages/guide.md",
+            {
+                **_citation("EFS 分为协议接入层、元数据面和数据面。"),
+                "routing_text": "学习手册 AP 权限概念",
+            },
+        ),
+        (
+            "wiki/pages/session.md",
+            {
+                **_citation("两条链路使用的不是同一组 AP 和 FS。"),
+                "routing_text": "AI 会话 IAM 测试覆盖",
+                "locator": "chars:11-20",
+            },
+        ),
+    ]
+
+    support = query_module._support_score(
+        tmp_path,
+        question,
+        query_module._terms(question),
+        citations,
+        symbol_matches=(),
+        exact_symbol_fact_keys=set(),
+        required_sources=1,
+        code_page_paths=set(),
+    )
+
+    assert not support["sufficient"]
+    assert "relationship_side_not_covered" in support["failed_hard_gates"]
 
 
 def test_conditional_support_requires_one_fact_to_cover_both_clauses(tmp_path: Path) -> None:
@@ -436,6 +697,7 @@ def test_support_benchmark_validates_complete_and_optional_unknown_payloads() ->
             "fact_co_location": 0.0,
             "negation_alignment": 1.0,
             "multi_source_coverage": 1.0,
+            "source_group_coverage": 1.0,
             "current_source_versions": 1.0,
         },
         "sufficient": True,
