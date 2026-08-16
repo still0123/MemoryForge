@@ -22,7 +22,7 @@ flowchart LR
 
 当前仓库提供源码构建的桌面端。它的界面和网页端完全相同，使用同一个 Workspace：
 
-![MemoryForge 桌面端：首页与知识更新审核](../assets/07-memoryforge-desktop-workflow.jpg)
+![MemoryForge 桌面端：首页与知识更新审核](../assets/07-memoryforge-desktop-workflow.png)
 
 ### 备选：本地网页端
 

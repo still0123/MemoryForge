@@ -139,6 +139,10 @@ commit. Automatic updates cannot bypass this chain.
 
 ![MemoryForge publishing chain: source snapshot, proposal, review, authorization, release](assets/04-memoryforge-publish-pipeline.png)
 
+The real review UI — one ChangeSet aggregating five sources (a web page, two AI sessions, two notes); nothing is written to the formal wiki before `approve`:
+
+![Update review page: a five-source proposal awaiting approve & apply](assets/usage/08-portal-review.png)
+
 ### Querying knowledge
 
 A query first locates a handful of relevant pages via `INDEX.md` and SQLite FTS5, then reads
@@ -146,6 +150,10 @@ citations; only when verification is needed does it expand the underlying source
 no need to stuff the entire wiki or every conversation into each new context.
 
 ![Progressive recall: locate pages, read citations, verify sources only when needed](assets/usage/03-progressive-recall.png)
+
+AI conversations are compiled into structured pages (overview / key conclusions / applicability) and flagged as "unverified conversation memory" — important conclusions still defer to current code and formal evidence:
+
+![Compiled AI session: a design discussion turned into a searchable wiki page](assets/usage/10-portal-conversation.png)
 
 Successful MCP calls uniformly return `status: ok`; project evidence is reported separately
 via `evidence_status`:
@@ -171,9 +179,15 @@ only when needed → let the AI synthesize an answer from the returned citations
 | **CLI** | Batch processing, automation, diagnostics |
 | **Codex / Claude Code / Gemini MCP** | On-demand access to reviewed knowledge and past sessions in chat |
 
-![MemoryForge desktop: wiki home and update review](assets/07-memoryforge-desktop-workflow.jpg)
+![MemoryForge desktop: multi-source local knowledge home](assets/07-memoryforge-desktop-workflow.png)
 
-<sub>Real screenshots: the local knowledge home (left) and pending updates (right); no user data included.</sub>
+<sub>Real macOS desktop screenshot (dogfooding: the wiki holds the MemoryForge repo itself, two AI design/debugging sessions, a web page, and notes).</sub>
+
+The local portal serves the same UI in the browser:
+
+![Local portal home: hero stat chips, metric cards, and project cards](assets/usage/07-portal-home.png)
+
+<sub>The portal binds to `127.0.0.1` only; your data stays local by default.</sub>
 
 The macOS desktop app is the recommended daily driver:
 

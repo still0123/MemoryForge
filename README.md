@@ -130,12 +130,20 @@ SourceAdapter 保存不可变来源版本，WikiCompiler 只生成待审核 Chan
 
 ![MemoryForge 知识发布链：来源快照、提案、审核、授权与发布](assets/04-memoryforge-publish-pipeline.png)
 
+真实审核界面——一次 ChangeSet 汇总五个来源（网页、两次 AI 会话、两份笔记），`approve` 前不会写入正式 Wiki：
+
+![知识更新审核页：五个来源的提案，批准并应用](assets/usage/08-portal-review.png)
+
 ### 查询知识
 
 查询先通过 `INDEX.md` 和 SQLite FTS5 找到少量相关页面，再读取 Citation；只有需要
 核验时，才展开对应的原文 Evidence——无需把整个 Wiki 或全部会话塞进每个新上下文。
 
 ![渐进式查询：先找页面，再读引用，最后按需核验原文](assets/usage/03-progressive-recall.png)
+
+AI 会话也会被编译成带结构的知识页（概览 / 结论要点 / 适用边界），并标注"未验证会话记忆"，重要结论仍以当前代码和正式证据为准：
+
+![AI 会话编译页：设计讨论被整理为可检索的 wiki 页面](assets/usage/10-portal-conversation.png)
 
 MCP 调用成功统一返回 `status: ok`，项目证据另由 `evidence_status` 表示：
 
@@ -160,9 +168,15 @@ MCP 调用成功统一返回 `status: ok`，项目证据另由 `evidence_status`
 | **CLI** | 批处理、自动更新和诊断 |
 | **Codex / Claude Code / Gemini MCP** | 在对话中按需读取已审核知识和历史会话 |
 
-![MemoryForge 桌面端：首页与知识更新审核](assets/07-memoryforge-desktop-workflow.jpg)
+![MemoryForge 桌面端：多来源本地知识库首页](assets/07-memoryforge-desktop-workflow.png)
 
-<sub>真实运行截图：左侧为本地知识库首页，右侧为待审核更新，不含用户本地数据。</sub>
+<sub>macOS 桌面端真实运行截图（dogfooding：知识库内容来自 MemoryForge 仓库本身、两次 AI 设计/排查会话、网页与笔记）。</sub>
+
+本地 Portal 提供同一套界面的浏览器版本：
+
+![本地 Portal 首页：hero 数据徽章、指标卡与项目卡片](assets/usage/07-portal-home.png)
+
+<sub>Portal 只绑定 `127.0.0.1`，资料默认留在本机。</sub>
 
 macOS 桌面端是日常使用的推荐方式：
 
