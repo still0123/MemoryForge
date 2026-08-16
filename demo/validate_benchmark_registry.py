@@ -84,7 +84,7 @@ RELEASE_DRILL_FIXTURE = {
     "source_id": "8864360214e8fa15d97f8019b8392729520e066c469d2e8475ec3e07c8734c68",
 }
 RELEASE_DRILL_WORKSPACE_COMMIT = "682b277b30ae3f8963f0eb1276c888215cb1c8c3"
-CURRENT_RELEASE_DRILL_WORKSPACE_COMMIT = "b64427a75b029405910600be4ba323be13695701"
+CURRENT_RELEASE_DRILL_WORKSPACE_COMMIT = "0e96fbae6d50e402de348a3538d3cf150ee2ddb4"
 _RESULTS = "demo/results/"
 HISTORICAL_REVIEW_SCOPES = {
     _RESULTS + "artifacts/release_candidate_review_candidate_5/review-scope.json": {
@@ -3415,12 +3415,13 @@ def _release_drill_support_valid(
     payload: object,
     expected_components: dict[str, float],
 ) -> bool:
-    if not isinstance(payload, dict) or not _strict_mapping(
-        payload.get("components"),
-        expected_components,
-    ):
+    if not isinstance(payload, dict) or not isinstance(payload.get("components"), dict):
         return False
-    components = cast(dict[str, float], payload["components"])
+    components = dict(cast(dict[str, float], payload["components"]))
+    if components.pop("source_group_coverage", 1.0) != 1.0:
+        return False
+    if not _strict_mapping(components, expected_components):
+        return False
     score = round(
         100
         * (
@@ -3438,8 +3439,9 @@ def _release_drill_support_valid(
         failed.append("exact_identifier_not_covered")
     if score < 75.0:
         failed.append("score_below_threshold")
+    normalized = {**payload, "components": components}
     return _strict_mapping(
-        payload,
+        normalized,
         {
             "score": score,
             "threshold": 75.0,

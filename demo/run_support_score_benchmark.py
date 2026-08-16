@@ -188,6 +188,15 @@ def _valid_support_payload(payload: object, threshold: float) -> bool:
     score = payload["score"]
     components = payload["components"]
     failed_hard_gates = payload["failed_hard_gates"]
+    legacy_component_keys = {
+        "exact_identifier_coverage",
+        "core_term_coverage",
+        "fact_co_location",
+        "negation_alignment",
+        "multi_source_coverage",
+        "current_source_versions",
+    }
+    component_keys = frozenset(components) if isinstance(components, dict) else frozenset()
     expected_score = (
         round(
             100
@@ -196,20 +205,21 @@ def _valid_support_payload(payload: object, threshold: float) -> bool:
                 + 0.35 * components["core_term_coverage"]
                 + 0.15 * components["fact_co_location"]
                 + 0.10 * components["negation_alignment"]
-                + 0.10 * components["multi_source_coverage"]
+                + (
+                    0.05 * components["multi_source_coverage"]
+                    + 0.05 * components["source_group_coverage"]
+                    if "source_group_coverage" in components
+                    else 0.10 * components["multi_source_coverage"]
+                )
                 + 0.10 * components["current_source_versions"]
             ),
             1,
         )
         if isinstance(components, dict)
-        and set(components)
-        == {
-            "exact_identifier_coverage",
-            "core_term_coverage",
-            "fact_co_location",
-            "negation_alignment",
-            "multi_source_coverage",
-            "current_source_versions",
+        and component_keys
+        in {
+            frozenset(legacy_component_keys),
+            frozenset((*legacy_component_keys, "source_group_coverage")),
         }
         and all(
             isinstance(value, (int, float)) and not isinstance(value, bool) and 0 <= value <= 1

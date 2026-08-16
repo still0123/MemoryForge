@@ -43,8 +43,9 @@ DOCUMENTS = (
 )
 DOCUMENT_CLAIMS = {
     DOCUMENTS[0]: (
-        "10% / 0%",
-        "Windows 尚未验证",
+        "v0.4.0",
+        "macos_passed=656",
+        "正式 Windows 发布支持仍需原生 Windows 门禁验证",
     ),
     DOCUMENTS[1]: (
         "v0.3.0 — 2026-08-10",
