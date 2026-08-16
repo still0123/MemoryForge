@@ -78,14 +78,23 @@ from memoryforge.interface.codex_connect import (
     install_agents_block,
 )
 from memoryforge.interface.doctor import doctor_report
+from memoryforge.interface.harness_connect import connect_harness_router
 from memoryforge.interface.mcp_server import build_router_server, build_server
 from memoryforge.portal.desktop import run_desktop
 from memoryforge.portal.local_portal import serve_local_portal
 from memoryforge.portal.showcase import build_showcase
 from memoryforge.query.agent import run_agent
-from memoryforge.query.agent_access import recall_context, resolve_repository_scope
+from memoryforge.query.agent_access import (
+    _named_repository_scope,
+    recall_context,
+    resolve_repository_scope,
+)
 from memoryforge.query.provider import OpenAICompatibleProvider, ProviderConfig
-from memoryforge.query.query import answer_question
+from memoryforge.query.query import (
+    DEFAULT_QUERY_MAX_CITATIONS,
+    DEFAULT_QUERY_MAX_PAGES,
+    answer_question,
+)
 from memoryforge.query.sessions import SessionStore
 from memoryforge.storage.changesets import ChangeSetStore, StoredChangeSet
 from memoryforge.storage.database import connect as _connect
@@ -1626,7 +1635,11 @@ def ask(
     max_pages: Annotated[
         int,
         typer.Option("--max-pages", min=1, max=10, help="Maximum Wiki pages to expand."),
-    ] = 3,
+    ] = DEFAULT_QUERY_MAX_PAGES,
+    max_citations: Annotated[
+        int,
+        typer.Option("--max-citations", min=1, max=10, help="Maximum citations to return."),
+    ] = DEFAULT_QUERY_MAX_CITATIONS,
     repository_id: Annotated[
         str | None,
         typer.Option("--repository", help="Limit answers to one registered Git repository."),
@@ -1637,6 +1650,11 @@ def ask(
         if as_of is not None:
             raise FeatureUnavailableError("--as-of is not supported yet")
         opened = Workspace.open_readonly(workspace)
+        named_scope = (
+            _named_repository_scope(opened.root, question)
+            if repository_id is None
+            else None
+        )
         provider = OpenAICompatibleProvider(ProviderConfig.from_environment()) if llm else None
         if provider is not None:
             typer.echo("正在基于命中的公开 Wiki 证据生成回答…", err=True)
@@ -1646,9 +1664,14 @@ def ask(
             debug=debug,
             verify=verify,
             max_pages=max_pages,
+            max_citations=max_citations,
             provider=provider,
             allow_local=allow_local_llm,
-            repository_id=repository_id,
+            repository_id=(
+                repository_id
+                if repository_id is not None
+                else named_scope.repository_id if named_scope is not None else None
+            ),
         )
     except (
         MemoryForgeError,
@@ -2081,7 +2104,10 @@ def mcp_config(
 
 @app.command()
 def connect(
-    host: Annotated[str, typer.Argument(help="AI Host to connect: codex or claude.")],
+    host: Annotated[
+        str,
+        typer.Argument(help="AI Host to connect: codex, claude, or harness."),
+    ],
     project: Annotated[
         Path | None,
         typer.Argument(
@@ -2114,6 +2140,15 @@ def connect(
                 allow_local=allow_local_llm,
                 startup_hook=startup_hook,
             )
+        elif host == "harness":
+            if project is not None:
+                raise ValueError("Harness one-shot connection uses the global Router; omit project")
+            if startup_hook:
+                raise ValueError("Harness does not support --startup-hook")
+            result = connect_harness_router(
+                workspace,
+                allow_local=allow_local_llm,
+            )
         elif host == "codex":
             result = (
                 connect_codex_router(
@@ -2130,7 +2165,9 @@ def connect(
                 )
             )
         else:
-            raise ValueError(f"unsupported AI Host '{host}'; use 'codex' or 'claude'")
+            raise ValueError(
+                f"unsupported AI Host '{host}'; use 'codex', 'claude', or 'harness'"
+            )
     except (
         MemoryForgeError,
         WorkspaceIntegrityError,

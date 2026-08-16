@@ -11,7 +11,7 @@ flowchart LR
     C --> D[知识更新]
     D --> E[审核并应用]
     E --> F[浏览 / 搜索 / 提问]
-    F --> G[可选：连接 Codex / Claude Code]
+    F --> G[可选：连接 Codex / Claude Code / DeepSeek Harness]
 ```
 
 ## 1. 先选一个入口
@@ -349,7 +349,7 @@ memoryforge watch --interval 60 --workspace "$MF_WORKSPACE"
 
 `watch` 只产生待审核 ChangeSet。它不会自动批准、自动应用或把未审核内容暴露给 AI。
 
-## 10. 在 Codex 或 Claude Code 中按需使用知识库
+## 10. 在 Codex、Claude Code 或 DeepSeek Harness 中按需使用知识库
 
 推荐方式是只注册 MCP，不开启自动会话注入。这样 AI 可以在需要时查询正式 Wiki，也可以在你明确
 选择后把某个旧会话主题加载进当前对话；普通新对话保持干净，不会自动继承上一次主题。
@@ -403,9 +403,31 @@ Claude Code 官方参考：[MCP 接入](https://code.claude.com/docs/en/mcp)、
 [Skills](https://code.claude.com/docs/en/slash-commands)、
 [Hooks](https://code.claude.com/docs/en/hooks)。
 
-### 10.3 在当前对话加载指定历史主题
+### 10.3 DeepSeek Harness：一键注册本地 Router
 
-Codex 和 Claude Code 中都可以先创建新对话，再直接说：
+DeepSeek Harness 内置标准 stdio MCP 客户端。MemoryForge 会向当前 Harness profile 的
+`cordis.patch.yml` 写入一个受管 `memoryforge-mcp` 条目，并安装全局
+`memoryforge-knowledge` Skill：
+
+```bash
+memoryforge connect harness --workspace "$MF_WORKSPACE"
+```
+
+默认连接只读取公开来源。如果确认当前 Harness 模型可以接收 `local_only` 来源，再显式授权：
+
+```bash
+memoryforge connect harness --allow-local-llm --workspace "$MF_WORKSPACE"
+```
+
+Harness 会热重载 profile patch。看到 `mcp__memoryforge__*` 工具后新建会话即可；若热重载未完成，
+再重启 App。Skill 位于 `~/.dsh/skills/memoryforge-knowledge/SKILL.md`。它会把普通项目知识路由到
+`memoryforge_context`，把明确询问旧 AI 会话的问题先路由到 `memoryforge_episodes` 和
+`memoryforge_load_session`；若返回 `no_session_evidence`，必须明确说明没有可加载的历史证据，
+不能用宽泛的 Wiki 页面替代答案。
+
+### 10.4 在当前对话加载指定历史主题
+
+Codex、Claude Code 和 DeepSeek Harness 中都可以先创建新对话，再直接说：
 
 ```text
 列出我最近的 MemoryForge 主题
@@ -420,7 +442,7 @@ Codex 和 Claude Code 中都可以先创建新对话，再直接说：
 `memoryforge_load_session(session_refs, question=...)` 只取相关片段。如果返回
 `no_session_evidence`，再用同一个问题调用 `memoryforge_context`，而不是把无关旧会话当成答案。
 
-### 10.4 可选的下一任务自动注入
+### 10.5 可选的下一任务自动注入
 
 普通用户不需要这一模式。Claude Code 如果确实需要，可以显式开启：
 
@@ -434,7 +456,7 @@ MemoryForge 只合并自己的条目，不会覆盖 `~/.claude/settings.json` �
 `--startup-hook` 的 `memoryforge connect claude` 可关闭该 Workspace 的自动注入。Claude Code 会把 Hook 返回的
 `additionalContext` 放入模型上下文，通常不会把它显示成一条普通聊天消息。
 
-### 10.5 查询结果和隐私边界
+### 10.6 查询结果和隐私边界
 
 它不会把整个 Wiki 预先塞进每个对话，而是先返回少量页面和 Citation，需要时再读取一条原文 Evidence。当前 MCP 返回的主要字段包括：
 

@@ -49,7 +49,9 @@ description: >-
 # MemoryForge knowledge
 
 1. Route first: inspect the current checkout for exact symbols, call chains, errors, files, or
-   line numbers. Call `memoryforge_context` for project facts and how-to questions: internal
+   line numbers. Call `memoryforge_status` for Workspace inventory questions such as registered
+   repository names, counts, commits, or languages. Call `memoryforge_context` for project facts
+   and how-to questions: internal
    operations, environment access or login, configuration, history, rationale, prior
    decisions, imported documents, cross-repository context, or when no checkout is available.
    Call it before any company-wide or external knowledge search. Only `no_local_evidence`

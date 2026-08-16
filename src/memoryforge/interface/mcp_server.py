@@ -25,7 +25,7 @@ import warnings
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Literal
 from urllib.parse import unquote, urlparse
 
@@ -49,6 +49,7 @@ from memoryforge.query.agent_access import (
     review_changeset,
     server_name,
 )
+from memoryforge.query.query import DEFAULT_QUERY_MAX_CITATIONS, DEFAULT_QUERY_MAX_PAGES
 from memoryforge.storage.changesets import ChangeSetStore
 from memoryforge.storage.database import connect as _connect
 from memoryforge.storage.database import connect_readonly as _connect_readonly
@@ -81,7 +82,8 @@ _INSTRUCTIONS = (
 
 _ROUTER_INSTRUCTIONS = (
     "MemoryForge exposes the whole applied, cited Wiki. Search the current checkout first "
-    "for exact code. Use memoryforge_context for project facts, imported documents, "
+    "for exact code. Use memoryforge_status for Workspace inventory such as repository names, "
+    "counts, commits and languages. Use memoryforge_context for project facts, imported documents, "
     "operations, login, configuration, history and cross-repository context before external "
     "search; only no_local_evidence permits fallback. When grounded, synthesize "
     "project_answer. Use memoryforge_recall only for latest summaries, not factual how-to. "
@@ -93,6 +95,13 @@ _ROUTER_INSTRUCTIONS = (
     "verification_status describes confidence. Grounded needs no repeated repo search; "
     "partial needs only gaps checked. Never invent project citations."
 )
+
+_LANGUAGE_BY_EXTENSION = {
+    ".go": "Go",
+    ".py": "Python",
+    ".ts": "TypeScript",
+    ".tsx": "TypeScript",
+}
 
 _READ_ONLY_ANNOTATIONS = ToolAnnotations(
     read_only_hint=True,
@@ -151,8 +160,8 @@ def build_server(
     @server.tool(name="memoryforge_context", annotations=_READ_ONLY_ANNOTATIONS)
     def memoryforge_context(
         question: str,
-        max_pages: int = 3,
-        max_citations: int = 6,
+        max_pages: int = DEFAULT_QUERY_MAX_PAGES,
+        max_citations: int = DEFAULT_QUERY_MAX_CITATIONS,
     ) -> dict[str, object]:
         """Answer from imported documents/Wiki before external search; exact code uses checkout."""
         if not question.strip():
@@ -448,8 +457,8 @@ def build_router_server(
     async def memoryforge_context(
         question: str,
         project_root: str | None = None,
-        max_pages: int = 3,
-        max_citations: int = 6,
+        max_pages: int = DEFAULT_QUERY_MAX_PAGES,
+        max_citations: int = DEFAULT_QUERY_MAX_CITATIONS,
         ctx: Context = None,  # type: ignore[assignment]
     ) -> dict[str, object]:
         """Answer from imported documents/Wiki before external search across repositories."""
@@ -747,15 +756,60 @@ def _router_status_payload(bindings: _RouterBindings) -> dict[str, object]:
         applied_sources = int(
             connection.execute("SELECT COUNT(*) FROM applied_source_versions").fetchone()[0]
         )
-        registered_repositories = int(
-            connection.execute("SELECT COUNT(*) FROM git_repositories").fetchone()[0]
+        repository_rows = connection.execute(
+            """
+            SELECT repositories.repository_id, repositories.name,
+                   COALESCE(repositories.last_synced_commit, '') AS commit_sha,
+                   revisions.relative_path
+            FROM git_repositories AS repositories
+            LEFT JOIN git_source_revisions AS revisions
+              ON revisions.repository_id = repositories.repository_id
+            LEFT JOIN source_versions AS versions
+              ON versions.id = revisions.source_version_id AND versions.is_current = 1
+            LEFT JOIN sources ON sources.id = versions.source_id
+            LEFT JOIN applied_source_versions AS applied
+              ON applied.source_id = sources.source_id
+             AND applied.source_version_id = versions.id
+            WHERE (? = 1 OR repositories.sensitivity = 'public')
+              AND (revisions.relative_path IS NULL OR applied.source_version_id IS NOT NULL)
+            ORDER BY repositories.name, repositories.repository_id, revisions.relative_path
+            """,
+            (int(bindings.allow_local),),
+        ).fetchall()
+    repositories: dict[str, dict[str, object]] = {}
+    for row in repository_rows:
+        repository_id = str(row["repository_id"])
+        repository = repositories.setdefault(
+            repository_id,
+            {
+                "name": str(row["name"]),
+                "commit": str(row["commit_sha"])[:12],
+                "languages": set(),
+                "source_count": 0,
+            },
         )
+        relative_path = str(row["relative_path"] or "")
+        if relative_path:
+            source_count = repository["source_count"]
+            assert isinstance(source_count, int)
+            repository["source_count"] = source_count + 1
+            language = _LANGUAGE_BY_EXTENSION.get(PurePosixPath(relative_path).suffix.lower())
+            if language:
+                languages = repository["languages"]
+                assert isinstance(languages, set)
+                languages.add(language)
+    public_repositories = []
+    for repository in repositories.values():
+        languages = repository["languages"]
+        assert isinstance(languages, set)
+        public_repositories.append({**repository, "languages": sorted(languages)})
     return {
         "status": "ok",
         "version": __version__,
         "server": "memoryforge",
         "workspace_commit": opened.current_commit(),
-        "registered_repositories": registered_repositories,
+        "registered_repositories": len(public_repositories),
+        "repositories": public_repositories,
         "applied_pages": applied_pages,
         "applied_sources": applied_sources,
         "allow_local": bindings.allow_local,

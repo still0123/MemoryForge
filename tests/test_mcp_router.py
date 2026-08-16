@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import sqlite3
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -10,9 +12,12 @@ import pytest
 
 from memoryforge.interface.mcp_server import (
     _router_project_from_context,
+    _router_status_payload,
+    _RouterBindings,
     _select_router_project_root,
     build_router_server,
 )
+from memoryforge.storage.workspace import Workspace
 from tests.test_agent_access import _make_checkout
 
 
@@ -124,6 +129,101 @@ def test_router_context_uses_the_host_root_as_preference_and_falls_back_to_works
 
     assert selected == checkout
     assert unavailable is None
+
+
+def test_router_status_filters_private_repositories_and_lists_languages(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from typer.testing import CliRunner
+
+    from memoryforge.interface.cli import app
+
+    public_repo = _make_checkout(tmp_path, "public-go", {"main.go": "package main\n"})
+    private_repo = _make_checkout(tmp_path, "private-py", {"app.py": "print('ok')\n"})
+    workspace = tmp_path / "workspace"
+    runner = CliRunner()
+    monkeypatch.chdir(tmp_path)
+    assert runner.invoke(app, ["init", str(workspace)]).exit_code == 0
+    repository_ids: dict[str, str] = {}
+    for checkout, public in ((public_repo, True), (private_repo, False)):
+        arguments = ["git-add", str(checkout)]
+        if public:
+            arguments.append("--public")
+        arguments.extend(["--workspace", str(workspace)])
+        registered = runner.invoke(app, arguments)
+        assert registered.exit_code == 0, registered.output
+        repository_ids[checkout.name] = json.loads(registered.stdout)["repository_id"]
+
+    index_path = Workspace.open_readonly(workspace).index_path
+    with sqlite3.connect(index_path) as connection:
+        for version_id, (name, path, sensitivity) in enumerate(
+            (
+                ("public-go", "main.go", "public"),
+                ("private-py", "app.py", "local_only"),
+            ),
+            start=1,
+        ):
+            source_id = str(version_id) * 64
+            content_hash = chr(96 + version_id) * 64
+            connection.execute(
+                "INSERT INTO blobs VALUES (?, ?, ?, 1, '2026-08-14T00:00:00+00:00')",
+                (version_id, content_hash, f"raw/blobs/{version_id}.blob"),
+            )
+            connection.execute(
+                "INSERT INTO sources VALUES (?, ?, ?, ?, NULL, 'local', ?)",
+                (
+                    version_id,
+                    source_id,
+                    f"mf://source/{source_id}",
+                    path,
+                    "2026-08-14T00:00:00+00:00",
+                ),
+            )
+            connection.execute(
+                "INSERT INTO source_versions VALUES "
+                "(?, ?, ?, NULL, ?, 'refs', ?, ?, ?, ?, NULL, 1)",
+                (
+                    version_id,
+                    version_id,
+                    version_id,
+                    "text/x-go" if path.endswith(".go") else "text/x-python",
+                    path,
+                    "2026-08-14T00:00:00+00:00",
+                    sensitivity,
+                    '["code"]',
+                ),
+            )
+            commit = str(version_id) * 40
+            connection.execute(
+                "UPDATE git_repositories SET last_synced_commit = ? WHERE repository_id = ?",
+                (commit, repository_ids[name]),
+            )
+            connection.execute(
+                "INSERT INTO git_source_revisions VALUES (?, ?, ?, ?)",
+                (version_id, repository_ids[name], path, commit),
+            )
+            connection.execute(
+                "INSERT INTO applied_source_versions VALUES (?, ?)",
+                (source_id, version_id),
+            )
+        connection.commit()
+
+    public_status = _router_status_payload(_RouterBindings(workspace=workspace, allow_local=False))
+    local_status = _router_status_payload(_RouterBindings(workspace=workspace, allow_local=True))
+
+    assert public_status["registered_repositories"] == 1
+    public = public_status["repositories"][0]
+    assert public["name"] == "public-go"
+    assert public["languages"] == ["Go"]
+    assert public["source_count"] == 1
+    assert {item["name"] for item in local_status["repositories"]} == {
+        "public-go",
+        "private-py",
+    }
+    private = next(item for item in local_status["repositories"] if item["name"] == "private-py")
+    assert private["languages"] == ["Python"]
+    assert private["source_count"] == 1
 
 
 def test_global_router_exposes_workspace_read_tools_without_a_current_project(

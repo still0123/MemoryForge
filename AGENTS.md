@@ -37,3 +37,13 @@ This repository contains MemoryForge and its own Feishu demonstration agent.
   metered features. Do not add payment methods, raise spending limits, or
   re-enable repository GitHub Actions. Use local free tools only. If a task
   cannot be completed at zero cost, stop and report the blocker.
+
+## Trae CLI
+
+- Use `/Users/bytedance/.local/bin/trae-cli`; it may not be on `PATH`.
+- For non-interactive coding from the repository root:
+  `/Users/bytedance/.local/bin/trae-cli exec -C . --ephemeral -m gpt-5.6-sol__max -c 'model_reasoning_effort="xhigh"' --permission-mode auto "<task>"`.
+- For conversation recompilation, use `memoryforge recompile conversations
+  --workspace <wiki> --trae --allow-local-llm` only after the user authorizes
+  sending `local_only` conversations to Trae.
+- Never use the dangerous permission-bypass flags.
