@@ -8,9 +8,10 @@ from typing import Any
 
 from typer.testing import CliRunner
 
+import memoryforge.compiler.linting as linting_module
 import memoryforge.storage.blob_store as blob_store_module
-from memoryforge.interface.cli import app
 from memoryforge.compiler.linting import lint_workspace
+from memoryforge.interface.cli import app
 from memoryforge.storage.workspace import Workspace
 from tests.cli_helpers import review_approve_apply
 
@@ -22,6 +23,42 @@ def test_lint_reports_clean_applied_wiki(tmp_path: Path, monkeypatch) -> None:
 
     assert result.exit_code == 0, result.output
     assert json.loads(result.stdout) == {"status": "clean", "checked_pages": 1, "issues": []}
+
+
+def test_lint_reuses_immutable_evidence_for_repeated_citations(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _, workspace, _ = _workspace_with_applied_source(tmp_path, monkeypatch)
+    page = next((workspace / "wiki/pages").glob("*.md"))
+    citation = linting_module.parse_page_citations(page.read_text(encoding="utf-8"))[0]
+    index = linting_module._open_readonly_index(workspace)
+    original_read = linting_module._read_blob_bytes_readonly
+    reads = 0
+
+    def counted_read(*args: Any, **kwargs: Any) -> bytes:
+        nonlocal reads
+        reads += 1
+        return original_read(*args, **kwargs)
+
+    monkeypatch.setattr(linting_module, "_read_blob_bytes_readonly", counted_read)
+    cache: dict[tuple[str, int], str] = {}
+    try:
+        for _ in range(2):
+            linting_module._validate_citation_excerpt(
+                workspace,
+                index,
+                source_id=citation["source_id"],
+                source_version=citation["source_version"],
+                locator=citation["locator"],
+                quote=citation["quote"],
+                grounding=citation.get("grounding", "exact"),
+                evidence_cache=cache,
+            )
+    finally:
+        index.close()
+
+    assert reads == 1
 
 
 def test_lint_reads_normal_workspace_without_workspace_open(tmp_path: Path, monkeypatch) -> None:

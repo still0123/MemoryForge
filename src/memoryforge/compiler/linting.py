@@ -110,6 +110,7 @@ def lint_workspace(
             target for target in _related_page_paths(relative_path, content) if target in page_paths
         )
 
+    evidence_cache: dict[tuple[str, int], str] = {}
     try:
         for path in pages:
             relative_path = str(path.relative_to(workspace_root))
@@ -148,6 +149,7 @@ def lint_workspace(
                         relative_path,
                         content,
                         set(citation_source_ids),
+                        evidence_cache,
                         issues,
                     )
                 _lint_related_page_links(relative_path, content, page_paths, issues)
@@ -187,6 +189,7 @@ def lint_workspace(
                     relative_path,
                     content,
                     set(source_ids) | set(citation_source_ids or ()),
+                    evidence_cache,
                     issues,
                 )
             _lint_related_page_links(relative_path, content, page_paths, issues)
@@ -340,6 +343,7 @@ def _lint_citations(
     page_path: str,
     content: str,
     source_ids: set[str],
+    evidence_cache: dict[tuple[str, int], str],
     issues: list[LintIssue],
 ) -> None:
     citations = parse_page_citations(content)
@@ -367,6 +371,7 @@ def _lint_citations(
                 locator=citation["locator"],
                 quote=citation["quote"],
                 grounding=citation.get("grounding", "exact"),
+                evidence_cache=evidence_cache,
             )
         except (
             OSError,
@@ -580,31 +585,36 @@ def _validate_citation_excerpt(
     locator: str,
     quote: str,
     grounding: Literal["exact", "semantic"],
+    evidence_cache: dict[tuple[str, int], str],
 ) -> None:
     locator_match = re.fullmatch(r"chars:(?P<start>\d+)-(?P<end>\d+)", locator)
     if locator_match is None:
         raise WorkspaceIntegrityError("Citation locator is invalid")
-    row = index.execute(
-        """
-        SELECT b.content_sha256, b.snapshot_path
-        FROM sources AS s
-        JOIN source_versions AS v ON v.source_id = s.id
-        JOIN blobs AS b ON b.id = v.blob_id
-        WHERE s.source_id = ? AND v.id = ?
-        """,
-        (source_id, source_version),
-    ).fetchone()
-    if row is None:
-        raise WorkspaceIntegrityError("Citation does not identify an imported SourceVersion")
-    evidence = _read_blob_bytes_readonly(
-        workspace_root,
-        str(row["content_sha256"]),
-        Path(str(row["snapshot_path"])),
-    )
-    try:
-        text = evidence.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        raise WorkspaceIntegrityError("Citation evidence is not valid UTF-8") from exc
+    key = (source_id, source_version)
+    text = evidence_cache.get(key)
+    if text is None:
+        row = index.execute(
+            """
+            SELECT b.content_sha256, b.snapshot_path
+            FROM sources AS s
+            JOIN source_versions AS v ON v.source_id = s.id
+            JOIN blobs AS b ON b.id = v.blob_id
+            WHERE s.source_id = ? AND v.id = ?
+            """,
+            key,
+        ).fetchone()
+        if row is None:
+            raise WorkspaceIntegrityError("Citation does not identify an imported SourceVersion")
+        evidence = _read_blob_bytes_readonly(
+            workspace_root,
+            str(row["content_sha256"]),
+            Path(str(row["snapshot_path"])),
+        )
+        try:
+            text = evidence.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise WorkspaceIntegrityError("Citation evidence is not valid UTF-8") from exc
+        evidence_cache[key] = text
     start = int(locator_match.group("start"))
     end = int(locator_match.group("end"))
     if start >= end or end > len(text):

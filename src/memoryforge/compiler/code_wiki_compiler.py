@@ -34,6 +34,7 @@ from memoryforge.core.models import (
     ChangeSetValidation,
 )
 from memoryforge.query.provider import OpenAICompatibleProvider, ProviderUnavailableError
+from memoryforge.storage.database import connect_readonly as _connect_readonly
 from memoryforge.storage.projection import candidate_page_sources
 from memoryforge.storage.workspace import (
     Workspace,
@@ -95,6 +96,21 @@ def compile_code_wiki(
     _validate_inputs(opened, snapshot, plan, architecture)
     graph = architecture or build_architecture_graph(snapshot, plan)
     source_texts = _validate_code_evidence(opened, snapshot)
+    applied_source_versions = _applied_source_versions(opened)
+    pending_code_source_ids = {
+        source_id
+        for source_id, source_version in snapshot.source_versions.items()
+        if applied_source_versions.get(source_id) != source_version
+    }
+    pending_metadata_source_versions = {
+        source.source_id: source.source_version
+        for source in list_current_git_source_versions(opened.root, snapshot.repository_id)
+        if (
+            "code-module" in source.tags
+            or ("code" in source.tags and source.source_id not in snapshot.source_versions)
+        )
+        and applied_source_versions.get(source.source_id) != source.source_version
+    }
     modules = _flatten_modules(plan.modules)
     modules_by_id = {module.module_id: module for module in modules}
     symbols_by_id = {symbol.symbol_id: symbol for symbol in snapshot.symbols}
@@ -118,6 +134,13 @@ def compile_code_wiki(
                 module,
                 snapshot,
             )
+    planned_paths = set(all_candidates)
+    archived_paths = _stale_code_wiki_paths(opened, snapshot.repository_id) - planned_paths
+    if provider is None and not pending_code_source_ids and not archived_paths:
+        for path in tuple(all_candidates):
+            stable = _stable_text(opened.root / path)
+            if stable is not None:
+                all_candidates[path] = stable
     if provider is not None:
         _synthesize_module_narratives(
             opened,
@@ -134,8 +157,6 @@ def compile_code_wiki(
             provider,
         )
 
-    planned_paths = set(all_candidates)
-    archived_paths = _stale_code_wiki_paths(opened, snapshot.repository_id) - planned_paths
     all_candidates["wiki/INDEX.md"] = _render_index(
         opened,
         all_candidates,
@@ -146,14 +167,29 @@ def compile_code_wiki(
         for path, content in all_candidates.items()
         if _stable_text(opened.root / path) != content
     }
-    if not candidate_files and not archived_paths:
+    if not candidate_files and not archived_paths and not pending_metadata_source_versions:
         return None
 
     page_sources = candidate_page_sources(candidate_files)
     changed_source_ids = tuple(
-        sorted({source_id for source_ids in page_sources.values() for source_id in source_ids})
+        sorted(
+            {
+                source_id
+                for source_ids in page_sources.values()
+                for source_id in source_ids
+            }
+            | set(pending_metadata_source_versions)
+        )
     )
-    if any(source_id not in snapshot.source_versions for source_id in changed_source_ids):
+    changed_source_versions = {
+        **{
+            source_id: snapshot.source_versions[source_id]
+            for source_id in changed_source_ids
+            if source_id in snapshot.source_versions
+        },
+        **pending_metadata_source_versions,
+    }
+    if set(changed_source_ids) != set(changed_source_versions):
         raise CodeWikiCompilationError("candidate page references a source outside the code index")
 
     operations: list[ChangeOperation] = []
@@ -229,6 +265,10 @@ def compile_code_wiki(
         plan.plan_id,
         graph.graph_id,
         *(
+            f"source:{source_id}:{source_version}"
+            for source_id, source_version in sorted(changed_source_versions.items())
+        ),
+        *(
             f"{path}:{hashlib.sha256(content.encode()).hexdigest()}"
             for path, content in sorted(candidate_files.items())
         ),
@@ -240,9 +280,7 @@ def compile_code_wiki(
             changeset_id=changeset_id,
             base_commit=base_commit,
             source_ids=changed_source_ids,
-            source_versions={
-                source_id: snapshot.source_versions[source_id] for source_id in changed_source_ids
-            },
+            source_versions=changed_source_versions,
             status=ChangeSetStatus.PROPOSED,
             operations=tuple(operations),
             validation=ChangeSetValidation(
@@ -996,6 +1034,16 @@ def _escape_narrative_text(value: str) -> str:
     )
 
 
+def _applied_source_versions(workspace: Workspace) -> dict[str, int]:
+    with _connect_readonly(workspace.index_path) as connection:
+        return {
+            str(row["source_id"]): int(row["source_version_id"])
+            for row in connection.execute(
+                "SELECT source_id, source_version_id FROM applied_source_versions"
+            )
+        }
+
+
 def _validate_inputs(
     workspace: Workspace,
     snapshot: CodeIndexSnapshot,
@@ -1307,10 +1355,11 @@ def _append_source_architecture(
                     start + len(evidence_quote),
                 )
             citations.append((label, display_evidence))
+            display_quote = re.sub(r"[ \t]*\r?\n[ \t]*", " ", evidence_quote)
             lines.append(
                 f"- `{source_symbol.qualified_name} -> {target_symbol.qualified_name}` "
                 f"({relation.type.value}): "
-                f"{json.dumps(evidence_quote, ensure_ascii=False)} [^{label}]"
+                f"{json.dumps(display_quote, ensure_ascii=False)} [^{label}]"
             )
     lines.append("")
     return tuple(citations)

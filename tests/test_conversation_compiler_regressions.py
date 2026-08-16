@@ -69,6 +69,65 @@ def test_process_notes_do_not_consume_substantive_quota() -> None:
     assert len(substantive) == len(quotes), "process notes consumed quota"
 
 
+def test_conversation_topic_filter_removes_unrelated_later_work() -> None:
+    facts = [
+        compiler.SourceFact(
+            "Bridge 调用的 Codex CLI 已从 0.141.0 升级到 0.145.0。",
+            10,
+            ("Assistant conclusions",),
+        ),
+        compiler.SourceFact(
+            "累计产出 45 个 MR，完成 118 次提交。",
+            100,
+            ("Assistant conclusions",),
+        ),
+        compiler.SourceFact(
+            "本周期负责接入点、挂载点和权限组的功能建设。",
+            150,
+            ("Assistant conclusions",),
+        ),
+    ]
+
+    selected = compiler._conversation_topic_facts(
+        facts,
+        title="Lark Channel Bridge 接入 Codex",
+        model_body="## Codex 版本兼容\n\nBridge 需要匹配新版 CLI。",
+        fallback=facts[0],
+    )
+
+    assert selected == [facts[0]]
+
+
+def test_topic_filter_sees_facts_beyond_per_turn_display_limit() -> None:
+    content = (
+        "# Bridge session\n\n"
+        "## Assistant (unverified)\n\n"
+        "Bridge 已收到消息。\n\n"
+        "Bridge 正在读取 daemon 日志。\n\n"
+        "Bridge 连接需要重启。\n\n"
+        "Bridge 调用的 Codex CLI 从 0.141.0 升级到 0.145.0。\n\n"
+        "累计产出 45 个 MR。\n"
+    )
+    selected = compiler._conversation_page_facts(
+        _source(),
+        content,
+        retain_all_facts=True,
+    )
+    assert selected is not None
+
+    facts, summary = selected
+    filtered = compiler._conversation_topic_facts(
+        facts,
+        title="Lark Channel Bridge 接入 Codex",
+        model_body="## Codex 版本兼容\n\nBridge 需要匹配新版 CLI。",
+        fallback=summary,
+    )
+
+    quotes = [fact.quote for fact in filtered]
+    assert any("0.141.0" in quote and "0.145.0" in quote for quote in quotes)
+    assert not any("45 个 MR" in quote for quote in quotes)
+
+
 def test_older_turn_retains_seven_job_count_and_exact_source_slice() -> None:
     """Offset=10 table turn (beyond 8-turn recent boundary) keeps count +
     all job names. The merged fact quote must be content[start:start+len]."""

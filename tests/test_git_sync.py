@@ -11,14 +11,12 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from memoryforge.storage.changesets import ChangeSetStore
-from memoryforge.interface.cli import app
+from memoryforge.adapters.importer import SourceValidationError
 from memoryforge.compiler.compiler import (
     _load_current_sources,
     _render_deterministic_group_page,
     compile_repository_topics,
 )
-from memoryforge.adapters.importer import SourceValidationError
 from memoryforge.compiler.linting import lint_workspace
 from memoryforge.core.models import (
     ChangeOperation,
@@ -28,7 +26,9 @@ from memoryforge.core.models import (
     Sensitivity,
     TopicGroup,
 )
+from memoryforge.interface.cli import app
 from memoryforge.query.query import answer_question
+from memoryforge.storage.changesets import ChangeSetStore
 from memoryforge.storage.workspace import (
     Workspace,
     WorkspaceError,
@@ -59,6 +59,22 @@ def test_register_and_list_git_checkout_are_idempotent(tmp_path: Path) -> None:
     assert first.checkout_path == str(checkout.resolve())
     assert first.remote_url is None
     assert first.sensitivity == "local_only"
+
+
+def test_register_uses_remote_name_for_hash_named_checkout(tmp_path: Path) -> None:
+    checkout = tmp_path / ("a" * 24)
+    checkout.mkdir()
+    _git(checkout, "init")
+    _git(checkout, "config", "user.email", "test@example.com")
+    _git(checkout, "config", "user.name", "Test User")
+    _git(checkout, "remote", "add", "origin", "https://github.com/example/MemoryForge.git")
+    _write(checkout / "README.md", "# MemoryForge\n")
+    _commit_all(checkout, "Initialize repository")
+    workspace = init_workspace(tmp_path / "workspace")
+
+    repository = register_git_checkout(workspace, checkout)
+
+    assert repository.name == "MemoryForge"
 
 
 def test_git_add_public_updates_existing_checkout_and_synced_sources(tmp_path: Path) -> None:

@@ -8,18 +8,22 @@ import re
 import sqlite3
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Protocol
 
 from memoryforge.compiler.index_rendering import (
     PageSummary,
     _escape_link_text,
     _frontmatter_fields,
+    _frontmatter_text,
     _parse_page_summary,
     render_index,
 )
 from memoryforge.compiler.source_rendering import (
     CurrentSource,
     _canonical_page_path,
+    _conversation_citation_is_assistant_fact,
+    _conversation_page_facts,
     _feishu_facts,
     _meaningful_paragraphs,
     _read_source_text,
@@ -309,7 +313,17 @@ def _compile_deterministically(
             if "code" in source.tags:
                 candidate_files[path] = _render_code_page(source, content)
             elif "conversation" in source.tags:
-                candidate_files[path] = _render_conversation_page(source, content)
+                candidate_files[path] = (
+                    _render_deterministic_conversation_group_page(
+                        workspace,
+                        [source],
+                        page_path=path,
+                    )
+                    if _existing_conversation_model_body(
+                        stable_path.read_text(encoding="utf-8") if stable_path.is_file() else ""
+                    )
+                    else _render_conversation_page(source, content)
+                )
             elif "feishu" in source.tags:
                 candidate_files[path] = _render_page(
                     source,
@@ -322,6 +336,7 @@ def _compile_deterministically(
             candidate_files[path] = _render_deterministic_group_page(
                 workspace,
                 page_sources,
+                page_path=path,
             )
 
     repository_overviews = _repository_overview_pages(workspace, sources, page_groups)
@@ -383,12 +398,12 @@ def _compile_deterministically(
 
 
 def _compile_missing_repository_overviews(workspace: Workspace) -> Compilation | None:
-    """Backfill navigation pages when an existing Git Wiki gains this feature."""
+    """Backfill or refresh deterministic repository navigation pages."""
     all_sources = _load_current_sources(workspace, set())
     overviews = {
         path: content
         for path, content in _repository_overview_pages(workspace, all_sources, []).items()
-        if not (workspace.root / path).is_file()
+        if _repository_overview_needs_refresh(workspace.root / path, content)
     }
     if not overviews:
         return None
@@ -398,7 +413,11 @@ def _compile_missing_repository_overviews(workspace: Workspace) -> Compilation |
     candidate_files[index_path] = _render_index(workspace, candidate_files)
     operations = [
         ChangeOperation(
-            type=ChangeOperationType.CREATE_PAGE,
+            type=(
+                ChangeOperationType.UPDATE_PAGE
+                if (workspace.root / path).is_file()
+                else ChangeOperationType.CREATE_PAGE
+            ),
             path=path,
             origin=ChangeOrigin.DETERMINISTIC_NAVIGATION,
         )
@@ -422,6 +441,14 @@ def _compile_missing_repository_overviews(workspace: Workspace) -> Compilation |
         ),
         candidate_files=candidate_files,
     )
+
+
+def _repository_overview_needs_refresh(path: Path, content: str) -> bool:
+    if not path.is_file():
+        return True
+    current = _frontmatter_fields(path.read_text(encoding="utf-8"))
+    candidate = _frontmatter_fields(content)
+    return current.get("title") != candidate.get("title")
 
 
 def _stale_pages(workspace: Workspace, selected: set[str]) -> tuple[StalePage, ...]:
@@ -516,6 +543,7 @@ def _compile_stale_pages(
             candidate_files[stale_page.path] = _render_deterministic_group_page(
                 workspace,
                 page_sources,
+                page_path=stale_page.path,
             )
         operations.append(
             ChangeOperation(
@@ -692,6 +720,9 @@ def _compile_with_provider(
         changes,
         pending_ids={source.source_id for source in pending},
         available_source_ids=set(sources_by_id),
+        conversation_source_ids={
+            source.source_id for source in available_sources if "conversation" in source.tags
+        },
         source_texts=source_texts,
         routed_pages=routed_pages,
         candidate_pages=candidate_pages,
@@ -985,6 +1016,7 @@ def _validate_llm_changes(
     *,
     pending_ids: set[str],
     available_source_ids: set[str],
+    conversation_source_ids: set[str],
     source_texts: dict[str, str],
     routed_pages: tuple[RoutedPage, ...] = (),
     candidate_pages: tuple[PageCard, ...] = (),
@@ -1030,6 +1062,19 @@ def _validate_llm_changes(
                 raise ValueError("provider citation must quote a source fact, not a heading")
             if end < len(source_text) and source_text[end - 1] not in ".!?。！？；;\n":
                 raise ValueError("provider citation must end at a source sentence boundary")
+        for source_id in change_source_ids & conversation_source_ids:
+            if not any(
+                citation.source_id == source_id
+                and _conversation_citation_is_assistant_fact(
+                    source_texts[source_id],
+                    start=_locator_range(citation.locator)[0],
+                    end=_locator_range(citation.locator)[1],
+                )
+                for citation in change.citations
+            ):
+                raise ValueError(
+                    "conversation page citations must quote substantive Assistant/Codex content"
+                )
         target_path = _target_page_path(
             change,
             routed_pages,
@@ -1751,6 +1796,66 @@ def _terms(text: str) -> set[str]:
     return terms
 
 
+def _conversation_topic_facts(
+    facts: list[SourceFact],
+    *,
+    title: str,
+    model_body: str,
+    fallback: SourceFact,
+) -> list[SourceFact]:
+    noise = {
+        "会话",
+        "问题",
+        "方案",
+        "项目",
+        "当前",
+        "相关",
+        "结果",
+        "流程",
+        "测试",
+        "修复",
+        "代码",
+        "工作",
+        "记录",
+        "整理",
+        "汇总",
+        "结论",
+        "建议",
+        "能力",
+        "接入",
+    }
+    title_terms = {term for term in _terms(title) if term not in noise}
+    headings = " ".join(re.findall(r"^#{2,4}\s+(.+)$", model_body, re.MULTILINE))
+    section_terms = {term for term in _terms(headings) if term not in noise}
+    if not title_terms and not section_terms:
+        return facts
+    ranked: list[tuple[tuple[int, int], int, SourceFact]] = []
+    for index, fact in enumerate(facts):
+        if fact.quote.lstrip().startswith(("<image ", "</image>")):
+            continue
+        fact_terms = _terms(fact.quote)
+        title_overlap = title_terms & fact_terms
+        section_overlap = section_terms & fact_terms
+        if title_overlap or len(section_overlap) >= 2:
+            ranked.append(
+                (
+                    (len(title_overlap), len(section_overlap)),
+                    index,
+                    fact,
+                )
+            )
+    if not ranked:
+        return [fallback]
+    assistant = [item for item in ranked if "assistant" in item[2].section_path[-1].lower()]
+    user = [item for item in ranked if "user" in item[2].section_path[-1].lower()]
+    retained = sorted(
+        (*sorted(assistant, key=lambda item: item[0], reverse=True)[:32],
+         *sorted(user, key=lambda item: item[0], reverse=True)[:8]),
+        key=lambda item: item[1],
+    )
+    return [fact for _, _, fact in retained]
+
+
 def _target_page_path(
     change: PageChange,
     routed_pages: tuple[RoutedPage, ...],
@@ -1771,8 +1876,16 @@ def _target_page_path(
 def _render_deterministic_group_page(
     workspace: Workspace,
     sources: list[CurrentSource],
+    *,
+    page_path: str = "",
 ) -> str:
-    """Use source excerpts as the local fallback for a previously merged Wiki page."""
+    """Use exact source excerpts for a previously merged Wiki page."""
+    if all("conversation" in source.tags for source in sources):
+        return _render_deterministic_conversation_group_page(
+            workspace,
+            sources,
+            page_path=page_path,
+        )
     excerpts: list[tuple[CurrentSource, str, str]] = []
     for source in sources:
         fact = _meaningful_paragraphs(_read_source_text(workspace, source))[0]
@@ -1784,6 +1897,164 @@ def _render_deterministic_group_page(
             )
         )
 
+    title = " / ".join(source.title for source in sources)
+    summary = " · ".join(quote for _, quote, _ in excerpts)
+    tags = tuple(
+        dict.fromkeys(tag for source in sources for tag in (source.category, *source.tags))
+    )
+    source_ids = tuple(source.source_id for source in sources)
+    source_versions = {source.source_id: source.source_version for source in sources}
+    lines = [
+        "---",
+        f"title: {json.dumps(title, ensure_ascii=False)}",
+        "type: concept",
+        f"summary: {json.dumps(summary, ensure_ascii=False)}",
+        f"tags: {json.dumps(tags, ensure_ascii=False)}",
+        f"sources: {json.dumps(source_ids, ensure_ascii=False)}",
+        f"source_versions: {json.dumps(source_versions, ensure_ascii=False)}",
+        "---",
+        "",
+        f"# {title}",
+        "",
+        "## Verified facts",
+        "",
+    ]
+    for index, (source, quote, _) in enumerate(excerpts, start=1):
+        footnote = f"source-{index}-{source.source_id[:8]}"
+        lines.append(f"- {quote} [^{footnote}]")
+    lines.append("")
+    for index, (source, _, locator) in enumerate(excerpts, start=1):
+        footnote = f"source-{index}-{source.source_id[:8]}"
+        lines.append(
+            f"[^{footnote}]: source `{source.source_id}` · revision "
+            f"`{source.source_version}` · `{locator}`"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def _render_deterministic_conversation_group_page(
+    workspace: Workspace,
+    sources: list[CurrentSource],
+    *,
+    page_path: str,
+) -> str:
+    """Preserve reviewed organization while rebuilding exact conversation evidence."""
+    existing = workspace.root / page_path
+    existing_content = existing.read_text(encoding="utf-8") if existing.is_file() else ""
+    fields = _frontmatter_fields(existing_content)
+    title = _frontmatter_text(fields.get("title", "")) or " / ".join(
+        source.title for source in sources
+    )
+    page_type = fields.get("type", "concept")
+    if page_type not in {"entity", "concept", "synthesis"}:
+        page_type = "concept"
+    model_body = _existing_conversation_model_body(existing_content)
+    reviewed_summary = _frontmatter_text(fields.get("summary", ""))
+    selected: list[tuple[CurrentSource, list[SourceFact], SourceFact]] = []
+    for source in sources:
+        source_facts = _conversation_page_facts(
+            source,
+            _read_source_text(workspace, source),
+            retain_all_facts=True,
+        )
+        if source_facts is None:
+            continue
+        displayed, summary_fact = source_facts
+        displayed = _conversation_topic_facts(
+            displayed,
+            title=title,
+            model_body=model_body,
+            fallback=summary_fact,
+        )
+        selected.append((source, displayed, summary_fact))
+    if not selected:
+        return _render_deterministic_group_page_fallback(workspace, sources)
+    summary = reviewed_summary or " · ".join(
+        summary_fact.quote for _, _, summary_fact in selected
+    )
+    tags = tuple(
+        dict.fromkeys(tag for source in sources for tag in (source.category, *source.tags))
+    )
+    source_ids = tuple(source.source_id for source in sources)
+    source_versions = {source.source_id: source.source_version for source in sources}
+    lines = [
+        "---",
+        f"title: {json.dumps(title, ensure_ascii=False)}",
+        f"type: {page_type}",
+        f"summary: {json.dumps(summary, ensure_ascii=False)}",
+        f"tags: {json.dumps(tags, ensure_ascii=False)}",
+        f"sources: {json.dumps(source_ids, ensure_ascii=False)}",
+        f"source_versions: {json.dumps(source_versions, ensure_ascii=False)}",
+        "---",
+        "",
+        f"# {title}",
+        "",
+    ]
+    if model_body:
+        lines.extend(["## Model summary (unverified)", "", model_body.rstrip(), ""])
+    lines.extend(
+        [
+            "## Conversation notes (unverified)",
+            "",
+            "> Assistant conclusions may answer questions. User prompts are search clues only. "
+            "Full transcript remains in immutable raw evidence.",
+            "",
+        ]
+    )
+    footnotes: list[tuple[str, CurrentSource, SourceFact]] = []
+    for source_index, (source, displayed_facts, _) in enumerate(selected, start=1):
+        lines.extend([f"### {source.title}", ""])
+        section_path: tuple[str, ...] = ()
+        for fact_index, fact in enumerate(displayed_facts, start=1):
+            if fact.section_path != section_path:
+                section_path = fact.section_path
+                lines.extend([f"#### {' / '.join(section_path)}", ""])
+            footnote = f"source-{source_index}-{fact_index}-{source.source_id[:8]}"
+            quote = " ".join(line.strip() for line in fact.quote.splitlines())
+            lines.append(f"- {quote} [^{footnote}]")
+            footnotes.append((footnote, source, fact))
+        lines.append("")
+    for footnote, source, fact in footnotes:
+        end = fact.start + len(fact.quote)
+        lines.append(
+            f"[^{footnote}]: source `{source.source_id}` · revision "
+            f"`{source.source_version}` · `chars:{fact.start}-{end}`"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def _existing_conversation_model_body(content: str) -> str:
+    marker = "## Model summary (unverified)\n"
+    if marker not in content:
+        return ""
+    body = content.split(marker, 1)[1]
+    boundaries = [
+        offset
+        for heading in (
+            "\n## Conversation notes (unverified)",
+            "\n## Verified facts",
+            "\n## Sources",
+        )
+        for offset in (body.find(heading),)
+        if offset >= 0
+    ]
+    return body[: min(boundaries) if boundaries else len(body)].strip()
+
+
+def _render_deterministic_group_page_fallback(
+    workspace: Workspace,
+    sources: list[CurrentSource],
+) -> str:
+    excerpts: list[tuple[CurrentSource, str, str]] = []
+    for source in sources:
+        fact = _meaningful_paragraphs(_read_source_text(workspace, source))[0]
+        excerpts.append(
+            (
+                source,
+                " ".join(line.strip() for line in fact.quote.splitlines()),
+                f"chars:{fact.start}-{fact.start + len(fact.quote)}",
+            )
+        )
     title = " / ".join(source.title for source in sources)
     summary = " · ".join(quote for _, quote, _ in excerpts)
     tags = tuple(

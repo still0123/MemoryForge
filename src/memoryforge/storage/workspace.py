@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import Literal, cast
+from urllib.parse import urlsplit
 
 from memoryforge.compiler.wiki_facts import (
     AppliedCodeSymbolMatch,
@@ -714,6 +715,7 @@ def register_git_checkout(
     snapshot = snapshot_git_repository(checkout)
     checkout_path = str(snapshot.repository_root)
     repository_id = hashlib.sha256(snapshot.repository_identity.encode("utf-8")).hexdigest()
+    repository_name = _git_repository_name(snapshot.repository_root, snapshot.remote_url)
 
     with _connect(opened.index_path) as connection:
         existing_checkout = connection.execute(
@@ -734,7 +736,7 @@ def register_git_checkout(
                 """,
                 (
                     repository_id,
-                    snapshot.repository_root.name,
+                    repository_name,
                     checkout_path,
                     snapshot.remote_name,
                     snapshot.remote_url,
@@ -750,7 +752,7 @@ def register_git_checkout(
                 WHERE repository_id = ?
                 """,
                 (
-                    snapshot.repository_root.name,
+                    repository_name,
                     checkout_path,
                     snapshot.remote_name,
                     snapshot.remote_url,
@@ -769,7 +771,7 @@ def register_git_checkout(
                 """,
                 (
                     repository_id,
-                    snapshot.repository_root.name,
+                    repository_name,
                     snapshot.remote_name,
                     snapshot.remote_url,
                     sensitivity.value,
@@ -783,6 +785,16 @@ def register_git_checkout(
     if row is None:
         raise WorkspaceIntegrityError("registered Git checkout could not be read")
     return _git_repository_record(row)
+
+
+def _git_repository_name(repository_root: Path, remote_url: str | None) -> str:
+    name = repository_root.name
+    if re.fullmatch(r"[a-f0-9]{16,64}", name, re.IGNORECASE) is None or remote_url is None:
+        return name
+    parsed = urlsplit(remote_url)
+    remote_path = parsed.path if parsed.scheme else remote_url.partition(":")[2]
+    remote_name = PurePosixPath(remote_path).name.removesuffix(".git")
+    return remote_name or name
 
 
 def list_git_checkouts(workspace: Path) -> tuple[GitRepositoryRecord, ...]:

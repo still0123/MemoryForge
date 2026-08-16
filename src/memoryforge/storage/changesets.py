@@ -236,15 +236,20 @@ class ChangeSetStore:
         )
 
     def list_all(self) -> list[StoredChangeSet]:
+        return [self.get(identifier) for identifier in self._identifiers()]
+
+    def list_all_for_recovery(self) -> list[StoredChangeSet]:
+        return [self.get_for_recovery(identifier) for identifier in self._identifiers()]
+
+    def _identifiers(self) -> list[str]:
         self.workspace.validate_internal_directory(self.staging_dir)
         staging_fd = self._open_staging()
         try:
-            identifiers = sorted(
+            return sorted(
                 name for name in os.listdir(staging_fd) if CHANGESET_ID_PATTERN.fullmatch(name)
             )
         finally:
             os.close(staging_fd)
-        return [self.get(identifier) for identifier in identifiers]
 
     def record_review(
         self,

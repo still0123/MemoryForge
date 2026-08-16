@@ -383,9 +383,33 @@ def _render_page(
 
 def _render_conversation_page(source: CurrentSource, content: str) -> str:
     """Keep recent, unverified conversation notes; retain full transcript as evidence."""
-    facts = _conversation_facts(content)
-    if not facts:
+    selected = _conversation_page_facts(source, content)
+    if selected is None:
         return _render_page(source, _meaningful_paragraphs(content))
+    displayed_facts, summary_fact = selected
+    return _render_page(
+        source,
+        displayed_facts,
+        section_title="Conversation notes (unverified)",
+        summary_fact=summary_fact,
+        section_preamble=(
+            "> Assistant conclusions may answer questions. User prompts are search clues only. "
+            "Full transcript remains in immutable raw evidence.",
+            "",
+        ),
+    )
+
+
+def _conversation_page_facts(
+    source: CurrentSource,
+    content: str,
+    *,
+    retain_all_facts: bool = False,
+) -> tuple[list[SourceFact], SourceFact] | None:
+    """Return exact, searchable conversation facts plus one short summary fact."""
+    facts = _conversation_facts(content, retain_all_facts=retain_all_facts)
+    if not facts:
+        return None
     assistant_facts = [
         SourceFact(conversation_conclusion_text(fact.quote), fact.start, ("Assistant conclusions",))
         for fact in facts
@@ -414,29 +438,45 @@ def _render_conversation_page(source: CurrentSource, content: str) -> str:
         default=assistant_facts[0] if assistant_facts else user_facts[0],
     )
     assistant_facts = [summary_fact, *(fact for fact in assistant_facts if fact != summary_fact)]
-    displayed_facts = assistant_facts + user_facts
     summary_quote = summary_fact.quote
     if len(summary_quote) > 180:
         summary_quote = summary_quote[:179].rstrip() + "…"
-    summary_fact = SourceFact(
+    return assistant_facts + user_facts, SourceFact(
         quote=summary_quote,
         start=summary_fact.start,
         section_path=(),
     )
-    return _render_page(
-        source,
-        displayed_facts,
-        section_title="Conversation notes (unverified)",
-        summary_fact=summary_fact,
-        section_preamble=(
-            "> Assistant conclusions may answer questions. User prompts are search clues only. "
-            "Full transcript remains in immutable raw evidence.",
-            "",
-        ),
-    )
 
 
-def _conversation_facts(content: str) -> list[SourceFact]:
+def _conversation_citation_is_assistant_fact(
+    content: str,
+    *,
+    start: int,
+    end: int,
+) -> bool:
+    """Return whether one citation is substantive text from an assistant turn."""
+    if start < 0 or end <= start or end > len(content):
+        return False
+    matches = list(_CONVERSATION_ROLE_HEADING.finditer(content))
+    for index, match in enumerate(matches):
+        section_end = matches[index + 1].start() if index + 1 < len(matches) else len(content)
+        if match.end() <= start and end <= section_end:
+            role = match.group("role")
+            quote = content[start:end].strip()
+            return (
+                role in {"Assistant (unverified)", "Codex"}
+                and len(quote) >= 8
+                and not quote.startswith("> Conversation draft.")
+                and not is_conversation_process_note(quote)
+            )
+    return False
+
+
+def _conversation_facts(
+    content: str,
+    *,
+    retain_all_facts: bool = False,
+) -> list[SourceFact]:
     matches = list(_CONVERSATION_ROLE_HEADING.finditer(content))
     turns: list[tuple[str, list[SourceFact]]] = []
     for index, match in enumerate(matches):
@@ -458,7 +498,8 @@ def _conversation_facts(content: str) -> list[SourceFact]:
             body_facts = substantive or [
                 fact for fact in ordered if is_conversation_process_note(fact.quote)
             ]
-        body_facts = body_facts[:_CONVERSATION_FACTS_PER_TURN]
+        if not retain_all_facts:
+            body_facts = body_facts[:_CONVERSATION_FACTS_PER_TURN]
         turns.append(
             (
                 role,
@@ -477,7 +518,9 @@ def _conversation_facts(content: str) -> list[SourceFact]:
     for recency, (role, turn_facts) in enumerate(reversed(retained)):
         label = f"{'Latest' if recency == 0 else 'Earlier'} {role.lower()} message"
         fact_limit = (
-            _CONVERSATION_FACTS_PER_TURN
+            len(turn_facts)
+            if retain_all_facts
+            else _CONVERSATION_FACTS_PER_TURN
             if recency < _CONVERSATION_RECENT_TURN_LIMIT
             else _CONVERSATION_EARLIER_FACTS_PER_TURN
         )

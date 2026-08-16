@@ -10,8 +10,6 @@ from typing import Any
 
 from typer.testing import CliRunner
 
-from memoryforge.storage.changesets import ChangeSetStore
-from memoryforge.interface.cli import app
 from memoryforge.core.errors import WorkspaceError
 from memoryforge.core.models import (
     ChangeOperation,
@@ -22,6 +20,8 @@ from memoryforge.core.models import (
     Claim,
     ClaimStatus,
 )
+from memoryforge.interface.cli import app
+from memoryforge.storage.changesets import ChangeSetStore
 from memoryforge.storage.version_store import GitVersionStore
 from memoryforge.storage.workspace import Workspace, read_source_version_text
 from tests.cli_helpers import review_approve_apply
@@ -788,6 +788,29 @@ def test_apply_rejects_duplicate_candidate_source_ownership_before_writes(
     assert _applied_source_versions(workspace_path) == {}
     assert Workspace.open(workspace_path).page_paths_for_source(first["source_id"]) == ()
     assert Workspace.open(workspace_path).page_paths_for_source(second["source_id"]) == ()
+
+
+def test_apply_rejects_metadata_only_non_code_source(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    runner, workspace_path, imported = _initialized_workspace(tmp_path, monkeypatch)
+    source_id = imported["source_id"]
+    workspace = Workspace.open(workspace_path)
+    changeset = ChangeSet(
+        changeset_id="chg_forged_metadata_only",
+        base_commit=workspace.current_commit(),
+        source_ids=(source_id,),
+        source_versions=_current_source_versions(workspace_path, (source_id,)),
+        status=ChangeSetStatus.PROPOSED,
+    )
+    ChangeSetStore(workspace).create(changeset, {})
+
+    failed = review_approve_apply(runner, changeset.changeset_id, workspace_path)
+
+    assert failed.exit_code != 0
+    assert "workspace integrity check failed" in (failed.stdout + failed.stderr)
+    assert _applied_source_versions(workspace_path) == {}
 
 
 def _initialized_workspace(

@@ -9,8 +9,6 @@ import pytest
 from typer.testing import CliRunner
 
 import memoryforge.interface.cli as cli_module
-from memoryforge.storage.changesets import ChangeSetStore
-from memoryforge.interface.cli import app
 from memoryforge.code.code_index import build_code_index
 from memoryforge.code.code_models import CitedStatement, ModuleNarrative, make_code_wiki_path
 from memoryforge.compiler.code_wiki_compiler import (
@@ -18,14 +16,18 @@ from memoryforge.compiler.code_wiki_compiler import (
     compile_code_wiki,
 )
 from memoryforge.compiler.compiler import _render_index
-from memoryforge.evaluation.evaluation import run_evaluation
 from memoryforge.compiler.linting import lint_workspace
 from memoryforge.compiler.module_planner import build_architecture_graph, build_module_plan
+from memoryforge.evaluation.evaluation import run_evaluation
+from memoryforge.interface.cli import app
 from memoryforge.query.provider import ProviderUnavailableError
 from memoryforge.query.query import _page_citations
+from memoryforge.storage.changesets import ChangeSetStore
 from memoryforge.storage.workspace import (
     Workspace,
     init_workspace,
+    is_applied_source_version,
+    list_current_git_source_versions,
     rebuild_applied_projection,
     register_git_checkout,
     register_git_code_module,
@@ -623,6 +625,52 @@ def test_code_wiki_uses_wider_markdown_delimiters_for_struct_tags(tmp_path: Path
     assert '``Page struct { Offset int `json:"Offset,omitempty"` }``' in page
 
 
+def test_code_wiki_flattens_multiline_dependency_evidence_for_display(
+    tmp_path: Path,
+) -> None:
+    _checkout, workspace, repository_id = _synced_repository(
+        tmp_path,
+        {
+            "src/helper.py": (
+                "class Helper:\n"
+                "    def __init__(self, name: str, enabled: bool):\n"
+                "        self.name = name\n"
+            ),
+            "src/service.py": (
+                "from src.helper import Helper\n\n"
+                "def build():\n"
+                "    return Helper(\n"
+                "        name=\"demo\",\n"
+                "        enabled=True,\n"
+                "    )\n"
+            ),
+        },
+    )
+    snapshot = build_code_index(workspace, repository_id)
+    plan = build_module_plan(snapshot)
+    graph = build_architecture_graph(snapshot, plan)
+
+    compilation = compile_code_wiki(workspace, snapshot, plan, graph)
+
+    assert compilation is not None
+    service_page = compilation.candidate_files[
+        make_code_wiki_path(repository_id, "src/service")
+    ]
+    dependency = next(
+        line
+        for line in service_page.splitlines()
+        if "src.service.build -> src.helper.Helper" in line
+    )
+    assert '\\n' not in dependency
+    assert 'Helper( name=\\"demo\\", enabled=True, )' in dependency
+    citation = next(
+        citation
+        for citation in _page_citations(service_page)
+        if "src.service.build -> src.helper.Helper" in citation.get("routing_text", "")
+    )
+    assert citation["quote"] == 'Helper( name="demo", enabled=True, )'
+
+
 def test_code_wiki_archives_modules_removed_from_the_current_snapshot(
     tmp_path: Path,
 ) -> None:
@@ -659,6 +707,33 @@ def test_code_wiki_archives_modules_removed_from_the_current_snapshot(
     assert result.exit_code == 0, result.output
     assert not legacy_page.exists()
     assert lint_workspace(workspace)["status"] == "clean"
+
+
+def test_code_wiki_applies_unindexable_code_metadata_with_page_updates(
+    tmp_path: Path,
+) -> None:
+    _checkout, workspace, repository_id = _synced_repository(
+        tmp_path,
+        {
+            "src/service.py": SERVICE_SOURCE,
+            "src/broken.py": "def broken(:\n",
+        },
+    )
+    snapshot = build_code_index(workspace, repository_id)
+    broken = next(
+        source
+        for source in list_current_git_source_versions(workspace, repository_id)
+        if source.relative_path == "src/broken.py"
+    )
+    assert broken.source_id not in snapshot.source_versions
+
+    _compile_and_apply(workspace, repository_id)
+
+    assert is_applied_source_version(
+        workspace,
+        source_id=broken.source_id,
+        source_version=broken.source_version,
+    )
 
 
 def _compile_and_apply(workspace: Path, repository_id: str) -> None:

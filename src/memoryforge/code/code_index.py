@@ -66,6 +66,38 @@ def build_code_index(
     workspace: Workspace | Path | str,
     repository_id: str,
 ) -> CodeIndexSnapshot:
+    """Build the canonical index from every implemented language adapter.
+
+    The snapshot is deterministic per (workspace, repository, synced commit), so
+    repeated queries in one process reuse it instead of re-parsing every source
+    file with tree-sitter.
+    """
+    root = workspace.root if isinstance(workspace, Workspace) else Path(workspace)
+    opened = Workspace.open_readonly(root)
+    repository = get_git_checkout_readonly(opened.root, repository_id)
+    cache_key = (
+        str(opened.root.resolve(strict=False)),
+        repository_id,
+        repository.last_synced_commit or "",
+    )
+    cached = _CODE_INDEX_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+    snapshot = _build_code_index_uncached(workspace, repository_id)
+    _CODE_INDEX_CACHE[cache_key] = snapshot
+    return snapshot
+
+
+# ponytail: in-process cache keyed by repository commit; the immutable Git
+# snapshot never changes under a synced commit, so this cannot go stale. Drop
+# it if indexes become huge and memory pressure is measured.
+_CODE_INDEX_CACHE: dict[tuple[str, str, str], CodeIndexSnapshot] = {}
+
+
+def _build_code_index_uncached(
+    workspace: Workspace | Path | str,
+    repository_id: str,
+) -> CodeIndexSnapshot:
     """Build the canonical index from every implemented language adapter."""
 
     from memoryforge.code.go_index import _build_go_code_index

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import difflib
+import json
 import re
 import shutil
 import tempfile
@@ -12,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from memoryforge.adapters.obsidian import build_obsidian
+from memoryforge.code.code_index import build_code_index
 from memoryforge.compiler.linting import LintPayload, lint_workspace
 from memoryforge.compiler.wiki_facts import IndexedWikiFact, WikiFact, parse_page_facts
 from memoryforge.core.errors import MemoryForgeError, WorkspaceError
@@ -20,6 +22,7 @@ from memoryforge.portal.showcase import _markdown_document
 from memoryforge.storage.apply_journal import ApplyJournalStore
 from memoryforge.storage.changesets import ChangeSetStore, StoredChangeSet
 from memoryforge.storage.database import connect_readonly as _connect_readonly
+from memoryforge.storage.errors import WorkspaceIntegrityError
 from memoryforge.storage.projection import (
     candidate_page_sources,
     validate_changeset_page_sources,
@@ -35,7 +38,10 @@ _INTERNAL_ID = re.compile(r"\b[a-f0-9]{64}\b")
 
 def list_updates(workspace: Path) -> list[dict[str, Any]]:
     opened = Workspace.open_readonly(workspace)
-    return [_update_summary(opened, stored) for stored in ChangeSetStore(opened).list_all()]
+    return [
+        _update_summary(opened, stored)
+        for stored in ChangeSetStore(opened).list_all_for_recovery()
+    ]
 
 
 def get_update(
@@ -45,13 +51,13 @@ def get_update(
     include_pages: bool = True,
 ) -> dict[str, Any]:
     opened = Workspace.open_readonly(workspace)
-    stored = ChangeSetStore(opened).get(changeset_id)
+    stored = ChangeSetStore(opened).get_for_recovery(changeset_id)
     return _update_details(opened, stored, include_pages=include_pages)
 
 
 def get_update_pages(workspace: Path, changeset_id: str) -> list[dict[str, Any]]:
     opened = Workspace.open_readonly(workspace)
-    stored = ChangeSetStore(opened).get(changeset_id)
+    stored = ChangeSetStore(opened).get_for_recovery(changeset_id)
     return _update_pages(opened, stored)
 
 
@@ -132,11 +138,31 @@ def _apply_stored(
         raise ValueError("ARCHIVE_PAGE operations must target wiki/pages/")
     existing_archive_paths = tuple(path for path in archive_paths if (opened.root / path).is_file())
     paths = tuple(sorted(set(stored.candidate_files) | set(existing_archive_paths)))
+    if not paths:
+        opened.require_current_source_versions(stored.changeset.source_versions)
+        _validate_changeset_source_ownership(opened, stored, {})
+        lint: LintPayload = {"status": "clean", "checked_pages": 0, "issues": []}
+        opened.record_applied_source_versions(stored.changeset.source_versions)
+        commit = opened.current_commit()
+        warning = None
+        try:
+            store.archive_applied(stored, commit=commit)
+        except MemoryForgeError as exc:
+            warning = str(exc)
+        return {
+            "changeset_id": stored.changeset.changeset_id,
+            "status": "APPLIED",
+            "commit": commit,
+            "files": [],
+            "warning": warning,
+            "obsidian": {"status": "unchanged", "warning": None},
+            "lint": lint,
+        }
     opened.version_store.require_clean_paths(paths)
     opened.require_current_source_versions(stored.changeset.source_versions)
     validate_candidate_page_evidence(opened, stored.candidate_files)
     page_sources = candidate_page_sources(stored.candidate_files)
-    validate_changeset_page_sources(page_sources, stored.changeset.source_ids)
+    _validate_changeset_source_ownership(opened, stored, page_sources)
     page_facts = {
         path: parse_page_facts(path, content)
         for path, content in stored.candidate_files.items()
@@ -238,6 +264,65 @@ def _apply_stored(
     }
 
 
+def _validate_changeset_source_ownership(
+    opened: Workspace,
+    stored: StoredChangeSet,
+    page_sources: dict[str, tuple[str, ...]],
+) -> None:
+    owned = {source_id for source_ids in page_sources.values() for source_id in source_ids}
+    declared = set(stored.changeset.source_ids)
+    if not stored.changeset.source_versions:
+        validate_changeset_page_sources(page_sources, declared)
+        return
+    extra = declared - owned
+    if not extra:
+        validate_changeset_page_sources(page_sources, declared)
+        return
+    if owned - declared:
+        validate_changeset_page_sources(page_sources, declared)
+    with _connect_readonly(opened.index_path) as connection:
+        rows = {
+            source_id: connection.execute(
+                """
+                SELECT source_versions.tags_json, revisions.repository_id
+                FROM sources
+                JOIN source_versions ON source_versions.source_id = sources.id
+                LEFT JOIN git_source_revisions AS revisions
+                  ON revisions.source_version_id = source_versions.id
+                WHERE sources.source_id = ?
+                  AND source_versions.id = ?
+                """,
+                (source_id, stored.changeset.source_versions[source_id]),
+            ).fetchone()
+            for source_id in extra
+        }
+    valid_metadata_sources: set[str] = set()
+    indexes: dict[str, set[str]] = {}
+    for source_id, row in rows.items():
+        if row is None:
+            continue
+        tags = set(json.loads(str(row["tags_json"])))
+        if "code-module" in tags:
+            valid_metadata_sources.add(source_id)
+            continue
+        repository_id = row["repository_id"]
+        if "code" not in tags or repository_id is None:
+            continue
+        repository_id = str(repository_id)
+        if repository_id not in indexes:
+            indexes[repository_id] = set(
+                build_code_index(opened.root, repository_id).source_versions
+            )
+        indexed_sources = indexes[repository_id]
+        if source_id not in indexed_sources:
+            valid_metadata_sources.add(source_id)
+    if valid_metadata_sources != extra:
+        raise WorkspaceIntegrityError(
+            "sources without Wiki page ownership must be unindexable Git code metadata"
+        )
+    validate_changeset_page_sources(page_sources, owned)
+
+
 def _lint_candidate_tree(
     opened: Workspace,
     *,
@@ -287,10 +372,12 @@ def _update_summary(opened: Workspace, stored: StoredChangeSet) -> dict[str, Any
     name = sources[0]["name"] if sources else "知识结构更新"
     if len(sources) > 1:
         name += f" 等 {len(sources)} 个来源"
+    stale = stored.changeset.base_commit != opened.current_commit()
     return {
         "id": stored.changeset.changeset_id,
         "name": name,
-        "status": "等待审核",
+        "status": "已过期" if stale else "等待审核",
+        "stale": stale,
         "counts": counts,
         "created_at": stored.record.staged_at.isoformat(),
         "base_commit": stored.changeset.base_commit[:12],

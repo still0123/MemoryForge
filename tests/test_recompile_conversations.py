@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 import memoryforge.core.platform_lock as platform_lock
@@ -246,6 +247,84 @@ def test_explicit_reorganization_archives_replaced_source_pages(
     merged_pages = set(compilation.candidate_files) - {"wiki/INDEX.md"}
     assert len(merged_pages) == 1
     assert not archived & merged_pages
+
+    stored = ChangeSetStore(workspace).create(
+        compilation.changeset,
+        compilation.candidate_files,
+    )
+    applied = review_approve_apply(
+        runner,
+        stored.changeset.changeset_id,
+        workspace_path,
+    )
+    assert applied.exit_code == 0, applied.output
+
+    rebuilt = compile_pending_sources(
+        Workspace.open(workspace_path),
+        source_ids=source_ids,
+    )
+    assert rebuilt is not None
+    rebuilt_page = rebuilt.candidate_files[next(iter(merged_pages))]
+    assert "The conversations are grouped into one reviewable topic." in rebuilt_page
+    assert "## Conversation notes (unverified)" in rebuilt_page
+    assert "Synthetic answer 1." in rebuilt_page
+    assert "Synthetic answer 2." in rebuilt_page
+
+
+def test_reorganization_rejects_conversation_disclaimer_citations(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    runner, workspace_path = _workspace(tmp_path, monkeypatch)
+    source_ids = (_remember(workspace_path, 1), _remember(workspace_path, 2))
+    initial = runner.invoke(cli.app, ["ingest", "--workspace", str(workspace_path)])
+    assert initial.exit_code == 0, initial.output
+    applied = review_approve_apply(
+        runner,
+        json.loads(initial.stdout)["changeset_id"],
+        workspace_path,
+    )
+    assert applied.exit_code == 0, applied.output
+
+    workspace = Workspace.open(workspace_path)
+    sources = {
+        source.source_id: source
+        for source in _load_current_sources(workspace, set(source_ids))
+    }
+    citations = []
+    disclaimer = "Conversation draft. Assistant responses are unverified until review and apply."
+    for source_id in source_ids:
+        content = _read_source_text(workspace, sources[source_id])
+        start = content.index(disclaimer)
+        citations.append(
+            {
+                "source_id": source_id,
+                "locator": f"chars:{start}-{start + len(disclaimer)}",
+            }
+        )
+    change = PageChange(
+        path="wiki/pages/conversation-topic.md",
+        title="Synthetic conversation topic",
+        page_type="synthesis",
+        summary="Two synthetic conversations cover one topic.",
+        body="The conversations are grouped into one reviewable topic.",
+        source_ids=source_ids,
+        citations=tuple(citations),
+    )
+
+    class Provider:
+        def compile_pages(self, messages):
+            del messages
+            return (change,)
+
+    with pytest.raises(ValueError, match="substantive Assistant/Codex content"):
+        compile_pending_sources(
+            workspace,
+            source_ids=source_ids,
+            provider=Provider(),
+            allow_local=True,
+            reorganize_existing=True,
+        )
 
 
 def test_candidate_content_identity_is_stable_and_changes_with_output() -> None:
