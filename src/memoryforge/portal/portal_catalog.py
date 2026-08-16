@@ -296,6 +296,8 @@ class PortalCatalog:
         matches = list(self.pages.values())
         if view != "all":
             matches = [page for page in matches if _page_in_view(page, view)]
+        if view == "published" and not any((query.strip(), kind, project, parent)):
+            matches = [page for page in matches if page.kind != "code"]
         if kind:
             matches = [page for page in matches if page.kind == kind]
         if project:

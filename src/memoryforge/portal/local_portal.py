@@ -15,7 +15,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path, PurePosixPath
 from threading import Lock
 from typing import Any
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, urlparse
 
 from memoryforge.compiler.lifecycle import (
     get_update,
@@ -25,15 +25,21 @@ from memoryforge.compiler.lifecycle import (
 )
 from memoryforge.core.errors import MemoryForgeError
 from memoryforge.portal.portal_assets import APP_CSS, CONTROL_JS, INDEX_HTML
-from memoryforge.portal.portal_catalog import PortalCatalog
+from memoryforge.portal.portal_catalog import PortalCatalog, _resolve_link
 from memoryforge.portal.portal_jobs import (
     PortalJobManager,
     automation_status,
     configure_automation,
 )
 from memoryforge.portal.showcase import _display_wiki_text, _markdown_document, _markdown_html
+from memoryforge.query.agent_access import _named_repository_scope
 from memoryforge.query.provider import OpenAICompatibleProvider
-from memoryforge.query.query import answer_question
+from memoryforge.query.query import (
+    DEFAULT_QUERY_MAX_CITATIONS,
+    DEFAULT_QUERY_MAX_PAGES,
+    answer_question,
+)
+from memoryforge.storage.changesets import ChangeSetStore
 from memoryforge.storage.errors import WorkspaceIntegrityError, WorkspaceSecurityError
 from memoryforge.storage.workspace import Workspace, read_source_version_text
 
@@ -42,6 +48,8 @@ _DEFAULT_LIMIT = 50
 _MAX_LIMIT = 100
 _DEFAULT_SOURCE_TEXT_LIMIT = 4_000
 _MAX_SOURCE_TEXT_LIMIT = 20_000
+_DEFAULT_PAGE_TEXT_LIMIT = 40_000
+_MAX_PAGE_TEXT_LIMIT = 100_000
 _JSON = "application/json"
 _HTML = "text/html; charset=utf-8"
 _CSS = "text/css; charset=utf-8"
@@ -347,7 +355,8 @@ class LocalPortalApp:
         jobs = self.jobs.list_jobs()["items"]
         updates = list_updates(self.root)
         payload.update(
-            pending_updates=len(updates),
+            pending_updates=sum(not item["stale"] for item in updates),
+            stale_updates=sum(item["stale"] for item in updates),
             active_jobs=sum(item["status"] in {"queued", "running"} for item in jobs),
             failed_jobs=sum(item["status"] == "failed" for item in jobs),
         )
@@ -392,24 +401,46 @@ class LocalPortalApp:
             limit=min(limit, _MAX_LIMIT),
         )
 
-    def page(self, page_path: str) -> dict[str, Any]:
+    def page(
+        self,
+        page_path: str,
+        *,
+        offset: int = 0,
+        limit: int = _DEFAULT_PAGE_TEXT_LIMIT,
+    ) -> dict[str, Any]:
         _validate_page_path(self.root, page_path)
+        _validate_pagination(offset, limit)
+        limit = min(limit, _MAX_PAGE_TEXT_LIMIT)
         catalog = self._catalog()
         details = catalog.page_details(page_path)
         content = self.workspace.version_store.read_text_at(catalog.commit, page_path)
         if content is None:
             raise FileNotFoundError("page not found")
         metadata, body = _markdown_document(content)
-        rendered_body = _portal_markdown(body)
+        total = len(body)
+        end = _page_chunk_end(body, offset, min(total, offset + limit))
+        visible_body = body[:end]
+        rendered_body = _portal_markdown(visible_body)
+        def resolve_page_link(target: str) -> str | None:
+            resolved = _resolve_link(page_path, target.partition("#")[0])
+            if resolved is None or resolved not in catalog.pages:
+                return None
+            return f"#page={quote(resolved, safe='')}"
+
         details["title"] = _display_wiki_text(str(details["title"]))
         details["summary"] = _display_wiki_text(str(details["summary"]))
         for item in details["structure"]:
             item["title"] = _display_heading(str(item["title"]))
         return {
             **details,
-            "content": content,
+            "content": content if end == total else visible_body,
             "summary": _display_wiki_text(metadata.get("summary", "")),
-            "html": _markdown_html(rendered_body),
+            "html": _markdown_html(rendered_body, link_resolver=resolve_page_link),
+            "offset": offset,
+            "limit": limit,
+            "next_offset": end,
+            "total": total,
+            "has_more": end < total,
         }
 
     def source_text(
@@ -523,7 +554,12 @@ class LocalPortalApp:
                 paths = params.get("path")
                 if not paths:
                     raise ValueError("page path is required")
-                return _json_response(self.page(paths[0]))
+                offset, limit = _pagination(
+                    params,
+                    default_limit=_DEFAULT_PAGE_TEXT_LIMIT,
+                    max_limit=_MAX_PAGE_TEXT_LIMIT,
+                )
+                return _json_response(self.page(paths[0], offset=offset, limit=limit))
             if parsed.path == "/api/jobs":
                 return _json_response(self._with_commit(self.jobs.list_jobs()))
             if parsed.path.startswith("/api/jobs/"):
@@ -615,6 +651,7 @@ class LocalPortalApp:
                 changeset_id = parsed.path.removeprefix("/api/updates/").removesuffix(
                     "/approve-and-apply"
                 )
+                ChangeSetStore(self.workspace).get(changeset_id)
                 update = get_update(self.root, changeset_id)
                 return _json_response(
                     self._with_commit(self.jobs.submit_apply(changeset_id, str(update["name"]))),
@@ -626,22 +663,36 @@ class LocalPortalApp:
                 question = payload.get("question")
                 if not isinstance(question, str) or not question.strip():
                     raise ValueError("question is required")
+                scoped_question = question.strip()
+                named_scope = _named_repository_scope(self.root, scoped_question)
                 answer = answer_question(
                     self.root,
-                    question.strip(),
-                    max_citations=3,
+                    scoped_question,
+                    max_pages=DEFAULT_QUERY_MAX_PAGES,
+                    max_citations=DEFAULT_QUERY_MAX_CITATIONS,
                     provider=self.provider,
                     allow_local=self.allow_local_llm,
+                    repository_id=(
+                        named_scope.repository_id if named_scope is not None else None
+                    ),
                 )
                 return _json_response(
                     self._with_commit(
                         {
                             "status": answer["status"],
+                            "evidence_status": answer["evidence_status"],
                             "answer": answer["answer"],
+                            "supported_claims": answer.get("supported_claims", []),
+                            "unsupported_aspects": answer.get("unsupported_aspects", []),
+                            "wiki_pages": answer["wiki_pages"],
+                            "support": answer.get("support") or {},
                             "citations": [
                                 {
+                                    "source_id": citation["source_id"],
                                     "quote": citation["quote"],
-                                    "section": citation["section_path"],
+                                    "section": citation.get("section_path", ""),
+                                    "source_version": citation["source_version"],
+                                    "locator": citation["locator"],
                                 }
                                 for citation in answer["citations"]
                             ],
@@ -969,6 +1020,13 @@ def _validate_pagination(offset: int, limit: int) -> None:
         raise ValueError("offset must not be negative")
     if limit < 1:
         raise ValueError("limit must be at least 1")
+
+
+def _page_chunk_end(markdown: str, offset: int, target: int) -> int:
+    if target >= len(markdown):
+        return len(markdown)
+    boundary = markdown.find("\n", max(offset, target))
+    return target if boundary < 0 else boundary + 1
 
 
 def _allowed_host(host: str) -> bool:

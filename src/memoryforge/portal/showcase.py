@@ -13,6 +13,7 @@ import sqlite3
 import stat
 import uuid
 from collections import defaultdict
+from collections.abc import Callable
 from contextlib import closing
 from pathlib import Path
 from typing import Any, cast
@@ -1247,7 +1248,12 @@ def _markdown_headings(markdown: str) -> list[tuple[int, str]]:
     return headings
 
 
-def _markdown_html(markdown: str, *, heading_prefix: str = "") -> str:
+def _markdown_html(
+    markdown: str,
+    *,
+    heading_prefix: str = "",
+    link_resolver: Callable[[str], str | None] | None = None,
+) -> str:
     output: list[str] = []
     paragraph: list[str] = []
     list_kind: str | None = None
@@ -1265,7 +1271,9 @@ def _markdown_html(markdown: str, *, heading_prefix: str = "") -> str:
     def flush_paragraph() -> None:
         if paragraph:
             text = _display_wiki_text(" ".join(paragraph))
-            output.append(f"<p>{_markdown_inline(text, footnote_numbers)}</p>")
+            output.append(
+                f"<p>{_markdown_inline(text, footnote_numbers, link_resolver=link_resolver)}</p>"
+            )
             paragraph.clear()
 
     def close_list() -> None:
@@ -1314,7 +1322,8 @@ def _markdown_html(markdown: str, *, heading_prefix: str = "") -> str:
             heading_text = _display_wiki_text(heading.group(2))
             output.append(
                 f"<h{level}{heading_id}>"
-                f"{_markdown_inline(heading_text, footnote_numbers)}</h{level}>"
+                f"{_markdown_inline(heading_text, footnote_numbers, link_resolver=link_resolver)}"
+                f"</h{level}>"
             )
             heading_index += 1
             continue
@@ -1330,7 +1339,9 @@ def _markdown_html(markdown: str, *, heading_prefix: str = "") -> str:
             match = bullet if bullet is not None else numbered
             assert match is not None
             item = _display_wiki_text(match.group(1))
-            output.append(f"<li>{_markdown_inline(item, footnote_numbers)}</li>")
+            output.append(
+                f"<li>{_markdown_inline(item, footnote_numbers, link_resolver=link_resolver)}</li>"
+            )
             continue
         close_list()
         paragraph.append(line.strip())
@@ -1354,11 +1365,19 @@ def _markdown_html(markdown: str, *, heading_prefix: str = "") -> str:
 def _markdown_inline(
     text: str,
     footnotes: dict[str, int] | None = None,
+    *,
+    link_resolver: Callable[[str], str | None] | None = None,
 ) -> str:
     text = re.sub(r"https?://[^\s<]+", "[external link]", text)
     escaped = _h(text)
-    escaped = re.sub(r"\[([^\]]+)\]\(#[^)]+\)", r'<span class="md-link">\1</span>', escaped)
-    escaped = re.sub(r"\[([^\]]+)\]\((?:[^)]+)\)", r'<span class="md-link">\1</span>', escaped)
+
+    def render_link(match: re.Match[str]) -> str:
+        route = link_resolver(match.group(2)) if link_resolver is not None else None
+        if route is None:
+            return f'<span class="md-link">{match.group(1)}</span>'
+        return f'<a class="md-link" href="{_h(route)}">{match.group(1)}</a>'
+
+    escaped = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", render_link, escaped)
     escaped = re.sub(r"`([^`]+)`", r"<code>\1</code>", escaped)
     escaped = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", escaped)
     escaped = re.sub(r"(?<!\*)\*([^*]+)\*(?!\*)", r"<em>\1</em>", escaped)

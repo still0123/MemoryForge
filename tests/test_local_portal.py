@@ -12,8 +12,10 @@ from urllib.parse import quote
 import pytest
 
 from memoryforge.adapters.importer import import_local_file
+from memoryforge.core.models import ChangeOperation, ChangeOperationType, ChangeSet, ChangeSetStatus
 from memoryforge.portal.local_portal import LocalPortalApp, LocalPortalServer, make_handler
 from memoryforge.portal.portal_catalog import _page_subtype
+from memoryforge.storage.changesets import ChangeSetStore
 from memoryforge.storage.workspace import Workspace
 
 
@@ -69,7 +71,70 @@ def test_local_portal_summary_pagination_search_and_page_read(tmp_path: Path) ->
     assert "summary:" not in page["html"]
     assert "<p>Alpha project 0 cache policy</p>" in page["html"]
 
+    assert page["has_more"] is False
+    assert page["next_offset"] == page["total"]
     assert _tree_sha256(workspace) == before
+
+
+def test_local_portal_paginates_large_wiki_pages(tmp_path: Path) -> None:
+    workspace = _workspace_with_pages(tmp_path, count=1)
+    page_path = "wiki/pages/page-00.md"
+    page = workspace / page_path
+    original = page.read_text(encoding="utf-8")
+    large_body = "\n\n".join(
+        f"Paragraph {index:04}: " + "x" * 180
+        for index in range(500)
+    )
+    page.write_text(original + "\n\n" + large_body + "\n", encoding="utf-8")
+    Workspace.open(workspace).version_store.commit_paths((page_path,), "test: large Wiki page")
+    portal = LocalPortalApp(workspace)
+
+    status, _, body = portal.dispatch(
+        "/api/page?path=wiki%2Fpages%2Fpage-00.md&offset=0&limit=4000"
+    )
+    first = json.loads(body)
+
+    assert status == 200
+    assert first["has_more"] is True
+    assert 4_000 <= first["next_offset"] < first["total"]
+    assert len(first["content"]) == first["next_offset"]
+    assert "Paragraph 0499" not in first["content"]
+
+    status, _, body = portal.dispatch(
+        "/api/page?path=wiki%2Fpages%2Fpage-00.md"
+        f"&offset={first['next_offset']}&limit=4000"
+    )
+    second = json.loads(body)
+
+    assert status == 200
+    assert second["next_offset"] > first["next_offset"]
+    assert second["content"].startswith(first["content"])
+    assert len(second["content"]) == second["next_offset"]
+
+
+def test_local_portal_renders_existing_wiki_links_as_page_routes(tmp_path: Path) -> None:
+    workspace = _workspace_with_pages(tmp_path, count=2)
+    page_path = "wiki/pages/page-00.md"
+    page = workspace / page_path
+    page.write_text(
+        page.read_text(encoding="utf-8")
+        + "\n- [Page 01](page-01.md)\n"
+        + "- [Missing](missing.md)\n",
+        encoding="utf-8",
+    )
+    Workspace.open(workspace).version_store.commit_paths((page_path,), "test: Wiki page links")
+
+    payload = json.loads(
+        LocalPortalApp(workspace).dispatch(
+            "/api/page?path=wiki%2Fpages%2Fpage-00.md"
+        )[2]
+    )
+
+    assert (
+        '<a class="md-link" href="#page=wiki%2Fpages%2Fpage-01.md">Page 01</a>'
+        in payload["html"]
+    )
+    assert '<span class="md-link">Missing</span>' in payload["html"]
 
 
 def test_local_portal_lists_navigation_pages_without_source_ownership(tmp_path: Path) -> None:
@@ -98,11 +163,18 @@ def test_local_portal_ask_forwards_explicit_local_model(
         captured.update(root=root, question=question, **kwargs)
         return {
             "status": "answered",
+            "evidence_status": "grounded",
             "answer": "EFS 是弹性文件存储。",
+            "supported_claims": ["EFS 是弹性文件存储。"],
+            "unsupported_aspects": [],
+            "wiki_pages": ["wiki/pages/page-00.md"],
+            "support": {"sufficient": True},
             "citations": [
                 {
+                    "source_id": "a" * 64,
+                    "source_version": 1,
+                    "locator": "chars:0-10",
                     "quote": "EFS 是弹性文件存储。",
-                    "section_path": "概览",
                 }
             ],
         }
@@ -112,14 +184,67 @@ def test_local_portal_ask_forwards_explicit_local_model(
     status, _, body = portal.dispatch_post("/api/ask", {"question": "EFS是什么"})
 
     assert status == 200
-    assert json.loads(body)["answer"] == "EFS 是弹性文件存储。"
+    payload = json.loads(body)
+    assert payload["answer"] == "EFS 是弹性文件存储。"
+    assert payload["evidence_status"] == "grounded"
+    assert payload["supported_claims"] == ["EFS 是弹性文件存储。"]
+    assert payload["unsupported_aspects"] == []
+    assert payload["wiki_pages"] == ["wiki/pages/page-00.md"]
+    assert payload["support"] == {"sufficient": True}
+    assert payload["citations"] == [
+        {
+            "source_id": "a" * 64,
+            "quote": "EFS 是弹性文件存储。",
+            "section": "",
+            "source_version": 1,
+            "locator": "chars:0-10",
+        }
+    ]
     assert captured == {
         "root": workspace,
         "question": "EFS是什么",
-        "max_citations": 3,
+        "max_pages": 3,
+        "max_citations": 6,
         "provider": provider,
         "allow_local": True,
+        "repository_id": None,
     }
+
+
+def test_local_portal_ask_scopes_an_explicit_repository_name(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace = _workspace_with_pages(tmp_path, count=1)
+    portal = LocalPortalApp(workspace, allow_local_llm=True)
+    scope = type("Scope", (), {"repository_id": "repo-id"})()
+    captured = {}
+    monkeypatch.setattr(
+        "memoryforge.portal.local_portal._named_repository_scope",
+        lambda *_args: scope,
+    )
+
+    def fake_answer(root: Path, question: str, **kwargs: object) -> dict[str, object]:
+        captured.update(root=root, question=question, **kwargs)
+        return {
+            "status": "unknown",
+            "evidence_status": "no_local_evidence",
+            "answer": "不知道",
+            "supported_claims": [],
+            "unsupported_aspects": ["no_local_evidence"],
+            "wiki_pages": [],
+            "citations": [],
+        }
+
+    monkeypatch.setattr("memoryforge.portal.local_portal.answer_question", fake_answer)
+
+    status, _, _body = portal.dispatch_post(
+        "/api/ask",
+        {"question": "efs-mgr 有什么配置？"},
+    )
+
+    assert status == 200
+    assert captured["repository_id"] == "repo-id"
 
 
 def test_local_portal_index_shell_is_small_and_self_contained(tmp_path: Path) -> None:
@@ -268,6 +393,7 @@ def test_local_portal_classifies_projects_sources_templates_and_relations(
         "source_count": 6,
         "applied_source_count": 5,
         "pending_updates": 0,
+        "stale_updates": 0,
         "active_jobs": 0,
         "failed_jobs": 0,
     }
@@ -307,6 +433,17 @@ def test_local_portal_classifies_projects_sources_templates_and_relations(
     assert [item["path"] for item in alpha_project["module_tree"]] == [paths["module"]]
     assert alpha_project["file_count"] == 1
     assert len(alpha_project["files"]) == 1
+
+    default_published = json.loads(
+        portal.dispatch("/api/pages?view=published&offset=0&limit=50")[2]
+    )
+    assert all(item["kind"] != "code" for item in default_published["items"])
+    assert {item["kind"] for item in default_published["items"]} >= {
+        "project",
+        "conversation",
+        "feishu",
+        "note",
+    }
 
     published = json.loads(
         portal.dispatch(
@@ -365,6 +502,48 @@ def test_local_portal_classifies_projects_sources_templates_and_relations(
 
     feishu = json.loads(portal.dispatch("/api/page?path=" + quote(paths["feishu"], safe=""))[2])
     assert paths["conversation"] in {item["path"] for item in feishu["related"]["direct"]}
+
+
+def test_local_portal_summary_recovers_stale_changesets(tmp_path: Path) -> None:
+    workspace = _workspace_with_pages(tmp_path, count=1)
+    opened = Workspace.open(workspace)
+    ChangeSetStore(opened).create(
+        ChangeSet(
+            changeset_id="chg_portal_stale",
+            base_commit=opened.current_commit(),
+            status=ChangeSetStatus.PROPOSED,
+            operations=(
+                ChangeOperation(
+                    type=ChangeOperationType.CREATE_PAGE,
+                    path="wiki/pages/proposed.md",
+                ),
+            ),
+        ),
+        {"wiki/pages/proposed.md": "# Proposed\n"},
+    )
+    (workspace / "wiki/INDEX.md").write_text("# Advanced\n", encoding="utf-8")
+    opened.version_store.commit_paths(("wiki/INDEX.md",), "test: stale portal proposal")
+    portal = LocalPortalApp(workspace)
+
+    status, _, body = portal.dispatch("/api/summary")
+    updates_status, _, updates_body = portal.dispatch("/api/updates")
+    detail_status, _, detail_body = portal.dispatch("/api/updates/chg_portal_stale")
+    apply_status, _, apply_body = portal.dispatch_post(
+        "/api/updates/chg_portal_stale/approve-and-apply",
+        {},
+    )
+    portal.close()
+
+    summary = json.loads(body)
+    assert status == 200
+    assert summary["pending_updates"] == 0
+    assert summary["stale_updates"] == 1
+    assert updates_status == 200
+    assert json.loads(updates_body)["items"][0]["status"] == "已过期"
+    assert detail_status == 200
+    assert json.loads(detail_body)["stale"] is True
+    assert apply_status == 500
+    assert json.loads(apply_body)["error_code"] == "workflow_error"
 
 
 def test_local_portal_search_rebuilds_catalog_after_workspace_commit(tmp_path: Path) -> None:

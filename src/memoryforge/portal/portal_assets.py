@@ -1237,15 +1237,25 @@ function sourceOriginal(item){
   ])
 }
 async function renderPage(path){
-  const data=await api("/api/page?path="+encodeURIComponent(path));
+  let data=await api("/api/page?path="+encodeURIComponent(path));
   rememberPage(path);
   const body=element("div",{class:"markdown"});body.innerHTML=data.html;
+  const more=data.has_more?element("button",{class:"button",type:"button",text:"继续加载正文"}):null;
+  if(more)more.addEventListener("click",async()=>{
+    more.disabled=true;
+    try{
+      data=await api(`/api/page?path=${encodeURIComponent(path)}&offset=${data.next_offset}&limit=40000`);
+      body.innerHTML=data.html;
+      [...body.querySelectorAll("h2,h3")].forEach((item,index)=>item.id="section-"+index);
+      if(data.has_more)more.disabled=false;else more.remove()
+    }catch(error){more.textContent=error.message}
+  });
   const content=element("article",{},[
     breadcrumbs(data.breadcrumbs),
     element("span",{class:data.status==="未验证会话记忆"?"badge warn":"badge",text:data.status}),
     element("h1",{class:"reader-title",text:displayPageTitle(data)}),
     data.summary?element("p",{class:"summary",text:data.summary}):null,
-    body,relatedKnowledge(data.related),sourceDetails(data.sources)
+    body,more,relatedKnowledge(data.related),sourceDetails(data.sources)
   ].filter(Boolean));
   const railItems=[
     element("h2",{text:"本页目录"}),
