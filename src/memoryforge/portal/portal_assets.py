@@ -633,11 +633,14 @@ async function postUpload(file,kind,publicValue,confirmPublic){
   if(!response.ok)throw new Error(data.user_message||"上传失败");
   return data
 }
+function renderMermaid(root){
+  const diagrams=root.querySelectorAll(".mermaid:not([data-processed])");
+  if(diagrams.length&&window.mermaid)window.mermaid.run({nodes:diagrams}).catch(()=>{})
+}
 function show(nodes,focus=true){
   clearTimeout(jobTimer);
   app.replaceChildren(...(Array.isArray(nodes)?nodes:[nodes]));
-  const diagrams=app.querySelectorAll(".mermaid");
-  if(diagrams.length&&window.mermaid)window.mermaid.run({nodes:diagrams}).catch(()=>{});
+  renderMermaid(app);
   if(focus)app.focus({preventScroll:true});
   updateNav();
   document.body.classList.remove("nav-open");
@@ -1255,6 +1258,7 @@ async function renderPage(path){
     try{
       data=await api(`/api/page?path=${encodeURIComponent(path)}&offset=${data.next_offset}&limit=40000`);
       body.innerHTML=data.html;
+      renderMermaid(body);
       [...body.querySelectorAll("h2,h3")].forEach((item,index)=>item.id="section-"+index);
       if(data.has_more)more.disabled=false;else more.remove()
     }catch(error){more.textContent=error.message}

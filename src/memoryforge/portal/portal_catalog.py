@@ -469,6 +469,16 @@ class PortalCatalog:
             module_rows = connection.execute(
                 "SELECT repository_id, relative_path FROM git_code_modules"
             ).fetchall()
+            open_conflict_paths = {
+                str(row["page_path"])
+                for row in connection.execute(
+                    """
+                    SELECT DISTINCT page_path
+                    FROM knowledge_conflicts
+                    WHERE resolution = 'open'
+                    """
+                ).fetchall()
+            }
             self.source_identity_count = int(
                 connection.execute("SELECT COUNT(*) FROM sources").fetchone()[0]
             )
@@ -571,7 +581,9 @@ class PortalCatalog:
             )
             generated = metadata.get("generated", "")
             source_ids = tuple(page_sources[page_path])
-            if not source_ids:
+            if page_path in open_conflict_paths:
+                freshness_state = "conflicted"
+            elif not source_ids:
                 freshness_state = "unknown"
             elif all(
                 source_id in self.sources and self.sources[source_id].applied
@@ -639,7 +651,10 @@ class PortalCatalog:
                 # New CodeWiki pages use repository-scoped paths. Keep this
                 # current hierarchy as the project view; legacy hash-named
                 # pages remain searchable but no longer bury the reader.
-                repository.page_paths = current_code_pages
+                overview_pages = [
+                    path for path in repository.page_paths if self.pages[path].kind == "project"
+                ]
+                repository.page_paths = [*overview_pages, *current_code_pages]
 
         direct: dict[str, dict[str, Relation]] = defaultdict(dict)
         mentions: dict[str, dict[str, Relation]] = defaultdict(dict)

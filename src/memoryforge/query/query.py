@@ -334,6 +334,7 @@ def answer_question(
         [
             page
             for path in explicit_source_page_paths
+            if page_paths is None or path in page_paths
             if (page := _safe_wiki_page(workspace_root, workspace_root / path)) is not None
         ][:max_pages]
         if explicit_titles

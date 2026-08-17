@@ -385,6 +385,54 @@ def test_global_query_returns_navigation_map_then_drills_into_selected_page(
     assert {citation["wiki_page"] for citation in drilled["citations"]} == {selected}
 
 
+def test_global_map_budget_covers_the_complete_response(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    entries = [
+        {
+            "title": f"Page {index}",
+            "page_path": f"wiki/pages/page-{index}.md",
+            "summary": "x" * 80,
+            "kind": "concept",
+            "navigation_only": True,
+        }
+        for index in range(50)
+    ]
+    monkeypatch.setattr(
+        agent_access_module,
+        "build_context_map",
+        lambda *_args, **_kwargs: {
+            "entries": entries,
+            "characters": 3_900,
+            "truncated": False,
+        },
+    )
+
+    class Opened:
+        root = tmp_path
+
+        @staticmethod
+        def current_commit() -> str:
+            return "b" * 40
+
+    payload = agent_access_module._query_context(
+        Opened(),  # type: ignore[arg-type]
+        "整体架构是什么？",
+        repository_id=None,
+        preferred_repository_id=None,
+        scope=None,
+        allow_local=True,
+        max_pages=3,
+        max_citations=6,
+    )
+
+    serialized = json.dumps(payload, ensure_ascii=False)
+    assert len(serialized) <= 4_000
+    assert payload["budget"]["output_characters"] == len(serialized)
+    assert payload["budget"]["truncated"] is True
+
+
 def test_global_map_filters_local_only_pages_before_rendering(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

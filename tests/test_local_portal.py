@@ -287,6 +287,7 @@ def test_local_portal_index_shell_is_small_and_self_contained(tmp_path: Path) ->
     assert "继续加载" in script
     assert "/api/source-text" in script
     assert "window.mermaid.run" in script
+    assert "renderMermaid(body)" in script
 
     status, content_type, body = portal.dispatch("/vendor/mermaid.min.js")
     assert status == 200
@@ -342,6 +343,32 @@ def test_local_portal_source_text_reads_only_applied_version(tmp_path: Path) -> 
     assert status == 200
     assert json.loads(body)["text"] == applied_text
     assert portal.dispatch("/api/source-text?path=%2Ftmp%2Ffixture.md")[0] == 400
+
+
+def test_local_portal_marks_open_conflicts_as_conflicted(tmp_path: Path) -> None:
+    workspace = _workspace_with_pages(tmp_path, count=1)
+    page_path = "wiki/pages/page-00.md"
+    with sqlite3.connect(workspace / ".memoryforge/index.sqlite") as connection:
+        connection.execute(
+            """
+            INSERT INTO knowledge_conflicts (
+                conflict_id, repository_id, page_path, subject_key, kind,
+                left_claim_id, left_source_id, left_source_version, left_locator,
+                right_claim_id, right_source_id, right_source_version, right_locator,
+                detected_at, resolution, resolved_by_changeset_id
+            ) VALUES (?, NULL, ?, 'cache:ttl', 'contradiction',
+                      'left', 'pending', 1, 'chars:0-1',
+                      'right', 'pending', 1, 'chars:0-1',
+                      '2026-01-01T00:00:00+00:00', 'open', NULL)
+            """,
+            ("test_open_conflict", page_path),
+        )
+    portal = LocalPortalApp(workspace)
+
+    page = portal.page(page_path)
+
+    assert page["freshness"]["state"] == "conflicted"
+    assert page["freshness"]["label"].startswith("有冲突")
 
 
 def test_local_portal_source_text_paginates_complete_immutable_text(tmp_path: Path) -> None:
@@ -434,7 +461,7 @@ def test_local_portal_classifies_projects_sources_templates_and_relations(
     assert code_item["relative_path"] == "src/store.py"
 
     alpha_project = json.loads(portal.dispatch(f"/api/project?id={repositories['alpha']}")[2])
-    assert alpha_project["overview"] == []
+    assert [item["path"] for item in alpha_project["overview"]] == [paths["project"]]
     assert [item["path"] for item in alpha_project["modules"]] == [paths["module"]]
     assert [item["path"] for item in alpha_project["module_tree"]] == [paths["module"]]
     assert alpha_project["file_count"] == 1

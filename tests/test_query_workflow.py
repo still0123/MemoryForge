@@ -2096,6 +2096,23 @@ def test_explicit_feishu_title_excludes_other_feishu_sources(
     assert "六十秒" in result["answer"]
 
 
+def test_explicit_title_respects_required_page_paths(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    workspace, _ = _explicit_title_workspace(tmp_path, monkeypatch)
+
+    result = query_module.answer_question(
+        workspace,
+        "飞书文档《飞书章节 A》规定缓存条目何时过期？",
+        page_paths=("wiki/pages/feishu-b.md",),
+    )
+
+    assert result["evidence_status"] == "no_local_evidence"
+    assert result["wiki_pages"] == []
+    assert result["citations"] == []
+
+
 def test_explicit_ai_title_excludes_readme_code_and_other_sessions(
     tmp_path: Path,
     monkeypatch,

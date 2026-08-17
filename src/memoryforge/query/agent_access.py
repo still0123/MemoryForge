@@ -431,6 +431,7 @@ def _query_context(
                 "budget": {
                     "max_output_characters": MAP_MAX_CHARACTERS,
                     "map_characters": navigation["characters"],
+                    "output_characters": 0,
                     "truncated": navigation["truncated"],
                 },
             }
@@ -439,6 +440,28 @@ def _query_context(
                 scope=scope,
                 preferred_scope=preferred_scope,
             )
+            entries = cast(list[dict[str, object]], map_payload["map"])
+            budget = cast(dict[str, object], map_payload["budget"])
+            budget["map_characters"] = len(json.dumps(entries, ensure_ascii=False))
+
+            def serialized_map_size() -> int:
+                size = len(json.dumps(map_payload, ensure_ascii=False))
+                for _ in range(3):
+                    budget["output_characters"] = size
+                    updated = len(json.dumps(map_payload, ensure_ascii=False))
+                    if updated == size:
+                        break
+                    size = updated
+                return size
+
+            output_characters = serialized_map_size()
+            while output_characters > MAP_MAX_CHARACTERS and entries:
+                entries.pop()
+                budget["map_characters"] = len(json.dumps(entries, ensure_ascii=False))
+                budget["truncated"] = True
+                output_characters = serialized_map_size()
+            if output_characters > MAP_MAX_CHARACTERS:
+                raise ValueError("map response envelope exceeds its hard character budget")
             return map_payload
         result = answer_question(
             opened.root,
