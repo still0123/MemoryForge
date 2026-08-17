@@ -128,7 +128,12 @@ def test_tool_discovery_contract_is_fixed(
                 assert "allow_local" not in properties
                 assert "llm" not in properties
             context_properties = by_name["memoryforge_context"].input_schema["properties"]
-            assert set(context_properties) == {"question", "max_pages", "max_citations"}
+            assert set(context_properties) == {
+                "question",
+                "max_pages",
+                "max_citations",
+                "page_paths",
+            }
             assert by_name["memoryforge_context"].input_schema["required"] == ["question"]
             recall_properties = by_name["memoryforge_recall"].input_schema["properties"]
             assert set(recall_properties) == {"limit"}
@@ -206,6 +211,48 @@ def test_context_answers_bounded_context_from_bound_repository(
     citation = payload["citations"][0]
     assert str(citation["wiki_page"]).startswith("wiki/pages/")
     assert citation["display_source"]  # friendly label, never a raw 64-char hash
+
+
+def test_context_global_question_returns_map_and_accepts_page_drilldown(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace, checkout, _repository_id = _bound_workspace(
+        tmp_path,
+        monkeypatch,
+        {"README.md": CACHE_POLICY},
+        public=True,
+    )
+
+    async def scenario() -> tuple[dict[str, object], dict[str, object]]:
+        from mcp.client import Client
+
+        server = build_server(workspace, checkout)
+        async with Client(server) as client:
+            navigation = await _call(
+                client,
+                "memoryforge_context",
+                {"question": "这个项目整体架构是什么？"},
+            )
+            selected = str(navigation["map"][0]["page_path"])
+            drilled = await _call(
+                client,
+                "memoryforge_context",
+                {
+                    "question": "When do cache entries expire?",
+                    "page_paths": [selected],
+                },
+            )
+            return navigation, drilled
+
+    navigation, drilled = _run(scenario)
+
+    assert navigation["mode"] == "map"
+    assert navigation["navigation_only"] is True
+    assert "project_answer" not in navigation
+    assert "citations" not in navigation
+    assert drilled["evidence_status"] == "grounded"
+    assert drilled["citations"]
 
 
 def test_context_returns_unknown_when_evidence_is_insufficient(

@@ -64,12 +64,18 @@ from memoryforge.core.models import (
     RiskLevel,
     Sensitivity,
 )
+from memoryforge.query.context_map import (
+    MAP_MAX_CHARACTERS,
+    build_context_map,
+    visible_context_page_paths,
+)
 from memoryforge.query.contracts import SupportPayload
 from memoryforge.query.query import (
     DEFAULT_QUERY_MAX_CITATIONS,
     DEFAULT_QUERY_MAX_PAGES,
     answer_question,
 )
+from memoryforge.query.route_rules import is_global_question
 from memoryforge.query.support import answer_is_supported
 from memoryforge.storage.changesets import ChangeSetStore, StoredChangeSet
 from memoryforge.storage.database import connect_readonly as _connect_readonly
@@ -297,6 +303,7 @@ def query_context(
     allow_local: bool = False,
     max_pages: int = DEFAULT_QUERY_MAX_PAGES,
     max_citations: int = DEFAULT_QUERY_MAX_CITATIONS,
+    page_paths: list[str] | None = None,
 ) -> dict[str, object]:
     """Return bounded L2 context for one question from the bound project.
 
@@ -324,6 +331,7 @@ def query_context(
         allow_local=allow_local,
         max_pages=max_pages,
         max_citations=max_citations,
+        page_paths=page_paths,
     )
 
 
@@ -335,6 +343,7 @@ def query_workspace_context(
     allow_local: bool = False,
     max_pages: int = DEFAULT_QUERY_MAX_PAGES,
     max_citations: int = DEFAULT_QUERY_MAX_CITATIONS,
+    page_paths: list[str] | None = None,
 ) -> dict[str, object]:
     """Return bounded context from the whole applied Workspace.
 
@@ -372,6 +381,7 @@ def query_workspace_context(
         max_pages=max_pages,
         max_citations=max_citations,
         preferred_scope=preferred_scope if named_scope is None else None,
+        page_paths=page_paths,
     )
 
 
@@ -386,9 +396,50 @@ def _query_context(
     max_pages: int,
     max_citations: int,
     preferred_scope: GitRepositoryRecord | None = None,
+    page_paths: list[str] | None = None,
 ) -> dict[str, object]:
     try:
         workspace_commit = opened.current_commit()
+        requested_page_paths: tuple[str, ...] | None = None
+        if page_paths is not None:
+            requested_page_paths = tuple(dict.fromkeys(page_paths))
+            if not requested_page_paths:
+                return {"status": "invalid_page_paths"}
+            visible_paths = visible_context_page_paths(
+                opened.root,
+                repository_id=repository_id,
+                allow_local=allow_local,
+            )
+            if any(path not in visible_paths for path in requested_page_paths):
+                return {"status": "invalid_page_paths"}
+        if requested_page_paths is None and is_global_question(question):
+            navigation = build_context_map(
+                opened.root,
+                repository_id=repository_id,
+                allow_local=allow_local,
+            )
+            map_payload: dict[str, object] = {
+                "status": "ok",
+                "mode": "map",
+                "navigation_only": True,
+                "workspace_commit": workspace_commit,
+                "map": navigation["entries"],
+                "guidance": (
+                    "Choose relevant page_path values, then call memoryforge_context "
+                    "again with page_paths. Map entries are navigation only, not evidence."
+                ),
+                "budget": {
+                    "max_output_characters": MAP_MAX_CHARACTERS,
+                    "map_characters": navigation["characters"],
+                    "truncated": navigation["truncated"],
+                },
+            }
+            _set_context_scope(
+                map_payload,
+                scope=scope,
+                preferred_scope=preferred_scope,
+            )
+            return map_payload
         result = answer_question(
             opened.root,
             question,
@@ -400,6 +451,7 @@ def _query_context(
             public_only=not allow_local,
             repository_id=repository_id,
             preferred_repository_id=preferred_repository_id,
+            page_paths=requested_page_paths,
         )
     except _OPEN_FAILURES:
         return {"status": "workspace_unavailable"}
@@ -453,23 +505,7 @@ def _query_context(
             "truncated": False,
         },
     }
-    if scope is not None:
-        payload["repository"] = {
-            "repository_id": scope.repository_id,
-            "name": scope.name,
-        }
-    else:
-        payload["scope"] = {
-            "mode": "workspace",
-            "preferred_repository": (
-                {
-                    "repository_id": preferred_scope.repository_id,
-                    "name": preferred_scope.name,
-                }
-                if preferred_scope is not None
-                else None
-            ),
-        }
+    _set_context_scope(payload, scope=scope, preferred_scope=preferred_scope)
 
     budget = cast(dict[str, object], payload["budget"])
 
@@ -527,6 +563,31 @@ def _query_context(
         )
     budget["output_characters"] = output_characters
     return payload
+
+
+def _set_context_scope(
+    payload: dict[str, object],
+    *,
+    scope: GitRepositoryRecord | None,
+    preferred_scope: GitRepositoryRecord | None,
+) -> None:
+    if scope is not None:
+        payload["repository"] = {
+            "repository_id": scope.repository_id,
+            "name": scope.name,
+        }
+        return
+    payload["scope"] = {
+        "mode": "workspace",
+        "preferred_repository": (
+            {
+                "repository_id": preferred_scope.repository_id,
+                "name": preferred_scope.name,
+            }
+            if preferred_scope is not None
+            else None
+        ),
+    }
 
 
 def read_applied_evidence(

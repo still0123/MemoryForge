@@ -347,6 +347,87 @@ def test_query_context_clamps_pages_and_citations_budgets(
     assert result["budget"]["max_citations"] == 6
 
 
+def test_global_query_returns_navigation_map_then_drills_into_selected_page(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace, checkout, repository_id = _bound_workspace(
+        tmp_path,
+        monkeypatch,
+        {"README.md": CACHE_POLICY},
+        public=True,
+    )
+
+    navigation = query_context(workspace, checkout, "这个项目整体架构是什么？")
+
+    assert navigation["status"] == "ok"
+    assert navigation["mode"] == "map"
+    assert navigation["navigation_only"] is True
+    assert navigation["repository"]["repository_id"] == repository_id
+    assert navigation["map"]
+    assert "project_answer" not in navigation
+    assert "citations" not in navigation
+    assert navigation["budget"]["map_characters"] <= 4000
+    assert all(entry["navigation_only"] is True for entry in navigation["map"])
+
+    selected = str(navigation["map"][0]["page_path"])
+    drilled = query_context(
+        workspace,
+        checkout,
+        "When do cache entries expire?",
+        page_paths=[selected],
+    )
+
+    assert drilled["status"] == "ok"
+    assert drilled["evidence_status"] == "grounded"
+    assert {page["path"] for page in drilled["wiki_pages"]} == {selected}
+    assert {citation["wiki_page"] for citation in drilled["citations"]} == {selected}
+
+
+def test_global_map_filters_local_only_pages_before_rendering(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace, checkout, _ = _bound_workspace(
+        tmp_path,
+        monkeypatch,
+        {"README.md": CACHE_POLICY},
+        public=False,
+    )
+
+    denied = query_context(workspace, checkout, "整体架构是什么？")
+    allowed = query_context(
+        workspace,
+        checkout,
+        "整体架构是什么？",
+        allow_local=True,
+    )
+
+    assert denied["map"] == []
+    assert allowed["map"]
+
+
+def test_context_rejects_page_paths_outside_visible_scope(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    workspace, checkout, _ = _bound_workspace(
+        tmp_path,
+        monkeypatch,
+        {"README.md": CACHE_POLICY},
+        public=True,
+    )
+
+    result = query_context(
+        workspace,
+        checkout,
+        "When do cache entries expire?",
+        page_paths=["wiki/pages/not-applied.md"],
+    )
+
+    assert result == {"status": "invalid_page_paths"}
+
+
 def test_query_context_returns_unmapped_project_for_unknown_project(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

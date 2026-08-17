@@ -104,6 +104,7 @@ def answer_question(
     repository_id: str | None = None,
     preferred_repository_id: str | None = None,
     conversation_context: str = "",
+    page_paths: tuple[str, ...] | None = None,
 ) -> AskPayload:
     """Answer from a bounded set of Wiki pages, expanding raw evidence only on request.
 
@@ -352,6 +353,7 @@ def answer_question(
             prefer_index_routes=_has_many_index_routes(workspace_root),
             exact_symbol_page_paths=exact_symbol_page_paths,
             preferred_page_paths=retrieval_page_paths,
+            required_page_paths=page_paths,
         )
     )
     for page_rank, page in enumerate(candidate_pages):
@@ -1299,6 +1301,7 @@ def _candidate_pages(
     prefer_index_routes: bool = False,
     exact_symbol_page_paths: tuple[str, ...] = (),
     preferred_page_paths: tuple[str, ...] = (),
+    required_page_paths: tuple[str, ...] | None = None,
 ) -> list[Path]:
     wiki_root = workspace_root / "wiki"
     index = wiki_root / "INDEX.md"
@@ -1309,6 +1312,9 @@ def _candidate_pages(
         if repository_id is not None
         else None
     )
+    if required_page_paths is not None:
+        requested = set(required_page_paths)
+        allowed_paths = requested if allowed_paths is None else allowed_paths & requested
     preferred_paths = (
         set(repository_page_paths(workspace_root, preferred_repository_id))
         if repository_id is None and preferred_repository_id is not None
@@ -1472,6 +1478,12 @@ def _candidate_pages(
         exact_candidates = list(
             dict.fromkeys((*exact_symbol_pages, *preferred_pages, *exact_code_pages))
         )
+        if allowed_paths is not None:
+            exact_candidates = [
+                page
+                for page in exact_candidates
+                if str(page.relative_to(workspace_root)) in allowed_paths
+            ]
         if preferred_paths:
             exact_candidates.sort(
                 key=lambda page: (str(page.relative_to(workspace_root)) not in preferred_paths,)
@@ -1491,6 +1503,11 @@ def _candidate_pages(
     )
     candidates: list[Path] = []
     for page in ordered_pages:
+        if (
+            allowed_paths is not None
+            and str(page.relative_to(workspace_root)) not in allowed_paths
+        ):
+            continue
         if page not in candidates:
             candidates.append(page)
     if preferred_paths:

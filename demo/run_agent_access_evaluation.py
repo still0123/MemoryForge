@@ -224,6 +224,22 @@ def _run_context_case(
     result = cast(
         dict[str, Any], query_context(workspace, project, case["question"], allow_local=allow_local)
     )
+    if result.get("mode") == "map":
+        selected = [
+            str(entry["page_path"])
+            for entry in cast(list[dict[str, object]], result.get("map", []))[:3]
+        ]
+        if selected:
+            result = cast(
+                dict[str, Any],
+                query_context(
+                    workspace,
+                    project,
+                    case["question"],
+                    allow_local=allow_local,
+                    page_paths=selected,
+                ),
+            )
     expected_repository_id = _repository_id_of(workspace, project)
     citations = result.get("citations") or []
     isolated = all(
@@ -272,7 +288,12 @@ def _run_context_case(
             }
             for citation in citations
         ],
-        "output_characters": int(result["budget"]["output_characters"]),
+        "output_characters": int(
+            cast(dict[str, object], result["budget"]).get(
+                "output_characters",
+                len(json.dumps(result, ensure_ascii=False)),
+            )
+        ),
         "leak": leak,
     }
 
