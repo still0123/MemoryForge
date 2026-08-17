@@ -73,7 +73,10 @@ def test_release_package_inputs_and_build_environment_are_stable(
         "/pyproject.toml",
         "/src",
     ]
-    assert (root / ".gitattributes").read_text(encoding="utf-8") == "* text=auto eol=lf\n"
+    assert (root / ".gitattributes").read_text(encoding="utf-8") == (
+        "* text=auto eol=lf\n"
+        "src/memoryforge/portal/vendor/mermaid.min.js whitespace=-trailing-space\n"
+    )
     assert (
         "-c",
         "core.autocrlf=false",
