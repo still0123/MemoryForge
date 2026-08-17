@@ -1,17 +1,14 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
-import pytest
-
-from memoryforge.storage.capture_inbox import RedactionResult, record_capture_event
 from memoryforge.core.capture_models import CaptureEvent
+from memoryforge.storage.capture_inbox import RedactionResult, record_capture_event
 from memoryforge.storage.handoff import build_handoff
 
-
 REPO_A = "a" * 64
-NOW = datetime(2026, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 6, 1, 12, 0, 0, tzinfo=UTC)
 
 
 def _identity_sanitize(text: str) -> RedactionResult:
@@ -56,9 +53,16 @@ def test_empty_handoff_returns_reminder() -> None:
 
 def test_ignored_session_not_included() -> None:
     connection = sqlite3.connect(":memory:")
-    _add_event(connection, event_type="session_start", text="ignored", minutes_ago=30, session_id="sess-ignored")
+    _add_event(
+        connection,
+        event_type="session_start",
+        text="ignored",
+        minutes_ago=30,
+        session_id="sess-ignored",
+    )
     connection.execute(
-        "UPDATE capture_sessions SET state = 'ignored' WHERE repository_id = ? AND client = 'codex' AND session_id = ?",
+        "UPDATE capture_sessions SET state = 'ignored' "
+        "WHERE repository_id = ? AND client = 'codex' AND session_id = ?",
         (REPO_A, "sess-ignored"),
     )
     connection.commit()
@@ -71,7 +75,10 @@ def test_handoff_respects_character_limit() -> None:
     _add_event(
         connection,
         event_type="user_prompt",
-        text="Please refactor the authentication module with role-based access control and auditing",
+        text=(
+            "Please refactor the authentication module with role-based access control "
+            "and auditing"
+        ),
         minutes_ago=5,
     )
     for i in range(8):
@@ -177,7 +184,12 @@ def test_handoff_extracts_recent_task_decisions_files() -> None:
     _add_event(
         connection,
         event_type="pre_compact",
-        text="Summary notes:\n- TODO: verify handoff truncation order\n- fix: handle empty sessions\n- 待办: write more tests",
+        text=(
+            "Summary notes:\n"
+            "- TODO: verify handoff truncation order\n"
+            "- fix: handle empty sessions\n"
+            "- 待办: write more tests"
+        ),
         minutes_ago=3,
     )
 

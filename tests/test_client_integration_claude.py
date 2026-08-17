@@ -49,7 +49,9 @@ def test_verify_install_claude_unsupported(tmp_path: Path) -> None:
     result = claude.verify_install(workspace, project)
     assert isinstance(result, IntegrationResult)
     assert result.status == "unsupported"
-    assert "mcp.json" in " ".join(result.next_steps).lower() or ".mcp.json" in " ".join(result.next_steps)
+    assert "mcp.json" in " ".join(result.next_steps).lower() or ".mcp.json" in " ".join(
+        result.next_steps
+    )
 
 
 def test_plan_uninstall_claude(tmp_path: Path) -> None:

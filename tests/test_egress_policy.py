@@ -1,15 +1,8 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-import pytest
-
-from memoryforge.core.egress_models import (
-    EgressClass,
-    EgressRequest,
-    SourceEgressRule,
-)
 from memoryforge.compiler.egress_policy import (
     SCHEMA_SQL,
     decide_egress,
@@ -18,8 +11,13 @@ from memoryforge.compiler.egress_policy import (
     rule_sha256,
     upsert_rule,
 )
-from memoryforge.core.models import Sensitivity
 from memoryforge.compiler.redaction import redact_for_model
+from memoryforge.core.egress_models import (
+    EgressClass,
+    EgressRequest,
+    SourceEgressRule,
+)
+from memoryforge.core.models import Sensitivity
 
 
 def _make_connection() -> sqlite3.Connection:
@@ -49,9 +47,7 @@ def _make_request(host_id: str = "host-trusted") -> EgressRequest:
 
 def test_schema_sql_creates_tables_without_error() -> None:
     connection = _make_connection()
-    cursor = connection.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
-    )
+    cursor = connection.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
     tables = {row[0] for row in cursor.fetchall()}
     assert "source_egress_rules" in tables
     assert "disclosure_receipts" in tables
@@ -96,7 +92,7 @@ def test_host_allowed_rule_matches_host() -> None:
         source_id=source_id,
         egress_class=EgressClass.HOST_ALLOWED,
         allowed_hosts=(_host_id("alpha"), _host_id("beta")),
-        updated_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(UTC),
         actor="human-admin",
     )
     upsert_rule(connection, rule)
@@ -120,7 +116,7 @@ def test_host_allowed_rule_rejects_unknown_host() -> None:
         source_id=source_id,
         egress_class=EgressClass.HOST_ALLOWED,
         allowed_hosts=(_host_id("alpha"),),
-        updated_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(UTC),
         actor="human-admin",
     )
     upsert_rule(connection, rule)
@@ -144,7 +140,7 @@ def test_decide_egress_disallows_nonexistent_host_id() -> None:
         source_id=source_id,
         egress_class=EgressClass.HOST_ALLOWED,
         allowed_hosts=(_host_id("alpha"),),
-        updated_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(UTC),
         actor="human-admin",
     )
     upsert_rule(connection, rule)
@@ -171,17 +167,12 @@ def test_filter_visible_sources() -> None:
 
     source_ids = [_source_id(i) for i in range(10, 15)]
     for idx, sid in enumerate(source_ids):
-        if idx < 2:
-            sensitivity = Sensitivity.PUBLIC
-        else:
-            sensitivity = Sensitivity.LOCAL_ONLY
-
         if idx == 3:
             rule = SourceEgressRule(
                 source_id=sid,
                 egress_class=EgressClass.HOST_ALLOWED,
                 allowed_hosts=(_host_id("filter-host"),),
-                updated_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(UTC),
                 actor="human-admin",
             )
             upsert_rule(connection, rule)
@@ -210,7 +201,7 @@ def test_filter_visible_sources() -> None:
 
 
 def test_policy_sha256_is_stable() -> None:
-    updated_at = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+    updated_at = datetime(2026, 1, 1, 0, 0, 0, tzinfo=UTC)
     rule_a = SourceEgressRule(
         source_id=_source_id(100),
         egress_class=EgressClass.HOST_ALLOWED,

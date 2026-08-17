@@ -18,7 +18,7 @@ from typing import Any, cast
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from memoryforge.query.retrieval_v2 import retrieve_candidates
+from memoryforge.query.retrieval_v2 import retrieve_candidates  # noqa: E402
 
 REGISTRY_PATH = REPO_ROOT / "demo/evaluation/agent_memory_v2_registry.json"
 DEV_PATH = REPO_ROOT / "demo/evaluation/agent_memory_v2_development.json"
@@ -207,7 +207,9 @@ def _run_cases(cases: list[dict[str, Any]], fixture: dict[str, Any]) -> list[dic
         )
 
         candidate_pages = [c.page_path for c in retrieval.candidates]
-        candidate_sources = [f"{c.source_id}|{c.source_version}|{c.locator}" for c in retrieval.candidates]
+        candidate_sources = [
+            f"{c.source_id}|{c.source_version}|{c.locator}" for c in retrieval.candidates
+        ]
 
         if expected_status == "unanswerable":
             recall_at_3 = 1.0 if len(expected_sources) == 0 and len(candidate_pages) == 0 else 0.0
@@ -233,9 +235,7 @@ def _run_cases(cases: list[dict[str, Any]], fixture: dict[str, Any]) -> list[dic
                     break
             mrr = (1.0 / ranks[0]) if ranks else 0.0
 
-            privacy_leaks = any(
-                c.source_id == SOURCE_ID_PRIVATE for c in retrieval.candidates
-            )
+            privacy_leaks = any(c.source_id == SOURCE_ID_PRIVATE for c in retrieval.candidates)
 
         results.append(
             {

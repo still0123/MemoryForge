@@ -18,8 +18,8 @@ import shutil
 from collections import Counter
 from pathlib import Path
 
-from memoryforge.evaluation.evaluation import EvaluationCase, EvaluationSuite
 from memoryforge.core.manifests import SourceManifestStore
+from memoryforge.evaluation.evaluation import EvaluationCase, EvaluationSuite
 from memoryforge.query.query import (
     _candidate_pages,
     _has_many_index_routes,

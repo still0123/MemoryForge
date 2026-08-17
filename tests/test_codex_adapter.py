@@ -5,8 +5,8 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from memoryforge.interface.cli import app
 from memoryforge.core.manifests import SourceManifestStore
+from memoryforge.interface.cli import app
 from memoryforge.storage.workspace import Workspace
 
 

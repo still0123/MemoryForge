@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
-import memoryforge.query.agent as agent_module
 import memoryforge.evaluation.agent_evaluation as agent_evaluation
+import memoryforge.query.agent as agent_module
 from memoryforge.evaluation.agent_evaluation import run_agent_evaluation
 from memoryforge.query.provider import AgentStep, OpenAICompatibleProvider
 from memoryforge.storage.workspace import init_workspace

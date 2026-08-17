@@ -9,10 +9,10 @@ from typing import Any
 import pytest
 from typer.testing import CliRunner
 
-from memoryforge.storage.changesets import ChangeSetStore
-from memoryforge.interface.cli import app
 from memoryforge.compiler.compiler import compile_pending_sources
 from memoryforge.core.models import CompilationPlan, PageChange, PlannedPage
+from memoryforge.interface.cli import app
+from memoryforge.storage.changesets import ChangeSetStore
 from memoryforge.storage.workspace import Workspace
 from tests.cli_helpers import review_approve_apply
 

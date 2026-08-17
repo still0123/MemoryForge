@@ -33,7 +33,10 @@ STYLES = {
     "zh": {
         "font": CJK_FONT,
         "title": "同样的资料，两条知识管线",
-        "subtitle": "普通 RAG 直接检索原文切片；MemoryForge 先把资料编译成可审核的 Wiki，再渐进式查询。",
+        "subtitle": (
+            "普通 RAG 直接检索原文切片；MemoryForge 先把资料编译成可审核的 Wiki，"
+            "再渐进式查询。"
+        ),
         "rag_header": "普通 RAG",
         "rag_sub": "切片 → 向量化 → 召回 → 直接生成",
         "rag_stages": [
@@ -55,49 +58,91 @@ STYLES = {
             ("渐进式查询", "INDEX.md 定位 → Citation → 按需展开 Evidence", "按需加载"),
         ],
         "mf_outcome": "结论可重放：Citation 固定 SourceVersion + locator + Commit + SHA-256",
-        "banner": "MemoryForge 不是“更强的检索”，而是把知识更新变成一条可审计的工程链路：编译、审核、发布、溯源。",
+        "banner": (
+            "MemoryForge 不是“更强的检索”，而是把知识更新变成一条可审计的工程链路："
+            "编译、审核、发布、溯源。"
+        ),
     },
     "en": {
         "font": LATIN_FONT,
         "title": "Same sources, two knowledge pipelines",
-        "subtitle": "Vanilla RAG retrieves raw chunks; MemoryForge compiles sources into an auditable Wiki first, then queries progressively.",
+        "subtitle": (
+            "Vanilla RAG retrieves raw chunks; MemoryForge compiles sources into an "
+            "auditable Wiki first, then queries progressively."
+        ),
         "rag_header": "Vanilla RAG",
         "rag_sub": "chunk → embed → recall → generate",
         "rag_stages": [
             ("Raw sources", "Docs, code, pages updated at will", "No version pinning"),
-            ("Fixed-window chunking", "Structure and context lost at chunk time", "Fragmented semantics"),
-            ("Embed into vector store", "Re-indexing silently replaces old data", "No review trail"),
-            ("Top-K similarity recall", "Picks fragments by vector distance", "Relevant ≠ supported"),
+            (
+                "Fixed-window chunking",
+                "Structure and context lost at chunk time",
+                "Fragmented semantics",
+            ),
+            (
+                "Embed into vector store",
+                "Re-indexing silently replaces old data",
+                "No review trail",
+            ),
+            (
+                "Top-K similarity recall",
+                "Picks fragments by vector distance",
+                "Relevant ≠ supported",
+            ),
             ("LLM answers directly", "Uses whatever was recalled", "Citation drift"),
         ],
-        "rag_outcome": "Not replayable: no way to tell which version of which passage a claim came from",
+        "rag_outcome": (
+            "Not replayable: no way to tell which version of which passage a claim came from"
+        ),
         "mf_header": "MemoryForge",
         "mf_sub": "snapshot → propose → review → publish → progressive query",
         "mf_stages": [
             ("Raw sources", "Git repos, Feishu, web, Issues, AI chats", "local_only by default"),
-            ("SourceAdapter snapshot", "Immutable SourceVersion pinned by SHA-256", "Replayable source"),
+            (
+                "SourceAdapter snapshot",
+                "Immutable SourceVersion pinned by SHA-256",
+                "Replayable source",
+            ),
             ("WikiCompiler proposal", "Emits PROPOSED ChangeSets only", "AI never publishes"),
-            ("review → approve → apply", "Human reviews diff & citations, then authorizes", "Git rollback"),
-            ("Wiki + SQLite FTS5", "Readable Markdown + local full-text index", "One base for human & AI"),
+            (
+                "review → approve → apply",
+                "Human reviews diff & citations, then authorizes",
+                "Git rollback",
+            ),
+            (
+                "Wiki + SQLite FTS5",
+                "Readable Markdown + local full-text index",
+                "One base for human & AI",
+            ),
             ("Progressive query", "INDEX.md → Citation → Evidence on demand", "Context on demand"),
         ],
         "mf_outcome": "Replayable: citations pin SourceVersion + locator + Commit + SHA-256",
-        "banner": "MemoryForge is not “better retrieval” — it turns knowledge updates into an auditable pipeline: compile, review, publish, trace.",
+        "banner": (
+            "MemoryForge is not “better retrieval” — it turns knowledge updates into an "
+            "auditable pipeline: compile, review, publish, trace."
+        ),
     },
 }
 
 
 def esc(text: str) -> str:
     return (
-        text.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
+        text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
     )
 
 
-def svg_text(x: float, y: float, size: float, fill: str, content: str, *, weight: int = 400,
-             anchor: str = "start", font: str = CJK_FONT, spacing: float = 0) -> str:
+def svg_text(
+    x: float,
+    y: float,
+    size: float,
+    fill: str,
+    content: str,
+    *,
+    weight: int = 400,
+    anchor: str = "start",
+    font: str = CJK_FONT,
+    spacing: float = 0,
+) -> str:
     return (
         f'<text x="{x:g}" y="{y:g}" font-family="{font}" font-size="{size:g}" '
         f'font-weight="{weight}" fill="{fill}" text-anchor="{anchor}" letter-spacing="{spacing:g}">'
@@ -113,10 +158,24 @@ def stage_arrow(x_center: float, y_top: float, color: str, marker: str) -> str:
     )
 
 
-def panel(x: float, header_title: str, header_sub: str, stages: list, outcome: str, *,
-          accent: str, header_bg: str, header_fg: str, stage_mark_fg: str,
-          stage_mark_bg: str, arrow_color: str, arrow_marker: str, outcome_bg: str,
-          outcome_fg: str, font: str) -> tuple[str, float]:
+def panel(
+    x: float,
+    header_title: str,
+    header_sub: str,
+    stages: list,
+    outcome: str,
+    *,
+    accent: str,
+    header_bg: str,
+    header_fg: str,
+    stage_mark_fg: str,
+    stage_mark_bg: str,
+    arrow_color: str,
+    arrow_marker: str,
+    outcome_bg: str,
+    outcome_fg: str,
+    font: str,
+) -> tuple[str, float]:
     """Draw one pipeline panel; returns (svg_fragment, panel_height)."""
     parts: list[str] = []
     n = len(stages)
@@ -131,7 +190,7 @@ def panel(x: float, header_title: str, header_sub: str, stages: list, outcome: s
     # Header strip.
     parts.append(
         f'<path d="M {x:g} {PANEL_Y + 22:g} A 22 22 0 0 1 {x + 22:g} {PANEL_Y:g} '
-        f'L {x + PANEL_W - 22:g} {PANEL_Y:g} A 22 22 0 0 1 {x + PANEL_W:g} {PANEL_Y + 22:g} '
+        f"L {x + PANEL_W - 22:g} {PANEL_Y:g} A 22 22 0 0 1 {x + PANEL_W:g} {PANEL_Y + 22:g} "
         f'L {x + PANEL_W:g} {PANEL_Y + HEADER_H:g} L {x:g} {PANEL_Y + HEADER_H:g} Z" '
         f'fill="{header_bg}"/>'
     )
@@ -154,10 +213,23 @@ def panel(x: float, header_title: str, header_sub: str, stages: list, outcome: s
         # Right-side mark chip (✗ pain / ✓ guarantee).
         chip_r = 10
         chip_cx = x + PANEL_W - 30 - chip_r
-        parts.append(f'<circle cx="{chip_cx:g}" cy="{y + STAGE_H / 2:g}" r="{chip_r:g}" fill="{stage_mark_bg}"/>')
+        parts.append(
+            f'<circle cx="{chip_cx:g}" cy="{y + STAGE_H / 2:g}" '
+            f'r="{chip_r:g}" fill="{stage_mark_bg}"/>'
+        )
         if stage_mark_fg.startswith("#D"):
-            parts.append(svg_text(chip_cx, y + STAGE_H / 2 + 5, 13, stage_mark_fg, "✗",
-                                 weight=800, anchor="middle", font=font))
+            parts.append(
+                svg_text(
+                    chip_cx,
+                    y + STAGE_H / 2 + 5,
+                    13,
+                    stage_mark_fg,
+                    "✗",
+                    weight=800,
+                    anchor="middle",
+                    font=font,
+                )
+            )
         else:
             parts.append(
                 f'<path d="M {chip_cx - 4.5:g} {y + STAGE_H / 2 + 0.5:g} L {chip_cx - 1.2:g} '
@@ -167,8 +239,18 @@ def panel(x: float, header_title: str, header_sub: str, stages: list, outcome: s
             )
         # Truncate mark text to keep the chip clear.
         mark_x = chip_cx - chip_r - 10
-        parts.append(svg_text(mark_x, y + STAGE_H / 2 + 4.5, 12.5, stage_mark_fg, mark,
-                              weight=650, anchor="end", font=font))
+        parts.append(
+            svg_text(
+                mark_x,
+                y + STAGE_H / 2 + 4.5,
+                12.5,
+                stage_mark_fg,
+                mark,
+                weight=650,
+                anchor="end",
+                font=font,
+            )
+        )
         if i < n - 1:
             parts.append(stage_arrow(x + PANEL_W / 2, y + STAGE_H, arrow_color, arrow_marker))
 
@@ -178,8 +260,18 @@ def panel(x: float, header_title: str, header_sub: str, stages: list, outcome: s
         f'<rect x="{x + 22:g}" y="{oy:g}" width="{PANEL_W - 44:g}" height="{OUTCOME_H:g}" rx="14" '
         f'fill="{outcome_bg}"/>'
     )
-    parts.append(svg_text(x + PANEL_W / 2, oy + OUTCOME_H / 2 + 6, 14.5, outcome_fg, outcome,
-                          weight=700, anchor="middle", font=font))
+    parts.append(
+        svg_text(
+            x + PANEL_W / 2,
+            oy + OUTCOME_H / 2 + 6,
+            14.5,
+            outcome_fg,
+            outcome,
+            weight=700,
+            anchor="middle",
+            font=font,
+        )
+    )
     return "".join(parts), panel_h
 
 
@@ -187,18 +279,38 @@ def render(lang: str) -> str:
     s = STYLES[lang]
     font = s["font"]
     rag_svg, rag_h = panel(
-        PANEL_X_RAG, s["rag_header"], s["rag_sub"], s["rag_stages"], s["rag_outcome"],
-        accent="#D9E4F5", header_bg="#F1F4F9", header_fg="#14213D",
-        stage_mark_fg="#D94A4A", stage_mark_bg="#FFE9E9",
-        arrow_color="#8CA0BE", arrow_marker="arrowGray",
-        outcome_bg="#FFF1F1", outcome_fg="#B93838", font=font,
+        PANEL_X_RAG,
+        s["rag_header"],
+        s["rag_sub"],
+        s["rag_stages"],
+        s["rag_outcome"],
+        accent="#D9E4F5",
+        header_bg="#F1F4F9",
+        header_fg="#14213D",
+        stage_mark_fg="#D94A4A",
+        stage_mark_bg="#FFE9E9",
+        arrow_color="#8CA0BE",
+        arrow_marker="arrowGray",
+        outcome_bg="#FFF1F1",
+        outcome_fg="#B93838",
+        font=font,
     )
     mf_svg, mf_h = panel(
-        PANEL_X_MF, s["mf_header"], s["mf_sub"], s["mf_stages"], s["mf_outcome"],
-        accent="#18A980", header_bg="#DDF7EE", header_fg="#17885F",
-        stage_mark_fg="#17885F", stage_mark_bg="#DDF7EE",
-        arrow_color="#18A980", arrow_marker="arrowGreen",
-        outcome_bg="#E4F8F0", outcome_fg="#14684A", font=font,
+        PANEL_X_MF,
+        s["mf_header"],
+        s["mf_sub"],
+        s["mf_stages"],
+        s["mf_outcome"],
+        accent="#18A980",
+        header_bg="#DDF7EE",
+        header_fg="#17885F",
+        stage_mark_fg="#17885F",
+        stage_mark_bg="#DDF7EE",
+        arrow_color="#18A980",
+        arrow_marker="arrowGreen",
+        outcome_bg="#E4F8F0",
+        outcome_fg="#14684A",
+        font=font,
     )
 
     mf_bottom = PANEL_Y + mf_h
@@ -232,19 +344,29 @@ def render(lang: str) -> str:
         f'<rect width="{W}" height="{total_h}" fill="#F5F8FF"/>',
         svg_text(70, 66, 38, "#1F2329", s["title"], weight=800, font=font),
         svg_text(70, 102, 16.5, "#69758C", s["subtitle"], weight=450, font=font),
-        '<path d="M70 124 L1530 124" fill="none" stroke="#D9E4F5" stroke-width="1" stroke-linecap="round"/>',
+        '<path d="M70 124 L1530 124" fill="none" stroke="#D9E4F5" '
+        'stroke-width="1" stroke-linecap="round"/>',
     ]
 
     vs_badge = (
-        f'<circle cx="800" cy="{PANEL_Y + 44:g}" r="32" fill="url(#brandGrad)" filter="url(#vsShadow)"/>'
+        f'<circle cx="800" cy="{PANEL_Y + 44:g}" r="32" '
+        'fill="url(#brandGrad)" filter="url(#vsShadow)"/>'
         + svg_text(800, PANEL_Y + 52, 21, "#FFFFFF", "VS", weight=850, anchor="middle", font=font)
     )
 
     banner = (
         f'<rect x="{(W - banner_w) / 2:g}" y="{banner_y:g}" width="{banner_w}" height="52" rx="16" '
         f'fill="#102A56" filter="url(#panelShadow)"/>'
-        + svg_text(W / 2, banner_y + 33, 16.5, "#FFFFFF", s["banner"], weight=700,
-                   anchor="middle", font=font)
+        + svg_text(
+            W / 2,
+            banner_y + 33,
+            16.5,
+            "#FFFFFF",
+            s["banner"],
+            weight=700,
+            anchor="middle",
+            font=font,
+        )
     )
 
     return "\n".join(head) + rag_svg + mf_svg + vs_badge + banner + "\n</svg>\n"

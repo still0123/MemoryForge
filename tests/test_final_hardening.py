@@ -14,10 +14,8 @@ from typer.testing import CliRunner
 
 import memoryforge.core.manifests as manifests_module
 import memoryforge.storage.workspace as workspace_module
-from memoryforge.storage.changesets import ChangeSetStore
-from memoryforge.interface.cli import app
-from memoryforge.core.errors import ChangeSetStoreError, WorkspaceError
 from memoryforge.adapters.importer import import_local_file
+from memoryforge.core.errors import ChangeSetStoreError, WorkspaceError
 from memoryforge.core.manifests import SourceManifestStore
 from memoryforge.core.models import (
     ChangeOperation,
@@ -27,6 +25,8 @@ from memoryforge.core.models import (
     SourceCategory,
     SourceVersionManifest,
 )
+from memoryforge.interface.cli import app
+from memoryforge.storage.changesets import ChangeSetStore
 from memoryforge.storage.version_store import GitVersionStore
 from memoryforge.storage.workspace import Workspace, WorkspaceIntegrityError, search_sources
 

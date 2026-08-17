@@ -16,15 +16,15 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 from typer.testing import CliRunner
 
-from memoryforge.storage.changesets import ChangeSetStore
-from memoryforge.interface.cli import app
 from memoryforge.code.code_index import build_code_index
 from memoryforge.code.code_models import CodeIndexSnapshot, ModuleNarrative, make_code_wiki_path
 from memoryforge.compiler.code_wiki_compiler import compile_code_wiki
 from memoryforge.compiler.linting import lint_workspace
 from memoryforge.compiler.module_planner import build_module_plan
-from memoryforge.query.provider import OpenAICompatibleProvider, ProviderConfig
 from memoryforge.compiler.wiki_facts import parse_page_citations
+from memoryforge.interface.cli import app
+from memoryforge.query.provider import OpenAICompatibleProvider, ProviderConfig
+from memoryforge.storage.changesets import ChangeSetStore
 from memoryforge.storage.workspace import (
     Workspace,
     init_workspace,

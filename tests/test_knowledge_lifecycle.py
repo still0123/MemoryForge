@@ -1,21 +1,15 @@
 from __future__ import annotations
 
 import hashlib
-from datetime import datetime
 from pathlib import Path
-
-import pytest
 
 from memoryforge.compiler.freshness import FreshnessState
 from memoryforge.compiler.knowledge_lifecycle import run_page_lifecycle
 from memoryforge.core.models import (
     ChangeOrigin,
     Citation,
-    Claim,
-    ClaimStatus,
     RiskLevel,
 )
-
 
 SOURCE_ID_A = "a" * 64
 CONTENT_SHA = "c" * 64

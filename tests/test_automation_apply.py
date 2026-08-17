@@ -23,14 +23,14 @@ from memoryforge.automation.automation_policy import (
     load_policy,
     save_policy,
 )
-from memoryforge.storage.changesets import ChangeSetStore
-from memoryforge.interface.cli import app
 from memoryforge.core.errors import ChangeSetStoreError
 from memoryforge.core.models import (
     AutomationDecision,
     AutomationDecisionReceipt,
     RiskLevel,
 )
+from memoryforge.interface.cli import app
+from memoryforge.storage.changesets import ChangeSetStore
 from memoryforge.storage.workspace import Workspace
 
 

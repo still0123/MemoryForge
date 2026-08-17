@@ -1,22 +1,17 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timezone
 
-import pytest
-
-from memoryforge.core.egress_models import (
-    EgressClass,
-    EgressRequest,
-    SourceEgressRule,
-)
 from memoryforge.compiler.egress_policy import (
     SCHEMA_SQL,
     decide_egress,
-    upsert_rule,
+)
+from memoryforge.compiler.redaction import redact_for_model
+from memoryforge.core.egress_models import (
+    EgressClass,
+    EgressRequest,
 )
 from memoryforge.core.models import Sensitivity
-from memoryforge.compiler.redaction import PATTERNS, redact_for_model
 
 
 def test_pem_private_key_redacted() -> None:
@@ -82,7 +77,11 @@ def test_env_secret_key_value_redacted() -> None:
 
 
 def test_user_private_tag_redacted() -> None:
-    text = "Public paragraph.\n<private>user only content with password=abc</private>\nMore public text."
+    text = (
+        "Public paragraph.\n"
+        "<private>user only content with password=abc</private>\n"
+        "More public text."
+    )
     result = redact_for_model(text)
     assert "<redacted:user_private>" in result.redacted_text
     assert "user only content with password=abc" not in result.redacted_text

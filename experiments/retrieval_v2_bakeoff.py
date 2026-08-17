@@ -10,8 +10,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from memoryforge.core.retrieval_models import RetrievalCandidate
-from memoryforge.query.retrieval_v2 import retrieve_candidates
+from memoryforge.query.retrieval_v2 import retrieve_candidates  # noqa: E402
 
 
 def _build_fixtures() -> tuple[list[dict], list[dict], list[dict]]:
@@ -175,8 +174,6 @@ def _run_case(
     repo_id: str,
     use_exact: bool = True,
 ) -> dict:
-    visible = lambda s, v: True  # noqa: E731
-
     def _visible(source_id: str, source_version: int) -> bool:
         return True
 
@@ -275,7 +272,7 @@ def main() -> None:
         lexical_results.append((question, lexical))
 
     cases_data = []
-    for (q, _), h, lx in zip(cases, hybrid_results, lexical_results):
+    for (q, _), h, lx in zip(cases, hybrid_results, lexical_results, strict=True):
         cases_data.append(
             {
                 "question": q,

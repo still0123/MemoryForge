@@ -3,15 +3,13 @@ from __future__ import annotations
 import hashlib
 from datetime import datetime
 
-import pytest
-
 from memoryforge.compiler.knowledge_conflicts import (
+    SCHEMA_SQL,
     ConflictKind,
     ConflictResolution,
     EvidenceRef,
     KnowledgeConflict,
     ProposalDraft,
-    SCHEMA_SQL,
     detect_conflicts,
     resolve_conflict,
 )
@@ -22,7 +20,6 @@ from memoryforge.core.models import (
     ClaimStatus,
     RiskLevel,
 )
-
 
 SOURCE_ID_A = "a" * 64
 SOURCE_ID_B = "b" * 64
@@ -40,7 +37,15 @@ def _citation(source_id: str) -> Citation:
     )
 
 
-def _claim(claim_id: str, subject: str, predicate: str, obj: str, *, status: ClaimStatus = ClaimStatus.VERIFIED, source_id: str = SOURCE_ID_A) -> Claim:
+def _claim(
+    claim_id: str,
+    subject: str,
+    predicate: str,
+    obj: str,
+    *,
+    status: ClaimStatus = ClaimStatus.VERIFIED,
+    source_id: str = SOURCE_ID_A,
+) -> Claim:
     return Claim(
         claim_id=claim_id,
         subject=subject,
@@ -95,14 +100,20 @@ def test_resolve_conflict_returns_proposal_not_db_update():
         page_path="wiki/pages/p.md",
         subject_key="X:equals",
         kind=ConflictKind.CONTRADICTION,
-        left=EvidenceRef(claim_id="clm_L", source_id=SOURCE_ID_A, source_version=1, locator="chars:0-1"),
-        right=EvidenceRef(claim_id="clm_R", source_id=SOURCE_ID_B, source_version=1, locator="chars:0-1"),
+        left=EvidenceRef(
+            claim_id="clm_L", source_id=SOURCE_ID_A, source_version=1, locator="chars:0-1"
+        ),
+        right=EvidenceRef(
+            claim_id="clm_R", source_id=SOURCE_ID_B, source_version=1, locator="chars:0-1"
+        ),
         detected_at=datetime.utcnow(),
     )
     citations = (
         EvidenceRef(claim_id="clm_L", source_id=SOURCE_ID_A, source_version=1, locator="chars:0-1"),
     )
-    proposal = resolve_conflict(conflict, resolution=ConflictResolution.SUPERSEDE_LEFT, citations=citations)
+    proposal = resolve_conflict(
+        conflict, resolution=ConflictResolution.SUPERSEDE_LEFT, citations=citations
+    )
     assert isinstance(proposal, ProposalDraft)
     assert proposal.page_path == "wiki/pages/p.md"
     assert proposal.risk == RiskLevel.HIGH

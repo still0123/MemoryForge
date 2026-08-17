@@ -16,9 +16,8 @@ import pytest
 from pydantic import ValidationError
 
 import memoryforge.storage.workspace as workspace_module
-from memoryforge.storage.changesets import ChangeSetStore
-from memoryforge.core.errors import ChangeSetStoreError, WorkspaceError
 from memoryforge.adapters.importer import import_local_file
+from memoryforge.core.errors import ChangeSetStoreError, WorkspaceError
 from memoryforge.core.manifests import SourceManifestStore
 from memoryforge.core.models import (
     ChangeOperation,
@@ -29,6 +28,7 @@ from memoryforge.core.models import (
     Claim,
     ClaimStatus,
 )
+from memoryforge.storage.changesets import ChangeSetStore
 from memoryforge.storage.workspace import Workspace, search_sources
 
 

@@ -4,15 +4,12 @@ import hashlib
 from datetime import datetime
 from pathlib import Path
 
-import pytest
-
 from memoryforge.compiler.freshness import (
     FreshnessState,
     impacted_pages_for_refresh,
     page_freshness,
 )
-from memoryforge.core.models import Claim, ClaimStatus, Citation
-
+from memoryforge.core.models import Citation, Claim, ClaimStatus
 
 SOURCE_ID_A = "a" * 64
 SOURCE_ID_B = "b" * 64
@@ -31,7 +28,12 @@ def _citation(source_id: str, version: int = 1) -> Citation:
     )
 
 
-def _claim(claim_id: str, *, status: ClaimStatus = ClaimStatus.VERIFIED, citations: tuple[Citation, ...] = ()) -> Claim:
+def _claim(
+    claim_id: str,
+    *,
+    status: ClaimStatus = ClaimStatus.VERIFIED,
+    citations: tuple[Citation, ...] = (),
+) -> Claim:
     return Claim(
         claim_id=claim_id,
         subject="S",

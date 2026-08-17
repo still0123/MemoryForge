@@ -8,16 +8,16 @@ from typer.main import get_command
 from typer.testing import CliRunner
 
 import memoryforge.query.agent as agent_module
-from memoryforge.query.agent import run_agent
-from memoryforge.storage.changesets import ChangeSetStore
-from memoryforge.interface.cli import app
 from memoryforge.core.models import PageChange
+from memoryforge.interface.cli import app
+from memoryforge.query.agent import run_agent
 from memoryforge.query.provider import (
     AgentStep,
     OpenAICompatibleProvider,
     ProviderResponseFormatError,
 )
 from memoryforge.query.sessions import SessionStore, rewrite_query, save_turn
+from memoryforge.storage.changesets import ChangeSetStore
 from memoryforge.storage.workspace import Workspace
 from tests.cli_helpers import review_approve_apply
 

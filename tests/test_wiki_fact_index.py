@@ -7,10 +7,10 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from memoryforge.interface.cli import app
-from memoryforge.core.errors import WorkspaceError
 from memoryforge.compiler.linting import lint_workspace
+from memoryforge.core.errors import WorkspaceError
 from memoryforge.core.models import Sensitivity
+from memoryforge.interface.cli import app
 from memoryforge.query.query import answer_question
 from memoryforge.storage.version_store import GitVersionStore
 from memoryforge.storage.workspace import (

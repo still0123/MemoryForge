@@ -6,14 +6,14 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from memoryforge.storage.changesets import ChangeSetStore
-from memoryforge.interface.cli import app
 from memoryforge.core.models import (
     ChangeOperation,
     ChangeOperationType,
     ChangeSet,
     ChangeSetStatus,
 )
+from memoryforge.interface.cli import app
+from memoryforge.storage.changesets import ChangeSetStore
 from memoryforge.storage.workspace import Workspace
 from tests.cli_helpers import review_approve_apply
 

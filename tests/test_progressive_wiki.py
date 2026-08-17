@@ -8,8 +8,8 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 import memoryforge.compiler.compiler as compiler
-from memoryforge.storage.changesets import ChangeSetStore
 from memoryforge.interface.cli import app
+from memoryforge.storage.changesets import ChangeSetStore
 from memoryforge.storage.workspace import Workspace
 from tests.cli_helpers import review_approve_apply
 

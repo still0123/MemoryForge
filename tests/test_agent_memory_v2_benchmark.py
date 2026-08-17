@@ -2,11 +2,8 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import sys
 from pathlib import Path
 from typing import Any, cast
-
-import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 RUNNER_PATH = REPO_ROOT / "demo" / "run_agent_memory_v2_benchmark.py"
@@ -181,7 +178,7 @@ def test_runner_twice_produces_same_deterministic_hash() -> None:
 
     r1_dev_cases = cast(list[dict[str, Any]], r1["splits"]["development"]["cases"])
     r2_dev_cases = cast(list[dict[str, Any]], r2["splits"]["development"]["cases"])
-    for a, b in zip(r1_dev_cases, r2_dev_cases):
+    for a, b in zip(r1_dev_cases, r2_dev_cases, strict=True):
         assert a["id"] == b["id"]
         assert a["source_recall_at_3"] == b["source_recall_at_3"]
         assert a["retrieved_pages"] == b["retrieved_pages"]

@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import hashlib
 
-import pytest
-
 from memoryforge.code.code_impact import (
     analyze_diff,
     call_paths,
@@ -26,6 +24,10 @@ REPOSITORY_ID = "a" * 64
 COMMIT_SHA = "b" * 40
 SOURCE_ID = "c" * 64
 CONTENT_SHA256 = "e" * 64
+
+
+def _visible(_source_id: str, _source_version: int) -> bool:
+    return True
 
 
 def _make_location(
@@ -93,24 +95,44 @@ def _make_relation(
 
 def _build_simple_graph():
     a = _make_symbol(
-        path="a.py", qualified_name="a.main", display_name="main",
-        kind=CodeSymbolKind.FUNCTION, locator="chars:0-10", lines=(1, 2),
+        path="a.py",
+        qualified_name="a.main",
+        display_name="main",
+        kind=CodeSymbolKind.FUNCTION,
+        locator="chars:0-10",
+        lines=(1, 2),
     )
     b = _make_symbol(
-        path="b.py", qualified_name="b.service", display_name="service",
-        kind=CodeSymbolKind.FUNCTION, locator="chars:0-10", lines=(1, 2),
+        path="b.py",
+        qualified_name="b.service",
+        display_name="service",
+        kind=CodeSymbolKind.FUNCTION,
+        locator="chars:0-10",
+        lines=(1, 2),
     )
     c = _make_symbol(
-        path="c.py", qualified_name="c.storage", display_name="storage",
-        kind=CodeSymbolKind.FUNCTION, locator="chars:0-10", lines=(1, 2),
+        path="c.py",
+        qualified_name="c.storage",
+        display_name="storage",
+        kind=CodeSymbolKind.FUNCTION,
+        locator="chars:0-10",
+        lines=(1, 2),
     )
     priv = _make_symbol(
-        path="priv.py", qualified_name="priv._helper", display_name="_helper",
-        kind=CodeSymbolKind.FUNCTION, locator="chars:0-10", lines=(1, 2),
+        path="priv.py",
+        qualified_name="priv._helper",
+        display_name="_helper",
+        kind=CodeSymbolKind.FUNCTION,
+        locator="chars:0-10",
+        lines=(1, 2),
     )
     test_c = _make_symbol(
-        path="tests/test_c.py", qualified_name="tests.test_c.test_storage", display_name="test_storage",
-        kind=CodeSymbolKind.FUNCTION, locator="chars:0-10", lines=(1, 2),
+        path="tests/test_c.py",
+        qualified_name="tests.test_c.test_storage",
+        display_name="test_storage",
+        kind=CodeSymbolKind.FUNCTION,
+        locator="chars:0-10",
+        lines=(1, 2),
     )
 
     symbols = [a, b, c, priv, test_c]
@@ -134,8 +156,7 @@ def _build_simple_graph():
 
 def test_impact_analysis_direct_and_transitive():
     snapshot, a, b, c, _, _ = _build_simple_graph()
-    visible = lambda s, v: True
-    result = impact_analysis(snapshot, "c.storage", visible_source=visible, max_depth=2)
+    result = impact_analysis(snapshot, "c.storage", visible_source=_visible, max_depth=2)
     assert result.status == "answered"
     assert result.target is not None
     assert result.target.qualified_name == "c.storage"
@@ -147,37 +168,34 @@ def test_impact_analysis_direct_and_transitive():
 
 def test_impact_analysis_tests_collection():
     snapshot, _, _, c, _, test_c = _build_simple_graph()
-    visible = lambda s, v: True
-    result = impact_analysis(snapshot, "c.storage", visible_source=visible)
+    result = impact_analysis(snapshot, "c.storage", visible_source=_visible)
     assert any(t.qualified_name == test_c.qualified_name for t in result.tests)
 
 
 def test_impact_analysis_risk_private_with_tests_is_low():
     snapshot, _, _, _, priv, test_c = _build_simple_graph()
-    visible = lambda s, v: True
-    result = impact_analysis(snapshot, "priv._helper", visible_source=visible)
+    result = impact_analysis(snapshot, "priv._helper", visible_source=_visible)
     assert result.status == "answered"
     assert result.risk in {"low", "medium", "unknown"}
 
 
 def test_impact_analysis_unknown_target():
     snapshot, _, _, _, _, _ = _build_simple_graph()
-    visible = lambda s, v: True
-    result = impact_analysis(snapshot, "nonexistent.fn", visible_source=visible)
+    result = impact_analysis(snapshot, "nonexistent.fn", visible_source=_visible)
     assert result.status == "unknown"
 
 
 def test_impact_analysis_truncated():
     snapshot, a, b, c, _, _ = _build_simple_graph()
-    visible = lambda s, v: True
-    result = impact_analysis(snapshot, "c.storage", visible_source=visible, max_depth=2, max_nodes=1)
+    result = impact_analysis(
+        snapshot, "c.storage", visible_source=_visible, max_depth=2, max_nodes=1
+    )
     assert result.truncated is True
 
 
 def test_call_paths_found():
     snapshot, a, b, c, _, _ = _build_simple_graph()
-    visible = lambda s, v: True
-    result = call_paths(snapshot, "a.main", "c.storage", visible_source=visible)
+    result = call_paths(snapshot, "a.main", "c.storage", visible_source=_visible)
     assert result.status == "answered"
     assert len(result.paths) >= 1
     path = result.paths[0]
@@ -186,15 +204,13 @@ def test_call_paths_found():
 
 def test_call_paths_not_found():
     snapshot, a, b, c, _, _ = _build_simple_graph()
-    visible = lambda s, v: True
-    result = call_paths(snapshot, "c.storage", "a.main", visible_source=visible)
+    result = call_paths(snapshot, "c.storage", "a.main", visible_source=_visible)
     assert result.status == "unknown"
 
 
 def test_analyze_diff_index_unavailable():
     snapshot, _, _, _, _, _ = _build_simple_graph()
-    visible = lambda s, v: True
-    result = analyze_diff(None, snapshot, ("a.py",), visible_source=visible)
+    result = analyze_diff(None, snapshot, ("a.py",), visible_source=_visible)
     assert result.status == "index_unavailable"
 
 
@@ -202,8 +218,12 @@ def test_analyze_diff_added_and_removed():
     snapshot1, a, b, c, _, _ = _build_simple_graph()
     symbols2 = list(snapshot1.symbols)
     d = _make_symbol(
-        path="d.py", qualified_name="d.extra", display_name="extra",
-        kind=CodeSymbolKind.FUNCTION, locator="chars:0-10", lines=(1, 2),
+        path="d.py",
+        qualified_name="d.extra",
+        display_name="extra",
+        kind=CodeSymbolKind.FUNCTION,
+        locator="chars:0-10",
+        lines=(1, 2),
     )
     symbols2.append(d)
     new_rels = []
@@ -221,17 +241,17 @@ def test_analyze_diff_added_and_removed():
         symbols=tuple(symbols2),
         relations=tuple(new_rels),
     )
-    visible = lambda s, v: True
-    result = analyze_diff(snapshot1, snapshot2, ("a.py", "b.py", "c.py", "d.py"), visible_source=visible)
+    result = analyze_diff(
+        snapshot1, snapshot2, ("a.py", "b.py", "c.py", "d.py"), visible_source=_visible
+    )
     assert result.status == "answered"
     assert result.affected_pages
 
 
 def test_impact_analysis_sorting_stable():
     snapshot, a, b, c, _, _ = _build_simple_graph()
-    visible = lambda s, v: True
-    r1 = impact_analysis(snapshot, "c.storage", visible_source=visible, max_depth=2)
-    r2 = impact_analysis(snapshot, "c.storage", visible_source=visible, max_depth=2)
+    r1 = impact_analysis(snapshot, "c.storage", visible_source=_visible, max_depth=2)
+    r2 = impact_analysis(snapshot, "c.storage", visible_source=_visible, max_depth=2)
     direct_ids_1 = tuple(e.relation_id for e in r1.direct)
     direct_ids_2 = tuple(e.relation_id for e in r2.direct)
     assert direct_ids_1 == direct_ids_2

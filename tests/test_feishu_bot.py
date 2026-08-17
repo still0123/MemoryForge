@@ -7,7 +7,6 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from memoryforge.interface.cli import app
 from memoryforge.adapters.feishu_bot import (
     FeishuBotError,
     handle_feishu_event,
@@ -17,6 +16,7 @@ from memoryforge.adapters.feishu_bot import (
 from memoryforge.adapters.feishu_service import _send_reply
 from memoryforge.core.manifests import SourceManifestStore
 from memoryforge.core.models import GitRepositoryRecord
+from memoryforge.interface.cli import app
 from memoryforge.query.provider import ProviderUnavailableError
 from memoryforge.query.sessions import SessionStore
 from tests.cli_helpers import review_approve_apply

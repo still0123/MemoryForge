@@ -8,8 +8,8 @@ import pytest
 from typer.testing import CliRunner
 
 import memoryforge.evaluation.evaluation as evaluation_module
-from memoryforge.interface.cli import app
 from memoryforge.core.models import Sensitivity
+from memoryforge.interface.cli import app
 from memoryforge.storage.workspace import init_workspace, register_git_checkout, sync_git_checkout
 from tests.cli_helpers import review_approve_apply
 

@@ -8,13 +8,13 @@ from typer.testing import CliRunner
 
 import memoryforge.compiler.lifecycle as lifecycle_module
 import memoryforge.storage.workspace as workspace_module
-from memoryforge.storage.apply_journal import ApplyJournalStore
-from memoryforge.storage.changesets import ChangeSetStore
-from memoryforge.interface.cli import app
-from memoryforge.core.errors import WorkspaceError
 from memoryforge.compiler.lifecycle import apply_changeset
 from memoryforge.compiler.linting import lint_workspace
 from memoryforge.compiler.wiki_facts import parse_page_facts
+from memoryforge.core.errors import WorkspaceError
+from memoryforge.interface.cli import app
+from memoryforge.storage.apply_journal import ApplyJournalStore
+from memoryforge.storage.changesets import ChangeSetStore
 from memoryforge.storage.workspace import Workspace, candidate_page_sources
 
 

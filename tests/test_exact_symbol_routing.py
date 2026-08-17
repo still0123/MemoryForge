@@ -4,8 +4,8 @@ from pathlib import Path
 
 from pytest import MonkeyPatch
 
-from memoryforge.query import query as query_module
 from memoryforge.compiler.wiki_facts import AppliedCodeSymbolMatch
+from memoryforge.query import query as query_module
 
 
 def test_explicit_code_identifiers_preserve_symbol_boundaries() -> None:

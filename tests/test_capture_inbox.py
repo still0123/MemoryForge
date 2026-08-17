@@ -1,27 +1,23 @@
 from __future__ import annotations
 
 import json
-import os
 import sqlite3
 import stat
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
-import pytest
-
+from memoryforge.core.capture_models import CaptureEvent
+from memoryforge.core.models import ChangeOrigin, RiskLevel
 from memoryforge.storage.capture_inbox import (
     CHAR_LIMITS,
     ProposalDraft,
     RedactionResult,
+    build_capture_proposal,
     drain_capture_spool,
     record_capture_event,
     spool_capture_event,
-    build_capture_proposal,
 )
-from memoryforge.core.capture_models import CaptureEvent
-from memoryforge.core.models import ChangeOrigin, RiskLevel
-
 
 REPO_A = "a" * 64
 REPO_B = "b" * 64
@@ -51,7 +47,7 @@ def _make_event(
         client=client,  # type: ignore[arg-type]
         session_id=session_id,
         event_type=event_type,  # type: ignore[arg-type]
-        observed_at=datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc),
+        observed_at=datetime(2026, 1, 1, 0, 0, 0, tzinfo=UTC),
         text=text,
         paths=paths,
     )

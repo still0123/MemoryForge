@@ -6,9 +6,9 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from memoryforge.interface.cli import app
 from memoryforge.adapters.importer import import_local_file
 from memoryforge.core.models import Sensitivity
+from memoryforge.interface.cli import app
 from memoryforge.storage.workspace import Workspace
 
 

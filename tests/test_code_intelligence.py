@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import hashlib
 
-import pytest
-
 from memoryforge.code.code_intelligence import symbol_context
 from memoryforge.code.code_models import (
     CodeIndexSnapshot,
@@ -23,6 +21,14 @@ COMMIT_SHA = "b" * 40
 SOURCE_ID = "c" * 64
 SOURCE_ID_2 = "d" * 64
 CONTENT_SHA256 = "e" * 64
+
+
+def _visible(_source_id: str, _source_version: int) -> bool:
+    return True
+
+
+def _hide_source_2(source_id: str, _source_version: int) -> bool:
+    return source_id != SOURCE_ID_2
 
 
 def _make_location(
@@ -186,22 +192,79 @@ def _build_snapshot():
     )
 
     symbols = [
-        entry_mod, storage_mod, service_mod,
-        main_fn, get_user_fn, save_user_fn, _private_fn,
-        create_user_svc, test_create, ambiguous_a,
+        entry_mod,
+        storage_mod,
+        service_mod,
+        main_fn,
+        get_user_fn,
+        save_user_fn,
+        _private_fn,
+        create_user_svc,
+        test_create,
+        ambiguous_a,
     ]
 
     relations = [
-        _make_relation(source=entry_mod, target=main_fn, rtype=CodeRelationType.CONTAINS, evidence_source=entry_mod),
-        _make_relation(source=storage_mod, target=get_user_fn, rtype=CodeRelationType.CONTAINS, evidence_source=storage_mod),
-        _make_relation(source=storage_mod, target=save_user_fn, rtype=CodeRelationType.CONTAINS, evidence_source=storage_mod),
-        _make_relation(source=storage_mod, target=_private_fn, rtype=CodeRelationType.CONTAINS, evidence_source=storage_mod),
-        _make_relation(source=service_mod, target=create_user_svc, rtype=CodeRelationType.CONTAINS, evidence_source=service_mod),
-        _make_relation(source=main_fn, target=create_user_svc, rtype=CodeRelationType.CALLS, evidence_source=main_fn),
-        _make_relation(source=create_user_svc, target=get_user_fn, rtype=CodeRelationType.CALLS, evidence_source=create_user_svc),
-        _make_relation(source=create_user_svc, target=save_user_fn, rtype=CodeRelationType.CALLS, evidence_source=create_user_svc),
-        _make_relation(source=main_fn, target=storage_mod, rtype=CodeRelationType.IMPORTS, evidence_source=main_fn),
-        _make_relation(source=test_create, target=create_user_svc, rtype=CodeRelationType.TESTS, evidence_source=test_create),
+        _make_relation(
+            source=entry_mod,
+            target=main_fn,
+            rtype=CodeRelationType.CONTAINS,
+            evidence_source=entry_mod,
+        ),
+        _make_relation(
+            source=storage_mod,
+            target=get_user_fn,
+            rtype=CodeRelationType.CONTAINS,
+            evidence_source=storage_mod,
+        ),
+        _make_relation(
+            source=storage_mod,
+            target=save_user_fn,
+            rtype=CodeRelationType.CONTAINS,
+            evidence_source=storage_mod,
+        ),
+        _make_relation(
+            source=storage_mod,
+            target=_private_fn,
+            rtype=CodeRelationType.CONTAINS,
+            evidence_source=storage_mod,
+        ),
+        _make_relation(
+            source=service_mod,
+            target=create_user_svc,
+            rtype=CodeRelationType.CONTAINS,
+            evidence_source=service_mod,
+        ),
+        _make_relation(
+            source=main_fn,
+            target=create_user_svc,
+            rtype=CodeRelationType.CALLS,
+            evidence_source=main_fn,
+        ),
+        _make_relation(
+            source=create_user_svc,
+            target=get_user_fn,
+            rtype=CodeRelationType.CALLS,
+            evidence_source=create_user_svc,
+        ),
+        _make_relation(
+            source=create_user_svc,
+            target=save_user_fn,
+            rtype=CodeRelationType.CALLS,
+            evidence_source=create_user_svc,
+        ),
+        _make_relation(
+            source=main_fn,
+            target=storage_mod,
+            rtype=CodeRelationType.IMPORTS,
+            evidence_source=main_fn,
+        ),
+        _make_relation(
+            source=test_create,
+            target=create_user_svc,
+            rtype=CodeRelationType.TESTS,
+            evidence_source=test_create,
+        ),
     ]
 
     snapshot = CodeIndexSnapshot(
@@ -218,8 +281,7 @@ def _build_snapshot():
 
 def test_symbol_context_exact_match():
     snapshot = _build_snapshot()
-    visible = lambda s, v: True
-    result = symbol_context(snapshot, "app.service.create_user", visible_source=visible)
+    result = symbol_context(snapshot, "app.service.create_user", visible_source=_visible)
     assert result.status == "answered"
     assert result.symbol is not None
     assert result.symbol.qualified_name == "app.service.create_user"
@@ -231,8 +293,7 @@ def test_symbol_context_exact_match():
 
 def test_symbol_context_prefix_match():
     snapshot = _build_snapshot()
-    visible = lambda s, v: True
-    result = symbol_context(snapshot, "app.storage", visible_source=visible)
+    result = symbol_context(snapshot, "app.storage", visible_source=_visible)
     assert result.status == "answered"
     assert result.symbol is not None
     assert result.symbol.qualified_name == "app.storage"
@@ -240,8 +301,7 @@ def test_symbol_context_prefix_match():
 
 def test_symbol_context_short_name_match():
     snapshot = _build_snapshot()
-    visible = lambda s, v: True
-    result = symbol_context(snapshot, "get_user", visible_source=visible)
+    result = symbol_context(snapshot, "get_user", visible_source=_visible)
     assert result.status == "answered"
     assert result.symbol is not None
     assert result.symbol.qualified_name == "app.storage.get_user"
@@ -249,8 +309,7 @@ def test_symbol_context_short_name_match():
 
 def test_symbol_context_ambiguous():
     snapshot = _build_snapshot()
-    visible = lambda s, v: True
-    result = symbol_context(snapshot, "main", visible_source=visible)
+    result = symbol_context(snapshot, "main", visible_source=_visible)
     assert result.status == "partial"
     assert len(result.ambiguous) >= 2
     qns = {a.qualified_name for a in result.ambiguous}
@@ -260,22 +319,23 @@ def test_symbol_context_ambiguous():
 
 def test_symbol_context_unknown():
     snapshot = _build_snapshot()
-    visible = lambda s, v: True
-    result = symbol_context(snapshot, "nonexistent_function_xyz", visible_source=visible)
+    result = symbol_context(snapshot, "nonexistent_function_xyz", visible_source=_visible)
     assert result.status == "unknown"
     assert result.symbol is None
 
 
 def test_symbol_context_visibility_filter_counts_unknown_edges():
     snapshot = _build_snapshot()
-    visible = lambda s, v: s != SOURCE_ID_2
-    result = symbol_context(snapshot, "app.service.create_user", visible_source=visible)
+    result = symbol_context(
+        snapshot,
+        "app.service.create_user",
+        visible_source=_hide_source_2,
+    )
     assert result.unknown_edges > 0
     assert len(result.related_tests) == 0
 
 
 def test_symbol_context_related_tests():
     snapshot = _build_snapshot()
-    visible = lambda s, v: True
-    result = symbol_context(snapshot, "app.service.create_user", visible_source=visible)
+    result = symbol_context(snapshot, "app.service.create_user", visible_source=_visible)
     assert any(t.qualified_name == "tests.test_service.test_create" for t in result.related_tests)

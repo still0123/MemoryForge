@@ -8,10 +8,10 @@ import pytest
 from pydantic import ValidationError
 from typer.testing import CliRunner
 
-from memoryforge.interface.cli import app
 from memoryforge.adapters.importer import import_local_file
 from memoryforge.core.manifests import SourceManifestStore
 from memoryforge.core.models import ChangeSet, ChangeSetStatus, Claim, ClaimStatus, Sensitivity
+from memoryforge.interface.cli import app
 from memoryforge.query.sessions import SessionStore
 from memoryforge.storage.workspace import Workspace
 

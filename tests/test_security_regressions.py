@@ -9,9 +9,8 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from memoryforge.storage.changesets import ChangeSetStore
-from memoryforge.core.errors import ChangeSetStoreError, WorkspaceError
 from memoryforge.adapters.importer import SourceValidationError, import_local_file
+from memoryforge.core.errors import ChangeSetStoreError, WorkspaceError
 from memoryforge.core.manifests import SourceManifestStore
 from memoryforge.core.models import (
     ChangeOperation,
@@ -20,6 +19,7 @@ from memoryforge.core.models import (
     ChangeSetStatus,
     Citation,
 )
+from memoryforge.storage.changesets import ChangeSetStore
 from memoryforge.storage.workspace import Workspace, WorkspaceSecurityError
 
 
