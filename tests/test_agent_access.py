@@ -380,7 +380,8 @@ def test_global_query_returns_navigation_map_then_drills_into_selected_page(
 
     assert drilled["status"] == "ok"
     assert drilled["evidence_status"] == "grounded"
-    assert {page["path"] for page in drilled["wiki_pages"]} == {selected}
+    assert set(drilled["wiki_pages"]) == {selected}
+    assert {page["path"] for page in drilled["wiki_page_details"]} == {selected}
     assert {citation["wiki_page"] for citation in drilled["citations"]} == {selected}
 
 
