@@ -1,227 +1,190 @@
-# Progressive Structure & Retrieval Specification (v2)
+# Progressive Structure & Retrieval Specification (v3)
 
 ## Status
 
 `DRAFT_FOR_REVIEW`
 
-- 版本：v2。取代 v1（归档于 `docs/research/progressive-structure-retrieval-spec-v1.md`，
-  保留作对比证据）。
-- 评审轮次：1（外部评审意见已吸收，关键变更见 §12）。
+- 版本：v3。取代 v2（归档 `docs/research/progressive-structure-retrieval-spec-v2.md`）。
+- 评审轮次：2（第二轮 5 个 P0 阻断项全部吸收，见 §12）。
 - 基线锚点 commit：`11e2285e03736e2490d31e31a39b37e8313f4b5`。
-- 参考基线（沿用 `EXACT_SYMBOL_ROUTING_SPEC.md` 冻结结果）：
-  - Answer accuracy: 60.0%
-  - page route recall@3: 100.0%
-  - Source recall@3: 100.0%
-  - Citation grounding: 88.9%
-  - **abstention accuracy: 0.0%（本版升为硬门禁，见 §10）**
-- 各冻结输入（套件 SHA256、confirmation 拆分）在进入开发前按既有流程补齐。
+- 既有冻结基线（`EXACT_SYMBOL_ROUTING_SPEC.md`）：answer accuracy 60.0%；
+  page route recall@3 100.0%；source recall@3 100.0%；citation grounding 88.9%；
+  abstention 0.0%（含 1 个已知未拒答失败，冻结不动）。
 
 ## 0. 实施前置（W0）
 
-1. 从 `11e2285` 新建**干净 worktree** 开发，不叠加任何未提交改动。
-2. 记录全量基线：`ruff` / `mypy` / `pytest` 全绿快照 + 既有四套冻结指标。
-   任何候选合入前提是基线本身无红灯。
+1. 干净 worktree 自 `11e2285`；远端不出现中间态，v3 与归档一次性提交。
+2. 基线全绿：`ruff` / `mypy` / `pytest`。当前 mypy 有 2 个既有错误
+   （`retrieval_v2.py` no-any-return、`index_rendering.py` redundant-cast），
+   属 W0 修复项。
 
-## 1. 问题陈述（v2 修正版）
+## 1. 问题陈述（v3：按层实测重写）
 
-### P1 中文检索失败模式（已实证，修正 v1 的错误前提）
+CJK 检索现状逐层核实（基线 commit 实测，Portal 查询 "存策略" 等纯 bigram 命中 4 页）：
 
-v1 错误声称 unicode61 "按单字切分"。实测（SQLite 内存库，`tokenize='unicode61'`）：
+| 层 | 实现 | CJK 状态 |
+| --- | --- | --- |
+| 页面搜索 `source_fts` | `search_terms` 列写入单字 + bigram（`workspace.py` `_search_terms`） | **正常** |
+| 检索泳道 `retrieval_v2._tokenize` | 内存 TF-IDF，查询侧 bigram | **正常** |
+| 事实页定位 `find_fact_pages` | `instr()` 子串匹配 | **正常** |
+| 事实 FTS `search_applied_wiki_facts`（`wiki_fact_fts`） | external-content trigger 索引原文列，CJK run 成整 token | **子短语失效**；且经 grep 确认 src/tests/demo 均无调用方（休眠路径） |
 
-```text
-INSERT: '我们讨论了缓存策略的调整方案'
-MATCH '缓存':    0 hits
-MATCH '缓存策略': 1 hits
-MATCH '策略':    0 hits
-MATCH '方案':    0 hits
-```
+残余风险：(a) `_search_terms` 与 `_tokenize` 两套分词实现并存，漂移风险；
+(b) 无 golden 分词测试；(c) 休眠的事实 FTS 路径一旦被启用即踩坑。
 
-**真实行为：CJK 连续段被索引为一个完整 token。** 因此子串查询、跨词边界查询、
-部分短语查询全部失败；只有查询 run 与索引 run 完全一致才命中。文档写
-"缓存策略的调整"而用户查"调整 缓存策略"即 miss。这比 v1 描述的失败模式更严重，
-bigram 方案的必要性反而更强。
-
-### P2 全局性问题没有落点
-
-"为什么这样设计 / 整体架构" 类问题只能靠 `same_project` 边拉回平级页面，
-没有"先总览、再下钻"的第一跳。
-
-### P3 渐进式缺少"地图"跳
-
-当前三跳为 `INDEX → 页面 → 证据`；AI 第一跳就可能读到过重的页面正文。
-目标形态为四跳：`INDEX → map（预算化地图） → 页面 → 证据`。
+结构性缺口不变：全局性问题无落点（P2）；渐进式缺"地图"跳（P3，
+目标四跳 `INDEX → map → 页面 → 证据`）。
 
 ## 2. 目标与非目标
 
-### 目标
+- G1 **abstention 正向门禁**：新增 CJK/全局/map-first 套件各内嵌 ≥5 条
+  无本地证据的"不可答"问题，要求 100% 不编造项目事实（`no_local_evidence`
+  或拒答）；既有符号路由套件的 wrong-abstention 数 ≤ 冻结基线（1）。
+  通用 abstention 提升仍属 support-score 阶段（显式 de-scope，不做隐式承诺）。
+- G2 **分词等价与休眠路径修复**：共享分词重构行为等价（golden 测试证明）；
+  `wiki_fact_fts` 子短语召回修复并有单测覆盖。撤销 v2 的 "+15pp"——
+  页面级中文检索本已正常，无真实基线可提升。
+- G3 全局问题：`global_questions_dev_v001` route recall@3 ≥ 80%（map-first 生效）。
+- G4 map-first：冻结 map-first 基准上**首轮响应字符数 median −50%**、
+  p95 不劣化；查询延迟 p95 容差 +10%。
 
-- G1 **abstention 硬门禁**：所有候选在所有冻结套件上 abstention 不回退
-  （baseline 0%）；改进目标在 CJK/全局套件冻结后设定。
-- G2 中文检索：`cjk_retrieval_dev_v001` 上 route recall@3 相对 baseline +15pp。
-- G3 全局问题：`global_questions_dev_v001` 上 route recall@3 ≥ 80%。
-- G4 map-first：`memoryforge_context` 首轮返回字符数 −50%（4,000 字符预算）。
+非目标：无向量库；无持久 Atlas 页面/新 Citation 类型/slug/增量 PageRank；
+不改变 PROPOSED 与 Citation 互锁不变量；首版**不设 `mcp.map_first` 配置开关**
+（无配置加载器，为一个布尔建配置系统不值得；路由由 route_rules 决定）；
+Phase C 搁置。
 
-### 非目标（v1 基础上扩充）
+## 3. 变更通道边界
 
-- 不引入向量数据库 / embeddings。
-- **不做持久 Atlas 页面、不做新 Citation 类型**（v1 的 SummaryCitation 撤销：
-  只锁子页哈希无法证明摘要陈述正确；摘要文本必须直接携带原始 Source Citation，
-  而首版根本不落盘摘要——见 W2）。
-- **不做 slug 文件名迁移**（展示收益不抵 redirect 永久债务与 Citation/projection
-  影响面；深链可读性由 INDEX 链接文本承担）。
-- **不做增量 PageRank**（全局不动点算法局部重算会产生漂移性错误排名；
-  仅在 §8 条件触发时做全量重算）。
-- 不改变"AI 止步于 PROPOSED"与"Citation 哈希互锁"不变量。
-- Phase C（社区摘要、核心记忆块）整体搁置。
+- 内容通道（ChangeSet/Git）与派生通道（migration 命令）分离，同 v2。
+- **迁移版本管理（v3 新增）**：`PRAGMA user_version` 记录库结构版本；
+  代码现状（表存在性探测）保持兼容读取，迁移命令按 user_version 判断是否执行。
+- **撤销"保留旧 FTS 表一版"**：失败回滚由单事务保证；代码版本回退 =
+  重跑重建命令。与"派生态可重建 + 体积预算"一致。
 
-## 3. 变更通道边界（v2 新增核心节）
+## 4. W1：共享分词 + 事实 FTS 修复
 
-项目存在两类变更，事务边界不同，**不得混用**：
+1. 新建 `core/tokenization.py`：
+   - `index_terms(text) -> list[str]`：Latin/数字小写原词；CJK run 保留单字
+     + bigram（与现 `_search_terms` 语义**逐字节等价**）。
+   - `bigram_tokens(text) -> list[str]`：CJK run 仅 bigram（供
+     `retrieval_v2` TF-IDF，与现行为等价）。
+2. `storage/workspace.py::_search_terms` 与 `query/retrieval_v2.py::_tokenize`
+   改为委托共享实现；行为不变，golden 单测锁定（纯 CJK / 混合 / 空串 /
+   标点边界 / latin 大小写）。
+3. **事实 FTS 修复（派生列方案，v3 采纳评审建议）**：
+   - `wiki_facts` 增列 `search_terms TEXT NOT NULL DEFAULT ''`（写入投影时
+     由 `index_terms(routing_text + quote + section_path + symbol)` 计算）；
+   - `wiki_fact_fts` 重建为**单列** external-content 表（仅 `search_terms` 列，
+     `content='wiki_facts'`），trigger 复制 `new.search_terms`；
+   - `search_applied_wiki_facts` 查询改为列限定 `search_terms:(...)`；
+   - 休眠状态记录在案：修复期间无调用方，风险受控。
+4. `memoryforge reindex-fts --workspace [--dry-run]`：单事务、幂等、
+   `PRAGMA user_version` 提升；重算 `wiki_facts.search_terms` 后对两张
+   FTS 表执行 `rebuild`；输出前后体积对比。
+5. `workspace_contract.py` 同步新列与虚拟表定义。
 
-| 通道 | 管辖对象 | 机制 | 回滚 |
-| --- | --- | --- | --- |
-| 内容通道 | wiki pages、INDEX.md | ChangeSet 发布链（Git commit） | revert commit |
-| 派生通道 | schema、FTS 索引、rank 表 | 事务性 migration 命令 | 重算/重建 |
+## 5. W2：map-first 响应协议（v3 重塑）
 
-规则：
+**目标契约：全局问题走 map-only envelope，非全局问题行为完全不变。**
 
-1. 派生状态必须能从「内容 + manifests」完全重建（FTS 从 pages/facts 重建，
-   rank 从关系边重算）；因此派生通道**不进发布链**，v1 §7 "FTS 迁移不绕过发布链"
-  的表述作废。
-2. migration 命令要求：单事务包裹、幂等（可重跑）、`--dry-run` 预览、
-   输出前后体积对比、失败自动回滚。
-3. 任何候选不得提供绕过 ChangeSet 直接改写 pages 的路径（不变量不变）。
+`memoryforge_context(question, ...)` 新增可选参数 `page_paths: list[str]`：
 
-## 4. W1：共享分词 + 事务性 FTS 重建
+- **全局问题**（W3 判定）且未提供 `page_paths` → 返回
+  `{status: ok, mode: "map", navigation_only: true, map: [...], guidance: ...}`：
+  仅含地图（title / page_path / summary 行 / kind），**不含 answer 与 Citation**，
+  并指引 AI 以 `page_paths=[...]` 二跳下钻；map 条目标记
+  `navigation_only`，**不得作为回答证据**（工具描述与 MCP prompt 同步声明）。
+- **下钻**：提供 `page_paths` → 仅返回这些页面的摘要 + Citation；
+  repository scope 与 sensitivity/`visible_source` 过滤在**展开前**执行。
+- 非全局问题：现行为不变（answer + pages + citations）。
 
-1. 新建 `memoryforge/core/tokenization.py`：
+**地图组装（首版，零 Portal 依赖）**：解析 `wiki/INDEX.md` 行
+（`- [title](path) — summary`）+ 当前 repository 页面清单；
+排序 = INDEX 分组（Entities/Concepts/…）内稳定序；**贪心前缀装填**至
+4,000 字符。落点：`query/context_map.py`（新）。
+Portal 关系边（direct/exact_mentions/same_project）留在
+`portal_catalog.py`，首版不复用；若 G3 不达标再抽共享 `query/page_relations.py`。
 
-```python
-def index_terms(text: str) -> list[str]:
-    """Latin/数字原词小写化；CJK 连续段生成 bigram（单字段保留单字）。"""
-```
+## 6. W3：route_rules 全局判定
 
-2. 写入侧（`storage/workspace.py` 写 `source_fts.search_terms` 与
-   `wiki_fact_fts.routing_text`）与查询侧（`query/retrieval_v2.py::_tokenize`）
-   **复用同一实现**，禁止两侧漂移。
-3. `storage/workspace_contract.py` schema 版本 bump；新增
-   `memoryforge reindex-fts --workspace [--dry-run]`：单事务重建两张虚拟表，
-   旧表保留一个版本后删除（支持一次回退）。
+- 新建 `query/route_rules.py`：中英全局疑问词表（为什么 / 整体 / 架构 /
+  how does X work overall …），数据与逻辑分离；
+- 归一化：大小写、标点、词边界（英文按词匹配，中文按子串）；
+- 判定：含全局词 **且** 无 `_EXPLICIT_CODE_IDENTIFIER` 符号命中 → global；
+- golden 单测四类：纯全局词 / 全局词+符号 / 纯符号 / 普通词。
 
-**验收**：golden 分词单测（含纯 CJK / 混合 / 空串）；CJK 套件 +15pp；
-索引体积增幅 ≤ 2.5×；查询延迟不回退。
+## 7. W4：Mermaid 架构图（独立 UI 轨道）
 
-## 5. W2：即时预算化 map（合并 v1 的 B1+B3，砍掉持久层）
+- **复用既有 `compiler/module_planner.py::build_architecture_graph()`**
+  （v3 撤销 v2 的 `module_edges` 新表——确定性节点与边已存在）；
+- 编译期在项目总览页追加 `flowchart TD` 块（≤30 节点，label slug 白名单）；
+- Portal 端 `\`\`\`mermaid` → `<pre class="mermaid">`，同源 vendor
+  mermaid.min.js（MIT）；**不触碰检索与路由**，独立合入独立回滚。
 
-**不新增任何页面、表或 Citation 类型。** map 在查询时由既有数据即时组装：
+## 8. 检索质量兜底：全量 PageRank（条件触发，同 v2）
 
-- 数据源：`INDEX.md` 结构 + `wiki_facts`（quote/symbol）+ 页面关系边
-  （direct / exact_mentions / same_project）。
-- 组装算法（全确定性）：
-  1. 种子 = 查询命中的 top 页面（既有泳道结果）；
-  2. 扩展 = 种子沿关系边一跳；
-  3. 排序 = 关系类型优先级（direct > exact_mentions > same_project），
-     同级按段落数稳定排序；
-  4. **贪心装填**：按排序逐项累加 `title + summary 首句` 至 4,000 字符预算即止
-     （排序后贪心前缀装填，无需求解优化）。
-- 落点：新建 `query/context_map.py`；`memoryforge_context` 返回结构新增 `map`
-  字段（`config.yaml: mcp.map_first` 可关闭）；工具签名向后兼容。
-- Portal 不消费 map（它是 AI 视图，不是人视图）。
+仅当 G3 未达标：页面关系图全量确定性重算，仅作 map/Top-N tie-breaker。
 
-**验收**：首轮字符 −50%；符号路由四指标不回退；trace 记录 map 组成的页面清单
-（可复现）。
+## 9. freshness 展示（v3 简化）
 
-## 6. W3：route_rules 全局优先路由
+"落后 N commits" 现有数据不可计算，撤销。徽章只展示
+**freshness state + base/current 短 SHA**（"基于 6ceeace · 当前 74c67f2"），
+数据全部来自 `compiler/freshness.py` 现有投影；不参与排序权重。
 
-1. 新建 `query/route_rules.py`：全局疑问词表（为什么 / 整体 / 架构 /
-   how does X work overall …）+ 确定性判定函数；词表数据与逻辑分离。
-2. 规则：查询含全局词 **且** 无符号命中 → map-first（W2 地图先行，AI 按需二跳）；
-   有符号命中 → 既有 exact lane 优先（不回退符号路由）。
-3. golden 单测覆盖：纯全局词 / 全局词+符号 / 纯符号 / 普通词 四类。
-
-**验收**：`global_questions_dev_v001`（≥30 条）route recall@3 ≥ 80%；
-abstention 与 citation grounding 硬门禁不回退。
-
-## 7. W4：Mermaid 架构图（独立 UI 增强轨道）
-
-- 设计同 v1 A1：tree-sitter 模块依赖边表（编译期产出，独立表 `module_edges`）→
-  项目总览页 `flowchart TD` 块（30 节点上限、label slug 化白名单）；
-  Portal 端 `\`\`\`mermaid` → `<pre class="mermaid">`，**同源 vendor**
-  mermaid.min.js（MIT），禁外部 CDN。
-- **v2 定位变化**：纯展示增强，不触碰检索与路由；独立 changeset、独立回滚，
-  可与 W1–W3 并行或延后。
-
-## 8. 检索质量兜底：全量 PageRank（条件触发）
-
-仅当 W2+W3 评测未达 G3 时启用：
-
-- 图：页面节点，边权 direct=1.0 / exact_mentions=0.5 / same_project=0.1；
-- **全量确定性重算**（apply 时触发；页面量级为几十至几百，毫秒级成本）；
-- 融合方式：仅作为 map/Top-N 的**排序 tie-breaker**，不做跨泳道分数混合。
-- 结果写 sqlite `page_rank`（派生通道，可随时重算）。
-
-## 9. freshness 语义（v1 B4 精简）
-
-freshness **不进入线性加权**（v1 的 0.2 权重撤销——过期精确证据不应输给新鲜
-弱相关证据）：
-
-1. 同分 tie-breaker：其余排序键完全相等时新者在前；
-2. 过期标注：Portal 页面徽章 "基于 commit X · 落后 N commits"，
-   trace 记录 freshness 状态（`compiler/freshness.py` 数据已有，只接展示与 trace）。
-
-## 10. 评测与门禁
+## 10. 评测与门禁（v3 补全）
 
 | 套件 | 指标 | 类型 |
 | --- | --- | --- |
-| 既有符号路由冻结套件 | route recall@3 / accuracy / source recall / grounding | **硬门禁：四项全不回退** |
-| 既有符号路由冻结套件 | abstention accuracy | **硬门禁：不回退（0%）** |
-| `cjk_retrieval_dev_v001`（新，≥50 条） | route recall@3 / MRR | 目标：+15pp |
-| `global_questions_dev_v001`（新，≥30 条） | route recall@3 | 目标：≥80% |
-| map-first 上下文基准（新） | 首轮字符数 | 目标：−50% |
-| 全部 | 查询延迟 p95 / 索引体积 | 预算：不回退 / ≤2.5× |
+| 符号路由冻结套件 | route recall / accuracy / source recall / grounding / **fact selection / multi-source coverage / repository path isolation** | **硬门禁：全不回退** |
+| 符号路由冻结套件 | wrong-abstention 计数 | **硬门禁：≤ 冻结基线（1）** |
+| sensitivity 隔离既有断言 | local_only 不外泄 | **硬门禁** |
+| 新三套件（CJK / global / map-first）各内嵌 ≥5 不可答问题 | 编造项目事实数 | **硬门禁：0** |
+| 分词 golden + wiki_fact 子短语单测 | 等价性 / 命中 | **硬门禁：全绿** |
+| `global_questions_dev_v001`（≥30 条） | route recall@3 | 目标 ≥80% |
+| map-first 基准 | 首轮字符 median / p95；延迟 p95 | 目标 −50% / 容差 +10% |
 | 工程 | ruff / mypy / pytest | **硬门禁：全绿** |
 
-冻结流程沿用 `EXACT_SYMBOL_ROUTING_SPEC`：baseline 与 confirmation 拆分 SHA256
-记入本 spec；confirmation 未跑不得声明收益。
-
-## 11. 交付顺序与排期
+## 11. 交付顺序
 
 ```text
-W0 基线清理（0.5 周）
- └─ W1 分词 + FTS 重建（1 周）        —— 独立合入
-     └─ W2 即时 map + W3 路由规则（1.5 周，同一冻结批次评测）
-         └─ 条件触发：§8 全量 PageRank
-W4 Mermaid（0.5–1 周）                —— 独立轨道，随时可并行
+W0 基线（mypy 2 错误修复）
+ └─ W1 共享分词 + 事实 FTS 修复（独立合入）
+     └─ W3 route_rules → W2 map-first 协议（同批评测）
+         └─ 条件触发：§8
+W4 Mermaid（独立轨道，随时并行）
 ```
 
-## 12. v1 → v2 变更归因（评审吸收记录）
+## 12. v2 → v3 变更归因（第二轮评审吸收）
 
-| v1 条目 | 处置 | 原因 |
+| v2 条目 | 处置 | 原因 |
 | --- | --- | --- |
-| A2 unicode61 "单字切分" 前提 | **改写** | 实证为整段单 token，失败模式更严重 |
-| A3 slug 文件名 | **删除** | redirect 永久债务 + Citation/projection 影响面 > 展示收益 |
-| B1 持久 Atlas 页面 | **撤销** | 即时 map（W2）无表无页面即可达成 G3/G4 |
-| B1 SummaryCitation | **撤销** | 子页哈希不能证明摘要陈述正确；不落盘摘要则无需新类型 |
-| B3 增量 PageRank | **撤销** | 全局算法局部重算产生漂移排名；改为条件触发的全量重算 |
-| B3 token 预算"二分" | **改为贪心前缀装填** | 排序确定后贪心等价且更简单 |
-| B4 freshness 0.2 权重 | **改为 tie-breaker + 标注** | 防止过期精确证据输给新鲜弱证据 |
-| —（新增） | abstention 硬门禁 | baseline 0% 是最紧急缺口，v1 竟未设门禁 |
-| —（新增） | §3 变更通道边界 | FTS/schema 是派生态，不进内容发布链 |
-| Phase C | 搁置 | 研究向，评审确认延后 |
+| §1 P1 "子串/跨词全失败" | **重写为分层实测表** | source_fts/泳道/instr 路径本已正常；失效仅 wiki_fact_fts 且无调用方 |
+| G2 "+15pp" | **撤销，改等价性目标** | 页面级中文检索无真实劣化基线 |
+| W1 wiki_fact_fts 重建 | **改派生列方案** | external-content trigger 无法调用 Python；派生列 + 列限定 MATCH 是可稳定重建解 |
+| W2 "新增 map 字段" | **重塑为 map-only envelope + page_paths 下钻** | 加字段与 G4 −50% 矛盾；四跳需要替换式响应与下钻参数；navigation_only 禁作证据 |
+| 迁移"保留旧表一版" | **删除** | 与派生态可重建/体积预算冲突；事务回滚 + 重建即回退；引入 PRAGMA user_version |
+| abstention "不回退(0%)" | **改正向门禁** | 0% 基线下"不回退"永真（空门禁） |
+| `mcp.map_first` 开关 | **删除** | 无配置加载器 |
+| W2 复用 portal 关系边 | **首版改 INDEX + repo 页面** | W2 不得依赖 Portal 层 |
+| W4 `module_edges` 新表 | **删除，复用 build_architecture_graph()** | module_planner.py:104 已提供确定性节点与边 |
+| freshness "落后 N commits" | **简化为 state + SHA** | 现有数据不可计算 |
+| G4/延迟 | **改 median/p95 + 容差** | 笼统 −50% 不可测 |
+| §10 | **补 4 项硬门禁** | fact selection / multi-source / path isolation / sensitivity |
 
-## 13. 影响面清单（精简后）
+## 13. 影响面清单
 
 ```
 src/memoryforge/core/tokenization.py          (新, W1)
-src/memoryforge/storage/workspace_contract.py  (W1 schema bump)
-src/memoryforge/storage/workspace.py           (W1 写入侧)
-src/memoryforge/query/retrieval_v2.py          (W1 查询侧)
-src/memoryforge/query/context_map.py           (新, W2)
+src/memoryforge/storage/workspace_contract.py  (W1 列/虚拟表/触发器)
+src/memoryforge/storage/workspace.py           (W1 委托共享分词 + 派生列写入 + 迁移)
+src/memoryforge/query/retrieval_v2.py          (W1 委托 + W0 mypy)
 src/memoryforge/query/route_rules.py           (新, W3)
-src/memoryforge/interface/mcp_server.py        (W2 map 字段)
-src/memoryforge/compiler/code_wiki_compiler.py (W4 边表)
+src/memoryforge/query/context_map.py           (新, W2)
+src/memoryforge/interface/mcp_server.py        (W2 envelope + page_paths)
+src/memoryforge/interface/cli.py               (W1 reindex-fts)
+src/memoryforge/compiler/module_planner.py     (W4 复用, 不改)
+src/memoryforge/compiler/code_wiki_compiler.py (W4 mermaid 注入)
 src/memoryforge/portal/portal_assets.py        (W4 mermaid 渲染 / §9 徽章)
-src/memoryforge/compiler/freshness.py          (§9 仅接展示与 trace)
-demo/evaluation/cjk_retrieval_dev_v001.json    (新, 评测)
-demo/evaluation/global_questions_dev_v001.json (新, 评测)
+src/memoryforge/compiler/index_rendering.py    (W0 mypy)
+tests/test_tokenization.py 等                  (新, 各 W)
 ```
