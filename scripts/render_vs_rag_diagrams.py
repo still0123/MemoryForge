@@ -34,8 +34,7 @@ STYLES = {
         "font": CJK_FONT,
         "title": "同样的资料，两条知识管线",
         "subtitle": (
-            "普通 RAG 直接检索原文切片；MemoryForge 先把资料编译成可审核的 Wiki，"
-            "再渐进式查询。"
+            "普通 RAG 直接检索原文切片；MemoryForge 先把资料编译成可审核的 Wiki，再渐进式查询。"
         ),
         "rag_header": "普通 RAG",
         "rag_sub": "切片 → 向量化 → 召回 → 直接生成",

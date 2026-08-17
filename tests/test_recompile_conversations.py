@@ -200,8 +200,7 @@ def test_explicit_reorganization_archives_replaced_source_pages(
 
     workspace = Workspace.open(workspace_path)
     sources = {
-        source.source_id: source
-        for source in _load_current_sources(workspace, set(source_ids))
+        source.source_id: source for source in _load_current_sources(workspace, set(source_ids))
     }
     citations = []
     for index, source_id in enumerate(source_ids, start=1):
@@ -288,8 +287,7 @@ def test_reorganization_rejects_conversation_disclaimer_citations(
 
     workspace = Workspace.open(workspace_path)
     sources = {
-        source.source_id: source
-        for source in _load_current_sources(workspace, set(source_ids))
+        source.source_id: source for source in _load_current_sources(workspace, set(source_ids))
     }
     citations = []
     disclaimer = "Conversation draft. Assistant responses are unverified until review and apply."

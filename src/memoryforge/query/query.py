@@ -120,9 +120,7 @@ def answer_question(
     question_terms = _expanded_question_terms(base_question_terms)
     explicit_titles = _explicit_titles(question)
     explicit_routing_base_terms = _terms(
-        " ".join(
-            (*explicit_titles, "飞书文档", "飞书资料", "AI", "Codex", "Claude", "会话")
-        )
+        " ".join((*explicit_titles, "飞书文档", "飞书资料", "AI", "Codex", "Claude", "会话"))
     )
     explicit_routing_terms = _expanded_question_terms(explicit_routing_base_terms)
     content_base_question_terms = (
@@ -133,9 +131,7 @@ def answer_question(
     content_question_terms = (
         question_terms - explicit_routing_terms if explicit_titles else question_terms
     )
-    identifier_terms = {
-        term for term in content_base_question_terms if not _CJK.fullmatch(term)
-    }
+    identifier_terms = {term for term in content_base_question_terms if not _CJK.fullmatch(term)}
     definition_question = _is_definition_question(question)
     definition_subject = _definition_subject(question)
     yes_no_focus_terms = _yes_no_focus_terms(question)
@@ -286,8 +282,7 @@ def answer_question(
                 applied_wiki_facts_list = [
                     fact
                     for fact in applied_wiki_facts_list
-                    if (str(fact["source_id"]), int(fact["source_version"]))
-                    in explicit_source_keys
+                    if (str(fact["source_id"]), int(fact["source_version"])) in explicit_source_keys
                 ]
             try:
                 retrieval_v2_result = retrieve_candidates(
@@ -402,10 +397,14 @@ def answer_question(
             local_morphology_pages.add(page_path)
         trace.append({"level": "L1", "artifact": page_path})
         for citation in _page_citations(content):
-            if explicit_titles and (
-                citation["source_id"],
-                citation["source_version"],
-            ) not in explicit_source_keys:
+            if (
+                explicit_titles
+                and (
+                    citation["source_id"],
+                    citation["source_version"],
+                )
+                not in explicit_source_keys
+            ):
                 continue
             if _is_conversation_search_clue(citation):
                 continue
@@ -1136,9 +1135,8 @@ def _is_test_lifecycle_fact(citation: CitationPayload) -> bool:
     if match is None or match["kind"] not in {"function", "method"}:
         return False
     symbol = match["symbol"].casefold()
-    return (
-        symbol.endswith((".run_test", ".post_test"))
-        or ("._wait_" in symbol and "deleted" in symbol)
+    return symbol.endswith((".run_test", ".post_test")) or (
+        "._wait_" in symbol and "deleted" in symbol
     )
 
 
@@ -1456,13 +1454,12 @@ def _candidate_pages(
         _is_explicit_code_question(question)
         or bool(exact_symbol_page_paths)
         or any(marker in question for marker in ("换算", "计算", "转换", "转成"))
-        or (
-            "作用" in question
-            and bool(_explicit_code_identifiers(question))
-        )
+        or ("作用" in question and bool(_explicit_code_identifiers(question)))
     )
-    if code_shortcut and (not definition_question or not has_explanatory_definition) and (
-        ranked_index or exact_symbol_page_paths or relaxed_fts_paths
+    if (
+        code_shortcut
+        and (not definition_question or not has_explanatory_definition)
+        and (ranked_index or exact_symbol_page_paths or relaxed_fts_paths)
     ):
         exact_code_pages = _exact_code_pages(
             workspace_root,
@@ -1503,10 +1500,7 @@ def _candidate_pages(
     )
     candidates: list[Path] = []
     for page in ordered_pages:
-        if (
-            allowed_paths is not None
-            and str(page.relative_to(workspace_root)) not in allowed_paths
-        ):
+        if allowed_paths is not None and str(page.relative_to(workspace_root)) not in allowed_paths:
             continue
         if page not in candidates:
             candidates.append(page)
@@ -1750,9 +1744,7 @@ def _top_matches(
         _, page_path, citation = remaining.pop(selected_index)
         new_terms = _matching_terms(question_terms, citation) - covered_terms
         source = (citation["source_id"], citation["source_version"])
-        source_groups_complete = all(
-            group & selected_sources for group in required_source_groups
-        )
+        source_groups_complete = all(group & selected_sources for group in required_source_groups)
         if (
             len(selected) >= minimum_citations
             and len(selected_sources) >= required_sources
@@ -1908,9 +1900,7 @@ def _question_repository_ids(workspace_root: Path, question: str) -> set[str]:
         return set()
     try:
         with _connect_readonly(database) as connection:
-            rows = connection.execute(
-                "SELECT repository_id, name FROM git_repositories"
-            ).fetchall()
+            rows = connection.execute("SELECT repository_id, name FROM git_repositories").fetchall()
     except sqlite3.Error:
         return set()
     repositories = [(str(row["repository_id"]), str(row["name"])) for row in rows]
@@ -1995,9 +1985,7 @@ def _explicit_applied_source_groups(
                     """,
                     (title,),
                 ).fetchall()
-                groups.append(
-                    frozenset((str(row["source_id"]), int(row["id"])) for row in rows)
-                )
+                groups.append(frozenset((str(row["source_id"]), int(row["id"])) for row in rows))
     except sqlite3.Error:
         return tuple(frozenset() for _ in titles)
     return tuple(groups)
@@ -2033,10 +2021,13 @@ def _explicit_source_page_paths(
 def _strict_source_kind(question: str) -> Literal["feishu", "conversation"] | None:
     lowered = question.casefold()
     requests_feishu = any(marker in lowered for marker in ("飞书资料", "飞书文档"))
-    requests_conversation = re.search(
-        r"(?:ai|codex|claude)\s*(?:会话|conversation)",
-        lowered,
-    ) is not None
+    requests_conversation = (
+        re.search(
+            r"(?:ai|codex|claude)\s*(?:会话|conversation)",
+            lowered,
+        )
+        is not None
+    )
     if requests_feishu == requests_conversation:
         return None
     return "feishu" if requests_feishu else "conversation"
@@ -2184,11 +2175,14 @@ def _defines_subject(
     if code_page:
         return _is_code_definition_fact(citation, identifier_terms)
     quote = re.sub(r"[`*_]", "", citation["quote"])
-    return re.search(
-        rf"(?:^|[\n|。；])\s*{re.escape(subject)}\s*(?:\||是|指|表示|：|:)",
-        quote,
-        re.IGNORECASE,
-    ) is not None
+    return (
+        re.search(
+            rf"(?:^|[\n|。；])\s*{re.escape(subject)}\s*(?:\||是|指|表示|：|:)",
+            quote,
+            re.IGNORECASE,
+        )
+        is not None
+    )
 
 
 def _is_definition_question(question: str) -> bool:

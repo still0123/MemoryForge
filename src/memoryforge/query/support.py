@@ -274,10 +274,7 @@ def _support_score(
     )
     quantity_covered = any(
         re.search(r"\d|[一二三四五六七八九十百千万亿两]", citation["quote"])
-        and (
-            not quantity_terms
-            or bool(quantity_terms & _terms(citation["quote"]))
-        )
+        and (not quantity_terms or bool(quantity_terms & _terms(citation["quote"])))
         for _, citation in selected
     )
     relationship_sides = _relationship_sides(question)
@@ -346,10 +343,15 @@ def _support_score(
         1,
     )
     code_enforced = any(page_path in code_page_paths for page_path, _ in selected)
-    enforced = bool(required_source_groups) or "分别" in question or code_enforced or any(
-        "assistant conclusions" in citation.get("section_path", "").lower()
-        or "assistant message" in citation.get("section_path", "").lower()
-        for _, citation in selected
+    enforced = (
+        bool(required_source_groups)
+        or "分别" in question
+        or code_enforced
+        or any(
+            "assistant conclusions" in citation.get("section_path", "").lower()
+            or "assistant message" in citation.get("section_path", "").lower()
+            for _, citation in selected
+        )
     )
     failed_hard_gates = []
     if code_enforced and explicit_identifiers and exact_identifier_coverage < 1:

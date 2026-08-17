@@ -134,11 +134,7 @@ def test_showcase_collapses_full_citation_identifiers() -> None:
 
 def test_markdown_renders_mermaid_as_same_origin_diagram_target() -> None:
     rendered = _markdown_html(
-        "## Architecture\n\n"
-        "```mermaid\n"
-        "flowchart TD\n"
-        '  m_a["api"] --> m_b["store"]\n'
-        "```\n"
+        '## Architecture\n\n```mermaid\nflowchart TD\n  m_a["api"] --> m_b["store"]\n```\n'
     )
 
     assert '<pre class="mermaid">flowchart TD' in rendered

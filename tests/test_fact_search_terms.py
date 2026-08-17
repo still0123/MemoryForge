@@ -65,9 +65,7 @@ def test_reindex_dry_run_does_not_write(tmp_path: Path, monkeypatch) -> None:
     assert result["migration_required"] is True
     assert hashlib.sha256(database.read_bytes()).hexdigest() == before
     with sqlite3.connect(database) as connection:
-        columns = {
-            str(row[1]) for row in connection.execute("PRAGMA table_info(wiki_facts)")
-        }
+        columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(wiki_facts)")}
         version = int(connection.execute("PRAGMA user_version").fetchone()[0])
     assert "search_terms" not in columns
     assert version == 0
@@ -89,9 +87,7 @@ def test_reindex_failure_rolls_back_schema_and_version(
         reindex_fact_search_terms(workspace)
 
     with sqlite3.connect(workspace / ".memoryforge/index.sqlite") as connection:
-        columns = {
-            str(row[1]) for row in connection.execute("PRAGMA table_info(wiki_facts)")
-        }
+        columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(wiki_facts)")}
         version = int(connection.execute("PRAGMA user_version").fetchone()[0])
     assert "search_terms" not in columns
     assert version == 0
@@ -104,10 +100,13 @@ def _applied_workspace(tmp_path: Path, monkeypatch) -> Path:
     source = tmp_path / "cache.md"
     source.write_text(_CHINESE_NOTE, encoding="utf-8")
     assert runner.invoke(app, ["init", str(workspace)]).exit_code == 0
-    assert runner.invoke(
-        app,
-        ["import", str(source), "--workspace", str(workspace)],
-    ).exit_code == 0
+    assert (
+        runner.invoke(
+            app,
+            ["import", str(source), "--workspace", str(workspace)],
+        ).exit_code
+        == 0
+    )
     ingested = runner.invoke(app, ["ingest", "--pending", "--workspace", str(workspace)])
     assert ingested.exit_code == 0, ingested.output
     applied = review_approve_apply(

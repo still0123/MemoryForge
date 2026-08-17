@@ -29,6 +29,7 @@ def _citation(source_id: str) -> Citation:
 def test_run_page_lifecycle_combines_freshness_and_conflicts(tmp_path: Path):
     claims = []
     from memoryforge.compiler.knowledge_conflicts import ProposalDraft
+
     candidate = ProposalDraft(
         page_path="wiki/pages/run.md",
         content="# Run\n\ntest",

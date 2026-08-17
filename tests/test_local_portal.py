@@ -85,10 +85,7 @@ def test_local_portal_paginates_large_wiki_pages(tmp_path: Path) -> None:
     page_path = "wiki/pages/page-00.md"
     page = workspace / page_path
     original = page.read_text(encoding="utf-8")
-    large_body = "\n\n".join(
-        f"Paragraph {index:04}: " + "x" * 180
-        for index in range(500)
-    )
+    large_body = "\n\n".join(f"Paragraph {index:04}: " + "x" * 180 for index in range(500))
     page.write_text(original + "\n\n" + large_body + "\n", encoding="utf-8")
     Workspace.open(workspace).version_store.commit_paths((page_path,), "test: large Wiki page")
     portal = LocalPortalApp(workspace)
@@ -105,8 +102,7 @@ def test_local_portal_paginates_large_wiki_pages(tmp_path: Path) -> None:
     assert "Paragraph 0499" not in first["content"]
 
     status, _, body = portal.dispatch(
-        "/api/page?path=wiki%2Fpages%2Fpage-00.md"
-        f"&offset={first['next_offset']}&limit=4000"
+        f"/api/page?path=wiki%2Fpages%2Fpage-00.md&offset={first['next_offset']}&limit=4000"
     )
     second = json.loads(body)
 
@@ -129,14 +125,11 @@ def test_local_portal_renders_existing_wiki_links_as_page_routes(tmp_path: Path)
     Workspace.open(workspace).version_store.commit_paths((page_path,), "test: Wiki page links")
 
     payload = json.loads(
-        LocalPortalApp(workspace).dispatch(
-            "/api/page?path=wiki%2Fpages%2Fpage-00.md"
-        )[2]
+        LocalPortalApp(workspace).dispatch("/api/page?path=wiki%2Fpages%2Fpage-00.md")[2]
     )
 
     assert (
-        '<a class="md-link" href="#page=wiki%2Fpages%2Fpage-01.md">Page 01</a>'
-        in payload["html"]
+        '<a class="md-link" href="#page=wiki%2Fpages%2Fpage-01.md">Page 01</a>' in payload["html"]
     )
     assert '<span class="md-link">Missing</span>' in payload["html"]
 
@@ -354,9 +347,9 @@ def test_local_portal_source_text_reads_only_applied_version(tmp_path: Path) -> 
 def test_local_portal_source_text_paginates_complete_immutable_text(tmp_path: Path) -> None:
     workspace = _workspace_with_pages(tmp_path, count=1)
     portal = LocalPortalApp(workspace)
-    source = json.loads(
-        portal.dispatch("/api/page?path=wiki%2Fpages%2Fpage-00.md")[2]
-    )["sources"][0]
+    source = json.loads(portal.dispatch("/api/page?path=wiki%2Fpages%2Fpage-00.md")[2])["sources"][
+        0
+    ]
     text = (tmp_path / "source/fixture.md").read_text(encoding="utf-8")
     endpoint = (
         f"/api/source-text?source_id={source['source_id']}"
@@ -459,17 +452,13 @@ def test_local_portal_classifies_projects_sources_templates_and_relations(
     }
 
     published = json.loads(
-        portal.dispatch(
-            f"/api/pages?view=published&kind=code&project={repositories['alpha']}"
-        )[2]
+        portal.dispatch(f"/api/pages?view=published&kind=code&project={repositories['alpha']}")[2]
     )
     assert published["total"] == 1
     assert published["items"][0]["template"] == "code_module"
 
     evidence = json.loads(
-        portal.dispatch(
-            f"/api/pages?view=evidence&kind=code&project={repositories['alpha']}"
-        )[2]
+        portal.dispatch(f"/api/pages?view=evidence&kind=code&project={repositories['alpha']}")[2]
     )
     assert evidence["total"] == 1
     assert evidence["items"][0]["template"] == "code_file"

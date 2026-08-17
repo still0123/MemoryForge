@@ -57,9 +57,9 @@ def test_changeset_load_and_listing_reject_stale_proposals(tmp_path: Path) -> No
         store.get("chg_cache_key_v1")
     with pytest.raises(ChangeSetStoreError, match="base_commit"):
         store.list_all()
-    assert [
-        stored.changeset.changeset_id for stored in store.list_all_for_recovery()
-    ] == ["chg_cache_key_v1"]
+    assert [stored.changeset.changeset_id for stored in store.list_all_for_recovery()] == [
+        "chg_cache_key_v1"
+    ]
 
 
 def test_reject_archives_stale_proposal_without_changing_head(tmp_path: Path) -> None:

@@ -2286,9 +2286,7 @@ def _fact_search_terms_from_values(
     symbol: object,
 ) -> str:
     return index_terms_text(
-        "\n".join(
-            str(part) for part in (routing_text, quote, section_path, symbol) if part
-        )
+        "\n".join(str(part) for part in (routing_text, quote, section_path, symbol) if part)
     )
 
 
@@ -2347,8 +2345,7 @@ def _fact_search_projection_state(
 ) -> tuple[int, bool, int, int]:
     version = int(connection.execute("PRAGMA user_version").fetchone()[0])
     fact_columns = {
-        str(row["name"])
-        for row in connection.execute("PRAGMA table_info(wiki_facts)").fetchall()
+        str(row["name"]) for row in connection.execute("PRAGMA table_info(wiki_facts)").fetchall()
     }
     fts_columns = {
         str(row["name"])
@@ -2373,8 +2370,7 @@ def _rebuild_fact_search_projection(connection: sqlite3.Connection) -> tuple[int
     for trigger in ("wiki_facts_ai", "wiki_facts_ad", "wiki_facts_au"):
         connection.execute(f"DROP TRIGGER IF EXISTS {trigger}")
     columns = {
-        str(row["name"])
-        for row in connection.execute("PRAGMA table_info(wiki_facts)").fetchall()
+        str(row["name"]) for row in connection.execute("PRAGMA table_info(wiki_facts)").fetchall()
     }
     if "search_terms" not in columns:
         connection.execute(
@@ -2413,9 +2409,7 @@ def _rebuild_fact_search_projection(connection: sqlite3.Connection) -> tuple[int
             connection.execute(statement)
     connection.execute("INSERT INTO wiki_fact_fts(wiki_fact_fts) VALUES ('rebuild')")
     connection.execute(f"PRAGMA user_version = {FACT_SEARCH_TERMS_USER_VERSION}")
-    indexed = int(
-        connection.execute("SELECT COUNT(*) FROM wiki_fact_fts_docsize").fetchone()[0]
-    )
+    indexed = int(connection.execute("SELECT COUNT(*) FROM wiki_fact_fts_docsize").fetchone()[0])
     return len(updates), indexed
 
 

@@ -143,9 +143,7 @@ def test_repository_isolation() -> None:
     record_capture_event(connection, event_a, sanitize=_identity_sanitize)
     record_capture_event(connection, event_b, sanitize=_identity_sanitize)
 
-    proposal_a = build_capture_proposal(
-        connection, repository_id=REPO_A, session_id="sess-A"
-    )
+    proposal_a = build_capture_proposal(connection, repository_id=REPO_A, session_id="sess-A")
     assert isinstance(proposal_a, ProposalDraft)
     assert proposal_a.page_path.startswith("wiki/pages/capture/")
     assert "evt-a-1" not in proposal_a.page_path
@@ -157,9 +155,7 @@ def test_proposal_does_not_write_wiki() -> None:
     connection = sqlite3.connect(":memory:")
     event = _make_event(event_id="evt-nw-1", session_id="sess-nw")
     record_capture_event(connection, event, sanitize=_identity_sanitize)
-    proposal = build_capture_proposal(
-        connection, repository_id=REPO_A, session_id="sess-nw"
-    )
+    proposal = build_capture_proposal(connection, repository_id=REPO_A, session_id="sess-nw")
     assert isinstance(proposal, ProposalDraft)
     assert proposal.origin == ChangeOrigin.AGENT_PROPOSAL
     assert proposal.risk == RiskLevel.HIGH

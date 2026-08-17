@@ -144,9 +144,9 @@ workspace 一页）。
 
 ```python
 class SummaryCitation(BaseModel):
-    child_page_id: str          # 指向子页面 page_id
-    child_content_sha256: str   # 锁定子页面内容哈希 —— 子页变更即失配
-    section_anchor: str         # 子页面内锚点
+    child_page_id: str  # 指向子页面 page_id
+    child_content_sha256: str  # 锁定子页面内容哈希 —— 子页变更即失配
+    section_anchor: str  # 子页面内锚点
 ```
 
 摘要的可重放语义 = "重放时先验子页面哈希，失配则声明摘要过期"。这与现有

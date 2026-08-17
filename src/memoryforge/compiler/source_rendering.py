@@ -144,9 +144,7 @@ def _markdown_facts(content: str) -> list[SourceFact]:
         quote = match.group("fact").strip()
         if quote:
             leading = len(match.group("fact")) - len(match.group("fact").lstrip())
-            facts.append(
-                (quote, match.start("fact") + leading, "list", match.group("marker"))
-            )
+            facts.append((quote, match.start("fact") + leading, "list", match.group("marker")))
         structured_ranges.append(match.span())
     for match in re.finditer(
         r"(?:\A|\n[ \t]*\n)(?P<paragraph>.*?)(?=\n[ \t]*\n|\Z)",

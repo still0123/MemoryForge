@@ -1859,8 +1859,10 @@ def _conversation_topic_facts(
     assistant = [item for item in ranked if "assistant" in item[2].section_path[-1].lower()]
     user = [item for item in ranked if "user" in item[2].section_path[-1].lower()]
     retained = sorted(
-        (*sorted(assistant, key=lambda item: item[0], reverse=True)[:32],
-         *sorted(user, key=lambda item: item[0], reverse=True)[:8]),
+        (
+            *sorted(assistant, key=lambda item: item[0], reverse=True)[:32],
+            *sorted(user, key=lambda item: item[0], reverse=True)[:8],
+        ),
         key=lambda item: item[1],
     )
     return [fact for _, _, fact in retained]
@@ -1979,9 +1981,7 @@ def _render_deterministic_conversation_group_page(
         selected.append((source, displayed, summary_fact))
     if not selected:
         return _render_deterministic_group_page_fallback(workspace, sources)
-    summary = reviewed_summary or " · ".join(
-        summary_fact.quote for _, _, summary_fact in selected
-    )
+    summary = reviewed_summary or " · ".join(summary_fact.quote for _, _, summary_fact in selected)
     tags = tuple(
         dict.fromkeys(tag for source in sources for tag in (source.category, *source.tags))
     )
@@ -2243,12 +2243,7 @@ def _existing_repository_architecture(
 
 def _with_repository_architecture(content: str, mermaid: str) -> str:
     without_existing = _REPOSITORY_ARCHITECTURE.sub("", content).rstrip()
-    return (
-        without_existing
-        + "\n\n## Architecture\n\n```mermaid\n"
-        + mermaid.rstrip()
-        + "\n```\n"
-    )
+    return without_existing + "\n\n## Architecture\n\n```mermaid\n" + mermaid.rstrip() + "\n```\n"
 
 
 def _topic_messages(

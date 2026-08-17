@@ -2092,9 +2092,7 @@ def test_explicit_feishu_title_excludes_other_feishu_sources(
     )
 
     assert result["status"] == "answered"
-    assert {citation["source_id"] for citation in result["citations"]} == {
-        sources["feishu_a"]
-    }
+    assert {citation["source_id"] for citation in result["citations"]} == {sources["feishu_a"]}
     assert "六十秒" in result["answer"]
 
 
@@ -2131,8 +2129,7 @@ def test_explicit_title_filters_source_version_inside_merged_page(
 
     assert result["wiki_pages"] == ["wiki/pages/merged-conversations.md"]
     assert all(
-        (citation["source_id"], citation["source_version"])
-        == (sources["conversation_a"], 3)
+        (citation["source_id"], citation["source_version"]) == (sources["conversation_a"], 3)
         for citation in result["citations"]
     )
 
@@ -2160,15 +2157,12 @@ def test_explicit_title_without_facts_makes_cross_source_answer_partial(
 
     result = query_module.answer_question(
         workspace,
-        "飞书文档《飞书章节 A》与 AI 会话《Codex 会话：空白记录》"
-        "如何说明缓存条目在六十秒后过期？",
+        "飞书文档《飞书章节 A》与 AI 会话《Codex 会话：空白记录》如何说明缓存条目在六十秒后过期？",
         max_citations=6,
     )
 
     assert result["evidence_status"] == "partial"
-    assert {citation["source_id"] for citation in result["citations"]} == {
-        sources["feishu_a"]
-    }
+    assert {citation["source_id"] for citation in result["citations"]} == {sources["feishu_a"]}
     assert result["support"]["failed_hard_gates"] == ["required_source_group_incomplete"]
     assert result["unsupported_aspects"] == [
         "required_source_group_incomplete:Codex 会话：空白记录"
@@ -2535,8 +2529,7 @@ def _source_page(
     lines.append("")
     for index, (source_id, version, quote) in enumerate(facts, start=1):
         lines.append(
-            f"[^fact-{index}]: source `{source_id}` · revision `{version}` · "
-            f"`chars:0-{len(quote)}`"
+            f"[^fact-{index}]: source `{source_id}` · revision `{version}` · `chars:0-{len(quote)}`"
         )
     lines.append("")
     return "\n".join(lines)

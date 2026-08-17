@@ -70,9 +70,7 @@ def validate_results(
     source_ratio = source_pct / 100.0
     privacy_leak_count = int(summary.get("privacy_leak_count", 0))
 
-    case_privacy_leaks = sum(
-        1 for c in dev_cases if bool(c.get("privacy_leak_detected"))
-    )
+    case_privacy_leaks = sum(1 for c in dev_cases if bool(c.get("privacy_leak_detected")))
     total_privacy_leaks = privacy_leak_count + case_privacy_leaks
 
     reported_hash = str(result["deterministic_hash"])
@@ -96,15 +94,11 @@ def validate_results(
 
     gates["privacy_leak_count"] = total_privacy_leaks <= max_privacy_leaks
     if not gates["privacy_leak_count"]:
-        failures.append(
-            f"privacy_leak_count {total_privacy_leaks} exceeds max {max_privacy_leaks}"
-        )
+        failures.append(f"privacy_leak_count {total_privacy_leaks} exceeds max {max_privacy_leaks}")
 
     gates["deterministic_hash_match"] = (not require_deterministic) or deterministic_ok
     if require_deterministic and not deterministic_ok:
-        failures.append(
-            "deterministic_hash mismatch: reported != recomputed payload hash"
-        )
+        failures.append("deterministic_hash mismatch: reported != recomputed payload hash")
 
     all_passed = all(gates.values())
 

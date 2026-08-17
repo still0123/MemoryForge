@@ -145,8 +145,7 @@ def test_quantity_support_requires_number_and_subject_in_the_same_fact(tmp_path:
 def test_code_support_rejects_quantity_question_without_numeric_evidence(tmp_path: Path) -> None:
     page_path = "wiki/pages/code/repository/ap.md"
     citation = _citation(
-        "`testcases.EFS.efs_mgr.ap.delete` (module): "
-        "`module testcases.EFS.efs_mgr.ap.delete`"
+        "`testcases.EFS.efs_mgr.ap.delete` (module): `module testcases.EFS.efs_mgr.ap.delete`"
     )
     question = "EFS AP IAM 的测试覆盖和线上缺陷率分别是多少？"
 

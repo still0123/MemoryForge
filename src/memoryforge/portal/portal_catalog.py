@@ -515,9 +515,7 @@ class PortalCatalog:
             source_id = str(row["source_id"])
             tags = _tags(str(row["tags_json"]))
             source_path = str(row["source_path"])
-            repository_id = (
-                str(row["repository_id"]) if row["repository_id"] is not None else None
-            )
+            repository_id = str(row["repository_id"]) if row["repository_id"] is not None else None
             self.applied_sources[source_id] = SourceEntry(
                 source_id=source_id,
                 title=str(row["title"]),
@@ -842,9 +840,7 @@ def _page_in_view(page: PageEntry, view: str) -> bool:
 
 def _module_tree(pages: list[PageEntry]) -> list[dict[str, Any]]:
     nodes = {
-        page.module_path: {**page.public(), "children": []}
-        for page in pages
-        if page.module_path
+        page.module_path: {**page.public(), "children": []} for page in pages if page.module_path
     }
     roots: list[dict[str, Any]] = []
     for path in sorted(nodes):

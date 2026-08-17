@@ -647,7 +647,7 @@ def test_code_wiki_flattens_multiline_dependency_evidence_for_display(
                 "from src.helper import Helper\n\n"
                 "def build():\n"
                 "    return Helper(\n"
-                "        name=\"demo\",\n"
+                '        name="demo",\n'
                 "        enabled=True,\n"
                 "    )\n"
             ),
@@ -660,15 +660,13 @@ def test_code_wiki_flattens_multiline_dependency_evidence_for_display(
     compilation = compile_code_wiki(workspace, snapshot, plan, graph)
 
     assert compilation is not None
-    service_page = compilation.candidate_files[
-        make_code_wiki_path(repository_id, "src/service")
-    ]
+    service_page = compilation.candidate_files[make_code_wiki_path(repository_id, "src/service")]
     dependency = next(
         line
         for line in service_page.splitlines()
         if "src.service.build -> src.helper.Helper" in line
     )
-    assert '\\n' not in dependency
+    assert "\\n" not in dependency
     assert 'Helper( name=\\"demo\\", enabled=True, )' in dependency
     citation = next(
         citation

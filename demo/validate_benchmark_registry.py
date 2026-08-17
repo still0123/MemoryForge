@@ -3116,9 +3116,7 @@ def _release_drill_contract(
     if not isinstance(payload, dict):
         return False
     expected_checked_pages = (
-        3
-        if expected_workspace_commit == CURRENT_RELEASE_DRILL_WORKSPACE_COMMIT
-        else 2
+        3 if expected_workspace_commit == CURRENT_RELEASE_DRILL_WORKSPACE_COMMIT else 2
     )
     expected_checks = {
         key: "passed"

@@ -76,8 +76,7 @@ def test_handoff_respects_character_limit() -> None:
         connection,
         event_type="user_prompt",
         text=(
-            "Please refactor the authentication module with role-based access control "
-            "and auditing"
+            "Please refactor the authentication module with role-based access control and auditing"
         ),
         minutes_ago=5,
     )

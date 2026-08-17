@@ -95,12 +95,10 @@ def test_candidate_lint_failure_does_not_mutate_stable_workspace(
 ) -> None:
     runner, workspace, changeset_id = _staged_changeset(tmp_path, monkeypatch)
     assert (
-        runner.invoke(app, ["review", changeset_id, "--workspace", str(workspace)]).exit_code
-        == 0
+        runner.invoke(app, ["review", changeset_id, "--workspace", str(workspace)]).exit_code == 0
     )
     assert (
-        runner.invoke(app, ["approve", changeset_id, "--workspace", str(workspace)]).exit_code
-        == 0
+        runner.invoke(app, ["approve", changeset_id, "--workspace", str(workspace)]).exit_code == 0
     )
     before = Workspace.open_readonly(workspace).current_commit()
     monkeypatch.setattr(

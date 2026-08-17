@@ -1651,9 +1651,7 @@ def ask(
             raise FeatureUnavailableError("--as-of is not supported yet")
         opened = Workspace.open_readonly(workspace)
         named_scope = (
-            _named_repository_scope(opened.root, question)
-            if repository_id is None
-            else None
+            _named_repository_scope(opened.root, question) if repository_id is None else None
         )
         provider = OpenAICompatibleProvider(ProviderConfig.from_environment()) if llm else None
         if provider is not None:
@@ -1670,7 +1668,9 @@ def ask(
             repository_id=(
                 repository_id
                 if repository_id is not None
-                else named_scope.repository_id if named_scope is not None else None
+                else named_scope.repository_id
+                if named_scope is not None
+                else None
             ),
         )
     except (
@@ -2165,9 +2165,7 @@ def connect(
                 )
             )
         else:
-            raise ValueError(
-                f"unsupported AI Host '{host}'; use 'codex', 'claude', or 'harness'"
-            )
+            raise ValueError(f"unsupported AI Host '{host}'; use 'codex', 'claude', or 'harness'")
     except (
         MemoryForgeError,
         WorkspaceIntegrityError,

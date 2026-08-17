@@ -192,11 +192,7 @@ def compile_code_wiki(
     page_sources = candidate_page_sources(candidate_files)
     changed_source_ids = tuple(
         sorted(
-            {
-                source_id
-                for source_ids in page_sources.values()
-                for source_id in source_ids
-            }
+            {source_id for source_ids in page_sources.values() for source_id in source_ids}
             | set(pending_metadata_source_versions)
         )
     )
@@ -1364,8 +1360,7 @@ def _render_repository_architecture(graph: ArchitectureGraph) -> str:
     for edge in graph.edges:
         if edge.source_module_id in node_ids and edge.target_module_id in node_ids:
             lines.append(
-                f"  m_{edge.source_module_id} -->|{edge.type.value}| "
-                f"m_{edge.target_module_id}"
+                f"  m_{edge.source_module_id} -->|{edge.type.value}| m_{edge.target_module_id}"
             )
     return "\n".join(lines)
 

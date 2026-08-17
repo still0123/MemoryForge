@@ -546,9 +546,7 @@ def _query_context(
             payload["verification_status"] = _verification_status(citations)
         elif wiki_pages:
             removed = wiki_pages.pop()
-            wiki_page_details[:] = [
-                page for page in wiki_page_details if page["path"] != removed
-            ]
+            wiki_page_details[:] = [page for page in wiki_page_details if page["path"] != removed]
         elif unsupported_aspects:
             unsupported_aspects.clear()
         else:

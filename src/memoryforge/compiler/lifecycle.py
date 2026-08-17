@@ -39,8 +39,7 @@ _INTERNAL_ID = re.compile(r"\b[a-f0-9]{64}\b")
 def list_updates(workspace: Path) -> list[dict[str, Any]]:
     opened = Workspace.open_readonly(workspace)
     return [
-        _update_summary(opened, stored)
-        for stored in ChangeSetStore(opened).list_all_for_recovery()
+        _update_summary(opened, stored) for stored in ChangeSetStore(opened).list_all_for_recovery()
     ]
 
 

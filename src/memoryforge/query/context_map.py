@@ -86,8 +86,4 @@ def _visible_page_paths(workspace: Workspace, *, allow_local: bool) -> set[str]:
             ORDER BY page_sources.page_path
             """
         ).fetchall()
-    return {
-        str(row["page_path"])
-        for row in rows
-        if allow_local or int(row["has_local"]) == 0
-    }
+    return {str(row["page_path"]) for row in rows if allow_local or int(row["has_local"]) == 0}

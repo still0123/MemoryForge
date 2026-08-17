@@ -99,9 +99,7 @@ def retrieve_candidates(
 
     question_terms = _terms(question)
     expanded_terms = sorted(
-        term
-        for term in _expanded_question_terms(question_terms) - question_terms
-        if term.isascii()
+        term for term in _expanded_question_terms(question_terms) - question_terms if term.isascii()
     )
     lexical_hits = _lexical_lane(" ".join((question, *expanded_terms)), facts)
     if lexical_hits:
@@ -471,16 +469,12 @@ def _preferred_source_kind(
         return "feishu"
     identifiers = _explicit_code_identifiers(question)
     if any(
-        "." in identifier
-        or "_" in identifier
-        or "$" in identifier
-        or f"`{identifier}`" in question
+        "." in identifier or "_" in identifier or "$" in identifier or f"`{identifier}`" in question
         for identifier in identifiers
     ):
         return "code"
-    if any(
-        marker in lowered
-        for marker in (" import ", " imports ", " dependency ")
-    ) or any(marker in question for marker in ("导入", "依赖", "继承", "实现", "用例")):
+    if any(marker in lowered for marker in (" import ", " imports ", " dependency ")) or any(
+        marker in question for marker in ("导入", "依赖", "继承", "实现", "用例")
+    ):
         return "code"
     return None

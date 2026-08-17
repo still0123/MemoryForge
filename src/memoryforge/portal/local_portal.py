@@ -422,6 +422,7 @@ class LocalPortalApp:
         end = _page_chunk_end(body, offset, min(total, offset + limit))
         visible_body = body[:end]
         rendered_body = _portal_markdown(visible_body)
+
         def resolve_page_link(target: str) -> str | None:
             resolved = _resolve_link(page_path, target.partition("#")[0])
             if resolved is None or resolved not in catalog.pages:
@@ -676,9 +677,7 @@ class LocalPortalApp:
                     max_citations=DEFAULT_QUERY_MAX_CITATIONS,
                     provider=self.provider,
                     allow_local=self.allow_local_llm,
-                    repository_id=(
-                        named_scope.repository_id if named_scope is not None else None
-                    ),
+                    repository_id=(named_scope.repository_id if named_scope is not None else None),
                 )
                 return _json_response(
                     self._with_commit(

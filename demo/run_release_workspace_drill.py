@@ -287,9 +287,7 @@ def _unknown_query_valid(payload: dict[str, Any]) -> bool:
 
 def _replay_payload(payload: dict[str, Any]) -> dict[str, Any]:
     return {
-        key: value
-        for key, value in payload.items()
-        if key not in {"trace", "_retrieval_debug"}
+        key: value for key, value in payload.items() if key not in {"trace", "_retrieval_debug"}
     }
 
 

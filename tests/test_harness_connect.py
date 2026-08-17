@@ -54,9 +54,7 @@ def test_connect_harness_installs_router_and_skill(tmp_path: Path) -> None:
     assert "serverName: memoryforge" in patch
     assert str(workspace.resolve()) in patch
     assert f'PYTHONPATH: "{(Path(__file__).parents[1] / "src").resolve()}"' in patch
-    skill = (dsh_home / "skills" / "memoryforge-knowledge" / "SKILL.md").read_text(
-        encoding="utf-8"
-    )
+    skill = (dsh_home / "skills" / "memoryforge-knowledge" / "SKILL.md").read_text(encoding="utf-8")
     assert "mcp__memoryforge__memoryforge_context" in skill
     assert "mcp__memoryforge__memoryforge_episodes" in skill
     assert "mcp__memoryforge__memoryforge_load_session" in skill
