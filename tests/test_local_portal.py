@@ -288,6 +288,22 @@ def test_local_portal_index_shell_is_small_and_self_contained(tmp_path: Path) ->
     assert "/api/source-text" in script
     assert "window.mermaid.run" in script
     assert "renderMermaid(body)" in script
+    assert 'theme:"base"' in script
+    assert 'primaryColor:"#e8f1ff"' in script
+    assert 'primaryTextColor:"#1f2329"' in script
+    assert 'primaryBorderColor:"#1664ff"' in script
+    assert 'lineColor:"#69758c"' in script
+
+    status, content_type, body = portal.dispatch("/app.css")
+    assert status == 200
+    assert content_type.startswith("text/css")
+    stylesheet = body.decode()
+    assert ".mermaid svg .node .label-container" in stylesheet
+    assert "fill:#e8f1ff!important" in stylesheet
+    assert ".mermaid svg .nodeLabel" in stylesheet
+    assert "color:#1f2329!important" in stylesheet
+    assert ".mermaid svg .flowchart-link" in stylesheet
+    assert "stroke:#69758c!important" in stylesheet
 
     status, content_type, body = portal.dispatch("/vendor/mermaid.min.js")
     assert status == 200

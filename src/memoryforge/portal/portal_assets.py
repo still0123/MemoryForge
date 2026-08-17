@@ -196,6 +196,13 @@ background:linear-gradient(135deg,var(--accent),var(--mint));margin-right:10px;v
 border-radius:10px;overflow:auto;font-size:13.5px}
 .markdown pre.mermaid{display:flex;justify-content:center;background:var(--panel);min-height:120px}
 .markdown pre.mermaid svg{max-width:100%;height:auto}
+.markdown pre.mermaid svg .node .label-container{fill:#e8f1ff!important;
+stroke:#1664ff!important;stroke-width:1.5px!important}
+.markdown pre.mermaid svg .nodeLabel,.markdown pre.mermaid svg .nodeLabel p{
+color:#1f2329!important;fill:#1f2329!important}
+.markdown pre.mermaid svg .flowchart-link{fill:none!important;stroke:#69758c!important;
+stroke-width:1.5px!important}
+.markdown pre.mermaid svg .arrowMarkerPath{fill:#69758c!important;stroke:#69758c!important}
 .markdown :not(pre)>code{padding:2px 6px;background:var(--code);border:1px solid var(--line);
 border-radius:5px;font-size:.88em}code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .markdown blockquote{margin-left:0;padding:10px 14px;color:var(--muted);background:var(--soft);
@@ -578,7 +585,22 @@ let requestController=null;
 let searchTimer=null;
 let jobTimer=null;
 if(window.mermaid){
-  window.mermaid.initialize({startOnLoad:false,securityLevel:"strict",theme:"neutral"})
+  window.mermaid.initialize({
+    startOnLoad:false,
+    securityLevel:"strict",
+    theme:"base",
+    themeVariables:{
+      background:"#ffffff",
+      primaryColor:"#e8f1ff",
+      primaryTextColor:"#1f2329",
+      primaryBorderColor:"#1664ff",
+      secondaryColor:"#e2f6ef",
+      tertiaryColor:"#f5f8ff",
+      lineColor:"#69758c",
+      textColor:"#1f2329",
+      edgeLabelBackground:"#ffffff"
+    }
+  })
 }
 
 function element(tag,attrs={},children=[]){
