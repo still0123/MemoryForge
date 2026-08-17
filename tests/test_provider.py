@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from urllib.error import HTTPError
 from urllib.request import Request
 
 import pytest
 from pydantic import ValidationError
 
+import memoryforge.query.provider as provider_module
 from memoryforge.code.code_models import ModuleNarrative
 from memoryforge.core.models import CompilationPlan, PageChange, TopicGroup
 from memoryforge.query.provider import (
@@ -14,6 +16,7 @@ from memoryforge.query.provider import (
     ProviderConfig,
     ProviderResponseFormatError,
     ProviderUnavailableError,
+    TraeCliAnswerProvider,
 )
 
 SOURCE_ID = "a" * 64
@@ -88,6 +91,85 @@ def test_provider_config_reads_project_dotenv_without_overriding_environment(
     config = ProviderConfig.from_environment()
 
     assert config == ProviderConfig("https://dotenv.test", "dotenv-key", "environment-model")
+
+
+def test_trae_cli_provider_uses_seed_turbo_without_tools_or_prompt_in_argv(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        captured.update(command=command, **kwargs)
+        output = command[command.index("--output-last-message") + 1]
+        with open(output, "w", encoding="utf-8") as stream:
+            json.dump({"answer": "缓存 60 秒后过期。", "citation_indexes": [0]}, stream)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(provider_module.subprocess, "run", fake_run)
+    provider = TraeCliAnswerProvider(tmp_path / "trae-cli")
+
+    answer, indexes = provider.answer_with_evidence(
+        [{"role": "user", "content": "事实：缓存 60 秒后过期。"}]
+    )
+
+    command = captured["command"]
+    assert isinstance(command, list)
+    assert command[0] == str(tmp_path / "trae-cli")
+    assert command[command.index("-m") + 1] == "Doubao-Seed-2.1-Turbo"
+    assert command[command.index("--sandbox") + 1] == "read-only"
+    assert command[command.index("--allowed-tool") + 1] == "__memoryforge_no_tools__"
+    assert command[-1] == "-"
+    assert "缓存 60 秒后过期" not in " ".join(command)
+    assert "缓存 60 秒后过期" in str(captured["input"])
+    assert answer == "缓存 60 秒后过期。"
+    assert indexes == (0,)
+
+
+def test_trae_cli_provider_rewrites_search_queries(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        output = command[command.index("--output-last-message") + 1]
+        with open(output, "w", encoding="utf-8") as stream:
+            json.dump(
+                {"queries": ["FileNAS 产品定位与职责", "FileNAS 管控面架构"]},
+                stream,
+            )
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(provider_module.subprocess, "run", fake_run)
+
+    queries = TraeCliAnswerProvider(tmp_path / "trae-cli").rewrite_search_queries(
+        "FileNAS是什么"
+    )
+
+    assert queries == ("FileNAS 产品定位与职责", "FileNAS 管控面架构")
+
+
+def test_trae_cli_provider_retries_one_transient_failure(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = 0
+
+    def fake_run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return subprocess.CompletedProcess(command, 1, "", "temporary failure")
+        output = command[command.index("--output-last-message") + 1]
+        with open(output, "w", encoding="utf-8") as stream:
+            json.dump({"answer": "ok", "citation_indexes": [0]}, stream)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(provider_module.subprocess, "run", fake_run)
+
+    result = TraeCliAnswerProvider(tmp_path / "trae-cli").answer_with_evidence([])
+
+    assert result == ("ok", (0,))
+    assert calls == 2
 
 
 def test_provider_posts_expected_chat_completions_request() -> None:

@@ -124,6 +124,11 @@ box-shadow:0 0 0 3px color-mix(in srgb,#e5a13c 22%,transparent)}
 .card{position:relative;min-width:0;padding:18px;background:color-mix(in srgb,var(--panel) 96%,transparent);
 border:1px solid var(--line);border-radius:14px;box-shadow:0 1px 2px rgba(22,100,255,.03)}
 a.card{display:block;color:var(--text);text-decoration:none}
+.card h2,.card h3{margin:0 0 6px;font-size:16px;letter-spacing:-.015em;
+overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.card p{margin:5px 0;color:var(--muted);
+overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-clamp:2;line-height:1.55}
+.card .meta{display:block;margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 a.card::before{content:"";position:absolute;left:-1px;top:14px;bottom:14px;width:3px;border-radius:3px;
 background:var(--accent);opacity:0;transition:opacity .16s ease}
 a.card:hover{border-color:color-mix(in srgb,var(--accent) 48%,var(--line));
@@ -132,8 +137,7 @@ a.card:hover::before{opacity:1}
 a.project-card::before{background:var(--mint)}a.update-card::before{background:#e5a13c}
 a.job-card::before{background:#8e97a8}
 .update-card{cursor:pointer}.card-action{display:block;margin-top:12px;
-color:var(--accent);font-weight:700}.card h2,.card h3{margin:0 0 6px;
-font-size:16px;letter-spacing:-.015em}.card p{margin:5px 0;color:var(--muted)}
+color:var(--accent);font-weight:700}
 .metric-card{position:relative;overflow:hidden;padding:20px 20px 18px}
 .metric-card::before{content:"";position:absolute;inset:0 auto 0 0;width:3px;background:var(--accent)}
 .metric-label{display:block;color:var(--muted);font-size:11px;font-weight:650;letter-spacing:.02em}
@@ -343,25 +347,32 @@ function section(title,description,content){
   ])
 }
 function empty(text){return element("p",{class:"empty",text})}
-function recentPaths(){
+function normalizeRecentItem(item){
+  if(typeof item==="string")return{path:item,title:item.split("/").pop().replace(/\.md$/,"")};
+  if(item&&typeof item==="object"&&typeof item.path==="string")return{path:item.path,title:String(item.title||item.path.split("/").pop().replace(/\.md$/,""))};
+  return null
+}
+function recentItems(){
   try{
     const value=JSON.parse(localStorage.getItem("memoryforge-recent-pages")||"[]");
-    return Array.isArray(value)?value.filter(item=>typeof item==="string").slice(0,8):[]
+    return Array.isArray(value)?value.map(normalizeRecentItem).filter(Boolean).slice(0,8):[]
   }catch(_){return[]}
 }
-function rememberPage(path){
+function recentPaths(){return recentItems().map(item=>item.path)}
+function rememberPage(path,title){
   try{
-    const paths=[path,...recentPaths().filter(item=>item!==path)].slice(0,8);
-    localStorage.setItem("memoryforge-recent-pages",JSON.stringify(paths))
+    const record={path:String(path),title:String(title||path).split("/").pop().replace(/\.md$/,"")};
+    const items=[record,...recentItems().filter(item=>item.path!==record.path)].slice(0,8);
+    localStorage.setItem("memoryforge-recent-pages",JSON.stringify(items))
   }catch(_){}
 }
 function recentGrid(){
-  const paths=recentPaths();
-  if(!paths.length)return empty("还没有最近打开的页面。");
-  return element("div",{class:"grid"},paths.map(path=>
-    element("a",{class:"card",href:"#page="+encodeURIComponent(path)},[
-      element("h3",{text:path.split("/").pop().replace(/\.md$/,"")}),
-      element("small",{class:"meta",text:path})
+  const items=recentItems();
+  if(!items.length)return empty("还没有最近打开的页面。");
+  return element("div",{class:"grid"},items.map(item=>
+    element("a",{class:"card",title:item.title,href:"#page="+encodeURIComponent(item.path)},[
+      element("h3",{text:item.title,title:item.title}),
+      element("small",{class:"meta",text:item.path,title:item.path})
     ])
   ))
 }
@@ -485,7 +496,7 @@ function sourceDetails(items){
 }
 async function renderPage(path){
   const data=await api("/api/page?path="+encodeURIComponent(path));
-  rememberPage(path);
+  rememberPage(path,data.title);
   const body=element("div",{class:"markdown"});
   body.innerHTML=data.html;
   const content=element("article",{},[
@@ -740,24 +751,31 @@ function section(title,description,content){
   ])
 }
 function empty(text){return element("p",{class:"empty",text})}
-function recentPaths(){
+function normalizeRecentItem(item){
+  if(typeof item==="string")return{path:item,title:item.split("/").pop().replace(/\.md$/,"")};
+  if(item&&typeof item==="object"&&typeof item.path==="string")return{path:item.path,title:String(item.title||item.path.split("/").pop().replace(/\.md$/,""))};
+  return null
+}
+function recentItems(){
   try{
     const value=JSON.parse(localStorage.getItem("memoryforge-recent-pages")||"[]");
-    return Array.isArray(value)?value.filter(item=>typeof item==="string").slice(0,8):[]
+    return Array.isArray(value)?value.map(normalizeRecentItem).filter(Boolean).slice(0,8):[]
   }catch(_){return[]}
 }
-function rememberPage(path){
+function recentPaths(){return recentItems().map(item=>item.path)}
+function rememberPage(path,title){
   try{
-    const paths=[path,...recentPaths().filter(item=>item!==path)].slice(0,8);
-    localStorage.setItem("memoryforge-recent-pages",JSON.stringify(paths))
+    const record={path:String(path),title:String(title||path).split("/").pop().replace(/\.md$/,"")};
+    const items=[record,...recentItems().filter(item=>item.path!==record.path)].slice(0,8);
+    localStorage.setItem("memoryforge-recent-pages",JSON.stringify(items))
   }catch(_){}
 }
 function recentGrid(){
-  const paths=recentPaths();
-  if(!paths.length)return empty("还没有最近打开的页面。");
-  return element("div",{class:"grid"},paths.map(path=>
-    element("a",{class:"card",href:"#page="+encodeURIComponent(path)},[
-      element("h3",{text:path.split("/").pop().replace(/\.md$/,"")}),
+  const items=recentItems();
+  if(!items.length)return empty("还没有最近打开的页面。");
+  return element("div",{class:"grid"},items.map(item=>
+    element("a",{class:"card",title:item.title,href:"#page="+encodeURIComponent(item.path)},[
+      element("h3",{text:item.title,title:item.title}),
       element("small",{class:"meta",text:"继续阅读"})
     ])
   ))
@@ -1272,7 +1290,7 @@ function sourceOriginal(item){
 }
 async function renderPage(path){
   let data=await api("/api/page?path="+encodeURIComponent(path));
-  rememberPage(path);
+  rememberPage(path,displayPageTitle(data));
   const body=element("div",{class:"markdown"});body.innerHTML=data.html;
   const more=data.has_more?element("button",{class:"button",type:"button",text:"继续加载正文"}):null;
   if(more)more.addEventListener("click",async()=>{

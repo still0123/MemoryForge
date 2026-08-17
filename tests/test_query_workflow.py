@@ -802,6 +802,141 @@ def test_ask_llm_does_not_egress_local_evidence_without_host_policy(
     assert result["status"] == "unknown"
 
 
+def test_ask_model_uses_wide_multi_query_candidates_before_answering(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    runner, workspace, _ = _workspace_with_imported_source(
+        tmp_path,
+        monkeypatch,
+        "# File services\n\n"
+        "FileNAS-Mgr 负责文件系统、挂载点、权限校验、状态编排与失败恢复。\n\n"
+        "EFS/FileNAS 的业务主链包含存储、网络入口、权限、配额和数据流动。\n",
+    )
+    _apply_pending_source(runner, workspace)
+    captured: list[dict[str, object]] = []
+
+    class StubProvider:
+        def rewrite_search_queries(self, _question: str) -> tuple[str, ...]:
+            return ("FileNAS 产品定位与职责", "FileNAS 管控面架构")
+
+        def answer_with_evidence(
+            self,
+            messages: list[dict[str, str]],
+        ) -> tuple[str, tuple[int, ...]]:
+            payload = json.loads(messages[1]["content"])
+            captured.extend(payload["facts"])
+            index = next(
+                fact["index"] for fact in payload["facts"] if "FileNAS-Mgr" in fact["quote"]
+            )
+            return "FileNAS 是文件存储管控产品，负责资源与状态编排。", (index,)
+
+    result = query_module.answer_question(
+        workspace,
+        "FileNAS是什么",
+        provider=StubProvider(),  # type: ignore[arg-type]
+    )
+
+    assert result["status"] == "answered"
+    assert result["model_status"] == "used"
+    assert "FileNAS-Mgr" in result["citations"][0]["quote"]
+    assert captured
+
+
+def test_ask_model_failure_falls_back_to_wide_retrieval_candidates(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    runner, workspace, _ = _workspace_with_imported_source(
+        tmp_path,
+        monkeypatch,
+        "# File services\n\n"
+        "FileNAS-Mgr 负责文件系统、挂载点、权限校验、状态编排与失败恢复。\n",
+    )
+    _apply_pending_source(runner, workspace)
+
+    class UnavailableProvider:
+        def rewrite_search_queries(self, _question: str) -> tuple[str, ...]:
+            return ("FileNAS 产品职责", "FileNAS 管控面")
+
+        def answer_with_evidence(self, _messages: object) -> tuple[str, tuple[int, ...]]:
+            raise ProviderUnavailableError("temporary outage")
+
+    result = query_module.answer_question(
+        workspace,
+        "FileNAS是什么",
+        provider=UnavailableProvider(),  # type: ignore[arg-type]
+    )
+
+    assert result["status"] == "answered"
+    assert result["model_status"] == "fallback"
+    assert "FileNAS-Mgr" in result["answer"]
+
+
+def test_model_failure_prefers_readable_fact_over_source_table() -> None:
+    table = {
+        "source_id": "a" * 64,
+        "source_version": 1,
+        "locator": "chars:0-50",
+        "quote": "| 仓库 | 说明 | |---|---| | FileNAS | source |",
+        "grounding": "exact",
+        "section_path": "来源索引",
+    }
+    prose = {
+        "source_id": "b" * 64,
+        "source_version": 2,
+        "locator": "chars:0-80",
+        "quote": "FileNAS-Mgr 负责文件系统、权限校验、状态编排与失败恢复。",
+        "grounding": "exact",
+        "section_path": "产品职责",
+    }
+    matches = [
+        ((100,), "wiki/pages/table.md", table),
+        ((90,), "wiki/pages/prose.md", prose),
+    ]
+
+    selected = query_module._top_matches(
+        query_module._prefer_readable_fallbacks(matches),  # type: ignore[arg-type]
+        1,
+        question_terms={"filenas"},
+    )
+
+    assert selected[0][1]["quote"].startswith("FileNAS-Mgr")
+
+
+def test_ask_trae_uses_explicitly_authorized_local_evidence(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    runner, workspace, _ = _workspace_with_imported_source(
+        tmp_path,
+        monkeypatch,
+        "# EFS\n\n官方口径中，EFS 是弹性共享文件存储服务。\n",
+        local_only=True,
+    )
+    _apply_pending_source(runner, workspace)
+    captured: list[object] = []
+
+    class StubTraeProvider:
+        accepts_local_evidence = True
+
+        def answer_with_evidence(self, messages: object) -> tuple[str, tuple[int, ...]]:
+            captured.append(messages)
+            return "EFS 是弹性共享文件存储服务。", (0,)
+
+    result = query_module.answer_question(
+        workspace,
+        "EFS是什么？",
+        provider=StubTraeProvider(),  # type: ignore[arg-type]
+        allow_local=True,
+    )
+
+    assert result["status"] == "answered"
+    assert result["model_status"] == "used"
+    assert result["answer"] == "EFS 是弹性共享文件存储服务。"
+    assert captured
+
+
 def test_ask_cli_uses_llm_only_when_explicitly_requested(tmp_path: Path, monkeypatch) -> None:
     runner, workspace, _ = _workspace_with_imported_source(
         tmp_path,
@@ -1464,6 +1599,7 @@ def test_candidate_pages_definition_question_prefers_explanatory_page(
         trace=[],
         repository_id=None,
         prefer_index_routes=True,
+        preferred_page_paths=("wiki/pages/guide.md",),
     )
 
     assert selected == [official_page]
@@ -1799,6 +1935,56 @@ def test_ask_does_not_define_a_subject_from_an_incidental_mention(
 
     assert result["evidence_status"] == "no_local_evidence"
     assert result["citations"] == []
+
+
+def test_ask_answers_what_kind_of_project_from_definition_not_quickstart(
+    tmp_path: Path,
+) -> None:
+    pages = tmp_path / "wiki/pages"
+    pages.mkdir(parents=True)
+    (tmp_path / "wiki/INDEX.md").write_text(
+        "# Knowledge Index\n\n"
+        "- [MemoryForge / 快速开始](pages/quickstart.md) — MemoryForge 项目使用命令\n"
+        "- [MemoryForge Benchmark](pages/benchmark.md) — MemoryForge 项目指标\n"
+        "- [MemoryForge 项目介绍](pages/definition.md) — MemoryForge 是本地知识编译器\n",
+        encoding="utf-8",
+    )
+    (pages / "quickstart.md").write_text(
+        _wiki_page(
+            "memoryforge import /absolute/path/to/design.md --workspace ./my-wiki "
+            "memoryforge apply <changeset-id> --workspace ./my-wiki"
+        ),
+        encoding="utf-8",
+    )
+    (pages / "benchmark.md").write_text(
+        _wiki_page("| 指标 | MemoryForge | Raw FTS | | 准确率 | 96.7% | 不适用 |"),
+        encoding="utf-8",
+    )
+    (pages / "definition.md").write_text(
+        _wiki_page(
+            "> MemoryForge 是一个本地优先的技术知识 Wiki 编译器。"
+            "它把多来源资料整理成可审核、可追溯的知识。"
+        ),
+        encoding="utf-8",
+    )
+
+    result = query_module.answer_question(tmp_path, "memoryforge是一个什么项目")
+
+    assert result["status"] == "answered"
+    assert result["answer"].startswith("MemoryForge 是一个本地优先的技术知识 Wiki 编译器。")
+    assert "memoryforge import" not in result["answer"]
+    assert not result["answer"].startswith(">")
+
+
+def test_definition_evidence_accepts_project_positioning_but_not_tables() -> None:
+    assert query_module._text_defines_subject(
+        "MemoryForge 的思路是**编译**：先整理资料，再发布 Wiki。",
+        "memoryforge",
+    )
+    assert not query_module._text_defines_subject(
+        "| 指标 | MemoryForge | Raw FTS |",
+        "memoryforge",
+    )
 
 
 def test_ask_does_not_define_an_abbreviation_from_a_namespace_match(

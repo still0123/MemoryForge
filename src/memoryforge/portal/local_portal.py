@@ -34,7 +34,7 @@ from memoryforge.portal.portal_jobs import (
 )
 from memoryforge.portal.showcase import _display_wiki_text, _markdown_document, _markdown_html
 from memoryforge.query.agent_access import _named_repository_scope
-from memoryforge.query.provider import OpenAICompatibleProvider
+from memoryforge.query.provider import EvidenceAnswerProvider, OpenAICompatibleProvider
 from memoryforge.query.query import (
     DEFAULT_QUERY_MAX_CITATIONS,
     DEFAULT_QUERY_MAX_PAGES,
@@ -336,11 +336,12 @@ class LocalPortalApp:
         workspace: Path,
         *,
         provider: OpenAICompatibleProvider | None = None,
+        answer_provider: EvidenceAnswerProvider | None = None,
         allow_local_llm: bool = False,
     ) -> None:
         self.workspace = Workspace.open_readonly(workspace)
         self.root = self.workspace.root
-        self.provider = provider
+        self.provider = answer_provider or provider
         self.allow_local_llm = allow_local_llm
         self._catalog_cache: PortalCatalog | None = None
         self._catalog_lock = Lock()
@@ -957,11 +958,13 @@ class LocalPortalServer(ThreadingHTTPServer):
         port: int = 8765,
         *,
         provider: OpenAICompatibleProvider | None = None,
+        answer_provider: EvidenceAnswerProvider | None = None,
         allow_local_llm: bool = False,
     ) -> None:
         self.app = LocalPortalApp(
             workspace,
             provider=provider,
+            answer_provider=answer_provider,
             allow_local_llm=allow_local_llm,
         )
         super().__init__((_HOST, port), make_handler(self.app))

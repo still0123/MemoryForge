@@ -9,6 +9,7 @@ import re
 import sqlite3
 import uuid
 from collections import Counter
+from collections.abc import Iterable
 from contextlib import suppress
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, Literal
@@ -29,7 +30,7 @@ from memoryforge.query.contracts import (
     SupportPayload,
     TraceStep,
 )
-from memoryforge.query.provider import OpenAICompatibleProvider, ProviderUnavailableError
+from memoryforge.query.provider import EvidenceAnswerProvider, ProviderUnavailableError
 from memoryforge.query.support import (
     _CAPABILITY_MARKERS,
     _CJK,
@@ -41,6 +42,7 @@ from memoryforge.query.support import (
     _citation_fact_key,
     _citation_terms,
     _code_identifier_tokens,
+    _content_question_terms,
     _expanded_question_terms,
     _explicit_code_identifiers,
     _has_direct_evidence,
@@ -98,7 +100,7 @@ def answer_question(
     max_pages: int = DEFAULT_QUERY_MAX_PAGES,
     max_citations: int = DEFAULT_QUERY_MAX_CITATIONS,
     min_source_count: int = 1,
-    provider: OpenAICompatibleProvider | None = None,
+    provider: EvidenceAnswerProvider | None = None,
     allow_local: bool = False,
     public_only: bool = False,
     repository_id: str | None = None,
@@ -122,15 +124,12 @@ def answer_question(
     explicit_routing_base_terms = _terms(
         " ".join((*explicit_titles, "飞书文档", "飞书资料", "AI", "Codex", "Claude", "会话"))
     )
-    explicit_routing_terms = _expanded_question_terms(explicit_routing_base_terms)
     content_base_question_terms = (
-        base_question_terms - explicit_routing_base_terms
+        _content_question_terms(question) - explicit_routing_base_terms
         if explicit_titles
-        else base_question_terms
+        else _content_question_terms(question)
     )
-    content_question_terms = (
-        question_terms - explicit_routing_terms if explicit_titles else question_terms
-    )
+    content_question_terms = _expanded_question_terms(content_base_question_terms)
     identifier_terms = {term for term in content_base_question_terms if not _CJK.fullmatch(term)}
     definition_question = _is_definition_question(question)
     definition_subject = _definition_subject(question)
@@ -236,6 +235,16 @@ def answer_question(
         )
 
     retrieval_debug: dict[str, Any] = {}
+    search_queries = (question,)
+    rewrite_search_queries = getattr(provider, "rewrite_search_queries", None)
+    if callable(rewrite_search_queries) and not explicit_titles and not symbol_matches:
+        try:
+            search_queries = tuple(
+                dict.fromkeys((question, *rewrite_search_queries(question)))
+            )
+        except (ProviderUnavailableError, ValueError) as exc:
+            logging.debug("query rewrite unavailable, using original question: %s", exc)
+    retrieval_debug["query_variants"] = list(search_queries)
     egress_request: EgressRequest | None = None
     try:
         safe_repo = repository_id if repository_id else "default"
@@ -267,10 +276,9 @@ def answer_question(
                 )
 
             visible: VisibleSource = _visible_source
-            applied_wiki_facts_list = _retrieval_wiki_facts(
-                workspace_root,
-                repository_id,
-                question,
+            applied_wiki_facts_list = _merge_retrieval_facts(
+                _retrieval_wiki_facts(workspace_root, repository_id, search_query)
+                for search_query in search_queries
             )
             if strict_source_kind is not None:
                 applied_wiki_facts_list = [
@@ -290,8 +298,9 @@ def answer_question(
                     question,
                     repository_id=repository_id,
                     visible_source=visible,
-                    max_pages=max_pages,
+                    max_pages=max_pages * 4,
                     wiki_facts=applied_wiki_facts_list,
+                    query_variants=search_queries[1:],
                 )
                 retrieval_debug["routes"] = list(retrieval_v2_result.routes)
                 retrieval_debug["semantic_status"] = retrieval_v2_result.semantic_status
@@ -328,6 +337,12 @@ def answer_question(
         )
         if retrieval_v2_result is not None
         else explicit_source_page_paths
+    )
+    retrieval_model_matches = _retrieval_candidate_matches(
+        retrieval_v2_result,
+        applied_wiki_facts_list if retrieval_v2_result is not None else [],
+        content_question_terms,
+        set().union(*(_content_question_terms(query) for query in search_queries)),
     )
 
     candidate_pages = (
@@ -581,7 +596,7 @@ def answer_question(
         if _has_direct_evidence(content_question_terms, match[2])
     ]
 
-    if not matches and (provider is None or not model_candidates):
+    if not matches and (provider is None or not (retrieval_model_matches or model_candidates)):
         return _unknown_payload(debug, trace)
 
     model_status: Literal["used", "fallback"] | None = None
@@ -598,17 +613,18 @@ def answer_question(
             required_source_groups=required_source_groups,
             minimum_citations=answer_citation_limit,
         )
-        answer = (
-            _fallback_answer(question, selected)
-            if "方法" in question
-            else " ".join(citation["quote"] for _, citation in selected)
-        )
+        answer = _fallback_answer(question, selected)
     else:
+        generation_matches = _merge_model_matches(
+            matches,
+            retrieval_model_matches,
+            model_candidates,
+        )
         try:
             generated = _model_answer(
                 workspace_root,
                 question,
-                matches or model_candidates,
+                generation_matches,
                 provider,
                 allow_local=allow_local,
                 conversation_context=conversation_context,
@@ -617,18 +633,18 @@ def answer_question(
         except ProviderUnavailableError:
             module_fallbacks = [
                 match
-                for match in model_candidates
+                for match in generation_matches
                 if match[2]["quote"].startswith("Main exported operations in `")
             ]
             fallback_matches = _usable_matches(
                 workspace_root,
-                module_fallbacks or matches,
+                module_fallbacks or generation_matches,
                 allow_local=allow_local,
             )
             if not fallback_matches:
                 return _unknown_payload(debug, trace)
             selected = _top_matches(
-                fallback_matches,
+                _prefer_readable_fallbacks(fallback_matches),
                 answer_citation_limit,
                 question_terms=citation_question_terms,
                 required_sources=min_source_count,
@@ -800,7 +816,7 @@ def _model_answer(
     workspace_root: Path,
     question: str,
     matches: list[tuple[tuple[int, ...], str, CitationPayload]],
-    provider: OpenAICompatibleProvider,
+    provider: EvidenceAnswerProvider,
     *,
     allow_local: bool,
     conversation_context: str,
@@ -866,7 +882,10 @@ def _model_answer(
                                 source_version=source_version,
                                 sensitivity=Sensitivity(str(row[0])),
                             )
-                            if not decision.allowed:
+                            if not decision.allowed and not (
+                                allow_local
+                                and getattr(provider, "accepts_local_evidence", False)
+                            ):
                                 return None
                         record_disclosure(
                             conn,
@@ -985,18 +1004,18 @@ def _fallback_answer(
     question: str,
     selected: list[tuple[str, CitationPayload]],
 ) -> str:
-    quote = selected[0][1]["quote"]
+    quote = _plain_fact_text(selected[0][1]["quote"])
     if "方法" in _terms(question):
         signature = next(
             (
-                citation["quote"]
+                _plain_fact_text(citation["quote"])
                 for _, citation in selected
                 if citation["quote"].startswith("func ")
             ),
             quote,
         )
         body_lines = [
-            citation["quote"].strip().rstrip("{").strip()
+            _plain_fact_text(citation["quote"]).rstrip("{").strip()
             for _, citation in selected
             if not citation["quote"].startswith("func ")
         ]
@@ -1007,7 +1026,7 @@ def _fallback_answer(
         operations = quote.partition(": ")[2]
         if any(_CJK.fullmatch(term) for term in _terms(question)):
             return f"{module} 模块主要导出这些操作：{operations}。"
-    return " ".join(citation["quote"] for _, citation in selected)
+    return " ".join(_plain_fact_text(citation["quote"]) for _, citation in selected)
 
 
 def _unknown_payload(
@@ -1213,7 +1232,7 @@ def _retrieval_wiki_facts(
     database = workspace_root / DATABASE_RELATIVE_PATH
     if not database.is_file() or database.is_symlink():
         return []
-    expanded_terms = _expanded_question_terms(_terms(question))
+    expanded_terms = _expanded_question_terms(_content_question_terms(question))
     identifier_terms = _question_identifier_terms(question)
     try:
         with _connect_readonly(database) as connection:
@@ -1268,6 +1287,101 @@ def _retrieval_wiki_facts(
     return [dict(row) for row in rows]
 
 
+def _merge_retrieval_facts(
+    groups: Iterable[list[dict[str, Any]]],
+) -> list[dict[str, Any]]:
+    merged: dict[tuple[str, str, int, str], dict[str, Any]] = {}
+    for facts in groups:
+        for fact in facts:
+            key = (
+                str(fact["page_path"]),
+                str(fact["source_id"]),
+                int(fact["source_version"]),
+                str(fact["locator"]),
+            )
+            merged.setdefault(key, fact)
+    return list(merged.values())
+
+
+def _retrieval_candidate_matches(
+    result: RetrievalResult | None,
+    facts: list[dict[str, Any]],
+    question_terms: set[str],
+    search_terms: set[str],
+) -> list[tuple[tuple[int, ...], str, CitationPayload]]:
+    if result is None:
+        return []
+    by_key = {
+        (
+            str(fact["page_path"]),
+            str(fact["source_id"]),
+            int(fact["source_version"]),
+            str(fact["locator"]),
+        ): fact
+        for fact in facts
+    }
+    matches: list[tuple[tuple[int, ...], str, CitationPayload]] = []
+    page_counts: Counter[str] = Counter()
+    for index, candidate in enumerate(result.candidates):
+        if len(matches) >= 18:
+            break
+        if page_counts[candidate.page_path] >= 3:
+            continue
+        key = (
+            candidate.page_path,
+            candidate.source_id,
+            candidate.source_version,
+            candidate.locator,
+        )
+        fact = by_key.get(key)
+        if fact is None:
+            continue
+        citation: CitationPayload = {
+            "source_id": candidate.source_id,
+            "source_version": candidate.source_version,
+            "locator": candidate.locator,
+            "quote": str(fact["quote"]),
+            "grounding": "exact",
+        }
+        if fact.get("section_path"):
+            citation["section_path"] = str(fact["section_path"])
+        if fact.get("routing_text"):
+            citation["routing_text"] = str(fact["routing_text"])
+        required_overlap = 1 if len(question_terms) <= 1 else 2
+        if len(_matching_terms(search_terms, citation)) < required_overlap:
+            continue
+        matches.append(((len(result.candidates) - index,), candidate.page_path, citation))
+        page_counts[candidate.page_path] += 1
+    return matches
+
+
+def _merge_model_matches(
+    *groups: list[tuple[tuple[int, ...], str, CitationPayload]],
+) -> list[tuple[tuple[int, ...], str, CitationPayload]]:
+    merged: list[tuple[tuple[int, ...], str, CitationPayload]] = []
+    seen: set[tuple[str, str, int, str, str]] = set()
+    for group in groups:
+        for match in group:
+            key = _citation_fact_key(match[1], match[2])
+            if key not in seen:
+                seen.add(key)
+                merged.append(match)
+    return merged
+
+
+def _prefer_readable_fallbacks(
+    matches: list[tuple[tuple[int, ...], str, CitationPayload]],
+) -> list[tuple[tuple[int, ...], str, CitationPayload]]:
+    ranked = []
+    for score, page_path, citation in matches:
+        quote = citation["quote"].lstrip()
+        section = citation.get("section_path", "").lower()
+        readable = not quote.startswith(("|", "```", "flowchart", "sequenceDiagram"))
+        substantive = not any(marker in section for marker in ("来源", "索引", "source"))
+        ranked.append(((int(readable), int(substantive), *score), page_path, citation))
+    return ranked
+
+
 def _expanded_fts_query(expanded_terms: set[str], question: str) -> str:
     """FTS query over expanded terms; falls back to the raw question tokens."""
     terms = [term for term in expanded_terms if _FTS_SAFE.fullmatch(term)]
@@ -1306,6 +1420,7 @@ def _candidate_pages(
     index = wiki_root / "INDEX.md"
     scored: list[tuple[tuple[int, ...], bool, Path]] = []
     definition_question = _is_definition_question(question)
+    definition_subject = _definition_subject(question)
     allowed_paths = (
         set(repository_page_paths(workspace_root, repository_id))
         if repository_id is not None
@@ -1336,6 +1451,11 @@ def _candidate_pages(
             overlap = question_terms & _terms(f"{title} {entry.group('summary')}")
             if overlap:
                 module_path = _title_module_path(title)
+                definition_score = _definition_title_score(title)
+                if definition_subject and _text_defines_subject(
+                    entry.group("summary"), definition_subject
+                ):
+                    definition_score += 3
                 question_identifiers = {term for term in question_terms if not _CJK.fullmatch(term)}
                 extra_module_parts = (
                     len(set(module_path.split("/")) - question_identifiers) if module_path else 0
@@ -1344,7 +1464,7 @@ def _candidate_pages(
                     (
                         (
                             int(module_path is not None),
-                            _definition_title_score(title) if definition_question else 0,
+                            definition_score if definition_question else 0,
                             int(definition_question and _is_definition_title(title, question)),
                             -extra_module_parts if module_path is not None else 0,
                             sum(not _CJK.fullmatch(term) for term in overlap),
@@ -1416,6 +1536,11 @@ def _candidate_pages(
     explanatory_pages = [
         page for score, code_title, page in ranked_index if not score[0] and not code_title
     ]
+    definition_pages = [
+        page
+        for score, code_title, page in ranked_index
+        if not score[0] and not code_title and score[1] >= 3
+    ]
     has_explanatory_definition = any(
         not code_title and (score[1] or score[2]) for score, code_title, _ in ranked_index
     )
@@ -1440,8 +1565,9 @@ def _candidate_pages(
     ]
     if definition_question:
         ordered_pages = (
-            *explanatory_pages,
+            *definition_pages,
             *fact_pages,
+            *explanatory_pages,
             *strict_pages,
             *module_pages,
             *code_index_pages,
@@ -1468,7 +1594,17 @@ def _candidate_pages(
             max_pages=candidate_limit,
             repository_id=repository_id,
         )
-    ordered_pages = (*exact_symbol_pages, *exact_code_pages, *preferred_pages, *ordered_pages)
+    ordered_pages = (
+        (
+            *exact_symbol_pages,
+            *exact_code_pages,
+            *definition_pages,
+            *preferred_pages,
+            *ordered_pages,
+        )
+        if definition_question
+        else (*exact_symbol_pages, *exact_code_pages, *preferred_pages, *ordered_pages)
+    )
     if (exact_symbol_pages or exact_code_pages) and (
         not _is_code_relation_question(question)
         or any(marker in question for marker in ("方法", "字段", "属性", "函数"))
@@ -2157,13 +2293,20 @@ def _definition_subject(question: str) -> str | None:
         r"\s*(?:"
         r"什么是\s*(?P<prefix>[A-Za-z][A-Za-z0-9_-]*|[\u4e00-\u9fff]{1,12})"
         r"|(?P<suffix>[A-Za-z][A-Za-z0-9_-]*|[\u4e00-\u9fff]{1,12})"
-        r"\s*(?:是什么|是什么意思|是啥)"
+        r"\s*(?:是什么|是什么意思|是啥|是(?:一个|个)?什么(?:样的)?(?:项目|工具|系统|平台|产品))"
         r")[？?]?\s*",
         question,
     )
     if match is None:
         return None
     return match["prefix"] or match["suffix"]
+
+
+def _plain_fact_text(text: str) -> str:
+    text = re.sub(r"(?m)^\s*(?:>\s*)+", "", text)
+    text = re.sub(r"\s+>\s+", " ", text)
+    text = re.sub(r"\*\*([^*\n]+)\*\*", r"\1", text)
+    return text.strip()
 
 
 def _defines_subject(
@@ -2175,11 +2318,16 @@ def _defines_subject(
 ) -> bool:
     if code_page:
         return _is_code_definition_fact(citation, identifier_terms)
-    quote = re.sub(r"[`*_]", "", citation["quote"])
+    return _text_defines_subject(citation["quote"], subject)
+
+
+def _text_defines_subject(text: str, subject: str) -> bool:
+    searchable = re.sub(r"[`*_]", "", _plain_fact_text(text))
     return (
         re.search(
-            rf"(?:^|[\n|。；])\s*{re.escape(subject)}\s*(?:\||是|指|表示|：|:)",
-            quote,
+            rf"(?:^|[\n。；,，:：])\s*{re.escape(subject)}\s*"
+            rf"(?:是|为|指|表示|的(?:定位|思路|用途|作用)是)",
+            searchable,
             re.IGNORECASE,
         )
         is not None
@@ -2187,7 +2335,9 @@ def _defines_subject(
 
 
 def _is_definition_question(question: str) -> bool:
-    return any(marker in question for marker in ("是什么", "什么是", "是啥", "简介", "介绍一下"))
+    return _definition_subject(question) is not None or any(
+        marker in question for marker in ("是什么", "什么是", "是啥", "简介", "介绍一下")
+    )
 
 
 def _is_definition_title(title: str, question: str) -> bool:

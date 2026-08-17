@@ -9,9 +9,9 @@ from typing import Any, Literal, cast
 from memoryforge.core.retrieval_models import RetrievalCandidate, RetrievalResult, VisibleSource
 from memoryforge.core.tokenization import bigram_tokens
 from memoryforge.query.support import (
+    _content_question_terms,
     _expanded_question_terms,
     _explicit_code_identifiers,
-    _terms,
 )
 
 _TOKEN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*|\w+", re.UNICODE)
@@ -69,6 +69,7 @@ def retrieve_candidates(
     wiki_facts: list[dict[str, Any]] | None = None,
     code_symbols: list[dict[str, Any]] | None = None,
     code_relations: list[dict[str, Any]] | None = None,
+    query_variants: tuple[str, ...] = (),
 ) -> RetrievalResult:
     if wiki_facts is None:
         wiki_facts = []
@@ -97,13 +98,19 @@ def retrieve_candidates(
     if exact_hits:
         routes.append("exact")
 
-    question_terms = _terms(question)
+    question_terms = _content_question_terms(question)
     expanded_terms = sorted(
         term for term in _expanded_question_terms(question_terms) - question_terms if term.isascii()
     )
-    lexical_hits = _lexical_lane(" ".join((question, *expanded_terms)), facts)
+    lexical_lists = [
+        _lexical_lane(" ".join((variant, *expanded_terms)), facts)
+        for variant in dict.fromkeys((question, *query_variants))
+    ]
+    lexical_hits = _rrf_hits(lexical_lists)
     if lexical_hits:
         routes.append("lexical")
+    if len(lexical_lists) > 1:
+        routes.append("multi_query")
 
     symbol_ids_from_hits: set[str] = set()
     for fact, _rank in exact_hits + lexical_hits:
@@ -343,6 +350,32 @@ def _lexical_lane(
     for rank, (idx, _s) in enumerate(scores[:20], start=1):
         result.append((facts[idx], rank))
     return result
+
+
+def _rrf_hits(
+    ranked_lists: list[list[tuple[dict[str, Any], int]]],
+) -> list[tuple[dict[str, Any], int]]:
+    scored: dict[tuple[str, str, int, str], tuple[dict[str, Any], float]] = {}
+    for ranked in ranked_lists:
+        for fact, rank in ranked:
+            key = (
+                str(fact["page_path"]),
+                str(fact["source_id"]),
+                int(fact["source_version"]),
+                str(fact["locator"]),
+            )
+            previous = scored.get(key)
+            score = (previous[1] if previous else 0.0) + 1.0 / (60.0 + rank)
+            scored[key] = (fact, score)
+    ordered = sorted(
+        scored.values(),
+        key=lambda item: (
+            -item[1],
+            str(item[0]["page_path"]),
+            str(item[0]["locator"]),
+        ),
+    )
+    return [(fact, rank) for rank, (fact, _score) in enumerate(ordered[:40], start=1)]
 
 
 def _relation_lane(

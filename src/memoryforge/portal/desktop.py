@@ -16,6 +16,7 @@ from typing import Any, Protocol, cast
 
 from memoryforge.core.errors import MemoryForgeError, WorkspaceError
 from memoryforge.portal.local_portal import LocalPortalServer
+from memoryforge.query.provider import default_trae_cli_provider
 
 _HOST = "127.0.0.1"
 _STATE_FILE = "desktop.json"
@@ -153,7 +154,12 @@ def run_desktop(
 
     webview = _load_webview()
     try:
-        server = LocalPortalServer(selected, port=0)
+        server = LocalPortalServer(
+            selected,
+            port=0,
+            answer_provider=default_trae_cli_provider(),
+            allow_local_llm=True,
+        )
     except (FileNotFoundError, WorkspaceError) as exc:
         raise DesktopAppError(
             "所选目录不是已初始化的 MemoryForge Workspace。"

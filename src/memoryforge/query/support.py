@@ -42,6 +42,9 @@ _STOP_WORDS = {
     "who",
     "why",
     "了",
+    "与",
+    "和",
+    "或",
     "什么",
     "是",
     "的",
@@ -72,6 +75,21 @@ _CODE_QUERY_EXPANSIONS = {
     "性能": {"performance", "performancedensity"},
     "预置": {"provisioned", "provisionedbandwidth"},
 }
+_QUESTION_PHRASE_REPLACEMENTS = (
+    ("有什么区别", "区别"),
+    ("有什么不同", "不同"),
+    ("是什么", " "),
+    ("什么意思", " "),
+    ("是啥", " "),
+    ("什么是", " "),
+    ("有哪些", " "),
+    ("如何", " "),
+    ("怎么样", " "),
+    ("怎么", " "),
+    ("为什么", " "),
+    ("请问", " "),
+    ("介绍一下", " "),
+)
 _CODE_FACT = re.compile(r"^(?:package|type|func|class|def)\b")
 _SUPPORT_THRESHOLD = 75.0
 _SUPPORT_CODE_KIND_TERMS = {
@@ -593,3 +611,9 @@ def _expanded_question_terms(question_terms: set[str]) -> set[str]:
     if {"不可", "可用"} & question_terms:
         expanded.update(_FAILURE_TERM_EXPANSIONS)
     return expanded
+
+
+def _content_question_terms(text: str) -> set[str]:
+    for phrase, replacement in _QUESTION_PHRASE_REPLACEMENTS:
+        text = text.replace(phrase, replacement)
+    return _terms(text)

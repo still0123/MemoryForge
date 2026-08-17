@@ -79,13 +79,23 @@ def test_run_desktop_embeds_loopback_portal_and_closes_server(
     workspace.mkdir()
     events: list[str] = []
     captured: dict[str, object] = {}
+    answer_provider = object()
 
     class FakeServer:
         server_address = ("127.0.0.1", 45837)
 
-        def __init__(self, root: Path, *, port: int) -> None:
+        def __init__(
+            self,
+            root: Path,
+            *,
+            port: int,
+            answer_provider: object,
+            allow_local_llm: bool,
+        ) -> None:
             assert root == workspace.resolve()
             assert port == 0
+            assert answer_provider is captured["answer_provider"]
+            assert allow_local_llm is True
 
         def serve_forever(self, *, poll_interval: float) -> None:
             assert poll_interval == 0.5
@@ -106,6 +116,8 @@ def test_run_desktop_embeds_loopback_portal_and_closes_server(
             events.append("window")
 
     monkeypatch.setattr(desktop, "LocalPortalServer", FakeServer)
+    captured["answer_provider"] = answer_provider
+    monkeypatch.setattr(desktop, "default_trae_cli_provider", lambda: answer_provider)
     monkeypatch.setattr(desktop, "_load_webview", lambda: FakeWebView())
 
     desktop.run_desktop(workspace, state_path=tmp_path / "desktop.json")
@@ -116,6 +128,7 @@ def test_run_desktop_embeds_loopback_portal_and_closes_server(
         "width": 1320,
         "height": 900,
         "min_size": (960, 640),
+        "answer_provider": answer_provider,
     }
     assert events[-2:] == ["shutdown", "close"]
 
@@ -130,11 +143,19 @@ def test_run_desktop_explains_when_selected_folder_is_not_a_workspace(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     class InvalidServer:
-        def __init__(self, root: Path, *, port: int) -> None:
-            del root, port
+        def __init__(
+            self,
+            root: Path,
+            *,
+            port: int,
+            answer_provider: object,
+            allow_local_llm: bool,
+        ) -> None:
+            del root, port, answer_provider, allow_local_llm
             raise WorkspaceError("MemoryForge workspace is not initialized")
 
     monkeypatch.setattr(desktop, "LocalPortalServer", InvalidServer)
+    monkeypatch.setattr(desktop, "default_trae_cli_provider", object)
     monkeypatch.setattr(desktop, "_load_webview", lambda: object())
 
     with pytest.raises(desktop.DesktopAppError, match="不是已初始化"):

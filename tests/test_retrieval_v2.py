@@ -311,6 +311,47 @@ def test_rrf_dedupe_and_tiebreak_stable() -> None:
             assert (a.page_path, a.source_id, a.locator) < (b.page_path, b.source_id, b.locator)
 
 
+def test_multi_query_rrf_recovers_complementary_wording() -> None:
+    facts = [
+        {
+            "page_path": "wiki/pages/filenas.md",
+            "source_id": SRC_A,
+            "source_version": 1,
+            "locator": "chars:0-80",
+            "section_path": "产品定位",
+            "quote": "FileNAS 管控面负责文件系统、挂载点、权限和状态恢复。",
+            "routing_text": "FileNAS 产品定位 管控面 架构 职责",
+            "symbol": None,
+            "relation_type": None,
+            "repository_id": None,
+        },
+        {
+            "page_path": "wiki/pages/unrelated.md",
+            "source_id": SRC_B,
+            "source_version": 1,
+            "locator": "chars:0-80",
+            "section_path": "其他",
+            "quote": "系统提供通用项目说明。",
+            "routing_text": "项目 介绍",
+            "symbol": None,
+            "relation_type": None,
+            "repository_id": None,
+        },
+    ]
+
+    result = retrieve_candidates(
+        Path("/tmp"),
+        "这个产品是什么",
+        repository_id=None,
+        visible_source=_all_visible,
+        wiki_facts=facts,
+        query_variants=("FileNAS 产品定位与职责", "FileNAS 管控面架构"),
+    )
+
+    assert "multi_query" in result.routes
+    assert result.candidates[0].page_path == "wiki/pages/filenas.md"
+
+
 def test_visibility_filters_before_scoring() -> None:
     facts = _make_facts()
 
