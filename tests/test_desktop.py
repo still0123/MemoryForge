@@ -190,6 +190,7 @@ def test_windows_build_script_creates_gui_executable_contract() -> None:
 
     assert "--windowed" in script
     assert "--onefile" in script
+    assert "portal\\vendor;memoryforge\\portal\\vendor" in script
     assert "dist\\MemoryForge.exe" in script
     assert "scripts/windows_desktop_app.py" in script
     assert "from memoryforge.portal.desktop import main" in entrypoint

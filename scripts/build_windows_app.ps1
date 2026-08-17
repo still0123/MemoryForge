@@ -25,6 +25,7 @@ if ([string]::IsNullOrWhiteSpace($Python)) {
     --onefile `
     --name MemoryForge `
     --paths src `
+    --add-data "$Root\src\memoryforge\portal\vendor;memoryforge\portal\vendor" `
     --specpath build `
     --exclude-module mypy `
     --exclude-module pytest `

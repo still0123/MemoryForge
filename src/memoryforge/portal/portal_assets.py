@@ -9,6 +9,7 @@ INDEX_HTML = """<!doctype html>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>MemoryForge 本地知识门户</title>
 <link rel="stylesheet" href="/app.css">
+<script src="/vendor/mermaid.min.js" defer></script>
 <script src="/app.js" defer></script>
 </head>
 <body>
@@ -165,6 +166,7 @@ border:1px solid color-mix(in srgb,var(--accent) 14%,transparent);border-radius:
 .badge::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.75}
 .badge.warn{color:var(--warn);background:color-mix(in srgb,var(--warn) 12%,var(--panel));
 border-color:color-mix(in srgb,var(--warn) 26%,transparent)}
+.badge-row{display:flex;flex-wrap:wrap;gap:8px}
 .breadcrumbs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:15px;color:var(--muted);font-size:12px}
 .breadcrumbs a{color:var(--muted);text-decoration:none}.breadcrumbs a:hover{color:var(--accent)}
 .breadcrumbs a:not(:last-child)::after{content:"/";margin-left:6px;color:var(--line)}
@@ -192,6 +194,8 @@ border-bottom:1px solid var(--line);font-size:23px}.markdown h3{margin:1.6em 0 .
 background:linear-gradient(135deg,var(--accent),var(--mint));margin-right:10px;vertical-align:2px}
 .markdown pre{padding:14px 16px;background:var(--code);border:1px solid var(--line);
 border-radius:10px;overflow:auto;font-size:13.5px}
+.markdown pre.mermaid{display:flex;justify-content:center;background:var(--panel);min-height:120px}
+.markdown pre.mermaid svg{max-width:100%;height:auto}
 .markdown :not(pre)>code{padding:2px 6px;background:var(--code);border:1px solid var(--line);
 border-radius:5px;font-size:.88em}code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
 .markdown blockquote{margin-left:0;padding:10px 14px;color:var(--muted);background:var(--soft);
@@ -573,6 +577,9 @@ let csrfToken="";
 let requestController=null;
 let searchTimer=null;
 let jobTimer=null;
+if(window.mermaid){
+  window.mermaid.initialize({startOnLoad:false,securityLevel:"strict",theme:"neutral"})
+}
 
 function element(tag,attrs={},children=[]){
   const node=document.createElement(tag);
@@ -629,6 +636,8 @@ async function postUpload(file,kind,publicValue,confirmPublic){
 function show(nodes,focus=true){
   clearTimeout(jobTimer);
   app.replaceChildren(...(Array.isArray(nodes)?nodes:[nodes]));
+  const diagrams=app.querySelectorAll(".mermaid");
+  if(diagrams.length&&window.mermaid)window.mermaid.run({nodes:diagrams}).catch(()=>{});
   if(focus)app.focus({preventScroll:true});
   updateNav();
   document.body.classList.remove("nav-open");
@@ -1252,7 +1261,13 @@ async function renderPage(path){
   });
   const content=element("article",{},[
     breadcrumbs(data.breadcrumbs),
-    element("span",{class:data.status==="未验证会话记忆"?"badge warn":"badge",text:data.status}),
+    element("div",{class:"badge-row"},[
+      element("span",{class:data.status==="未验证会话记忆"?"badge warn":"badge",text:data.status}),
+      data.freshness?element("span",{
+        class:data.freshness.state==="fresh"?"badge":"badge warn",
+        text:data.freshness.label
+      }):null
+    ].filter(Boolean)),
     element("h1",{class:"reader-title",text:displayPageTitle(data)}),
     data.summary?element("p",{class:"summary",text:data.summary}):null,
     body,more,relatedKnowledge(data.related),sourceDetails(data.sources)

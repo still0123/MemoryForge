@@ -252,6 +252,31 @@ class GitVersionStore:
         )
         return tuple(path for path in completed.stdout.splitlines() if path)
 
+    def latest_wiki_commits(
+        self,
+        commit: str,
+        paths: tuple[str, ...],
+    ) -> dict[str, str]:
+        """Return each selected page's latest Commit in one Git log scan."""
+        self._require_commit(commit)
+        selected = set(paths)
+        if not selected:
+            return {}
+        completed = self._run(
+            ["log", "--format=%H", "--name-only", commit, "--", "wiki/pages"],
+            check=True,
+        )
+        current = ""
+        commits: dict[str, str] = {}
+        for line in completed.stdout.splitlines():
+            if _COMMIT_ID.fullmatch(line):
+                current = line
+            elif current and line in selected and line not in commits:
+                commits[line] = current
+                if len(commits) == len(selected):
+                    break
+        return commits
+
     def restore_wiki(self, commit: str) -> None:
         """Restore the tracked Wiki tree from one validated Commit."""
         self._require_commit(commit)

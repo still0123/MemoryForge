@@ -63,6 +63,10 @@ from memoryforge.storage.workspace import Workspace, list_git_checkouts
 _WORDS = re.compile(r"[a-z0-9]+|[\u4e00-\u9fff]+", re.IGNORECASE)
 _CJK = re.compile(r"^[\u4e00-\u9fff]+$")
 _RELATED_PAGE_LINK = re.compile(r"^- \[[^\]]+\]\((?P<path>[^)]+\.md)\)$", re.MULTILINE)
+_REPOSITORY_ARCHITECTURE = re.compile(
+    r"(?:^|\n)## Architecture\n\n```mermaid\n.*?\n```",
+    re.DOTALL,
+)
 
 
 @dataclass(frozen=True)
@@ -234,7 +238,12 @@ def compile_repository_topics(
     overview_path = _repository_overview_path(repository_id)
     index_path = "wiki/INDEX.md"
     candidate_files = {
-        overview_path: _render_repository_overview(repository_id, links, topics),
+        overview_path: _render_repository_overview(
+            repository_id,
+            links,
+            topics,
+            architecture=_existing_repository_architecture(workspace, repository_id),
+        ),
     }
     candidate_files[index_path] = _render_index(workspace, candidate_files)
     base_commit = workspace.current_commit()
@@ -573,6 +582,7 @@ def _compile_stale_pages(
                 repository_id,
                 links,
                 _existing_repository_topics(workspace, repository_id, links),
+                architecture=_existing_repository_architecture(workspace, repository_id),
             )
             operations.append(
                 ChangeOperation(
@@ -2118,6 +2128,7 @@ def _repository_overview_pages(
             repository_id,
             links,
             _existing_repository_topics(workspace, repository_id, links),
+            architecture=_existing_repository_architecture(workspace, repository_id),
         )
     return pages
 
@@ -2167,6 +2178,8 @@ def _render_repository_overview(
     repository_id: str,
     links: list[tuple[CurrentSource, str]],
     topics: tuple[TopicGroup, ...] = (),
+    *,
+    architecture: str = "",
 ) -> str:
     repository_name = next(
         source.repository_name for source, _ in links if source.repository_name is not None
@@ -2212,7 +2225,30 @@ def _render_repository_overview(
             f"- [{_escape_link_text(source.title)}]({page_path.rsplit('/', 1)[-1]})"
             f" — {source.relative_path or source.title}"
         )
+    if architecture:
+        lines.extend(["", architecture])
     return "\n".join(lines) + "\n"
+
+
+def _existing_repository_architecture(
+    workspace: Workspace,
+    repository_id: str,
+) -> str:
+    overview = workspace.root / _repository_overview_path(repository_id)
+    if overview.is_symlink() or not overview.is_file():
+        return ""
+    match = _REPOSITORY_ARCHITECTURE.search(overview.read_text(encoding="utf-8"))
+    return match.group(0).strip() if match is not None else ""
+
+
+def _with_repository_architecture(content: str, mermaid: str) -> str:
+    without_existing = _REPOSITORY_ARCHITECTURE.sub("", content).rstrip()
+    return (
+        without_existing
+        + "\n\n## Architecture\n\n```mermaid\n"
+        + mermaid.rstrip()
+        + "\n```\n"
+    )
 
 
 def _topic_messages(

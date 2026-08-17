@@ -77,6 +77,9 @@ class PageEntry:
     status: str
     tags: tuple[str, ...]
     source_ids: tuple[str, ...]
+    freshness_state: str
+    based_on_commit: str
+    current_commit: str
     module_path: str | None = None
     relative_path: str | None = None
     headings: tuple[tuple[int, str], ...] = ()
@@ -99,6 +102,15 @@ class PageEntry:
             "relative_path": self.relative_path,
             "updated": self.updated,
             "status": self.status,
+            "freshness": {
+                "state": self.freshness_state,
+                "based_on_commit": self.based_on_commit[:12],
+                "current_commit": self.current_commit[:12],
+                "label": (
+                    f"{_freshness_label(self.freshness_state)} · "
+                    f"基于 {self.based_on_commit[:7]} · 当前 {self.current_commit[:7]}"
+                ),
+            },
         }
 
 
@@ -387,6 +399,10 @@ class PortalCatalog:
             if _is_page_path(path)
         )
         contents = self.workspace.version_store.read_wiki_texts_at(self.commit, paths=page_paths)
+        page_commits = self.workspace.version_store.latest_wiki_commits(
+            self.commit,
+            page_paths,
+        )
         with _connect_readonly(self.workspace.index_path) as connection:
             repositories = connection.execute(
                 """
@@ -557,6 +573,15 @@ class PortalCatalog:
             )
             generated = metadata.get("generated", "")
             source_ids = tuple(page_sources[page_path])
+            if not source_ids:
+                freshness_state = "unknown"
+            elif all(
+                source_id in self.sources and self.sources[source_id].applied
+                for source_id in source_ids
+            ):
+                freshness_state = "fresh"
+            else:
+                freshness_state = "stale"
             source_kinds = {self.sources[source_id].kind for source_id in source_ids}
             kind = _page_kind(tags, generated, source_kinds, page_repository_id)
             relative_paths = page_relative_paths[page_path]
@@ -585,6 +610,9 @@ class PortalCatalog:
                 status="未验证会话记忆" if kind == "conversation" else "已应用",
                 tags=tags,
                 source_ids=source_ids,
+                freshness_state=freshness_state,
+                based_on_commit=page_commits.get(page_path, self.commit),
+                current_commit=self.commit,
                 module_path=module_path,
                 relative_path=relative_path,
                 headings=tuple(
@@ -716,6 +744,16 @@ def _tags(value: str) -> tuple[str, ...]:
 
 def _metadata_tags(value: str) -> tuple[str, ...]:
     return _tags(value) if value else ()
+
+
+def _freshness_label(state: str) -> str:
+    return {
+        "fresh": "新鲜",
+        "stale": "过期",
+        "superseded": "已取代",
+        "conflicted": "有冲突",
+        "unknown": "未知",
+    }.get(state, "未知")
 
 
 def _source_kind(tags: tuple[str, ...], source_path: str, repository_id: str | None) -> str:

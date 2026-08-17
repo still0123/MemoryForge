@@ -70,6 +70,10 @@ def test_local_portal_summary_pagination_search_and_page_read(tmp_path: Path) ->
     assert page["summary"] == "模块 fixture/page-00 包含 3 个已验证代码符号。"
     assert "summary:" not in page["html"]
     assert "<p>Alpha project 0 cache policy</p>" in page["html"]
+    assert page["freshness"]["state"] == "fresh"
+    assert page["freshness"]["based_on_commit"]
+    assert page["freshness"]["current_commit"]
+    assert "基于" in page["freshness"]["label"]
 
     assert page["has_more"] is False
     assert page["next_offset"] == page["total"]
@@ -259,6 +263,7 @@ def test_local_portal_index_shell_is_small_and_self_contained(tmp_path: Path) ->
     assert len(html) < 24_000
     assert '<html lang="zh-CN">' in html
     assert '<link rel="stylesheet" href="/app.css">' in html
+    assert '<script src="/vendor/mermaid.min.js" defer></script>' in html
     assert '<script src="/app.js" defer></script>' in html
     assert "<script>" not in html
     assert "<style>" not in html
@@ -288,6 +293,13 @@ def test_local_portal_index_shell_is_small_and_self_contained(tmp_path: Path) ->
     assert "查看来源原文" in script
     assert "继续加载" in script
     assert "/api/source-text" in script
+    assert "window.mermaid.run" in script
+
+    status, content_type, body = portal.dispatch("/vendor/mermaid.min.js")
+    assert status == 200
+    assert content_type.startswith("text/javascript")
+    assert len(body) > 1_000_000
+    assert b"mermaid" in body[:10_000]
     assert "view=published" in script
     assert 'view:"evidence"' in script
     assert "搜索源码证据" in script
@@ -321,6 +333,7 @@ def test_local_portal_source_text_reads_only_applied_version(tmp_path: Path) -> 
     page = json.loads(portal.dispatch("/api/page?path=wiki%2Fpages%2Fpage-00.md")[2])
     applied = page["sources"][0]
 
+    assert page["freshness"]["state"] == "stale"
     assert applied["source_id"] == updated.source_id
     assert applied["source_version"] != current_version
     status, _, body = portal.dispatch(

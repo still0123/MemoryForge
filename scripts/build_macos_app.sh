@@ -18,6 +18,7 @@ cd "$repo_root"
   --name MemoryForge \
   --osx-bundle-identifier com.memoryforge.desktop \
   --paths src \
+  --add-data "$repo_root/src/memoryforge/portal/vendor:memoryforge/portal/vendor" \
   --specpath build \
   --exclude-module mypy \
   --exclude-module pytest \

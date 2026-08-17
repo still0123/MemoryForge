@@ -12,6 +12,7 @@ from contextlib import suppress
 from email import policy
 from email.parser import BytesParser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from importlib.resources import files
 from pathlib import Path, PurePosixPath
 from threading import Lock
 from typing import Any
@@ -482,6 +483,9 @@ class LocalPortalApp:
                 return 200, _CSS, APP_CSS.encode("utf-8")
             if parsed.path == "/app.js":
                 return 200, _JAVASCRIPT, CONTROL_JS.encode("utf-8")
+            if parsed.path == "/vendor/mermaid.min.js":
+                asset = files("memoryforge.portal").joinpath("vendor/mermaid.min.js")
+                return 200, _JAVASCRIPT, asset.read_bytes()
             if parsed.path == "/api/summary":
                 return _json_response(self.summary())
             if parsed.path == "/api/session":

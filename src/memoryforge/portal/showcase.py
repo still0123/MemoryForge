@@ -1285,9 +1285,13 @@ def _markdown_html(
     def close_fence() -> None:
         nonlocal in_fence, code_language
         code = _h("\n".join(code_lines))
-        output.append(
-            f'<pre class="wiki-code"><code class="language-{_h(code_language)}">{code}</code></pre>'
-        )
+        if code_language == "mermaid":
+            output.append(f'<pre class="mermaid">{code}</pre>')
+        else:
+            output.append(
+                f'<pre class="wiki-code"><code class="language-{_h(code_language)}">'
+                f"{code}</code></pre>"
+            )
         code_lines.clear()
         code_language = ""
         in_fence = False

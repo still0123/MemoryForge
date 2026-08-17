@@ -113,8 +113,10 @@ def test_code_wiki_compiles_reviews_applies_and_lints_nested_pages(
     assert compilation.changeset.status.value == "PROPOSED"
     src_page = make_code_wiki_path(repository_id, "src")
     service_page = make_code_wiki_path(repository_id, "src/service")
+    overview_page = f"wiki/pages/repository-{repository_id[:12]}.md"
     assert set(compilation.candidate_files) == {
         "wiki/INDEX.md",
+        overview_page,
         src_page,
         service_page,
     }
@@ -131,6 +133,11 @@ def test_code_wiki_compiles_reviews_applies_and_lints_nested_pages(
     assert "## Verified symbols" in leaf
     assert "src.service.Service.greet" in leaf
     assert "revision `" in leaf
+    overview = compilation.candidate_files[overview_page]
+    assert "generated: repository_overview" in overview
+    assert "```mermaid\nflowchart TD\n" in overview
+    assert overview.count("```mermaid") == 1
+    assert "m_" in overview
     assert compilation.changeset.validation is not None
     assert compilation.changeset.validation.citation_coverage == 1.0
     assert all(
@@ -175,7 +182,7 @@ def test_code_wiki_compiles_reviews_applies_and_lints_nested_pages(
     assert json.loads(applied.stdout)["status"] == "APPLIED"
     assert lint_workspace(workspace) == {
         "status": "clean",
-        "checked_pages": 2,
+        "checked_pages": 3,
         "issues": [],
     }
     source_id = next(iter(snapshot.source_versions))

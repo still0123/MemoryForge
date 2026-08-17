@@ -9,7 +9,12 @@ import pytest
 from typer.testing import CliRunner
 
 from memoryforge.interface.cli import app
-from memoryforge.portal.showcase import ShowcaseBuildError, _markdown_html, _page_group, build_showcase
+from memoryforge.portal.showcase import (
+    ShowcaseBuildError,
+    _markdown_html,
+    _page_group,
+    build_showcase,
+)
 
 
 def test_showcase_builds_complete_public_snapshot_without_mutating_workspace(
@@ -125,6 +130,20 @@ def test_showcase_collapses_full_citation_identifiers() -> None:
     assert '<details class="citation-details">' in rendered
     assert source_id in rendered
     assert rendered.index("citation-details") < rendered.index(source_id)
+
+
+def test_markdown_renders_mermaid_as_same_origin_diagram_target() -> None:
+    rendered = _markdown_html(
+        "## Architecture\n\n"
+        "```mermaid\n"
+        "flowchart TD\n"
+        '  m_a["api"] --> m_b["store"]\n'
+        "```\n"
+    )
+
+    assert '<pre class="mermaid">flowchart TD' in rendered
+    assert "language-mermaid" not in rendered
+    assert "&quot;api&quot;" in rendered
 
 
 def test_showcase_localizes_generated_code_headings() -> None:

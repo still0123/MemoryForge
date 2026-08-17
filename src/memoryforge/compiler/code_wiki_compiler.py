@@ -23,7 +23,12 @@ from memoryforge.code.code_models import (
     ModuleNode,
     ModulePlan,
 )
-from memoryforge.compiler.compiler import Compilation, _render_index
+from memoryforge.compiler.compiler import (
+    Compilation,
+    _render_index,
+    _repository_overview_path,
+    _with_repository_architecture,
+)
 from memoryforge.compiler.module_planner import build_architecture_graph, build_module_plan
 from memoryforge.core.models import (
     ChangeOperation,
@@ -60,6 +65,7 @@ _SENSITIVE_LITERAL_CONTEXT = re.compile(
     r"|(?:^|[^a-z0-9])(?:ak|sk))\s*=\s*$",
     re.IGNORECASE,
 )
+_MERMAID_LABEL = re.compile(r"[^A-Za-z0-9_./ -]+")
 
 
 @dataclass(frozen=True)
@@ -157,6 +163,19 @@ def compile_code_wiki(
             provider,
         )
 
+    overview_path = _repository_overview_path(snapshot.repository_id)
+    overview = _stable_text(opened.root / overview_path)
+    if overview is None:
+        repository = get_git_checkout_readonly(opened.root, snapshot.repository_id)
+        overview = _render_code_repository_overview(
+            repository.name,
+            snapshot.repository_id,
+            graph,
+        )
+    all_candidates[overview_path] = _with_repository_architecture(
+        overview,
+        _render_repository_architecture(graph),
+    )
     all_candidates["wiki/INDEX.md"] = _render_index(
         opened,
         all_candidates,
@@ -199,6 +218,25 @@ def compile_code_wiki(
             operations.append(
                 ChangeOperation(
                     type=ChangeOperationType.UPDATE_PAGE,
+                    path=path,
+                    details={
+                        "origin": "code_wiki",
+                        "code_index_id": snapshot.index_id,
+                        "module_plan_id": plan.plan_id,
+                        "architecture_graph_id": graph.graph_id,
+                    },
+                    origin=ChangeOrigin.DETERMINISTIC_NAVIGATION,
+                )
+            )
+            continue
+        if path == overview_path:
+            operations.append(
+                ChangeOperation(
+                    type=(
+                        ChangeOperationType.UPDATE_PAGE
+                        if (opened.root / path).is_file()
+                        else ChangeOperationType.CREATE_PAGE
+                    ),
                     path=path,
                     details={
                         "origin": "code_wiki",
@@ -1286,6 +1324,50 @@ def _append_source_reading_guide(
 def _is_test_symbol(symbol: CodeSymbol) -> bool:
     is_test_file = symbol.location.relative_path.endswith(_TEST_FILE_SUFFIXES)
     return is_test_file or symbol.display_name.startswith(("Test", "test_"))
+
+
+def _render_code_repository_overview(
+    repository_name: str,
+    repository_id: str,
+    graph: ArchitectureGraph,
+) -> str:
+    title = f"{repository_name} 项目总览"
+    summary = f"{repository_name} 的代码模块与依赖架构。"
+    lines = [
+        "---",
+        f"title: {json.dumps(title, ensure_ascii=False)}",
+        "type: entity",
+        f"summary: {json.dumps(summary, ensure_ascii=False)}",
+        'tags: ["repository", "generated"]',
+        "generated: repository_overview",
+        f"repository_id: {repository_id}",
+        "---",
+        "",
+        f"# {title}",
+        "",
+        "## 页面导航",
+        "",
+    ]
+    for node in sorted(graph.nodes, key=lambda item: item.path):
+        link = posixpath.relpath(node.wiki_path, start="wiki/pages")
+        lines.append(f"- [{node.label}]({link}) — {node.path}")
+    return "\n".join(lines) + "\n"
+
+
+def _render_repository_architecture(graph: ArchitectureGraph) -> str:
+    nodes = tuple(sorted(graph.nodes, key=lambda item: item.path)[:30])
+    node_ids = {node.module_id for node in nodes}
+    lines = ["flowchart TD"]
+    for node in nodes:
+        label = _MERMAID_LABEL.sub("-", node.path).strip(" -") or "module"
+        lines.append(f"  m_{node.module_id}[{json.dumps(label[:80])}]")
+    for edge in graph.edges:
+        if edge.source_module_id in node_ids and edge.target_module_id in node_ids:
+            lines.append(
+                f"  m_{edge.source_module_id} -->|{edge.type.value}| "
+                f"m_{edge.target_module_id}"
+            )
+    return "\n".join(lines)
 
 
 def _append_child_modules(lines: list[str], module: ModuleNode) -> None:
