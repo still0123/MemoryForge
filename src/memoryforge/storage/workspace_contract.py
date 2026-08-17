@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 from memoryforge.compiler.egress_policy import SCHEMA_SQL as _EGRESS_SCHEMA
@@ -27,8 +26,6 @@ _GITIGNORE_RULES = (
     "/.memoryforge/vectors/",
     "/.memoryforge/sessions/",
 )
-_CJK_RUN = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]+")
-_SEARCH_RUN = re.compile(r"[A-Za-z0-9_]+|[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]+")
 _BASELINE_PATHS = (
     ".gitignore",
     ".memoryforgeignore",
@@ -90,11 +87,7 @@ CREATE VIRTUAL TABLE IF NOT EXISTS source_fts USING fts5(
 )"""
 _WIKI_FACT_FTS_SCHEMA_STATEMENT = """
 CREATE VIRTUAL TABLE IF NOT EXISTS wiki_fact_fts USING fts5(
-    section_path,
-    quote,
-    routing_text,
-    symbol,
-    relation_type,
+    search_terms,
     content='wiki_facts',
     content_rowid='id',
     tokenize='unicode61'
@@ -169,6 +162,7 @@ CREATE TABLE IF NOT EXISTS wiki_facts (
     routing_text TEXT NOT NULL,
     symbol TEXT,
     relation_type TEXT,
+    search_terms TEXT NOT NULL DEFAULT '',
     UNIQUE(page_path, fact_id)
 )""",
     """
@@ -272,33 +266,17 @@ CREATE TABLE IF NOT EXISTS page_protection (
     _WIKI_FACT_FTS_SCHEMA_STATEMENT,
     """
 CREATE TRIGGER IF NOT EXISTS wiki_facts_ai AFTER INSERT ON wiki_facts BEGIN
-  INSERT INTO wiki_fact_fts(
-    rowid, section_path, quote, routing_text, symbol, relation_type
-  ) VALUES (
-    new.id, new.section_path, new.quote, new.routing_text, new.symbol, new.relation_type
-  );
+  INSERT INTO wiki_fact_fts(rowid, search_terms) VALUES (new.id, new.search_terms);
 END""",
     """
 CREATE TRIGGER IF NOT EXISTS wiki_facts_ad AFTER DELETE ON wiki_facts BEGIN
-  INSERT INTO wiki_fact_fts(
-    wiki_fact_fts, rowid, section_path, quote, routing_text, symbol, relation_type
-  ) VALUES (
-    'delete', old.id, old.section_path, old.quote, old.routing_text, old.symbol,
-    old.relation_type
-  );
+  INSERT INTO wiki_fact_fts(wiki_fact_fts, rowid, search_terms)
+  VALUES ('delete', old.id, old.search_terms);
 END""",
     """
 CREATE TRIGGER IF NOT EXISTS wiki_facts_au AFTER UPDATE ON wiki_facts BEGIN
-  INSERT INTO wiki_fact_fts(
-    wiki_fact_fts, rowid, section_path, quote, routing_text, symbol, relation_type
-  ) VALUES (
-    'delete', old.id, old.section_path, old.quote, old.routing_text, old.symbol,
-    old.relation_type
-  );
-  INSERT INTO wiki_fact_fts(
-    rowid, section_path, quote, routing_text, symbol, relation_type
-  ) VALUES (
-    new.id, new.section_path, new.quote, new.routing_text, new.symbol, new.relation_type
-  );
+  INSERT INTO wiki_fact_fts(wiki_fact_fts, rowid, search_terms)
+  VALUES ('delete', old.id, old.search_terms);
+  INSERT INTO wiki_fact_fts(rowid, search_terms) VALUES (new.id, new.search_terms);
 END""",
 )

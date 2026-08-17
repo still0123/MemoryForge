@@ -39,6 +39,7 @@ from memoryforge.core.models import (
     SourceVersionManifest,
 )
 from memoryforge.core.platform_lock import UnsafeLockFileError, exclusive_workspace_lock
+from memoryforge.core.tokenization import _SEARCH_RUN, index_terms_text
 from memoryforge.storage.apply_journal import recover_interrupted_apply
 from memoryforge.storage.blob_store import (
     blob_relative_path,
@@ -85,7 +86,6 @@ from memoryforge.storage.projection import validate_stable_page_paths as _valida
 from memoryforge.storage.version_store import GitVersionStore
 from memoryforge.storage.workspace_contract import (
     _BASELINE_PATHS,
-    _CJK_RUN,
     _DEFAULT_AGENTS_MD,
     _DEFAULT_CONFIG_YAML,
     _DEFAULT_MEMORYFORGEIGNORE,
@@ -93,8 +93,8 @@ from memoryforge.storage.workspace_contract import (
     _GITIGNORE_RULES,
     _PROMPT_CONTEXT_LIMIT,
     _SCHEMA_STATEMENTS,
-    _SEARCH_RUN,
     _SOURCE_FTS_SCHEMA_STATEMENT,
+    _WIKI_FACT_FTS_SCHEMA_STATEMENT,
     CAPTURE_SCHEMA,
     CONFLICT_SCHEMA,
     EGRESS_SCHEMA,
@@ -116,6 +116,8 @@ _read_blob_bytes = read_blob_bytes
 _unlink_blob = unlink_blob
 _verify_blob_hash = verify_blob_hash
 _write_blob = write_blob
+
+FACT_SEARCH_TERMS_USER_VERSION = 1
 
 
 @dataclass(frozen=True)
@@ -493,8 +495,9 @@ class Workspace:
                 """
                 INSERT INTO wiki_facts(
                     fact_id, page_path, repository_id, source_id, source_version,
-                    locator, section_path, quote, routing_text, symbol, relation_type
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    locator, section_path, quote, routing_text, symbol, relation_type,
+                    search_terms
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     (
@@ -509,6 +512,7 @@ class Workspace:
                         fact.routing_text,
                         fact.symbol,
                         fact.relation_type,
+                        _fact_search_terms(fact),
                     )
                     for path in paths
                     for fact in normalized[path]
@@ -534,8 +538,9 @@ class Workspace:
                 """
                 INSERT INTO wiki_facts(
                     fact_id, page_path, repository_id, source_id, source_version,
-                    locator, section_path, quote, routing_text, symbol, relation_type
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    locator, section_path, quote, routing_text, symbol, relation_type,
+                    search_terms
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     (
@@ -550,6 +555,7 @@ class Workspace:
                         fact.routing_text,
                         fact.symbol,
                         fact.relation_type,
+                        _fact_search_terms(fact),
                     )
                     for path in paths
                     for fact in previous[path]
@@ -1343,6 +1349,7 @@ def _initialize_workspace(workspace: Path) -> Path:
     with _connect(database_path) as connection:
         connection.execute("BEGIN IMMEDIATE")
         _apply_schema(connection)
+        connection.execute(f"PRAGMA user_version = {FACT_SEARCH_TERMS_USER_VERSION}")
     database_path.chmod(0o600)
 
     version_store = GitVersionStore(root)
@@ -1933,7 +1940,13 @@ def search_wiki_facts(
 
     opened = Workspace.open_readonly(workspace)
     with _connect_readonly(opened.index_path) as connection:
-        parameters: list[object] = [_wiki_fact_fts_query(query)]
+        fts_columns = {
+            str(row["name"])
+            for row in connection.execute("PRAGMA table_info(wiki_fact_fts)").fetchall()
+        }
+        parameters: list[object] = [
+            _wiki_fact_fts_query(query, projected="search_terms" in fts_columns)
+        ]
         repository_filter = ""
         if repository_id is not None:
             _validate_repository_scope(connection, repository_id)
@@ -2231,8 +2244,9 @@ def rebuild_applied_projection(workspace: Workspace) -> None:
             """
             INSERT INTO wiki_facts(
                 fact_id, page_path, repository_id, source_id, source_version,
-                locator, section_path, quote, routing_text, symbol, relation_type
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                locator, section_path, quote, routing_text, symbol, relation_type,
+                search_terms
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 (
@@ -2247,11 +2261,168 @@ def rebuild_applied_projection(workspace: Workspace) -> None:
                     fact.routing_text,
                     fact.symbol,
                     fact.relation_type,
+                    _fact_search_terms(fact),
                 )
                 for path in sorted(page_facts)
                 for fact in sorted(page_facts[path], key=lambda item: item.fact_id)
             ),
         )
+
+
+def _fact_search_terms(fact: WikiFact | IndexedWikiFact) -> str:
+    """Derive the FTS search-terms projection for one indexed wiki fact."""
+    return _fact_search_terms_from_values(
+        fact.routing_text,
+        fact.quote,
+        fact.section_path,
+        fact.symbol,
+    )
+
+
+def _fact_search_terms_from_values(
+    routing_text: object,
+    quote: object,
+    section_path: object,
+    symbol: object,
+) -> str:
+    return index_terms_text(
+        "\n".join(
+            str(part) for part in (routing_text, quote, section_path, symbol) if part
+        )
+    )
+
+
+def reindex_fact_search_terms(workspace: Path, *, dry_run: bool = False) -> dict[str, object]:
+    """Recompute the ``wiki_facts.search_terms`` projection and rebuild its FTS.
+
+    Derived-state migration (spec PROGRESSIVE_STRUCTURE_RETRIEVAL_SPEC §3/§4):
+    runs in one transaction, is idempotent, and records the schema level in
+    ``PRAGMA user_version``. Failure rolls back; a code rollback re-runs this
+    command against the previous tokenizer.
+    """
+    opened = Workspace.open_readonly(workspace)
+    with opened.exclusive_lock(), _connect(opened.index_path) as connection:
+        version, migration_required, facts, fts_rows = _fact_search_projection_state(connection)
+        database_bytes_before = _database_bytes(connection)
+        if dry_run:
+            return {
+                "status": "dry_run",
+                "migration_required": migration_required,
+                "facts": facts,
+                "fts_rows": fts_rows,
+                "user_version": version,
+                "database_bytes_before": database_bytes_before,
+            }
+        if not migration_required:
+            return {
+                "status": "up_to_date",
+                "facts": facts,
+                "fts_rows": fts_rows,
+                "backfilled": 0,
+                "user_version": version,
+                "database_bytes_before": database_bytes_before,
+                "database_bytes_after": database_bytes_before,
+                "size_ratio": 1.0,
+            }
+        connection.execute("BEGIN IMMEDIATE")
+        backfilled, indexed = _rebuild_fact_search_projection(connection)
+        database_bytes_after = _database_bytes(connection)
+        return {
+            "status": "rebuilt",
+            "facts": facts,
+            "backfilled": backfilled,
+            "fts_rows": indexed,
+            "user_version": FACT_SEARCH_TERMS_USER_VERSION,
+            "database_bytes_before": database_bytes_before,
+            "database_bytes_after": database_bytes_after,
+            "size_ratio": round(
+                database_bytes_after / max(1, database_bytes_before),
+                3,
+            ),
+        }
+
+
+def _fact_search_projection_state(
+    connection: sqlite3.Connection,
+) -> tuple[int, bool, int, int]:
+    version = int(connection.execute("PRAGMA user_version").fetchone()[0])
+    fact_columns = {
+        str(row["name"])
+        for row in connection.execute("PRAGMA table_info(wiki_facts)").fetchall()
+    }
+    fts_columns = {
+        str(row["name"])
+        for row in connection.execute("PRAGMA table_info(wiki_fact_fts)").fetchall()
+    }
+    facts = int(connection.execute("SELECT COUNT(*) FROM wiki_facts").fetchone()[0])
+    fts_rows = (
+        int(connection.execute("SELECT COUNT(*) FROM wiki_fact_fts_docsize").fetchone()[0])
+        if "search_terms" in fts_columns
+        else facts
+    )
+    required = (
+        version < FACT_SEARCH_TERMS_USER_VERSION
+        or "search_terms" not in fact_columns
+        or fts_columns != {"search_terms"}
+        or fts_rows != facts
+    )
+    return version, required, facts, fts_rows
+
+
+def _rebuild_fact_search_projection(connection: sqlite3.Connection) -> tuple[int, int]:
+    for trigger in ("wiki_facts_ai", "wiki_facts_ad", "wiki_facts_au"):
+        connection.execute(f"DROP TRIGGER IF EXISTS {trigger}")
+    columns = {
+        str(row["name"])
+        for row in connection.execute("PRAGMA table_info(wiki_facts)").fetchall()
+    }
+    if "search_terms" not in columns:
+        connection.execute(
+            "ALTER TABLE wiki_facts ADD COLUMN search_terms TEXT NOT NULL DEFAULT ''"
+        )
+    rows = connection.execute(
+        """
+        SELECT id, routing_text, quote, section_path, symbol, search_terms
+        FROM wiki_facts
+        """
+    ).fetchall()
+    updates = [
+        (
+            derived,
+            int(row["id"]),
+        )
+        for row in rows
+        if (
+            derived := _fact_search_terms_from_values(
+                row["routing_text"],
+                row["quote"],
+                row["section_path"],
+                row["symbol"],
+            )
+        )
+        != str(row["search_terms"])
+    ]
+    connection.executemany(
+        "UPDATE wiki_facts SET search_terms = ? WHERE id = ?",
+        updates,
+    )
+    connection.execute("DROP TABLE IF EXISTS wiki_fact_fts")
+    connection.execute(_WIKI_FACT_FTS_SCHEMA_STATEMENT)
+    for statement in _SCHEMA_STATEMENTS:
+        if statement.startswith("CREATE TRIGGER IF NOT EXISTS wiki_facts_"):
+            connection.execute(statement)
+    connection.execute("INSERT INTO wiki_fact_fts(wiki_fact_fts) VALUES ('rebuild')")
+    connection.execute(f"PRAGMA user_version = {FACT_SEARCH_TERMS_USER_VERSION}")
+    indexed = int(
+        connection.execute("SELECT COUNT(*) FROM wiki_fact_fts_docsize").fetchone()[0]
+    )
+    return len(updates), indexed
+
+
+def _database_bytes(connection: sqlite3.Connection) -> int:
+    page_count = int(connection.execute("PRAGMA page_count").fetchone()[0])
+    page_size = int(connection.execute("PRAGMA page_size").fetchone()[0])
+    return page_count * page_size
 
 
 def _absolute_path(path: Path) -> Path:
@@ -2396,6 +2567,7 @@ def _migrate_unified_schema(connection: sqlite3.Connection, root: Path) -> None:
     }
     if not columns:
         _apply_schema(connection)
+        connection.execute(f"PRAGMA user_version = {FACT_SEARCH_TERMS_USER_VERSION}")
         _backfill_wiki_facts(connection, root)
         return
     if "sensitivity" not in columns:
@@ -2418,6 +2590,8 @@ def _migrate_unified_schema(connection: sqlite3.Connection, root: Path) -> None:
         (SourceCategory.NOTES.value, *RAW_CATEGORIES),
     )
     _apply_schema(connection)
+    if _fact_search_projection_state(connection)[1]:
+        _rebuild_fact_search_projection(connection)
     _backfill_wiki_facts(connection, root)
 
 
@@ -2529,6 +2703,7 @@ def _migrate_origin_main_schema(
     connection.execute(_SOURCE_FTS_SCHEMA_STATEMENT)
     _rebuild_origin_main_fts(connection, root)
     connection.execute("DROP TABLE source_documents")
+    _rebuild_fact_search_projection(connection)
     _backfill_wiki_facts(connection, root)
 
 
@@ -2680,8 +2855,9 @@ def _backfill_wiki_facts(connection: sqlite3.Connection, root: Path) -> None:
                 """
                 INSERT INTO wiki_facts(
                     fact_id, page_path, repository_id, source_id, source_version,
-                    locator, section_path, quote, routing_text, symbol, relation_type
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    locator, section_path, quote, routing_text, symbol, relation_type,
+                    search_terms
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     fact.fact_id,
@@ -2695,6 +2871,7 @@ def _backfill_wiki_facts(connection: sqlite3.Connection, root: Path) -> None:
                     fact.routing_text,
                     fact.symbol,
                     fact.relation_type,
+                    _fact_search_terms(fact),
                 ),
             )
 
@@ -2806,16 +2983,7 @@ def _backfill_source_manifests(root: Path) -> None:
 
 
 def _search_terms(text: str) -> str:
-    terms: list[str] = []
-    for match in _SEARCH_RUN.finditer(text):
-        run = match.group(0)
-        if _CJK_RUN.fullmatch(run):
-            terms.extend(run)
-            if len(run) > 1:
-                terms.extend(run[index : index + 2] for index in range(len(run) - 1))
-        else:
-            terms.append(run.lower())
-    return " ".join(terms)
+    return index_terms_text(text)
 
 
 def _fts_query(query: str, *, require_all_terms: bool = True) -> str:
@@ -2827,12 +2995,13 @@ def _fts_query(query: str, *, require_all_terms: bool = True) -> str:
     return "search_terms : (" + operator.join(f'"{term}"' for term in escaped) + ")"
 
 
-def _wiki_fact_fts_query(query: str) -> str:
+def _wiki_fact_fts_query(query: str, *, projected: bool = True) -> str:
     terms = _search_terms(query).split()
     if not terms:
         raise ValueError("fact search query must contain a word or number")
     escaped = [term.replace('"', '""') for term in terms]
-    return " OR ".join(f'"{term}"' for term in escaped)
+    column = "search_terms:" if projected else ""
+    return " OR ".join(f'{column}"{term}"' for term in escaped)
 
 
 def _make_snippet(content: str, query: str, *, max_chars: int = 240) -> str:

@@ -125,7 +125,7 @@ def _parse_page_summary(path: str, content: str) -> PageSummary | None:
     summary = _frontmatter_text(fields.get("summary", ""))
     if not title or not summary:
         return None
-    return PageSummary(path=path, title=title, page_type=cast(PageType, page_type), summary=summary)
+    return PageSummary(path=path, title=title, page_type=page_type, summary=summary)
 
 
 def _frontmatter_fields(content: str) -> dict[str, str]:

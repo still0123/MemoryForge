@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 from memoryforge.core.retrieval_models import RetrievalCandidate, RetrievalResult, VisibleSource
+from memoryforge.core.tokenization import bigram_tokens
 from memoryforge.query.support import (
     _expanded_question_terms,
     _explicit_code_identifiers,
@@ -295,14 +296,7 @@ def _exact_lane(
 
 
 def _tokenize(text: str) -> list[str]:
-    tokens: list[str] = []
-    for m in _WORD.finditer(text.lower()):
-        token = m.group(0)
-        if _CJK.fullmatch(token) and len(token) > 1:
-            tokens.extend(token[index : index + 2] for index in range(len(token) - 1))
-        else:
-            tokens.append(token)
-    return tokens
+    return bigram_tokens(text)
 
 
 def _lexical_lane(
@@ -448,11 +442,14 @@ def _cross_repository_lane(
     ]
 
 
+_SOURCE_KINDS = frozenset({"code", "feishu", "conversation", "note"})
+
+
 def _source_kind(
     fact: dict[str, Any],
 ) -> Literal["code", "feishu", "conversation", "note"]:
     value = fact.get("source_kind")
-    if value in {"code", "feishu", "conversation", "note"}:
+    if value in _SOURCE_KINDS:
         return cast(Literal["code", "feishu", "conversation", "note"], value)
     if fact.get("symbol") or fact.get("relation_type") or fact.get("repository_id"):
         return "code"

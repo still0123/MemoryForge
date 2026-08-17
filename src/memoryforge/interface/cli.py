@@ -2296,6 +2296,21 @@ def doctor(workspace: WorkspaceOption = Path(".")) -> None:
     typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
 
 
+@app.command("reindex-fts")
+def reindex_fts(
+    workspace: WorkspaceOption = Path("."),
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Report pending work without writing."),
+    ] = False,
+) -> None:
+    """Recompute the fact search-terms projection and rebuild FTS in one transaction."""
+    from memoryforge.storage.workspace import reindex_fact_search_terms
+
+    result = reindex_fact_search_terms(workspace, dry_run=dry_run)
+    typer.echo(json.dumps(result, ensure_ascii=False, indent=2))
+
+
 def _workspace_status(workspace: Path) -> dict[str, object]:
     opened = Workspace.open_readonly(workspace)
     commit = opened.current_commit()
