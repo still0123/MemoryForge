@@ -84,7 +84,7 @@ RELEASE_DRILL_FIXTURE = {
     "source_id": "8864360214e8fa15d97f8019b8392729520e066c469d2e8475ec3e07c8734c68",
 }
 RELEASE_DRILL_WORKSPACE_COMMIT = "682b277b30ae3f8963f0eb1276c888215cb1c8c3"
-CURRENT_RELEASE_DRILL_WORKSPACE_COMMIT = "0e96fbae6d50e402de348a3538d3cf150ee2ddb4"
+CURRENT_RELEASE_DRILL_WORKSPACE_COMMIT = "4626423bb2fe3165e7c39603d3a85a8c4e31fd83"
 _RESULTS = "demo/results/"
 HISTORICAL_REVIEW_SCOPES = {
     _RESULTS + "artifacts/release_candidate_review_candidate_5/review-scope.json": {
@@ -3115,6 +3115,11 @@ def _release_drill_contract(
 ) -> bool:
     if not isinstance(payload, dict):
         return False
+    expected_checked_pages = (
+        3
+        if expected_workspace_commit == CURRENT_RELEASE_DRILL_WORKSPACE_COMMIT
+        else 2
+    )
     expected_checks = {
         key: "passed"
         for key in {
@@ -3212,7 +3217,11 @@ def _release_drill_contract(
         or workspace.get("restored_commit") != workspace.get("original_commit")
         or not _strict_mapping(
             workspace.get("restored_lint"),
-            {"status": "clean", "checked_pages": 2, "issues": []},
+            {
+                "status": "clean",
+                "checked_pages": expected_checked_pages,
+                "issues": [],
+            },
         )
         or (
             evidence_revision >= 14
